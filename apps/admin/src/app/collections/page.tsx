@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { Category, PaginatedResult } from "@/lib/types";
+import type { Collection, PaginatedResult } from "@/lib/types";
 
 interface FormState {
   id?: string;
   name: string;
   slug: string;
   description: string;
-  parentId: string;
-  displayImageUrl: string;
+  coverImageUrl: string;
   seoTitle: string;
   metaDescription: string;
   displayOrder: string;
@@ -21,24 +20,25 @@ const emptyForm: FormState = {
   name: "",
   slug: "",
   description: "",
-  parentId: "",
-  displayImageUrl: "",
+  coverImageUrl: "",
   seoTitle: "",
   metaDescription: "",
   displayOrder: "0",
   isActive: true,
 };
 
-export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
+export default function CollectionsPage() {
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   async function refresh() {
-    const res = await api.get<PaginatedResult<Category>>("/api/categories?pageSize=100&includeInactive=true");
-    setCategories(res.items);
+    const res = await api.get<PaginatedResult<Collection>>(
+      "/api/collections?pageSize=100&includeInactive=true",
+    );
+    setCollections(res.items);
   }
 
   useEffect(() => {
@@ -49,18 +49,17 @@ export default function CategoriesPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function edit(category: Category) {
+  function edit(collection: Collection) {
     setForm({
-      id: category.id,
-      name: category.name,
-      slug: category.slug,
-      description: category.description ?? "",
-      parentId: category.parentId ?? "",
-      displayImageUrl: category.displayImageUrl ?? "",
-      seoTitle: category.seoTitle ?? "",
-      metaDescription: category.metaDescription ?? "",
-      displayOrder: String(category.displayOrder),
-      isActive: category.isActive,
+      id: collection.id,
+      name: collection.name,
+      slug: collection.slug,
+      description: collection.description ?? "",
+      coverImageUrl: collection.coverImageUrl ?? "",
+      seoTitle: collection.seoTitle ?? "",
+      metaDescription: collection.metaDescription ?? "",
+      displayOrder: String(collection.displayOrder),
+      isActive: collection.isActive,
     });
   }
 
@@ -73,8 +72,7 @@ export default function CategoriesPage() {
       name: form.name,
       slug: form.slug || undefined,
       description: form.description || undefined,
-      parentId: form.parentId || undefined,
-      displayImageUrl: form.displayImageUrl || undefined,
+      coverImageUrl: form.coverImageUrl || undefined,
       seoTitle: form.seoTitle || undefined,
       metaDescription: form.metaDescription || undefined,
       displayOrder: Number(form.displayOrder) || 0,
@@ -82,9 +80,9 @@ export default function CategoriesPage() {
     };
     try {
       if (form.id) {
-        await api.put(`/api/categories/${form.id}`, payload);
+        await api.put(`/api/collections/${form.id}`, payload);
       } else {
-        await api.post("/api/categories", payload);
+        await api.post("/api/collections", payload);
       }
       setForm(emptyForm);
       await refresh();
@@ -104,18 +102,18 @@ export default function CategoriesPage() {
     }
   }
 
-  async function toggleActive(category: Category) {
-    if (category.isActive) {
-      await api.post(`/api/categories/${category.id}/archive`, {});
+  async function toggleActive(collection: Collection) {
+    if (collection.isActive) {
+      await api.post(`/api/collections/${collection.id}/archive`, {});
     } else {
-      await api.post(`/api/categories/${category.id}/restore`, {});
+      await api.post(`/api/collections/${collection.id}/restore`, {});
     }
     await refresh();
   }
 
   return (
     <div>
-      <h1>Categories</h1>
+      <h1>Collections</h1>
       <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
 
       <div style={{ display: "flex", gap: 32 }}>
@@ -131,7 +129,7 @@ export default function CategoriesPage() {
               </tr>
             </thead>
             <tbody>
-              {categories.map((c) => (
+              {collections.map((c) => (
                 <tr key={c.id} style={{ borderBottom: "1px solid rgba(122,106,79,0.3)" }}>
                   <td style={tdStyle}>{c.name}</td>
                   <td style={tdStyle}>{c.slug}</td>
@@ -156,7 +154,7 @@ export default function CategoriesPage() {
           className="noctella-panel"
           style={{ width: 340, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}
         >
-          <h3 style={{ margin: 0 }}>{form.id ? "Edit Category" : "New Category"}</h3>
+          <h3 style={{ margin: 0 }}>{form.id ? "Edit Collection" : "New Collection"}</h3>
           {error && <p style={{ color: "#c86a6a", fontSize: 13 }}>{error}</p>}
           <Field label="Name" error={fieldErrors.name}>
             <input style={inputStyle} value={form.name} onChange={(e) => set("name", e.target.value)} />
@@ -171,14 +169,11 @@ export default function CategoriesPage() {
               onChange={(e) => set("description", e.target.value)}
             />
           </Field>
-          <Field label="Parent Category ID (optional)">
-            <input style={inputStyle} value={form.parentId} onChange={(e) => set("parentId", e.target.value)} />
-          </Field>
-          <Field label="Display Image URL">
+          <Field label="Cover Image URL">
             <input
               style={inputStyle}
-              value={form.displayImageUrl}
-              onChange={(e) => set("displayImageUrl", e.target.value)}
+              value={form.coverImageUrl}
+              onChange={(e) => set("coverImageUrl", e.target.value)}
             />
           </Field>
           <Field label="SEO Title">
@@ -217,7 +212,7 @@ export default function CategoriesPage() {
                 cursor: "pointer",
               }}
             >
-              {saving ? "Saving..." : form.id ? "Save Changes" : "Create Category"}
+              {saving ? "Saving..." : form.id ? "Save Changes" : "Create Collection"}
             </button>
             {form.id && (
               <button type="button" style={linkButtonStyle} onClick={() => setForm(emptyForm)}>

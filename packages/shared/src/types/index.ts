@@ -1,6 +1,9 @@
 import { AdminRole } from "../enums/adminRole";
 import { ProductStatus } from "../enums/productStatus";
 import { ProductType } from "../enums/productType";
+import { DimensionUnit } from "../enums/dimensionUnit";
+import { WeightUnit } from "../enums/weightUnit";
+import { PriceCurrency } from "../enums/priceCurrency";
 
 export type ID = string;
 
@@ -45,7 +48,13 @@ export interface Category extends Timestamps {
   id: ID;
   name: string;
   slug: string;
+  description?: string;
   parentId?: ID;
+  displayImageUrl?: string;
+  seoTitle?: string;
+  metaDescription?: string;
+  displayOrder: number;
+  isActive: boolean;
 }
 
 export interface Collection extends Timestamps {
@@ -53,6 +62,11 @@ export interface Collection extends Timestamps {
   name: string;
   slug: string;
   description?: string;
+  coverImageUrl?: string;
+  seoTitle?: string;
+  metaDescription?: string;
+  displayOrder: number;
+  isActive: boolean;
 }
 
 export interface ProductImage extends Timestamps {
@@ -61,22 +75,72 @@ export interface ProductImage extends Timestamps {
   url: string;
   altText?: string;
   sortOrder: number;
+  isPrimary: boolean;
 }
 
 export interface Product extends Timestamps {
   id: ID;
   erpReferenceId?: ID;
+
+  // Core
   sku: string;
   title: string;
   slug: string;
-  description?: string;
   type: ProductType;
   status: ProductStatus;
-  price: number;
-  currencyId: ID;
   categoryId?: ID;
   collectionId?: ID;
-  quantity: number;
+
+  // Product details
+  brand?: string;
+  model?: string;
+  manufacturer?: string;
+  countryOfOrigin?: string;
+  period?: string;
+  materials?: string;
+  description?: string;
+  productStory?: string;
+  condition?: string;
+  conditionDescription?: string;
+
+  // Physical information
+  lengthValue?: number;
+  widthValue?: number;
+  heightValue?: number;
+  dimensionUnit?: DimensionUnit;
+  weightValue?: number;
+  weightUnit?: WeightUnit;
+
+  // Inventory
+  stockQuantity: number;
+  lotItemCount?: number;
+  purchaseCost?: number;
+  purchaseCurrency?: PriceCurrency;
+  internalNotes?: string;
+
+  // Pricing
+  priceEur: number;
+  priceUsd?: number;
+  minOfferPrice?: number;
+
+  // Media
+  videoUrl?: string;
+
+  // Shipping
+  shippingProfile?: string;
+  shippingNote?: string;
+  customsWarning: boolean;
+
+  // SEO
+  seoTitle?: string;
+  metaDescription?: string;
+  keywords?: string[];
+
+  // Website options
+  isFeatured: boolean;
+  allowMakeOffer: boolean;
+  allowCashOnDelivery: boolean;
+  showInArchiveAfterSale: boolean;
 }
 
 export interface Order extends Timestamps {
