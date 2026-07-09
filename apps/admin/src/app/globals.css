@@ -1,0 +1,48 @@
+:root {
+  --noctella-night-navy: #0b1220;
+  --noctella-deep-star-blue: #141f35;
+  --noctella-antique-gold: #b08d3f;
+  --noctella-bright-star-gold: #e8c577;
+  --noctella-ivory: #f3efe6;
+  --noctella-aged-bronze: #7a6a4f;
+
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--noctella-night-navy);
+  color: var(--noctella-ivory);
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  color: var(--noctella-bright-star-gold);
+  letter-spacing: 0.02em;
+}
+
+a {
+  color: inherit;
+}
+
+.noctella-panel {
+  background: var(--noctella-deep-star-blue);
+  border: 1px solid var(--noctella-antique-gold);
+  border-radius: 4px;
+}
+
+.noctella-divider {
+  border: none;
+  border-top: 1px solid var(--noctella-aged-bronze);
+  opacity: 0.5;
+}
