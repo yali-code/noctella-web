@@ -170,3 +170,46 @@ export const productImages = sqliteTable("product_images", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+/**
+ * Sprint 3: AI listing drafts. Uses its own status column (ai_draft_status
+ * values) — intentionally not ProductStatus, per Sprint 3 rules.
+ */
+export const aiListingDrafts = sqliteTable("ai_listing_drafts", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  status: text("status").notNull(),
+
+  generatedTitle: text("generated_title"),
+  generatedDescription: text("generated_description"),
+  generatedStory: text("generated_story"),
+  generatedConditionDescription: text("generated_condition_description"),
+
+  suggestedCategoryId: text("suggested_category_id"),
+  suggestedCollectionId: text("suggested_collection_id"),
+  suggestedEurPrice: real("suggested_eur_price"),
+  suggestedUsdPrice: real("suggested_usd_price"),
+  suggestedMinimumOfferPrice: real("suggested_minimum_offer_price"),
+
+  seoTitle: text("seo_title"),
+  metaDescription: text("meta_description"),
+  keywords: text("keywords"), // JSON-encoded string[]
+
+  shippingNote: text("shipping_note"),
+  customsWarning: integer("customs_warning", { mode: "boolean" }),
+
+  aiConfidenceScore: real("ai_confidence_score"),
+  aiModel: text("ai_model"),
+  generationPromptVersion: text("generation_prompt_version"),
+
+  rejectionReason: text("rejection_reason"),
+  reviewedByAdminUserId: text("reviewed_by_admin_user_id"),
+  reviewedAt: text("reviewed_at"),
+
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});

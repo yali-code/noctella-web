@@ -120,9 +120,40 @@ CREATE TABLE IF NOT EXISTS product_images (
   FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+CREATE TABLE IF NOT EXISTS ai_listing_drafts (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  generated_title TEXT,
+  generated_description TEXT,
+  generated_story TEXT,
+  generated_condition_description TEXT,
+  suggested_category_id TEXT,
+  suggested_collection_id TEXT,
+  suggested_eur_price REAL,
+  suggested_usd_price REAL,
+  suggested_minimum_offer_price REAL,
+  seo_title TEXT,
+  meta_description TEXT,
+  keywords TEXT,
+  shipping_note TEXT,
+  customs_warning INTEGER,
+  ai_confidence_score REAL,
+  ai_model TEXT,
+  generation_prompt_version TEXT,
+  rejection_reason TEXT,
+  reviewed_by_admin_user_id TEXT,
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_type ON products(type);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_collection ON products(collection_id);
 CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id);
 CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
+CREATE INDEX IF NOT EXISTS idx_ai_listing_drafts_product ON ai_listing_drafts(product_id);
+CREATE INDEX IF NOT EXISTS idx_ai_listing_drafts_status ON ai_listing_drafts(status);

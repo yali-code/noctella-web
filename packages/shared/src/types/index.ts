@@ -5,6 +5,7 @@ import { DimensionUnit } from "../enums/dimensionUnit";
 import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
+import { AiDraftStatus } from "../enums/aiDraftStatus";
 
 export type ID = string;
 
@@ -204,15 +205,37 @@ export interface OrderItem extends Timestamps {
   unitPrice: number;
 }
 
-/** Draft produced by the AI listing step, before admin review/publish. */
+/** AI-generated listing draft, reviewed by an admin before its values are approved onto the product. */
 export interface AiListingDraft extends Timestamps {
   id: ID;
-  erpReferenceId?: ID;
-  suggestedTitle?: string;
-  suggestedDescription?: string;
-  suggestedPrice?: number;
-  status: ProductStatus;
+  productId: ID;
+  status: AiDraftStatus;
+
+  generatedTitle?: string;
+  generatedDescription?: string;
+  generatedStory?: string;
+  generatedConditionDescription?: string;
+
+  suggestedCategoryId?: ID;
+  suggestedCollectionId?: ID;
+  suggestedEurPrice?: number;
+  suggestedUsdPrice?: number;
+  suggestedMinimumOfferPrice?: number;
+
+  seoTitle?: string;
+  metaDescription?: string;
+  keywords?: string[];
+
+  shippingNote?: string;
+  customsWarning?: boolean;
+
+  aiConfidenceScore?: number;
+  aiModel?: string;
+  generationPromptVersion?: string;
+
+  rejectionReason?: string;
   reviewedByAdminUserId?: ID;
+  reviewedAt?: string;
 }
 
 export interface Currency extends Timestamps {

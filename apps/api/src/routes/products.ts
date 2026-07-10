@@ -2,6 +2,8 @@ import { Router } from "express";
 import { db } from "../db/client";
 import { archiveProduct, createProduct, getProductById, listProducts, updateProduct } from "../services/products";
 import { createProductSchema, productListQuerySchema, updateProductSchema } from "../validation/product";
+import { generateDraft } from "../services/aiDrafts";
+import { generateDraftSchema } from "../validation/aiDraft";
 import { handleRouteError } from "./errorHandler";
 
 const router = Router();
@@ -49,6 +51,16 @@ router.post("/:id/archive", async (req, res) => {
   try {
     const product = await archiveProduct(db, req.params.id);
     res.json(product);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.post("/:productId/ai-drafts/generate", async (req, res) => {
+  try {
+    generateDraftSchema.parse(req.body ?? {});
+    const draft = await generateDraft(db, req.params.productId);
+    res.status(201).json(draft);
   } catch (err) {
     handleRouteError(err, res);
   }

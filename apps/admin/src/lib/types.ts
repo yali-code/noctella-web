@@ -1,4 +1,11 @@
-import type { Category, Collection, Product, ProductImage, ProductMarketplaceReadiness } from "@noctella/shared";
+import type {
+  AiListingDraft,
+  Category,
+  Collection,
+  Product,
+  ProductImage,
+  ProductMarketplaceReadiness,
+} from "@noctella/shared";
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -16,4 +23,10 @@ export interface ProductDetail extends Product {
   marketplaceReadiness: ProductMarketplaceReadiness;
 }
 
-export type { Category, Collection };
+export interface AiDraftListItem extends AiListingDraft {
+  productTitle: string;
+  productSku: string;
+  primaryImageUrl?: string;
+}
+
+export type { AiListingDraft, Category, Collection };

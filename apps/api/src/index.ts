@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import aiRouter from "./routes/ai";
+import aiDraftsRouter from "./routes/aiDrafts";
 import analyticsRouter from "./routes/analytics";
 import categoriesRouter from "./routes/categories";
 import collectionsRouter from "./routes/collections";
@@ -24,11 +25,12 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// Sprint 2: products, categories, collections are now functional (SQLite +
-// Drizzle). Remaining routers are still Sprint 1 placeholders awaiting
-// real ERP sync, AI generation, and business logic in later sprints.
+// Sprint 2/3: products, categories, collections, and ai-drafts are now
+// functional (SQLite + Drizzle). Remaining routers are still Sprint 1
+// placeholders awaiting real ERP sync and business logic in later sprints.
 app.use("/api/erp", erpRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/ai-drafts", aiDraftsRouter);
 app.use("/api/products", productsRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/collections", collectionsRouter);
