@@ -1,5 +1,6 @@
 import {
   DIMENSION_UNIT_VALUES,
+  LISTING_STATUS_VALUES,
   PRICE_CURRENCY_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
@@ -74,6 +75,36 @@ const baseProductSchema = z.object({
   showInArchiveAfterSale: z.boolean().default(false),
 
   images: z.array(imageSchema).optional(),
+
+  // Sprint 3: marketplace data foundation — all optional at creation time.
+  // Marketplace validation (readiness) happens only at future publish time.
+  ebayTitle: z.string().optional(),
+  ebaySubtitle: z.string().optional(),
+  ebayDescription: z.string().optional(),
+  ebayConditionDescription: z.string().optional(),
+  ebayCategory: z.string().optional(),
+  ebayItemSpecifics: z.string().optional(),
+  ebayListingPriceEur: z.number().positive("eBay listing price must be greater than 0").optional(),
+  ebayListingStatus: z.enum(LISTING_STATUS_VALUES as [string, ...string[]]).optional(),
+
+  etsyTitle: z.string().optional(),
+  etsyDescription: z.string().optional(),
+  etsyTags: z.array(z.string()).optional(),
+  etsyMaterials: z.string().optional(),
+  etsyStyle: z.string().optional(),
+  etsyOccasion: z.string().optional(),
+  etsyListingPriceEur: z.number().positive("Etsy listing price must be greater than 0").optional(),
+  etsyListingStatus: z.enum(LISTING_STATUS_VALUES as [string, ...string[]]).optional(),
+
+  wooProductName: z.string().optional(),
+  wooShortDescription: z.string().optional(),
+  wooLongDescription: z.string().optional(),
+  wooSlug: z.string().optional(),
+  wooSeoTitle: z.string().optional(),
+  wooMetaDescription: z.string().optional(),
+  wooFocusKeyword: z.string().optional(),
+  wooListingPriceEur: z.number().positive("WooCommerce listing price must be greater than 0").optional(),
+  wooListingStatus: z.enum(LISTING_STATUS_VALUES as [string, ...string[]]).optional(),
 });
 
 export const createProductSchema = baseProductSchema.superRefine((data, ctx) => {

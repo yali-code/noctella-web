@@ -4,6 +4,7 @@ import { ProductType } from "../enums/productType";
 import { DimensionUnit } from "../enums/dimensionUnit";
 import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
+import { ListingStatus } from "../enums/listingStatus";
 
 export type ID = string;
 
@@ -141,6 +142,49 @@ export interface Product extends Timestamps {
   allowMakeOffer: boolean;
   allowCashOnDelivery: boolean;
   showInArchiveAfterSale: boolean;
+
+  // eBay marketplace data (Sprint 3 foundation — all optional, not published/synced yet)
+  ebayTitle?: string;
+  ebaySubtitle?: string;
+  ebayDescription?: string;
+  ebayConditionDescription?: string;
+  ebayCategory?: string;
+  ebayItemSpecifics?: string;
+  ebayListingPriceEur?: number;
+  ebayListingStatus?: ListingStatus;
+
+  // Etsy marketplace data (Sprint 3 foundation — all optional, not published/synced yet)
+  etsyTitle?: string;
+  etsyDescription?: string;
+  etsyTags?: string[];
+  etsyMaterials?: string;
+  etsyStyle?: string;
+  etsyOccasion?: string;
+  etsyListingPriceEur?: number;
+  etsyListingStatus?: ListingStatus;
+
+  // WooCommerce marketplace data (Sprint 3 foundation — all optional, not published/synced yet)
+  wooProductName?: string;
+  wooShortDescription?: string;
+  wooLongDescription?: string;
+  wooSlug?: string;
+  wooSeoTitle?: string;
+  wooMetaDescription?: string;
+  wooFocusKeyword?: string;
+  wooListingPriceEur?: number;
+  wooListingStatus?: ListingStatus;
+}
+
+/** Missing-field readiness report for one marketplace. Never blocks product save. */
+export interface MarketplaceReadiness {
+  ready: boolean;
+  missingFields: string[];
+}
+
+export interface ProductMarketplaceReadiness {
+  ebay: MarketplaceReadiness;
+  etsy: MarketplaceReadiness;
+  woocommerce: MarketplaceReadiness;
 }
 
 export interface Order extends Timestamps {

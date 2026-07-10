@@ -128,4 +128,52 @@ describe("product service", () => {
     );
     expect(result.success).toBe(false);
   });
+
+  it("creates a product with no marketplace fields and reports all marketplaces not ready", async () => {
+    const product = await createProduct(db, baseInput());
+    expect(product.marketplaceReadiness.ebay.ready).toBe(false);
+    expect(product.marketplaceReadiness.ebay.missingFields).toEqual(
+      expect.arrayContaining(["title", "description", "category", "listingPriceEur"]),
+    );
+    expect(product.marketplaceReadiness.etsy.ready).toBe(false);
+    expect(product.marketplaceReadiness.woocommerce.ready).toBe(false);
+  });
+
+  it("saves optional eBay/Etsy/WooCommerce fields without requiring them", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        ebayTitle: "Vintage Chronograph — 1960s",
+        ebayDescription: "A rare find.",
+        ebayCategory: "Jewelry & Watches",
+        ebayListingPriceEur: 1300,
+        etsyTitle: "Vintage Chronograph",
+        etsyTags: ["vintage", "watch"],
+        wooProductName: "Vintage Chronograph",
+      }),
+    );
+    expect(product.ebayTitle).toBe("Vintage Chronograph — 1960s");
+    expect(product.etsyTags).toEqual(["vintage", "watch"]);
+    expect(product.wooProductName).toBe("Vintage Chronograph");
+    // eBay has all 4 required fields filled -> ready
+    expect(product.marketplaceReadiness.ebay.ready).toBe(true);
+    // Etsy is missing description + listingPriceEur -> not ready, but doesn't block save
+    expect(product.marketplaceReadiness.etsy.ready).toBe(false);
+    expect(product.marketplaceReadiness.etsy.missingFields).toEqual(
+      expect.arrayContaining(["description", "listingPriceEur"]),
+    );
+  });
+
+  it("updates marketplace fields independently via updateProduct", async () => {
+    const product = await createProduct(db, baseInput());
+    const updated = await updateProduct(db, product.id, {
+      etsyTitle: "Updated Etsy Title",
+      etsyDescription: "Updated description",
+      etsyListingPriceEur: 900,
+    });
+    expect(updated.etsyTitle).toBe("Updated Etsy Title");
+    expect(updated.marketplaceReadiness.etsy.ready).toBe(true);
+    // eBay untouched and still not ready
+    expect(updated.marketplaceReadiness.ebay.ready).toBe(false);
+  });
 });

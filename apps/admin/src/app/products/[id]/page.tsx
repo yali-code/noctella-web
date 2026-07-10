@@ -94,6 +94,48 @@ export default function ProductViewPage({ params }: { params: { id: string } }) 
           <p style={{ color: "var(--noctella-ivory)" }}>{product.description}</p>
         </div>
       )}
+
+      <div style={{ marginTop: 24 }}>
+        <h3>Marketplace Readiness</h3>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ReadinessCard label="eBay" readiness={product.marketplaceReadiness.ebay} />
+          <ReadinessCard label="Etsy" readiness={product.marketplaceReadiness.etsy} />
+          <ReadinessCard label="WooCommerce" readiness={product.marketplaceReadiness.woocommerce} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReadinessCard({
+  label,
+  readiness,
+}: {
+  label: string;
+  readiness: { ready: boolean; missingFields: string[] };
+}) {
+  return (
+    <div className="noctella-panel" style={{ padding: 16, minWidth: 200 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 14 }}>{label}</span>
+        <span
+          style={{
+            fontSize: 12,
+            padding: "2px 8px",
+            borderRadius: 4,
+            color: readiness.ready ? "var(--noctella-night-navy)" : "var(--noctella-ivory)",
+            background: readiness.ready ? "var(--noctella-bright-star-gold)" : "transparent",
+            border: readiness.ready ? "none" : "1px solid var(--noctella-aged-bronze)",
+          }}
+        >
+          {readiness.ready ? "Ready" : "Not Ready"}
+        </span>
+      </div>
+      {!readiness.ready && (
+        <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--noctella-aged-bronze)" }}>
+          Missing: {readiness.missingFields.join(", ")}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
-import { type Product, type ProductImage, ProductStatus, ProductType } from "@noctella/shared";
+import {
+  type Product,
+  type ProductImage,
+  type ProductMarketplaceReadiness,
+  ProductStatus,
+  ProductType,
+} from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { categories, collections, productImages, products } from "../db/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
@@ -53,6 +59,31 @@ function toProduct(row: typeof products.$inferSelect): Product {
     allowMakeOffer: row.allowMakeOffer,
     allowCashOnDelivery: row.allowCashOnDelivery,
     showInArchiveAfterSale: row.showInArchiveAfterSale,
+    ebayTitle: row.ebayTitle ?? undefined,
+    ebaySubtitle: row.ebaySubtitle ?? undefined,
+    ebayDescription: row.ebayDescription ?? undefined,
+    ebayConditionDescription: row.ebayConditionDescription ?? undefined,
+    ebayCategory: row.ebayCategory ?? undefined,
+    ebayItemSpecifics: row.ebayItemSpecifics ?? undefined,
+    ebayListingPriceEur: row.ebayListingPriceEur ?? undefined,
+    ebayListingStatus: (row.ebayListingStatus as Product["ebayListingStatus"]) ?? undefined,
+    etsyTitle: row.etsyTitle ?? undefined,
+    etsyDescription: row.etsyDescription ?? undefined,
+    etsyTags: row.etsyTags ? (JSON.parse(row.etsyTags) as string[]) : undefined,
+    etsyMaterials: row.etsyMaterials ?? undefined,
+    etsyStyle: row.etsyStyle ?? undefined,
+    etsyOccasion: row.etsyOccasion ?? undefined,
+    etsyListingPriceEur: row.etsyListingPriceEur ?? undefined,
+    etsyListingStatus: (row.etsyListingStatus as Product["etsyListingStatus"]) ?? undefined,
+    wooProductName: row.wooProductName ?? undefined,
+    wooShortDescription: row.wooShortDescription ?? undefined,
+    wooLongDescription: row.wooLongDescription ?? undefined,
+    wooSlug: row.wooSlug ?? undefined,
+    wooSeoTitle: row.wooSeoTitle ?? undefined,
+    wooMetaDescription: row.wooMetaDescription ?? undefined,
+    wooFocusKeyword: row.wooFocusKeyword ?? undefined,
+    wooListingPriceEur: row.wooListingPriceEur ?? undefined,
+    wooListingStatus: (row.wooListingStatus as Product["wooListingStatus"]) ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -160,6 +191,43 @@ async function getImagesForProduct(db: DbClient, productId: string): Promise<Pro
 
 export interface ProductWithImages extends Product {
   images: ProductImage[];
+  marketplaceReadiness: ProductMarketplaceReadiness;
+}
+
+/**
+ * Sprint 3: computes which fields are missing for each marketplace, without
+ * blocking product save. Required-field sets below are a minimal, sensible
+ * foundation (title/description/category/price per platform) — full
+ * platform-specific publish validation is out of scope for this sprint.
+ */
+export function computeMarketplaceReadiness(product: Product): ProductMarketplaceReadiness {
+  const missing = (fields: Array<[string, unknown]>) =>
+    fields.filter(([, value]) => value === undefined || value === null || value === "").map(([name]) => name);
+
+  const ebayMissing = missing([
+    ["title", product.ebayTitle],
+    ["description", product.ebayDescription],
+    ["category", product.ebayCategory],
+    ["listingPriceEur", product.ebayListingPriceEur],
+  ]);
+
+  const etsyMissing = missing([
+    ["title", product.etsyTitle],
+    ["description", product.etsyDescription],
+    ["listingPriceEur", product.etsyListingPriceEur],
+  ]);
+
+  const wooMissing = missing([
+    ["productName", product.wooProductName],
+    ["shortDescription", product.wooShortDescription],
+    ["listingPriceEur", product.wooListingPriceEur],
+  ]);
+
+  return {
+    ebay: { ready: ebayMissing.length === 0, missingFields: ebayMissing },
+    etsy: { ready: etsyMissing.length === 0, missingFields: etsyMissing },
+    woocommerce: { ready: wooMissing.length === 0, missingFields: wooMissing },
+  };
 }
 
 export async function listProducts(db: DbClient, query: ProductListQuery) {
@@ -203,7 +271,8 @@ export async function getProductById(db: DbClient, id: string): Promise<ProductW
   const [row] = await db.select().from(products).where(eq(products.id, id));
   if (!row) throw new NotFoundError("Product not found");
   const images = await getImagesForProduct(db, id);
-  return { ...toProduct(row), images };
+  const product = toProduct(row);
+  return { ...product, images, marketplaceReadiness: computeMarketplaceReadiness(product) };
 }
 
 export async function createProduct(
@@ -267,6 +336,31 @@ export async function createProduct(
     allowMakeOffer: input.allowMakeOffer,
     allowCashOnDelivery: input.allowCashOnDelivery,
     showInArchiveAfterSale: input.showInArchiveAfterSale,
+    ebayTitle: input.ebayTitle,
+    ebaySubtitle: input.ebaySubtitle,
+    ebayDescription: input.ebayDescription,
+    ebayConditionDescription: input.ebayConditionDescription,
+    ebayCategory: input.ebayCategory,
+    ebayItemSpecifics: input.ebayItemSpecifics,
+    ebayListingPriceEur: input.ebayListingPriceEur,
+    ebayListingStatus: input.ebayListingStatus,
+    etsyTitle: input.etsyTitle,
+    etsyDescription: input.etsyDescription,
+    etsyTags: input.etsyTags ? JSON.stringify(input.etsyTags) : undefined,
+    etsyMaterials: input.etsyMaterials,
+    etsyStyle: input.etsyStyle,
+    etsyOccasion: input.etsyOccasion,
+    etsyListingPriceEur: input.etsyListingPriceEur,
+    etsyListingStatus: input.etsyListingStatus,
+    wooProductName: input.wooProductName,
+    wooShortDescription: input.wooShortDescription,
+    wooLongDescription: input.wooLongDescription,
+    wooSlug: input.wooSlug,
+    wooSeoTitle: input.wooSeoTitle,
+    wooMetaDescription: input.wooMetaDescription,
+    wooFocusKeyword: input.wooFocusKeyword,
+    wooListingPriceEur: input.wooListingPriceEur,
+    wooListingStatus: input.wooListingStatus,
     createdAt: now,
     updatedAt: now,
   });
@@ -360,6 +454,45 @@ export async function updateProduct(
       ...(input.showInArchiveAfterSale !== undefined
         ? { showInArchiveAfterSale: input.showInArchiveAfterSale }
         : {}),
+      ...(input.ebayTitle !== undefined ? { ebayTitle: input.ebayTitle } : {}),
+      ...(input.ebaySubtitle !== undefined ? { ebaySubtitle: input.ebaySubtitle } : {}),
+      ...(input.ebayDescription !== undefined ? { ebayDescription: input.ebayDescription } : {}),
+      ...(input.ebayConditionDescription !== undefined
+        ? { ebayConditionDescription: input.ebayConditionDescription }
+        : {}),
+      ...(input.ebayCategory !== undefined ? { ebayCategory: input.ebayCategory } : {}),
+      ...(input.ebayItemSpecifics !== undefined ? { ebayItemSpecifics: input.ebayItemSpecifics } : {}),
+      ...(input.ebayListingPriceEur !== undefined
+        ? { ebayListingPriceEur: input.ebayListingPriceEur }
+        : {}),
+      ...(input.ebayListingStatus !== undefined ? { ebayListingStatus: input.ebayListingStatus } : {}),
+      ...(input.etsyTitle !== undefined ? { etsyTitle: input.etsyTitle } : {}),
+      ...(input.etsyDescription !== undefined ? { etsyDescription: input.etsyDescription } : {}),
+      ...(input.etsyTags !== undefined ? { etsyTags: JSON.stringify(input.etsyTags) } : {}),
+      ...(input.etsyMaterials !== undefined ? { etsyMaterials: input.etsyMaterials } : {}),
+      ...(input.etsyStyle !== undefined ? { etsyStyle: input.etsyStyle } : {}),
+      ...(input.etsyOccasion !== undefined ? { etsyOccasion: input.etsyOccasion } : {}),
+      ...(input.etsyListingPriceEur !== undefined
+        ? { etsyListingPriceEur: input.etsyListingPriceEur }
+        : {}),
+      ...(input.etsyListingStatus !== undefined ? { etsyListingStatus: input.etsyListingStatus } : {}),
+      ...(input.wooProductName !== undefined ? { wooProductName: input.wooProductName } : {}),
+      ...(input.wooShortDescription !== undefined
+        ? { wooShortDescription: input.wooShortDescription }
+        : {}),
+      ...(input.wooLongDescription !== undefined
+        ? { wooLongDescription: input.wooLongDescription }
+        : {}),
+      ...(input.wooSlug !== undefined ? { wooSlug: input.wooSlug } : {}),
+      ...(input.wooSeoTitle !== undefined ? { wooSeoTitle: input.wooSeoTitle } : {}),
+      ...(input.wooMetaDescription !== undefined
+        ? { wooMetaDescription: input.wooMetaDescription }
+        : {}),
+      ...(input.wooFocusKeyword !== undefined ? { wooFocusKeyword: input.wooFocusKeyword } : {}),
+      ...(input.wooListingPriceEur !== undefined
+        ? { wooListingPriceEur: input.wooListingPriceEur }
+        : {}),
+      ...(input.wooListingStatus !== undefined ? { wooListingStatus: input.wooListingStatus } : {}),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(products.id, id));

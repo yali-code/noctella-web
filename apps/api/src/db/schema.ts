@@ -117,6 +117,37 @@ export const products = sqliteTable("products", {
     .notNull()
     .default(false),
 
+  // eBay marketplace data (Sprint 3 foundation — all optional)
+  ebayTitle: text("ebay_title"),
+  ebaySubtitle: text("ebay_subtitle"),
+  ebayDescription: text("ebay_description"),
+  ebayConditionDescription: text("ebay_condition_description"),
+  ebayCategory: text("ebay_category"),
+  ebayItemSpecifics: text("ebay_item_specifics"),
+  ebayListingPriceEur: real("ebay_listing_price_eur"),
+  ebayListingStatus: text("ebay_listing_status"),
+
+  // Etsy marketplace data (Sprint 3 foundation — all optional)
+  etsyTitle: text("etsy_title"),
+  etsyDescription: text("etsy_description"),
+  etsyTags: text("etsy_tags"), // JSON-encoded string[]
+  etsyMaterials: text("etsy_materials"),
+  etsyStyle: text("etsy_style"),
+  etsyOccasion: text("etsy_occasion"),
+  etsyListingPriceEur: real("etsy_listing_price_eur"),
+  etsyListingStatus: text("etsy_listing_status"),
+
+  // WooCommerce marketplace data (Sprint 3 foundation — all optional)
+  wooProductName: text("woo_product_name"),
+  wooShortDescription: text("woo_short_description"),
+  wooLongDescription: text("woo_long_description"),
+  wooSlug: text("woo_slug"),
+  wooSeoTitle: text("woo_seo_title"),
+  wooMetaDescription: text("woo_meta_description"),
+  wooFocusKeyword: text("woo_focus_keyword"),
+  wooListingPriceEur: real("woo_listing_price_eur"),
+  wooListingStatus: text("woo_listing_status"),
+
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),

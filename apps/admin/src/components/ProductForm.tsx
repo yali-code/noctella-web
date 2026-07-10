@@ -2,6 +2,7 @@
 
 import {
   DIMENSION_UNIT_VALUES,
+  LISTING_STATUS_VALUES,
   PRICE_CURRENCY_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
@@ -67,6 +68,35 @@ export interface ProductFormValues {
   allowMakeOffer: boolean;
   allowCashOnDelivery: boolean;
   showInArchiveAfterSale: boolean;
+
+  // Sprint 3: marketplace data foundation — all optional, not required to save
+  ebayTitle?: string;
+  ebaySubtitle?: string;
+  ebayDescription?: string;
+  ebayConditionDescription?: string;
+  ebayCategory?: string;
+  ebayItemSpecifics?: string;
+  ebayListingPriceEur?: string;
+  ebayListingStatus?: string;
+
+  etsyTitle?: string;
+  etsyDescription?: string;
+  etsyTags?: string;
+  etsyMaterials?: string;
+  etsyStyle?: string;
+  etsyOccasion?: string;
+  etsyListingPriceEur?: string;
+  etsyListingStatus?: string;
+
+  wooProductName?: string;
+  wooShortDescription?: string;
+  wooLongDescription?: string;
+  wooSlug?: string;
+  wooSeoTitle?: string;
+  wooMetaDescription?: string;
+  wooFocusKeyword?: string;
+  wooListingPriceEur?: string;
+  wooListingStatus?: string;
 }
 
 export const emptyProductForm: ProductFormValues = {
@@ -130,6 +160,31 @@ export function productToFormValues(product: ProductDetail): ProductFormValues {
     allowMakeOffer: product.allowMakeOffer,
     allowCashOnDelivery: product.allowCashOnDelivery,
     showInArchiveAfterSale: product.showInArchiveAfterSale,
+    ebayTitle: product.ebayTitle,
+    ebaySubtitle: product.ebaySubtitle,
+    ebayDescription: product.ebayDescription,
+    ebayConditionDescription: product.ebayConditionDescription,
+    ebayCategory: product.ebayCategory,
+    ebayItemSpecifics: product.ebayItemSpecifics,
+    ebayListingPriceEur: product.ebayListingPriceEur?.toString(),
+    ebayListingStatus: product.ebayListingStatus,
+    etsyTitle: product.etsyTitle,
+    etsyDescription: product.etsyDescription,
+    etsyTags: product.etsyTags?.join(", "),
+    etsyMaterials: product.etsyMaterials,
+    etsyStyle: product.etsyStyle,
+    etsyOccasion: product.etsyOccasion,
+    etsyListingPriceEur: product.etsyListingPriceEur?.toString(),
+    etsyListingStatus: product.etsyListingStatus,
+    wooProductName: product.wooProductName,
+    wooShortDescription: product.wooShortDescription,
+    wooLongDescription: product.wooLongDescription,
+    wooSlug: product.wooSlug,
+    wooSeoTitle: product.wooSeoTitle,
+    wooMetaDescription: product.wooMetaDescription,
+    wooFocusKeyword: product.wooFocusKeyword,
+    wooListingPriceEur: product.wooListingPriceEur?.toString(),
+    wooListingStatus: product.wooListingStatus,
   };
 }
 
@@ -180,6 +235,33 @@ function toApiPayload(values: ProductFormValues) {
     allowMakeOffer: values.allowMakeOffer,
     allowCashOnDelivery: values.allowCashOnDelivery,
     showInArchiveAfterSale: values.showInArchiveAfterSale,
+    ebayTitle: values.ebayTitle || undefined,
+    ebaySubtitle: values.ebaySubtitle || undefined,
+    ebayDescription: values.ebayDescription || undefined,
+    ebayConditionDescription: values.ebayConditionDescription || undefined,
+    ebayCategory: values.ebayCategory || undefined,
+    ebayItemSpecifics: values.ebayItemSpecifics || undefined,
+    ebayListingPriceEur: num(values.ebayListingPriceEur),
+    ebayListingStatus: values.ebayListingStatus || undefined,
+    etsyTitle: values.etsyTitle || undefined,
+    etsyDescription: values.etsyDescription || undefined,
+    etsyTags: values.etsyTags
+      ? values.etsyTags.split(",").map((t) => t.trim()).filter(Boolean)
+      : undefined,
+    etsyMaterials: values.etsyMaterials || undefined,
+    etsyStyle: values.etsyStyle || undefined,
+    etsyOccasion: values.etsyOccasion || undefined,
+    etsyListingPriceEur: num(values.etsyListingPriceEur),
+    etsyListingStatus: values.etsyListingStatus || undefined,
+    wooProductName: values.wooProductName || undefined,
+    wooShortDescription: values.wooShortDescription || undefined,
+    wooLongDescription: values.wooLongDescription || undefined,
+    wooSlug: values.wooSlug || undefined,
+    wooSeoTitle: values.wooSeoTitle || undefined,
+    wooMetaDescription: values.wooMetaDescription || undefined,
+    wooFocusKeyword: values.wooFocusKeyword || undefined,
+    wooListingPriceEur: num(values.wooListingPriceEur),
+    wooListingStatus: values.wooListingStatus || undefined,
     images: values.imageUrl
       ? [{ url: values.imageUrl, altText: values.imageAltText || undefined, sortOrder: 0, isPrimary: true }]
       : [],
@@ -545,6 +627,198 @@ export function ProductForm({ initialValues, submitLabel, onSubmit }: ProductFor
           checked={values.showInArchiveAfterSale}
           onChange={(v) => set("showInArchiveAfterSale", v)}
         />
+      </Section>
+
+      <Section title="eBay (optional — not published or synced yet)">
+        <Field label="Title">
+          <input style={inputStyle} value={values.ebayTitle ?? ""} onChange={(e) => set("ebayTitle", e.target.value)} />
+        </Field>
+        <Field label="Subtitle">
+          <input
+            style={inputStyle}
+            value={values.ebaySubtitle ?? ""}
+            onChange={(e) => set("ebaySubtitle", e.target.value)}
+          />
+        </Field>
+        <Field label="Description">
+          <textarea
+            style={{ ...inputStyle, minHeight: 80 }}
+            value={values.ebayDescription ?? ""}
+            onChange={(e) => set("ebayDescription", e.target.value)}
+          />
+        </Field>
+        <Field label="Condition Description">
+          <textarea
+            style={{ ...inputStyle, minHeight: 60 }}
+            value={values.ebayConditionDescription ?? ""}
+            onChange={(e) => set("ebayConditionDescription", e.target.value)}
+          />
+        </Field>
+        <Field label="Category">
+          <input
+            style={inputStyle}
+            value={values.ebayCategory ?? ""}
+            onChange={(e) => set("ebayCategory", e.target.value)}
+          />
+        </Field>
+        <Field label="Item Specifics">
+          <textarea
+            style={{ ...inputStyle, minHeight: 60 }}
+            value={values.ebayItemSpecifics ?? ""}
+            onChange={(e) => set("ebayItemSpecifics", e.target.value)}
+          />
+        </Field>
+        <Field label="Listing Price (EUR)">
+          <input
+            style={inputStyle}
+            value={values.ebayListingPriceEur ?? ""}
+            onChange={(e) => set("ebayListingPriceEur", e.target.value)}
+          />
+        </Field>
+        <Field label="Listing Status">
+          <select
+            style={inputStyle}
+            value={values.ebayListingStatus ?? ""}
+            onChange={(e) => set("ebayListingStatus", e.target.value)}
+          >
+            <option value="">—</option>
+            {LISTING_STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </Section>
+
+      <Section title="Etsy (optional — not published or synced yet)">
+        <Field label="Title">
+          <input style={inputStyle} value={values.etsyTitle ?? ""} onChange={(e) => set("etsyTitle", e.target.value)} />
+        </Field>
+        <Field label="Description">
+          <textarea
+            style={{ ...inputStyle, minHeight: 80 }}
+            value={values.etsyDescription ?? ""}
+            onChange={(e) => set("etsyDescription", e.target.value)}
+          />
+        </Field>
+        <Field label="Tags (comma-separated)">
+          <input style={inputStyle} value={values.etsyTags ?? ""} onChange={(e) => set("etsyTags", e.target.value)} />
+        </Field>
+        <Field label="Materials">
+          <input
+            style={inputStyle}
+            value={values.etsyMaterials ?? ""}
+            onChange={(e) => set("etsyMaterials", e.target.value)}
+          />
+        </Field>
+        <Field label="Style">
+          <input style={inputStyle} value={values.etsyStyle ?? ""} onChange={(e) => set("etsyStyle", e.target.value)} />
+        </Field>
+        <Field label="Occasion">
+          <input
+            style={inputStyle}
+            value={values.etsyOccasion ?? ""}
+            onChange={(e) => set("etsyOccasion", e.target.value)}
+          />
+        </Field>
+        <Field label="Listing Price (EUR)">
+          <input
+            style={inputStyle}
+            value={values.etsyListingPriceEur ?? ""}
+            onChange={(e) => set("etsyListingPriceEur", e.target.value)}
+          />
+        </Field>
+        <Field label="Listing Status">
+          <select
+            style={inputStyle}
+            value={values.etsyListingStatus ?? ""}
+            onChange={(e) => set("etsyListingStatus", e.target.value)}
+          >
+            <option value="">—</option>
+            {LISTING_STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </Section>
+
+      <Section title="WooCommerce (optional — not published or synced yet)">
+        <Field label="Product Name">
+          <input
+            style={inputStyle}
+            value={values.wooProductName ?? ""}
+            onChange={(e) => set("wooProductName", e.target.value)}
+          />
+        </Field>
+        <Field label="Short Description">
+          <textarea
+            style={{ ...inputStyle, minHeight: 60 }}
+            value={values.wooShortDescription ?? ""}
+            onChange={(e) => set("wooShortDescription", e.target.value)}
+          />
+        </Field>
+        <Field label="Long Description">
+          <textarea
+            style={{ ...inputStyle, minHeight: 80 }}
+            value={values.wooLongDescription ?? ""}
+            onChange={(e) => set("wooLongDescription", e.target.value)}
+          />
+        </Field>
+        <Field label="Slug">
+          <input style={inputStyle} value={values.wooSlug ?? ""} onChange={(e) => set("wooSlug", e.target.value)} />
+        </Field>
+        <Field label="SEO Title">
+          <input
+            style={inputStyle}
+            value={values.wooSeoTitle ?? ""}
+            onChange={(e) => set("wooSeoTitle", e.target.value)}
+          />
+        </Field>
+        <Field label="Meta Description">
+          <input
+            style={inputStyle}
+            value={values.wooMetaDescription ?? ""}
+            onChange={(e) => set("wooMetaDescription", e.target.value)}
+          />
+        </Field>
+        <Field label="Focus Keyword">
+          <input
+            style={inputStyle}
+            value={values.wooFocusKeyword ?? ""}
+            onChange={(e) => set("wooFocusKeyword", e.target.value)}
+          />
+        </Field>
+        <Field label="Listing Price (EUR)">
+          <input
+            style={inputStyle}
+            value={values.wooListingPriceEur ?? ""}
+            onChange={(e) => set("wooListingPriceEur", e.target.value)}
+          />
+        </Field>
+        <Field label="Listing Status">
+          <select
+            style={inputStyle}
+            value={values.wooListingStatus ?? ""}
+            onChange={(e) => set("wooListingStatus", e.target.value)}
+          >
+            <option value="">—</option>
+            {LISTING_STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </Section>
+
+      <Section title="AI Drafts">
+        <p style={{ margin: 0, fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
+          AI-assisted listing generation is not implemented yet. Draft review will appear here in a
+          future sprint.
+        </p>
       </Section>
 
       <button

@@ -1,4 +1,4 @@
-import type { Category, Collection, Product, ProductImage } from "@noctella/shared";
+import type { Category, Collection, Product, ProductImage, ProductMarketplaceReadiness } from "@noctella/shared";
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -13,6 +13,7 @@ export interface ProductListItem extends Product {
 
 export interface ProductDetail extends Product {
   images: ProductImage[];
+  marketplaceReadiness: ProductMarketplaceReadiness;
 }
 
 export type { Category, Collection };
