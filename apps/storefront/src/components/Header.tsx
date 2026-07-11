@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getWishlistIds } from "@/lib/wishlist";
+import { cartItemCount, getCart } from "@/lib/cart";
 
 const NAV_ITEMS = [
   { label: "Home", href: "/" },
@@ -20,15 +21,22 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [wishlistCount, setWishlistCount] = useState(0);
+  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
     setWishlistCount(getWishlistIds().length);
-    const onStorage = () => setWishlistCount(getWishlistIds().length);
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("noctella:wishlist-updated", onStorage);
+    setCartCount(cartItemCount(getCart()));
+    const onWishlistUpdate = () => setWishlistCount(getWishlistIds().length);
+    const onCartUpdate = () => setCartCount(cartItemCount(getCart()));
+    window.addEventListener("storage", onWishlistUpdate);
+    window.addEventListener("storage", onCartUpdate);
+    window.addEventListener("noctella:wishlist-updated", onWishlistUpdate);
+    window.addEventListener("noctella:cart-updated", onCartUpdate);
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("noctella:wishlist-updated", onStorage);
+      window.removeEventListener("storage", onWishlistUpdate);
+      window.removeEventListener("storage", onCartUpdate);
+      window.removeEventListener("noctella:wishlist-updated", onWishlistUpdate);
+      window.removeEventListener("noctella:cart-updated", onCartUpdate);
     };
   }, []);
 
@@ -106,8 +114,8 @@ export function Header() {
           <Link href="/account" style={{ fontSize: 14 }}>
             Account
           </Link>
-          <Link href="/cart" style={{ fontSize: 14 }}>
-            Cart
+          <Link href="/cart" style={{ fontSize: 14 }} aria-label={`Cart (${cartCount} items)`}>
+            Cart{cartCount > 0 ? ` (${cartCount})` : ""}
           </Link>
         </nav>
       </div>
@@ -129,7 +137,7 @@ export function Header() {
             Account
           </Link>
           <Link href="/cart" style={{ fontSize: 14 }} onClick={() => setMenuOpen(false)}>
-            Cart
+            Cart{cartCount > 0 ? ` (${cartCount})` : ""}
           </Link>
         </nav>
       )}

@@ -7,6 +7,7 @@ import { ProductGallery } from "@/components/ProductGallery";
 import { ProductCard } from "@/components/ProductCard";
 import { MakeOfferForm } from "@/components/MakeOfferForm";
 import { getWishlistIds, toggleWishlistPersisted } from "@/lib/wishlist";
+import { addToCartPersisted, cartHasItem, getCart } from "@/lib/cart";
 import type { PublicProductDetail } from "@/lib/types";
 
 export default function ProductDetailPage({ params }: { params: { slug: string } }) {
@@ -15,6 +16,8 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
   const [error, setError] = useState<string | null>(null);
   const [inWishlist, setInWishlist] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
+  const [inCart, setInCart] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
 
   useEffect(() => {
     api
@@ -22,6 +25,7 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
       .then((p) => {
         setProduct(p);
         setInWishlist(getWishlistIds().includes(p.id));
+        setInCart(cartHasItem(getCart(), p.id));
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) setNotFound(true);
@@ -34,6 +38,24 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
     const updated = toggleWishlistPersisted(product.id);
     setInWishlist(updated.includes(product.id));
     window.dispatchEvent(new Event("noctella:wishlist-updated"));
+  }
+
+  function handleAddToCart() {
+    if (!product || product.status !== "published" || inCart) return;
+    const primaryImage = product.images.find((img) => img.isPrimary) ?? product.images[0];
+    addToCartPersisted({
+      productId: product.id,
+      slug: product.slug,
+      title: product.title,
+      primaryImageUrl: primaryImage?.url,
+      eurPrice: product.priceEur,
+      usdPrice: product.priceUsd,
+      quantity: 1,
+      productType: product.type,
+    });
+    setInCart(true);
+    setJustAdded(true);
+    window.dispatchEvent(new Event("noctella:cart-updated"));
   }
 
   if (notFound) {
@@ -143,10 +165,23 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
             <button disabled style={disabledButtonStyle} title="Coming soon">
               Ask AI
             </button>
-            <button disabled style={disabledButtonStyle} title="Coming soon">
-              Add to Cart
+            <button
+              onClick={handleAddToCart}
+              disabled={product.status !== "published" || inCart}
+              style={inCart ? secondaryButtonStyle : primaryButtonStyle}
+              aria-live="polite"
+            >
+              {inCart ? (justAdded ? "Added to Cart" : "Already in Cart") : "Add to Cart"}
             </button>
           </div>
+
+          {inCart && (
+            <p style={{ fontSize: 13, color: "var(--noctella-bright-star-gold)", marginTop: -12 }}>
+              <Link href="/cart" style={{ color: "inherit" }}>
+                View Cart
+              </Link>
+            </p>
+          )}
 
           {showOfferForm && product.allowMakeOffer && (
             <div style={{ marginBottom: 20 }}>
