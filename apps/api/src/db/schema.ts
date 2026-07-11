@@ -213,3 +213,21 @@ export const aiListingDrafts = sqliteTable("ai_listing_drafts", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+/** Sprint 4: minimal "Make an Offer" persistence. Never auto-accepted. */
+export const offers = sqliteTable("offers", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  offeredAmount: real("offered_amount").notNull(),
+  currency: text("currency").notNull(),
+  message: text("message"),
+  status: text("status").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});

@@ -63,16 +63,16 @@ const baseProductSchema = z.object({
 
   shippingProfile: z.string().optional(),
   shippingNote: z.string().optional(),
-  customsWarning: z.boolean().default(false),
+  customsWarning: z.boolean().optional(),
 
   seoTitle: z.string().optional(),
   metaDescription: z.string().optional(),
   keywords: z.array(z.string()).optional(),
 
-  isFeatured: z.boolean().default(false),
-  allowMakeOffer: z.boolean().default(false),
-  allowCashOnDelivery: z.boolean().default(false),
-  showInArchiveAfterSale: z.boolean().default(false),
+  isFeatured: z.boolean().optional(),
+  allowMakeOffer: z.boolean().optional(),
+  allowCashOnDelivery: z.boolean().optional(),
+  showInArchiveAfterSale: z.boolean().optional(),
 
   images: z.array(imageSchema).optional(),
 

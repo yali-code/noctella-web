@@ -47,3 +47,25 @@ a {
   border-top: 1px solid var(--noctella-aged-bronze);
   opacity: 0.5;
 }
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--noctella-bright-star-gold);
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .noctella-mobile-menu-toggle {
+    display: inline-block !important;
+  }
+  .noctella-nav {
+    display: none !important;
+  }
+}
+
+@media (min-width: 861px) {
+  .noctella-mobile-nav {
+    display: none !important;
+  }
+}

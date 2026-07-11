@@ -70,6 +70,14 @@ describe("product service", () => {
     expect(archived.status).toBe(ProductStatus.Archived);
   });
 
+  it("a partial update does not reset unrelated boolean flags to false", async () => {
+    const product = await createProduct(db, baseInput({ showInArchiveAfterSale: true, isFeatured: true }));
+    const updated = await updateProduct(db, product.id, { status: ProductStatus.Sold });
+    expect(updated.showInArchiveAfterSale).toBe(true);
+    expect(updated.isFeatured).toBe(true);
+    expect(updated.status).toBe(ProductStatus.Sold);
+  });
+
   it("enforces Unique Item stock quantity cannot exceed 1", async () => {
     await expect(
       createProduct(db, baseInput({ type: ProductType.UniqueItem, stockQuantity: 2 })),

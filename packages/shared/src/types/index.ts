@@ -6,6 +6,7 @@ import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
+import { OfferStatus } from "../enums/offerStatus";
 
 export type ID = string;
 
@@ -249,4 +250,16 @@ export interface Setting extends Timestamps {
   id: ID;
   key: string;
   value: string;
+}
+
+/** Customer-submitted "Make an Offer" record. Never auto-accepted; reviewed manually later. */
+export interface Offer extends Timestamps {
+  id: ID;
+  productId: ID;
+  customerName: string;
+  customerEmail: string;
+  offeredAmount: number;
+  currency: PriceCurrency;
+  message?: string;
+  status: OfferStatus;
 }

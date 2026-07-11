@@ -6,5 +6,6 @@ export * from "./enums/weightUnit";
 export * from "./enums/priceCurrency";
 export * from "./enums/listingStatus";
 export * from "./enums/aiDraftStatus";
+export * from "./enums/offerStatus";
 export * from "./types";
 export * from "./theme/tokens";
