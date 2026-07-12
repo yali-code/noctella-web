@@ -34,6 +34,7 @@ export interface PublicProduct {
   customsWarning: boolean;
   isFeatured: boolean;
   allowMakeOffer: boolean;
+  allowCashOnDelivery: boolean;
   status: string;
   categoryId?: string;
   categoryName?: string;

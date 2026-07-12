@@ -52,6 +52,7 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
       usdPrice: product.priceUsd,
       quantity: 1,
       productType: product.type,
+      allowCashOnDelivery: product.allowCashOnDelivery,
     });
     setInCart(true);
     setJustAdded(true);

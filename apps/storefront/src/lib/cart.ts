@@ -9,6 +9,7 @@ export interface CartItem {
   usdPrice?: number;
   quantity: number;
   productType: string;
+  allowCashOnDelivery?: boolean;
 }
 
 /**
@@ -29,7 +30,8 @@ function isValidCartItem(value: unknown): value is CartItem {
     typeof v.quantity === "number" &&
     typeof v.productType === "string" &&
     (v.primaryImageUrl === undefined || typeof v.primaryImageUrl === "string") &&
-    (v.usdPrice === undefined || typeof v.usdPrice === "number")
+    (v.usdPrice === undefined || typeof v.usdPrice === "number") &&
+    (v.allowCashOnDelivery === undefined || typeof v.allowCashOnDelivery === "boolean")
   );
 }
 
@@ -64,6 +66,11 @@ export function cartUsdSubtotal(items: CartItem[]): number | undefined {
   if (items.length === 0) return undefined;
   if (items.some((i) => i.usdPrice === undefined)) return undefined;
   return items.reduce((sum, i) => sum + (i.usdPrice as number) * i.quantity, 0);
+}
+
+/** Cash on Delivery is available only when the cart is non-empty and every item allows it. */
+export function isCashOnDeliveryAvailable(items: CartItem[]): boolean {
+  return items.length > 0 && items.every((i) => i.allowCashOnDelivery === true);
 }
 
 /** localStorage-backed wrapper — guest-only persistence, no database. */

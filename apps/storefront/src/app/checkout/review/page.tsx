@@ -182,12 +182,12 @@ export default function CheckoutReviewPage() {
               occur during international shipping.
             </p>
 
-            <button disabled style={disabledButtonStyle} title="Payment methods will be configured in Sprint 6">
+            <Link
+              href="/checkout/payment"
+              style={{ ...primaryButtonStyle, display: "block", textAlign: "center", textDecoration: "none" }}
+            >
               Continue to Payment
-            </button>
-            <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)", marginTop: 8 }}>
-              Payment methods will be configured in Sprint 6
-            </p>
+            </Link>
           </div>
         </aside>
       </div>
@@ -235,15 +235,15 @@ function SummaryRow({ label, value, muted }: { label: string; value: string; mut
   );
 }
 
-const disabledButtonStyle: React.CSSProperties = {
+const primaryButtonStyle: React.CSSProperties = {
   width: "100%",
   marginTop: 16,
   padding: "12px 18px",
-  background: "transparent",
-  color: "var(--noctella-aged-bronze)",
-  border: "1px solid var(--noctella-aged-bronze)",
+  background: "var(--noctella-antique-gold)",
+  color: "var(--noctella-night-navy)",
+  border: "none",
   borderRadius: 4,
   fontSize: 14,
-  opacity: 0.6,
-  cursor: "not-allowed",
+  fontWeight: 600,
+  cursor: "pointer",
 };

@@ -38,6 +38,7 @@ export interface PublicProduct {
   customsWarning: boolean;
   isFeatured: boolean;
   allowMakeOffer: boolean;
+  allowCashOnDelivery: boolean;
   status: ProductStatus;
   categoryId?: string;
   categoryName?: string;
@@ -150,6 +151,7 @@ async function toPublicProduct(
     customsWarning: row.customsWarning,
     isFeatured: row.isFeatured,
     allowMakeOffer: row.allowMakeOffer,
+    allowCashOnDelivery: row.allowCashOnDelivery,
     status: row.status as ProductStatus,
     categoryId: row.categoryId ?? undefined,
     categoryName,

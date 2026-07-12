@@ -7,6 +7,8 @@ import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { OfferStatus } from "../enums/offerStatus";
+import { PaymentProvider } from "../enums/paymentProvider";
+import { PaymentStatus } from "../enums/paymentStatus";
 
 export type ID = string;
 
@@ -262,4 +264,14 @@ export interface Offer extends Timestamps {
   currency: PriceCurrency;
   message?: string;
   status: OfferStatus;
+}
+
+/** Sprint 6A: payment foundation. No real provider connected yet — mock providers only. */
+export interface Payment extends Timestamps {
+  id: ID;
+  orderDraftId: string;
+  provider: PaymentProvider;
+  status: PaymentStatus;
+  amount: number;
+  currency: PriceCurrency;
 }
