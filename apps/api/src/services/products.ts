@@ -3,13 +3,16 @@ import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import {
   type Product,
   type ProductImage,
+  type ProductPhoto,
   type ProductMarketplaceReadiness,
   ProductStatus,
   ProductType,
 } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { categories, collections, productImages, products } from "../db/schema";
+import { categories, collections, productImages, productPhotos, products } from "../db/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
+import type { PhotoStorage, StoredProductPhoto } from "./photoStorage";
+import { photoStorage } from "./photoStorage";
 import { slugify } from "../validation/common";
 import type { CreateProductInput, ProductListQuery, UpdateProductInput } from "../validation/product";
 
@@ -84,6 +87,26 @@ function toProduct(row: typeof products.$inferSelect): Product {
     wooFocusKeyword: row.wooFocusKeyword ?? undefined,
     wooListingPriceEur: row.wooListingPriceEur ?? undefined,
     wooListingStatus: (row.wooListingStatus as Product["wooListingStatus"]) ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+
+function toProductPhoto(row: typeof productPhotos.$inferSelect): ProductPhoto {
+  return {
+    id: row.id,
+    productId: row.productId,
+    url: row.url,
+    thumbnailUrl: row.thumbnailUrl,
+    altText: row.altText ?? undefined,
+    sortOrder: row.sortOrder,
+    isPrimary: row.isPrimary,
+    filename: row.filename,
+    mimeType: row.mimeType,
+    sizeBytes: row.sizeBytes,
+    width: row.width,
+    height: row.height,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -189,7 +212,46 @@ async function getImagesForProduct(db: DbClient, productId: string): Promise<Pro
   return rows.map(toProductImage);
 }
 
+
+async function getPhotosForProduct(db: DbClient, productId: string): Promise<ProductPhoto[]> {
+  const rows = await db
+    .select()
+    .from(productPhotos)
+    .where(eq(productPhotos.productId, productId))
+    .orderBy(asc(productPhotos.sortOrder));
+  return rows.map(toProductPhoto);
+}
+
+async function ensureSinglePrimary(db: DbClient, productId: string, primaryId?: string): Promise<void> {
+  const photos = await getPhotosForProduct(db, productId);
+  const selected = primaryId ?? photos.find((photo) => photo.isPrimary)?.id ?? photos[0]?.id;
+  if (!selected) return;
+  const now = new Date().toISOString();
+  for (const photo of photos) {
+    await db.update(productPhotos).set({ isPrimary: photo.id === selected, updatedAt: now }).where(eq(productPhotos.id, photo.id));
+  }
+}
+
+function photoToLegacyImage(photo: ProductPhoto): ProductImage {
+  return {
+    id: photo.id,
+    productId: photo.productId,
+    url: photo.url,
+    altText: photo.altText,
+    sortOrder: photo.sortOrder,
+    isPrimary: photo.isPrimary,
+    createdAt: photo.createdAt,
+    updatedAt: photo.updatedAt,
+  };
+}
+
+async function getPreferredImagesForProduct(db: DbClient, productId: string): Promise<ProductImage[]> {
+  const photos = await getPhotosForProduct(db, productId);
+  if (photos.length > 0) return photos.map(photoToLegacyImage);
+  return getImagesForProduct(db, productId);
+}
 export interface ProductWithImages extends Product {
+  photos: ProductPhoto[];
   images: ProductImage[];
   marketplaceReadiness: ProductMarketplaceReadiness;
 }
@@ -259,7 +321,7 @@ export async function listProducts(db: DbClient, query: ProductListQuery) {
   const items = await Promise.all(
     rows.map(async (row) => {
       const product = toProduct(row);
-      const primaryImage = (await getImagesForProduct(db, row.id)).find((img) => img.isPrimary);
+      const primaryImage = (await getPreferredImagesForProduct(db, row.id)).find((img) => img.isPrimary) ?? (await getPreferredImagesForProduct(db, row.id))[0];
       return { ...product, primaryImageUrl: primaryImage?.url };
     }),
   );
@@ -270,9 +332,10 @@ export async function listProducts(db: DbClient, query: ProductListQuery) {
 export async function getProductById(db: DbClient, id: string): Promise<ProductWithImages> {
   const [row] = await db.select().from(products).where(eq(products.id, id));
   if (!row) throw new NotFoundError("Product not found");
-  const images = await getImagesForProduct(db, id);
+  const photos = await getPhotosForProduct(db, id);
+  const images = photos.length > 0 ? photos.map(photoToLegacyImage) : await getImagesForProduct(db, id);
   const product = toProduct(row);
-  return { ...product, images, marketplaceReadiness: computeMarketplaceReadiness(product) };
+  return { ...product, photos, images, marketplaceReadiness: computeMarketplaceReadiness(product) };
 }
 
 export async function createProduct(
@@ -512,4 +575,90 @@ export async function archiveProduct(db: DbClient, id: string): Promise<ProductW
     .set({ status: ProductStatus.Archived, updatedAt: new Date().toISOString() })
     .where(eq(products.id, id));
   return getProductById(db, id);
+}
+
+
+export async function uploadProductPhoto(
+  db: DbClient,
+  productId: string,
+  file: { buffer: Buffer; mimetype: string; size: number },
+  altText?: string,
+  storage: PhotoStorage = photoStorage,
+): Promise<ProductPhoto> {
+  await getProductById(db, productId);
+  const stored = await storage.saveProductPhoto(file);
+  const existing = await getPhotosForProduct(db, productId);
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  try {
+    await db.insert(productPhotos).values({
+      id,
+      productId,
+      url: stored.url,
+      thumbnailUrl: stored.thumbnailUrl,
+      altText,
+      sortOrder: existing.length,
+      isPrimary: existing.length === 0,
+      filename: stored.filename,
+      mimeType: stored.mimeType,
+      sizeBytes: stored.sizeBytes,
+      width: stored.width,
+      height: stored.height,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ensureSinglePrimary(db, productId);
+    return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
+  } catch (err) {
+    await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
+    throw err;
+  }
+}
+
+export async function updateProductPhoto(db: DbClient, productId: string, photoId: string, altText?: string): Promise<ProductPhoto> {
+  await getProductById(db, productId);
+  const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
+  if (!photo) throw new NotFoundError("Product photo not found");
+  await db.update(productPhotos).set({ altText, updatedAt: new Date().toISOString() }).where(eq(productPhotos.id, photoId));
+  return (await getPhotosForProduct(db, productId)).find((item) => item.id === photoId)!;
+}
+
+export async function setPrimaryProductPhoto(db: DbClient, productId: string, photoId: string): Promise<ProductPhoto[]> {
+  await getProductById(db, productId);
+  const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
+  if (!photo) throw new NotFoundError("Product photo not found");
+  await ensureSinglePrimary(db, productId, photoId);
+  return getPhotosForProduct(db, productId);
+}
+
+export async function reorderProductPhotos(db: DbClient, productId: string, photoIds: string[]): Promise<ProductPhoto[]> {
+  await getProductById(db, productId);
+  const photos = await getPhotosForProduct(db, productId);
+  if (photos.length !== photoIds.length || photos.some((photo) => !photoIds.includes(photo.id))) {
+    throw new BadRequestError("Reorder payload must include every product photo exactly once");
+  }
+  const now = new Date().toISOString();
+  for (const [sortOrder, photoId] of photoIds.entries()) {
+    await db.update(productPhotos).set({ sortOrder, updatedAt: now }).where(eq(productPhotos.id, photoId));
+  }
+  return getPhotosForProduct(db, productId);
+}
+
+export async function deleteProductPhoto(
+  db: DbClient,
+  productId: string,
+  photoId: string,
+  storage: PhotoStorage = photoStorage,
+): Promise<ProductPhoto[]> {
+  await getProductById(db, productId);
+  const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
+  if (!photo) throw new NotFoundError("Product photo not found");
+  await db.delete(productPhotos).where(eq(productPhotos.id, photoId));
+  await storage.deleteProductPhoto({ url: photo.url, thumbnailUrl: photo.thumbnailUrl });
+  const remaining = await getPhotosForProduct(db, productId);
+  for (const [sortOrder, item] of remaining.entries()) {
+    await db.update(productPhotos).set({ sortOrder }).where(eq(productPhotos.id, item.id));
+  }
+  await ensureSinglePrimary(db, productId);
+  return getPhotosForProduct(db, productId);
 }

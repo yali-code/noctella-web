@@ -108,6 +108,25 @@ CREATE TABLE IF NOT EXISTS products (
   FOREIGN KEY (collection_id) REFERENCES collections(id)
 );
 
+
+CREATE TABLE IF NOT EXISTS product_photos (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  thumbnail_url TEXT NOT NULL,
+  alt_text TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
 CREATE TABLE IF NOT EXISTS product_images (
   id TEXT PRIMARY KEY,
   product_id TEXT NOT NULL,
@@ -153,6 +172,8 @@ CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_type ON products(type);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_collection ON products(collection_id);
+CREATE INDEX IF NOT EXISTS idx_product_photos_product ON product_photos(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_photos_product_sort ON product_photos(product_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id);
 CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_ai_listing_drafts_product ON ai_listing_drafts(product_id);

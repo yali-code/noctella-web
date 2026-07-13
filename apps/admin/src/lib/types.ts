@@ -4,6 +4,7 @@ import type {
   Collection,
   Product,
   ProductImage,
+  ProductPhoto,
   ProductMarketplaceReadiness,
 } from "@noctella/shared";
 
@@ -19,6 +20,7 @@ export interface ProductListItem extends Product {
 }
 
 export interface ProductDetail extends Product {
+  photos: ProductPhoto[];
   images: ProductImage[];
   marketplaceReadiness: ProductMarketplaceReadiness;
 }
