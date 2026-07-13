@@ -16,6 +16,7 @@ import publicCategoriesRouter from "./routes/publicCategories";
 import publicCollectionsRouter from "./routes/publicCollections";
 import publicProductsRouter from "./routes/publicProducts";
 import settingsRouter from "./routes/settings";
+import stockMovementsRouter from "./routes/stockMovements";
 import { db } from "./db/client";
 import { seedInitialCategoriesIfEmpty } from "./services/categories";
 
@@ -29,8 +30,8 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// Sprint 2/3/4: products, categories, collections, ai-drafts, the public
-// storefront read endpoints, and offers are now functional (SQLite +
+// Sprint 2/3/4/7A: products, categories, collections, ai-drafts, the public
+// storefront read endpoints, offers, and order read persistence are now functional (SQLite +
 // Drizzle). Remaining routers are still Sprint 1 placeholders awaiting real
 // ERP sync and business logic in later sprints.
 app.use("/api/erp", erpRouter);
@@ -46,6 +47,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/live-visitors", liveVisitorsRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/stock-movements", stockMovementsRouter);
 app.use("/api/public/products", publicProductsRouter);
 app.use("/api/public/categories", publicCategoriesRouter);
 app.use("/api/public/collections", publicCollectionsRouter);

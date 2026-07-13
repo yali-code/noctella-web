@@ -12,6 +12,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   const sql = fs.readFileSync(sqlPath, "utf-8");
   sqlite.exec(sql);
   ensureMarketplaceColumns(sqlite);
+  ensureOrderColumns(sqlite);
 }
 
 /**
@@ -59,4 +60,27 @@ function ensureMarketplaceColumns(sqlite: Database.Database): void {
       sqlite.exec(`ALTER TABLE products ADD COLUMN ${column.name} ${column.ddl}`);
     }
   }
+}
+
+
+const ORDER_COLUMNS: Array<{ table: string; name: string; ddl: string }> = [
+  { table: "orders", name: "order_draft_id", ddl: "TEXT" },
+  { table: "orders", name: "payment_reference", ddl: "TEXT" },
+  { table: "order_items", name: "product_slug", ddl: "TEXT NOT NULL DEFAULT ''" },
+  { table: "order_items", name: "product_type", ddl: "TEXT NOT NULL DEFAULT ''" },
+  { table: "order_items", name: "product_image_url", ddl: "TEXT" },
+];
+
+function ensureOrderColumns(sqlite: Database.Database): void {
+  for (const column of ORDER_COLUMNS) {
+    const existing = new Set(
+      (sqlite.prepare(`PRAGMA table_info(${column.table})`).all() as Array<{ name: string }>).map(
+        (row) => row.name,
+      ),
+    );
+    if (!existing.has(column.name)) {
+      sqlite.exec(`ALTER TABLE ${column.table} ADD COLUMN ${column.name} ${column.ddl}`);
+    }
+  }
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_draft ON orders(order_draft_id)");
 }

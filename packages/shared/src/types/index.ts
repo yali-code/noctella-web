@@ -9,6 +9,8 @@ import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { OfferStatus } from "../enums/offerStatus";
 import { PaymentProvider } from "../enums/paymentProvider";
 import { PaymentStatus } from "../enums/paymentStatus";
+import { OrderStatus } from "../enums/orderStatus";
+import { StockMovementType } from "../enums/stockMovementType";
 
 export type ID = string;
 
@@ -191,21 +193,65 @@ export interface ProductMarketplaceReadiness {
   woocommerce: MarketplaceReadiness;
 }
 
+export interface Address {
+  fullName: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  region?: string;
+  postalCode: string;
+  country: string;
+  phone?: string;
+}
+
 export interface Order extends Timestamps {
   id: ID;
+  orderNumber: string;
   customerId?: ID;
-  guestEmail?: string;
-  status: string;
+  guestEmail: string;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  paymentProvider?: PaymentProvider;
+  subtotalAmount: number;
+  shippingAmount: number;
+  taxAmount: number;
   totalAmount: number;
-  currencyId: ID;
+  currency: PriceCurrency;
+  orderDraftId?: string;
+  paymentReference?: string;
+  billingAddress: Address;
+  shippingAddress: Address;
+  notes?: string;
 }
 
 export interface OrderItem extends Timestamps {
   id: ID;
   orderId: ID;
   productId: ID;
-  quantity: number;
+  productSku: string;
+  productTitle: string;
+  productSlug: string;
+  productType: ProductType;
+  productImageUrl?: string;
+  quantity: 1;
   unitPrice: number;
+  totalPrice: number;
+  currency: PriceCurrency;
+}
+
+export interface StockMovement {
+  id: ID;
+  productId: ID;
+  type: StockMovementType;
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  unitCost?: number;
+  currency?: PriceCurrency;
+  referenceType?: string;
+  referenceId?: string;
+  note?: string;
+  createdAt: string;
 }
 
 /** AI-generated listing draft, reviewed by an admin before its values are approved onto the product. */

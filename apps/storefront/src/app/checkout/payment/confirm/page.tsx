@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import {
@@ -9,7 +10,9 @@ import {
   updatePaymentSelectionStatus,
   type PaymentSelection,
 } from "@/lib/paymentSelection";
+import { getOrderDraft, type OrderDraft } from "@/lib/orderDraft";
 import { cancelMockPayment, verifyMockPayment } from "@/lib/payments";
+import { createOrderFromPaidPayment, saveCreatedOrder } from "@/lib/orders";
 
 function formatProviderName(provider: string): string {
   return provider
@@ -24,13 +27,16 @@ function formatStatus(status?: string): string {
 }
 
 export default function CheckoutPaymentConfirmPage() {
+  const router = useRouter();
   const [selection, setSelection] = useState<PaymentSelection | null>(null);
+  const [orderDraft, setOrderDraft] = useState<OrderDraft | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [busy, setBusy] = useState<"verify" | "cancel" | null>(null);
+  const [busy, setBusy] = useState<"verify" | "cancel" | "order" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelection(getPaymentSelection());
+    setOrderDraft(getOrderDraft());
     setLoaded(true);
   }, []);
 
@@ -64,6 +70,21 @@ export default function CheckoutPaymentConfirmPage() {
       setSelection(updatePaymentSelectionStatus(result.status));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Cancellation failed. Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleCreateOrder() {
+    if (!selection || !orderDraft) return;
+    setBusy("order");
+    setError(null);
+    try {
+      const order = await createOrderFromPaidPayment(orderDraft, selection);
+      saveCreatedOrder({ id: order.id, orderNumber: order.orderNumber });
+      router.push("/checkout/success");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Order creation failed. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -126,10 +147,13 @@ export default function CheckoutPaymentConfirmPage() {
             {busy === "cancel" ? "Cancelling..." : "Cancel Payment"}
           </button>
         )}
-        {isFinal && (
-          <p style={{ color: "var(--noctella-aged-bronze)", fontSize: 13 }}>
-            {status === "paid" ? "Payment complete. No further action needed." : "This payment was cancelled."}
-          </p>
+        {status === "paid" && (
+          <button onClick={handleCreateOrder} disabled={busy !== null || !orderDraft} style={primaryButtonStyle}>
+            {busy === "order" ? "Creating Order..." : "Create Order"}
+          </button>
+        )}
+        {isFinal && status !== "paid" && (
+          <p style={{ color: "var(--noctella-aged-bronze)", fontSize: 13 }}>This payment was cancelled.</p>
         )}
       </div>
 

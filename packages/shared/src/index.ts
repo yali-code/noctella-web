@@ -9,5 +9,7 @@ export * from "./enums/aiDraftStatus";
 export * from "./enums/offerStatus";
 export * from "./enums/paymentProvider";
 export * from "./enums/paymentStatus";
+export * from "./enums/orderStatus";
+export * from "./enums/stockMovementType";
 export * from "./types";
 export * from "./theme/tokens";
