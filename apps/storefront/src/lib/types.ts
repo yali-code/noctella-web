@@ -1,6 +1,7 @@
 export interface PublicProductImage {
   id: string;
   url: string;
+  thumbnailUrl?: string;
   altText?: string;
   sortOrder: number;
   isPrimary: boolean;
@@ -44,6 +45,7 @@ export interface PublicProduct {
   collectionSlug?: string;
   seoTitle?: string;
   metaDescription?: string;
+  photos?: PublicProductImage[];
   images: PublicProductImage[];
   createdAt: string;
   updatedAt: string;

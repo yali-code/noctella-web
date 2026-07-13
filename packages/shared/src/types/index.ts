@@ -76,6 +76,21 @@ export interface Collection extends Timestamps {
   isActive: boolean;
 }
 
+export interface ProductPhoto extends Timestamps {
+  id: ID;
+  productId: ID;
+  url: string;
+  thumbnailUrl: string;
+  altText?: string;
+  sortOrder: number;
+  isPrimary: boolean;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+}
+
 export interface ProductImage extends Timestamps {
   id: ID;
   productId: ID;

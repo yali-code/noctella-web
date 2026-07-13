@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import { ProductStatus, ProductType } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { categories, collections, productImages, products } from "../db/schema";
+import { categories, collections, productImages, productPhotos, products } from "../db/schema";
 import { NotFoundError } from "./errors";
 import type { PublicProductListQuery } from "../validation/publicCatalog";
 
@@ -48,7 +48,8 @@ export interface PublicProduct {
   collectionSlug?: string;
   seoTitle?: string;
   metaDescription?: string;
-  images: Array<{ id: string; url: string; altText?: string; sortOrder: number; isPrimary: boolean }>;
+  photos: Array<{ id: string; url: string; thumbnailUrl?: string; altText?: string; sortOrder: number; isPrimary: boolean }>;
+  images: Array<{ id: string; url: string; thumbnailUrl?: string; altText?: string; sortOrder: number; isPrimary: boolean }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -101,11 +102,18 @@ async function toPublicProduct(
   db: DbClient,
   row: typeof products.$inferSelect,
 ): Promise<PublicProduct> {
-  const images = await db
+  const photos = await db
     .select()
-    .from(productImages)
-    .where(eq(productImages.productId, row.id))
-    .orderBy(asc(productImages.sortOrder));
+    .from(productPhotos)
+    .where(eq(productPhotos.productId, row.id))
+    .orderBy(asc(productPhotos.sortOrder));
+  const images = photos.length > 0
+    ? photos.map((photo) => ({ id: photo.id, url: photo.url, thumbnailUrl: photo.thumbnailUrl, altText: photo.altText, sortOrder: photo.sortOrder, isPrimary: photo.isPrimary }))
+    : await db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.productId, row.id))
+      .orderBy(asc(productImages.sortOrder));
 
   let categoryName: string | undefined;
   let categorySlug: string | undefined;
@@ -161,9 +169,18 @@ async function toPublicProduct(
     collectionSlug,
     seoTitle: row.seoTitle ?? undefined,
     metaDescription: row.metaDescription ?? undefined,
+    photos: photos.map((photo) => ({
+      id: photo.id,
+      url: photo.url,
+      thumbnailUrl: photo.thumbnailUrl,
+      altText: photo.altText ?? undefined,
+      sortOrder: photo.sortOrder,
+      isPrimary: photo.isPrimary,
+    })),
     images: images.map((img) => ({
       id: img.id,
       url: img.url,
+      thumbnailUrl: "thumbnailUrl" in img ? img.thumbnailUrl ?? undefined : undefined,
       altText: img.altText ?? undefined,
       sortOrder: img.sortOrder,
       isPrimary: img.isPrimary,

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { productThumbnailUrl, sortedProductImages } from "@/lib/productImages";
 import type { PublicProductImage } from "@/lib/types";
 
 export function ProductGallery({ images, title }: { images: PublicProductImage[]; title: string }) {
-  const sorted = [...images].sort((a, b) => (a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1));
+  const sorted = sortedProductImages({ images });
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
 
@@ -70,7 +71,7 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={img.url}
+                src={productThumbnailUrl(img)}
                 alt={img.altText || `${title} thumbnail ${i + 1}`}
                 style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 3 }}
               />
