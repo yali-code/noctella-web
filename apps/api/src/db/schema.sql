@@ -174,3 +174,52 @@ CREATE TABLE IF NOT EXISTS offers (
 
 CREATE INDEX IF NOT EXISTS idx_offers_product ON offers(product_id);
 CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY,
+  order_number TEXT NOT NULL UNIQUE,
+  order_draft_id TEXT UNIQUE,
+  customer_id TEXT,
+  guest_email TEXT NOT NULL,
+  status TEXT NOT NULL,
+  payment_status TEXT NOT NULL,
+  payment_provider TEXT,
+  payment_reference TEXT,
+  subtotal_amount REAL NOT NULL,
+  shipping_amount REAL NOT NULL DEFAULT 0,
+  tax_amount REAL NOT NULL DEFAULT 0,
+  total_amount REAL NOT NULL,
+  currency TEXT NOT NULL,
+  billing_address TEXT NOT NULL,
+  shipping_address TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  product_sku TEXT NOT NULL,
+  product_title TEXT NOT NULL,
+  product_slug TEXT NOT NULL,
+  product_type TEXT NOT NULL,
+  product_image_url TEXT,
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity = 1),
+  unit_price REAL NOT NULL,
+  total_price REAL NOT NULL,
+  currency TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders(order_number);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_draft ON orders(order_draft_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+CREATE INDEX IF NOT EXISTS idx_orders_guest_email ON orders(guest_email);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id);

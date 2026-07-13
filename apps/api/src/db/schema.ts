@@ -231,3 +231,52 @@ export const offers = sqliteTable("offers", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+
+/** Sprint 7A: order persistence foundation. No checkout creation, stock reservation, ERP, or invoices. */
+export const orders = sqliteTable("orders", {
+  id: text("id").primaryKey(),
+  orderNumber: text("order_number").notNull().unique(),
+  orderDraftId: text("order_draft_id"),
+  customerId: text("customer_id"),
+  guestEmail: text("guest_email").notNull(),
+  status: text("status").notNull(),
+  paymentStatus: text("payment_status").notNull(),
+  paymentProvider: text("payment_provider"),
+  paymentReference: text("payment_reference"),
+  subtotalAmount: real("subtotal_amount").notNull(),
+  shippingAmount: real("shipping_amount").notNull().default(0),
+  taxAmount: real("tax_amount").notNull().default(0),
+  totalAmount: real("total_amount").notNull(),
+  currency: text("currency").notNull(),
+  billingAddress: text("billing_address").notNull(),
+  shippingAddress: text("shipping_address").notNull(),
+  notes: text("notes"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+export const orderItems = sqliteTable("order_items", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  productId: text("product_id").notNull(),
+  productSku: text("product_sku").notNull(),
+  productTitle: text("product_title").notNull(),
+  productSlug: text("product_slug").notNull(),
+  productType: text("product_type").notNull(),
+  productImageUrl: text("product_image_url"),
+  quantity: integer("quantity").notNull().default(1),
+  unitPrice: real("unit_price").notNull(),
+  totalPrice: real("total_price").notNull(),
+  currency: text("currency").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
