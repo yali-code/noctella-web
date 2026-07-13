@@ -16,6 +16,7 @@ import publicCategoriesRouter from "./routes/publicCategories";
 import publicCollectionsRouter from "./routes/publicCollections";
 import publicProductsRouter from "./routes/publicProducts";
 import settingsRouter from "./routes/settings";
+import stockMovementsRouter from "./routes/stockMovements";
 import { db } from "./db/client";
 import { seedInitialCategoriesIfEmpty } from "./services/categories";
 
@@ -40,6 +41,7 @@ app.use("/api/products", productsRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/collections", collectionsRouter);
 app.use("/api/orders", ordersRouter);
+app.use("/api/stock-movements", stockMovementsRouter);
 app.use("/api/customers", customersRouter);
 app.use("/api/offers", offersRouter);
 app.use("/api/payments", paymentsRouter);

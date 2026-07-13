@@ -10,6 +10,7 @@ import { OfferStatus } from "../enums/offerStatus";
 import { PaymentProvider } from "../enums/paymentProvider";
 import { PaymentStatus } from "../enums/paymentStatus";
 import { OrderStatus } from "../enums/orderStatus";
+import { StockMovementType } from "../enums/stockMovementType";
 
 export type ID = string;
 
@@ -304,4 +305,18 @@ export interface Payment extends Timestamps {
   status: PaymentStatus;
   amount: number;
   currency: PriceCurrency;
+}
+
+export interface StockMovement extends Timestamps {
+  id: ID;
+  productId: ID;
+  type: StockMovementType;
+  quantityDelta: number;
+  stockBefore: number;
+  stockAfter: number;
+  orderId?: ID;
+  orderItemId?: ID;
+  note?: string;
+  createdByAdminUserId?: ID;
+  idempotencyKey?: string;
 }

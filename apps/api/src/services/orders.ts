@@ -8,9 +8,11 @@ import {
   PaymentStatus,
   PriceCurrency,
   ProductStatus,
+  StockMovementType,
 } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { orderItems, orders, productImages, products } from "../db/schema";
+import { applyStockMovementSync } from "./stockMovements";
 import { BadRequestError, NotFoundError } from "./errors";
 import type { CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
 
@@ -121,7 +123,7 @@ export async function createOrder(db: DbClient, input: CreateOrderInput): Promis
     throw new BadRequestError("Only EUR orders are supported for now");
   }
 
-  const snapshots = [];
+  const snapshots: Array<{ product: typeof products.$inferSelect; imageUrl: string | undefined }> = [];
   for (const item of input.items) {
     if (item.quantity !== 1) throw new BadRequestError("Order item quantity must be 1");
     const [product] = await db.select().from(products).where(eq(products.id, item.productId));
@@ -139,10 +141,12 @@ export async function createOrder(db: DbClient, input: CreateOrderInput): Promis
 
   const now = new Date().toISOString();
   const id = randomUUID();
+  const orderNumber = await generateOrderNumber(db);
 
-  await db.insert(orders).values({
+  db.transaction((tx) => {
+    tx.insert(orders).values({
     id,
-    orderNumber: await generateOrderNumber(db),
+    orderNumber,
     orderDraftId: input.orderDraftId,
     customerId: input.customerId,
     guestEmail: input.guestEmail,
@@ -160,12 +164,13 @@ export async function createOrder(db: DbClient, input: CreateOrderInput): Promis
     notes: input.notes,
     createdAt: now,
     updatedAt: now,
-  });
+    }).run();
 
-  for (const snapshot of snapshots) {
-    await db.insert(orderItems).values({
-      id: randomUUID(),
-      orderId: id,
+    for (const snapshot of snapshots) {
+      const orderItemId = randomUUID();
+      tx.insert(orderItems).values({
+        id: orderItemId,
+        orderId: id,
       productId: snapshot.product.id,
       productSku: snapshot.product.sku,
       productTitle: snapshot.product.title,
@@ -177,9 +182,19 @@ export async function createOrder(db: DbClient, input: CreateOrderInput): Promis
       totalPrice: snapshot.product.priceEur,
       currency: input.currency,
       createdAt: now,
-      updatedAt: now,
-    });
-  }
+        updatedAt: now,
+      }).run();
+      applyStockMovementSync(tx, {
+        productId: snapshot.product.id,
+        type: StockMovementType.Sale,
+        quantityDelta: -1,
+        orderId: id,
+        orderItemId,
+        note: `Sale for order ${id}`,
+        idempotencyKey: `order-sale:${id}:${snapshot.product.id}`,
+      });
+    }
+  });
 
   return getOrderById(db, id);
 }
