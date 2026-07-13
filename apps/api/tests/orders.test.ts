@@ -2,6 +2,7 @@ import { OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType
 import { beforeEach, describe, expect, it } from "vitest";
 import { createCategory } from "../src/services/categories";
 import { createProduct, getProductById, updateProduct } from "../src/services/products";
+import { listStockMovements } from "../src/services/stockMovements";
 import {
   createOrder,
   updateOrderStatus,
@@ -143,17 +144,12 @@ describe("order service", () => {
     expect(second.orderNumber).toBe(first.orderNumber);
   });
 
-  it("updates order status without changing payment status or product state", async () => {
+  it("updates order status without changing payment status", async () => {
     const order = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
-    const before = await getProductById(db, productId);
-
     const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Confirmed });
-    const after = await getProductById(db, productId);
 
     expect(updated.status).toBe(OrderStatus.Confirmed);
     expect(updated.paymentStatus).toBe(PaymentStatus.Paid);
-    expect(after.stockQuantity).toBe(before.stockQuantity);
-    expect(after.status).toBe(before.status);
   });
 
   it("rejects invalid status updates and unknown order status updates", async () => {
@@ -170,6 +166,7 @@ describe("order service", () => {
 
   it("lists, searches, paginates, and filters by order/payment status", async () => {
     const paid = await createOrder(db, createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-paid" })));
+    await updateProduct(db, productId, { status: ProductStatus.Published, stockQuantity: 1 });
     await createOrder(db, createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-complete", status: OrderStatus.Completed })));
 
     const pending = await listOrders(db, orderListQuerySchema.parse({ status: OrderStatus.Pending }));
@@ -187,7 +184,7 @@ describe("order service", () => {
     expect(page.pagination.totalPages).toBe(2);
   });
 
-  it("rejects quantities other than one and never mutates products", async () => {
+  it("rejects quantities other than one and reduces stock once", async () => {
     const invalid = createOrderSchema.safeParse(baseOrderInput({ items: [{ productId, quantity: 2 }] }));
     expect(invalid.success).toBe(false);
 
@@ -195,8 +192,15 @@ describe("order service", () => {
     await createOrder(db, createOrderSchema.parse(baseOrderInput()));
     const after = await getProductById(db, productId);
 
-    expect(after.stockQuantity).toBe(before.stockQuantity);
+    expect(after.stockQuantity).toBe(before.stockQuantity - 1);
     expect(after.priceEur).toBe(before.priceEur);
-    expect(after.status).toBe(before.status);
+    expect(after.status).toBe(ProductStatus.Sold);
+
+    const duplicate = await createOrder(db, createOrderSchema.parse(baseOrderInput({ paymentReference: "again" })));
+    const final = await getProductById(db, productId);
+    const movements = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
+    expect(duplicate.id).toBeDefined();
+    expect(final.stockQuantity).toBe(after.stockQuantity);
+    expect(movements.items).toHaveLength(1);
   });
 });

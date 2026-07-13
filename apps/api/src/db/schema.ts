@@ -280,3 +280,24 @@ export const orderItems = sqliteTable("order_items", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+/** Sprint 8: immutable stock movement ledger for manual adjustments and order sales. */
+export const stockMovements = sqliteTable("stock_movements", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  type: text("type").notNull(),
+  quantityDelta: integer("quantity_delta").notNull(),
+  stockBefore: integer("stock_before").notNull(),
+  stockAfter: integer("stock_after").notNull(),
+  orderId: text("order_id"),
+  orderItemId: text("order_item_id"),
+  note: text("note"),
+  createdByAdminUserId: text("created_by_admin_user_id"),
+  idempotencyKey: text("idempotency_key").unique(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});

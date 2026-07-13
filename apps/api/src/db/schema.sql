@@ -223,3 +223,27 @@ CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
 CREATE INDEX IF NOT EXISTS idx_orders_guest_email ON orders(guest_email);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id);
+
+
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  quantity_delta INTEGER NOT NULL,
+  stock_before INTEGER NOT NULL,
+  stock_after INTEGER NOT NULL,
+  order_id TEXT,
+  order_item_id TEXT,
+  note TEXT,
+  created_by_admin_user_id TEXT,
+  idempotency_key TEXT UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (product_id) REFERENCES products(id),
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (order_item_id) REFERENCES order_items(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_order ON stock_movements(order_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_type ON stock_movements(type);
