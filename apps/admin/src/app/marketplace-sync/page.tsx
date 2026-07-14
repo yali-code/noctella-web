@@ -1,0 +1,3 @@
+export const dynamic = "force-dynamic";
+import { listSyncRuns, listWebhookEvents, safeError } from "../../lib/marketplaceSync";
+export default async function MarketplaceSyncPage(){ const [runs,events]=await Promise.all([listSyncRuns(),listWebhookEvents()]); return <main><h1>Marketplace Sync</h1><h2>Recent webhook events</h2><ul>{events.items.map((e:any)=><li key={e.id}>{e.channel} {e.eventType} {e.status} {safeError(e.lastError)}</li>)}</ul><h2>Sync runs</h2><ul>{runs.items.map((r:any)=><li key={r.id}>{r.channel} {r.syncType} {r.status} processed {r.processedCount} failed {r.failureCount} {safeError(r.lastError)}</li>)}</ul></main>; }

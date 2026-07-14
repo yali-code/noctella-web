@@ -8,6 +8,8 @@ import collectionsRouter from "./routes/collections";
 import customersRouter from "./routes/customers";
 import erpRouter from "./routes/erp";
 import marketplacesRouter from "./routes/marketplaces";
+import marketplaceAdminRouter from "./routes/marketplaceAdmin";
+import marketplaceSyncWebhookRouter from "./routes/marketplaceSync";
 import liveVisitorsRouter from "./routes/liveVisitors";
 import offersRouter from "./routes/offers";
 import ordersRouter from "./routes/orders";
@@ -27,6 +29,7 @@ const app = express();
 const port = process.env.API_PORT ?? 4000;
 
 app.use(cors());
+app.use("/api/webhooks", marketplaceSyncWebhookRouter);
 app.use(express.json());
 app.use(productPhotoStaticPath, express.static(productPhotoStaticRoot));
 
@@ -54,6 +57,7 @@ app.use("/api/analytics", analyticsRouter);
 app.use("/api/live-visitors", liveVisitorsRouter);
 app.use("/api/marketplaces", marketplacesRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api", marketplaceAdminRouter);
 app.use("/api/public/products", publicProductsRouter);
 app.use("/api/public/categories", publicCategoriesRouter);
 app.use("/api/public/collections", publicCollectionsRouter);
