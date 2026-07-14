@@ -13,6 +13,7 @@ import {
 import type { DbClient } from "../db/client";
 import { orderItems, orders, productImages, products } from "../db/schema";
 import { applyStockMovementSync } from "./stockMovements";
+import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError, NotFoundError } from "./errors";
 import type { CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
 
@@ -196,7 +197,9 @@ export async function createOrder(db: DbClient, input: CreateOrderInput): Promis
     }
   });
 
-  return getOrderById(db, id);
+  const order = await getOrderById(db, id);
+  for (const item of order.items) await enqueueProductStockSync(db, item.productId, `order-sale:${id}:${item.productId}`);
+  return order;
 }
 
 export async function updateOrderStatus(

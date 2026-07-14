@@ -1,0 +1,3 @@
+export const dynamic = "force-dynamic";
+import { getStockSyncStatus, stockSyncAudit } from "../../lib/stockSyncJobs";
+export default async function StockSyncPage() { const summary = await getStockSyncStatus(); const audit = await stockSyncAudit(); return <main><h1>Stock sync</h1><p>Last run: {summary.lastRun ?? "Never"}</p><p>Next run: {summary.nextRun ?? "Scheduler ready"}</p><h2>Job counts</h2><pre>{JSON.stringify(summary.jobs, null, 2)}</pre><h2>Latest audit results</h2><ul>{audit.items.map((a) => <li key={a.id}>{a.channel} {a.externalListingId}: {a.resultStatus} requested {a.requestedMarketplaceStock} confirmed {a.confirmedMarketplaceStock ?? "-"}</li>)}</ul></main>; }

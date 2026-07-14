@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { ProductStatus, StockMovementType, type StockMovement } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { products, stockMovements } from "../db/schema";
+import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError, NotFoundError } from "./errors";
 import type { ManualStockAdjustmentInput, StockMovementListQuery } from "../validation/stockMovement";
 
@@ -112,11 +113,13 @@ export async function applyStockMovement(db: StockDb, input: Parameters<typeof a
 }
 
 export async function createManualStockAdjustment(db: DbClient, input: ManualStockAdjustmentInput): Promise<StockMovement> {
-  return db.transaction((tx) =>
+  const movement = db.transaction((tx) =>
     applyStockMovementSync(tx, {
       ...input,
       type: StockMovementType.ManualAdjustment,
       idempotencyKey: input.idempotencyKey ?? `manual:${input.productId}:${input.quantityDelta}:${input.note ?? ""}:${Date.now()}`,
     }),
   );
+  await enqueueProductStockSync(db, movement.productId, movement.idempotencyKey ?? movement.id);
+  return movement;
 }

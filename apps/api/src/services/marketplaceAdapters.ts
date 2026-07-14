@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload } from "@noctella/shared";
 
 export interface MarketplaceTokens { accessToken: string; refreshToken?: string; expiresAt?: string; scopes?: string[]; externalAccountId?: string; }
+export interface MarketplaceInventoryResult { externalListingId: string; stock: number; raw?: unknown; }
+export interface MarketplaceInventoryUpdateResult { externalListingId: string; requestedStock: number; confirmedStock: number; raw?: unknown; }
 export interface AdapterListingResult { externalListingId: string; externalListingUrl?: string; externalStatus: string; raw?: unknown; }
 export interface NormalizedMarketplaceOrderItem { externalOrderItemId?: string; externalListingId?: string; sku?: string; title: string; quantity: number; unitPrice: number; lineTotal: number; }
 export interface NormalizedMarketplaceOrder { externalOrderId: string; externalOrderNumber?: string; status: string; currency: string; subtotal: number; shipping: number; tax: number; total: number; buyerEmail?: string; buyerName?: string; shippingAddress?: unknown; billingAddress?: unknown; orderedAt: string; items: NormalizedMarketplaceOrderItem[]; raw?: unknown; }
@@ -19,6 +21,10 @@ export interface MarketplaceAdapter {
   parseWebhookEvent(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): Promise<ParsedMarketplaceWebhookEvent> | ParsedMarketplaceWebhookEvent;
   fetchOrderById(accessToken: string, externalOrderId: string): Promise<NormalizedMarketplaceOrder>;
   fetchListingStatus(accessToken: string, externalListingId: string): Promise<{ externalListingId: string; externalStatus: string; raw?: unknown }>;
+  getListingInventory(accessToken: string, externalListingId: string): Promise<MarketplaceInventoryResult>;
+  updateListingInventory(accessToken: string, externalListingId: string, stock: number): Promise<MarketplaceInventoryUpdateResult>;
+  listActiveListings?(accessToken: string): Promise<MarketplaceInventoryResult[]>;
+  normalizeInventoryError(error: unknown): MarketplaceApiError;
   acknowledgeWebhook?(event: ParsedMarketplaceWebhookEvent): Promise<void>;
 }
 
@@ -43,7 +49,11 @@ abstract class HttpAdapter implements MarketplaceAdapter {
   verifyWebhookSignature(rawBody: Buffer, headers: Record<string, string | string[] | undefined>) { const secret = this.env[`${this.prefix}_WEBHOOK_SECRET`] ?? "test-secret"; const sig = String(headers[`${this.prefix.toLowerCase()}-signature`] ?? headers["x-marketplace-signature"] ?? ""); const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex"); return sig === expected; }
   parseWebhookEvent(rawBody: Buffer) { const payload = JSON.parse(rawBody.toString("utf8") || "{}"); return { externalEventId: String(payload.eventId ?? payload.id ?? payload.externalEventId), eventType: String(payload.type ?? payload.eventType ?? MarketplaceWebhookEventType.Unsupported), externalOrderId: payload.orderId ? String(payload.orderId) : undefined, externalListingId: payload.listingId ? String(payload.listingId) : undefined, payload }; }
   async fetchOrderById(accessToken: string, externalOrderId: string) { const raw = await requestJson(`${this.base()}/orders/${externalOrderId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return normalizeOrder(raw, externalOrderId); }
+  async getListingInventory(accessToken: string, externalListingId: string) { const raw = await requestJson(`${this.base()}/sell/listing/${externalListingId}/inventory`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { externalListingId, stock: Number(raw.stock ?? raw.quantity ?? raw.available ?? 0), raw }; }
+  async updateListingInventory(accessToken: string, externalListingId: string, stock: number) { const raw = await requestJson(`${this.base()}/sell/listing/${externalListingId}/inventory`, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ stock, quantity: stock }) }, this.timeout()); return { externalListingId, requestedStock: stock, confirmedStock: Number(raw.stock ?? raw.quantity ?? raw.available ?? stock), raw }; }
+  async listActiveListings(accessToken: string) { const raw = await requestJson(`${this.base()}/sell/listing?status=active`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); const rows = Array.isArray(raw.listings) ? raw.listings as Record<string, unknown>[] : []; return rows.map((row) => ({ externalListingId: String(row.id ?? row.listing_id), stock: Number(row.stock ?? row.quantity ?? 0), raw: row })); }
   async fetchListingStatus(accessToken: string, externalListingId: string) { const raw = await requestJson(`${this.base()}/sell/listing/${externalListingId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { externalListingId, externalStatus: String(raw.status ?? "active"), raw }; }
+  normalizeInventoryError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
   normalizeError(error: unknown): MarketplaceApiError { const e = error as { status?: number; message?: string; name?: string }; const type = e.name === "AbortError" ? "Timeout" : e.status === 401 ? "Authentication" : e.status === 403 ? "Authorization" : e.status === 429 ? "RateLimit" : e.status && e.status >= 500 ? "Temporary" : e.status && e.status >= 400 ? "Permanent" : "Unknown"; return { type, code: e.status ? String(e.status) : undefined, message: type, retryable: ["RateLimit","Timeout","Temporary","Unknown"].includes(type) }; }
 }
 export class EbayAdapter extends HttpAdapter { constructor(env=process.env){ super(env,"EBAY"); } }
