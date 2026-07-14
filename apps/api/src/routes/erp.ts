@@ -10,6 +10,7 @@ import { barcode, deleteProductPhoto, executeCreateProduct, executeStockAdjustme
 import { handleRouteError } from "./errorHandler";
 import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchaseEvents, getPurchaseLandedCostSummary, listPurchases, listSuppliers, productPurchaseHistory } from "../services/erpPurchasingBridge";
 import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
+import * as warehouse from "../services/erpWarehouseBridge";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
 const router = Router();
@@ -33,6 +34,48 @@ router.post("/migration/preview", requireErp, async (req:any, res) => { const pa
 router.post("/migration/conflicts", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const conflicts=await detectErpMigrationConflicts(db,payload); res.json({ dryRun:true, conflicts }); });
 router.post("/migration/manifest-preview", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const result=await buildErpMigrationManifestPreview(db,payload,req.body?.sourceType); await auditMigration(req,"ErpMigrationManifestPreview",result,result.ok,result.ok?undefined:"MANIFEST_BLOCKED"); res.status(result.ok?200:400).json(result.manifestPreview); });
 
+
+
+router.get("/warehouses", requireErp, async (_req, res) => { try { res.json({ items: await warehouse.listWarehouses(db) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/warehouses/:id", requireErp, async (req, res) => { try { res.json(await warehouse.getWarehouse(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/warehouse/locations", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listWarehouseLocations(db, req.query.warehouseId as string | undefined) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:id/warehouse-availability", requireErp, async (req, res) => { try { res.json(await warehouse.availability(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:id/locations", requireErp, async (req, res) => { try { res.json({ items: await warehouse.getProductLocations(db, req.params.id) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/reservations", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listReservations(db, req.query) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/orders/:orderId/reservations", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listReservations(db, { ...req.query, orderId:req.params.orderId }) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:productId/reservations", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listReservations(db, { ...req.query, productId:req.params.productId }) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/picking", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listPickingTasks(db, req.query) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/picking/:id", requireErp, async (req, res) => { try { res.json(await warehouse.getPickingTask(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/orders/:orderId/picking", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listPickingTasks(db, { orderId:req.params.orderId }) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/packing", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listPackingTasks(db, req.query) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/packing/:id", requireErp, async (req, res) => { try { res.json(await warehouse.getPackingTask(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/orders/:orderId/packing", requireErp, async (req, res) => { try { res.json({ items: await warehouse.listPackingTasks(db, { orderId:req.params.orderId }) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/warehouse/shipment-ready", requireErp, async (_req, res) => { try { res.json({ items: await warehouse.shipmentReadyQueue(db) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/warehouse/events", requireErp, async (req, res) => { try { res.json({ items: await warehouse.warehouseEvents(db, req.query) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:id/warehouse-history", requireErp, async (req, res) => { try { res.json({ items: await warehouse.warehouseEvents(db, { ...req.query, productId:req.params.id }) }); } catch (err) { handleRouteError(err, res); } });
+router.get("/orders/:id/warehouse-history", requireErp, async (req, res) => { try { res.json({ items: await warehouse.warehouseEvents(db, { ...req.query, orderId:req.params.id }) }); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/warehouses/create", requireErp, async (req:any, res) => { try { res.status(201).json(await warehouse.createWarehouse(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/warehouses/:id/deactivate", requireErp, async (req:any, res) => { try { res.json(await warehouse.updateWarehouseStatus(db, req.erp.clientId, req.body, req.params.id, "Inactive")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/warehouses/:id/reactivate", requireErp, async (req:any, res) => { try { res.json(await warehouse.updateWarehouseStatus(db, req.erp.clientId, req.body, req.params.id, "Active")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/warehouse-locations/create", requireErp, async (req:any, res) => { try { res.status(201).json(await warehouse.createWarehouseLocation(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/product-locations/assign", requireErp, async (req:any, res) => { try { res.status(201).json(await warehouse.assignProductLocation(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/reservations/create", requireErp, async (req:any, res) => { try { res.status(201).json(await warehouse.createReservation(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/reservations/:reservationId/release", requireErp, async (req:any, res) => { try { res.json(await warehouse.changeReservation(db, req.erp.clientId, req.body, req.params.reservationId, "Released")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/reservations/:reservationId/cancel", requireErp, async (req:any, res) => { try { res.json(await warehouse.changeReservation(db, req.erp.clientId, req.body, req.params.reservationId, "Cancelled")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/reservations/:reservationId/consume", requireErp, async (req:any, res) => { try { res.json(await warehouse.changeReservation(db, req.erp.clientId, req.body, req.params.reservationId, "Consumed")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/orders/:orderId/reservations/reconcile", requireErp, async (_req:any, res) => res.json({ status:"Succeeded", reconciled:false, explicitOnly:true }));
+router.post("/commands/orders/:orderId/picking/create", requireErp, async (req:any, res) => { try { res.status(201).json(await warehouse.createPickingTask(db, req.erp.clientId, req.body, req.params.orderId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/picking/:taskId/start", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePicking(db, req.erp.clientId, req.body, req.params.taskId, "StartPickingTask")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/picking/:taskId/lines/:lineId/confirm", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePicking(db, req.erp.clientId, req.body, req.params.taskId, "ConfirmPickedLine", req.params.lineId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/picking/:taskId/lines/:lineId/short", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePicking(db, req.erp.clientId, req.body, req.params.taskId, "MarkPickingShort", req.params.lineId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/picking/:taskId/complete", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePicking(db, req.erp.clientId, req.body, req.params.taskId, "CompletePickingTask")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/picking/:taskId/cancel", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePicking(db, req.erp.clientId, req.body, req.params.taskId, "CancelPickingTask")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/orders/:orderId/packing/create", requireErp, async (req:any, res) => { try { res.status(201).json(await warehouse.createPackingTask(db, req.erp.clientId, req.body, req.params.orderId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/packing/:taskId/start", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePacking(db, req.erp.clientId, req.body, req.params.taskId, "StartPackingTask")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/packing/:taskId/update", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePacking(db, req.erp.clientId, req.body, req.params.taskId, "UpdatePackingTask")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/packing/:taskId/complete", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePacking(db, req.erp.clientId, req.body, req.params.taskId, "CompletePackingTask")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/packing/:taskId/ready-for-shipment", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePacking(db, req.erp.clientId, req.body, req.params.taskId, "MarkPackingReady")); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/packing/:taskId/cancel", requireErp, async (req:any, res) => { try { res.json(await warehouse.updatePacking(db, req.erp.clientId, req.body, req.params.taskId, "CancelPackingTask")); } catch (err) { handleRouteError(err, res); } });
 
 router.get("/sales", requireErp, async (req, res) => { try { res.json(await listSales(db, req.query)); } catch (err) { handleRouteError(err, res); } });
 router.get("/sales/:id", requireErp, async (req, res) => { try { res.json(await saleProjection(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });

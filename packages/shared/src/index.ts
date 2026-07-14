@@ -21,3 +21,4 @@ export * from "./enums/returns";
 export * from "./types/purchasing";
 
 export * from "./types/salesFinanceBridge";
+export * from "./types/warehouseBridge";

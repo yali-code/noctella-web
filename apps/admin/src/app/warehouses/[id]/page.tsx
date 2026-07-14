@@ -1,0 +1,1 @@
+export default function Page(){ return <main><h1>Warehouse Detail</h1><p>ERP warehouse bridge workspace. Use authenticated ERP API projections for operational data and safe command actions.</p></main>; }
