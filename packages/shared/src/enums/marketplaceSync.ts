@@ -8,7 +8,7 @@ export const MARKETPLACE_WEBHOOK_EVENT_STATUS_VALUES = Object.values(Marketplace
 export const MARKETPLACE_ORDER_STATUS_VALUES = Object.values(MarketplaceOrderStatus);
 export const MARKETPLACE_SYNC_STATUS_VALUES = Object.values(MarketplaceSyncStatus);
 
-export enum BackgroundJobType { StockSyncProduct = "stock_sync_product", StockSyncChannel = "stock_sync_channel", StockSyncListing = "stock_sync_listing", SubmitMarketplaceShipment = "submit_marketplace_shipment", RefreshShipmentStatus = "refresh_shipment_status" }
+export enum BackgroundJobType { StockSyncProduct = "stock_sync_product", StockSyncChannel = "stock_sync_channel", StockSyncListing = "stock_sync_listing", SubmitMarketplaceShipment = "submit_marketplace_shipment", RefreshShipmentStatus = "refresh_shipment_status", SubmitMarketplaceRefund = "submit_marketplace_refund", RefreshMarketplaceReturn = "refresh_marketplace_return", RefreshMarketplaceRefund = "refresh_marketplace_refund", CloseMarketplaceReturn = "close_marketplace_return" }
 export enum BackgroundJobStatus { Pending = "pending", Processing = "processing", Succeeded = "succeeded", Failed = "failed", RetryPending = "retry_pending", Cancelled = "cancelled", DeadLetter = "dead_letter" }
 export enum StockSyncStatus { Skipped = "skipped", Updated = "updated", Failed = "failed", Conflict = "conflict", AutoResolved = "auto_resolved" }
 export enum StockSyncConflictType { LocalHigherThanMarketplace = "local_higher_than_marketplace", MarketplaceHigherThanLocal = "marketplace_higher_than_local", ListingMissing = "listing_missing", ProductMissing = "product_missing", NegativeMarketplaceStock = "negative_marketplace_stock", ConcurrentSale = "concurrent_sale", ManualReview = "manual_review", Authentication = "authentication" }

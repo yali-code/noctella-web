@@ -17,6 +17,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketplaceSyncTables(sqlite);
   ensureStockSyncTables(sqlite);
   ensureShippingTables(sqlite);
+  ensureReturnRefundTables(sqlite);
 }
 
 /**
@@ -189,4 +190,13 @@ function ensureShippingTables(sqlite: Database.Database): void {
   const marker = "-- Sprint 14 shipping, tracking and complete sale workflow";
   const chunk = all.includes(marker) ? all.slice(all.indexOf(marker)) : "";
   if (chunk) sqlite.exec(chunk);
+}
+
+
+function ensureReturnRefundTables(sqlite: Database.Database): void {
+  const sqlPath = path.join(__dirname, "schema.sql");
+  const sqlText = fs.readFileSync(sqlPath, "utf-8");
+  const marker = "-- Sprint 15 returns, refunds and safe sale reversal.";
+  const index = sqlText.indexOf(marker);
+  if (index >= 0) sqlite.exec(sqlText.slice(index));
 }
