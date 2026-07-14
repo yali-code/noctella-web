@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload } from "@noctella/shared";
+import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload, type ShipmentUpdateResult } from "@noctella/shared";
 
 export interface MarketplaceTokens { accessToken: string; refreshToken?: string; expiresAt?: string; scopes?: string[]; externalAccountId?: string; }
 export interface MarketplaceInventoryResult { externalListingId: string; stock: number; raw?: unknown; }
@@ -24,6 +24,11 @@ export interface MarketplaceAdapter {
   getListingInventory(accessToken: string, externalListingId: string): Promise<MarketplaceInventoryResult>;
   updateListingInventory(accessToken: string, externalListingId: string, stock: number): Promise<MarketplaceInventoryUpdateResult>;
   listActiveListings?(accessToken: string): Promise<MarketplaceInventoryResult[]>;
+  submitShipment(accessToken: string, payload: unknown): Promise<ShipmentUpdateResult & { externalFulfillmentId?: string; raw?: unknown }>;
+  updateShipmentTracking(accessToken: string, externalFulfillmentId: string, payload: unknown): Promise<ShipmentUpdateResult & { raw?: unknown }>;
+  cancelShipmentFulfillment(accessToken: string, externalFulfillmentId: string): Promise<ShipmentUpdateResult & { raw?: unknown }>;
+  fetchShipmentStatus(accessToken: string, externalFulfillmentId: string): Promise<ShipmentUpdateResult & { raw?: unknown }>;
+  normalizeShipmentError(error: unknown): MarketplaceApiError;
   normalizeInventoryError(error: unknown): MarketplaceApiError;
   acknowledgeWebhook?(event: ParsedMarketplaceWebhookEvent): Promise<void>;
 }
@@ -53,6 +58,11 @@ abstract class HttpAdapter implements MarketplaceAdapter {
   async updateListingInventory(accessToken: string, externalListingId: string, stock: number) { const raw = await requestJson(`${this.base()}/sell/listing/${externalListingId}/inventory`, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ stock, quantity: stock }) }, this.timeout()); return { externalListingId, requestedStock: stock, confirmedStock: Number(raw.stock ?? raw.quantity ?? raw.available ?? stock), raw }; }
   async listActiveListings(accessToken: string) { const raw = await requestJson(`${this.base()}/sell/listing?status=active`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); const rows = Array.isArray(raw.listings) ? raw.listings as Record<string, unknown>[] : []; return rows.map((row) => ({ externalListingId: String(row.id ?? row.listing_id), stock: Number(row.stock ?? row.quantity ?? 0), raw: row })); }
   async fetchListingStatus(accessToken: string, externalListingId: string) { const raw = await requestJson(`${this.base()}/sell/listing/${externalListingId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { externalListingId, externalStatus: String(raw.status ?? "active"), raw }; }
+  async submitShipment(accessToken: string, payload: any) { const raw = await requestJson(`${this.base()}/orders/${payload.externalOrderId ?? payload.orderId}/fulfillment`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { shipment: payload.shipment, externalFulfillmentId: String(raw.id ?? raw.fulfillment_id ?? payload.shipment?.id), marketplaceStatus: "accepted", raw, issues: [] } as any; }
+  async updateShipmentTracking(accessToken: string, externalFulfillmentId: string, payload: unknown) { const raw = await requestJson(`${this.base()}/fulfillment/${externalFulfillmentId}/tracking`, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { shipment: (payload as any).shipment, marketplaceStatus: "accepted", raw } as any; }
+  async cancelShipmentFulfillment(accessToken: string, externalFulfillmentId: string) { const raw = await requestJson(`${this.base()}/fulfillment/${externalFulfillmentId}/cancel`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { shipment: {} as any, marketplaceStatus: "cancelled", raw } as any; }
+  async fetchShipmentStatus(accessToken: string, externalFulfillmentId: string) { const raw = await requestJson(`${this.base()}/fulfillment/${externalFulfillmentId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { shipment: {} as any, marketplaceStatus: String(raw.status ?? "submitted"), raw } as any; }
+  normalizeShipmentError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
   normalizeInventoryError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
   normalizeError(error: unknown): MarketplaceApiError { const e = error as { status?: number; message?: string; name?: string }; const type = e.name === "AbortError" ? "Timeout" : e.status === 401 ? "Authentication" : e.status === 403 ? "Authorization" : e.status === 429 ? "RateLimit" : e.status && e.status >= 500 ? "Temporary" : e.status && e.status >= 400 ? "Permanent" : "Unknown"; return { type, code: e.status ? String(e.status) : undefined, message: type, retryable: ["RateLimit","Timeout","Temporary","Unknown"].includes(type) }; }
 }

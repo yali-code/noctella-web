@@ -1,0 +1,1 @@
+export default function CompleteSalesPage() { return <main><h1>Complete Sales</h1><p>Completed sale financial list is backed by the API sale_financials projection.</p><table><thead><tr><th>Order/Product</th><th>Revenue</th><th>Item cost</th><th>Fees</th><th>Shipping cost</th><th>Profit</th><th>Completed</th></tr></thead><tbody /></table></main>; }

@@ -15,3 +15,5 @@ export * from "./enums/stockMovementType";
 export * from "./enums/marketplaceSync";
 export * from "./types";
 export * from "./theme/tokens";
+
+export * from "./enums/shipping";

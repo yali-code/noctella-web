@@ -455,3 +455,27 @@ CREATE INDEX IF NOT EXISTS idx_stock_sync_conflicts_listing ON stock_sync_confli
 CREATE TABLE IF NOT EXISTS stock_sync_audit (id TEXT PRIMARY KEY, job_id TEXT, channel TEXT NOT NULL, product_id TEXT NOT NULL, external_listing_id TEXT, previous_marketplace_stock INTEGER, requested_marketplace_stock INTEGER NOT NULL, confirmed_marketplace_stock INTEGER, result_status TEXT NOT NULL, error_code TEXT, error_message TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
 CREATE INDEX IF NOT EXISTS idx_stock_sync_audit_job ON stock_sync_audit(job_id);
 CREATE INDEX IF NOT EXISTS idx_stock_sync_audit_listing ON stock_sync_audit(channel, external_listing_id, created_at);
+
+-- Sprint 14 shipping, tracking and complete sale workflow
+CREATE TABLE IF NOT EXISTS shipments (
+  id TEXT PRIMARY KEY, order_id TEXT NOT NULL, marketplace_order_id TEXT, channel TEXT, carrier_code TEXT NOT NULL,
+  custom_carrier_name TEXT, tracking_number TEXT, tracking_url TEXT, status TEXT NOT NULL, shipping_cost REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'EUR', shipped_at TEXT, delivered_at TEXT, cancelled_at TEXT, returned_at TEXT,
+  external_fulfillment_id TEXT, marketplace_fulfillment_status TEXT, last_error TEXT, customs_snapshot TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shipments_one_active_order ON shipments(order_id) WHERE status NOT IN ('cancelled','returned');
+CREATE INDEX IF NOT EXISTS idx_shipments_order ON shipments(order_id);
+CREATE INDEX IF NOT EXISTS idx_shipments_status ON shipments(status);
+CREATE INDEX IF NOT EXISTS idx_shipments_tracking ON shipments(tracking_number);
+CREATE INDEX IF NOT EXISTS idx_shipments_channel ON shipments(channel);
+CREATE INDEX IF NOT EXISTS idx_shipments_carrier ON shipments(carrier_code);
+CREATE TABLE IF NOT EXISTS shipment_items (id TEXT PRIMARY KEY, shipment_id TEXT NOT NULL, order_item_id TEXT NOT NULL, quantity INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shipment_items_unique ON shipment_items(shipment_id, order_item_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_items_shipment ON shipment_items(shipment_id);
+CREATE TABLE IF NOT EXISTS shipment_events (id TEXT PRIMARY KEY, shipment_id TEXT NOT NULL, event_type TEXT NOT NULL, previous_status TEXT, new_status TEXT, payload_snapshot TEXT, error_code TEXT, error_message TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_shipment_events_shipment ON shipment_events(shipment_id, created_at);
+CREATE TABLE IF NOT EXISTS shipment_tracking_updates (id TEXT PRIMARY KEY, shipment_id TEXT NOT NULL, source TEXT NOT NULL, external_status TEXT, normalized_status TEXT, location TEXT, description TEXT, occurred_at TEXT, payload_snapshot TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tracking_dedupe ON shipment_tracking_updates(shipment_id, source, external_status, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_tracking_shipment ON shipment_tracking_updates(shipment_id, created_at);
+CREATE TABLE IF NOT EXISTS sale_financials (id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE, gross_revenue REAL NOT NULL, shipping_charged REAL NOT NULL, shipping_cost REAL NOT NULL, marketplace_fee REAL, promoted_fee REAL, payment_fee REAL, tax_vat REAL NOT NULL DEFAULT 0, item_cost REAL NOT NULL, net_revenue REAL NOT NULL, profit REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'EUR', source_snapshot TEXT NOT NULL, completed_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
