@@ -21,6 +21,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureErpIntegrationTables(sqlite);
   ensurePurchasingTables(sqlite);
   ensureSalesFinanceBridgeTables(sqlite);
+  ensureCustomerBridgeTables(sqlite);
 }
 
 /**
@@ -250,4 +251,36 @@ function ensureSalesFinanceBridgeTables(sqlite: Database.Database): void {
   const marker = "-- Sprint 20 sales, invoices and finance bridge.";
   const index = sqlText.indexOf(marker);
   if (index >= 0) sqlite.exec(sqlText.slice(index));
+}
+
+
+function ensureCustomerBridgeTables(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS customer_profiles (id TEXT PRIMARY KEY, erp_reference_id TEXT, marketplace_buyer_id TEXT, email TEXT, phone TEXT, vat_number TEXT, name TEXT, status TEXT NOT NULL DEFAULT 'Active', source TEXT NOT NULL DEFAULT 'ERP', created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_customer_profiles_email ON customer_profiles(email);
+CREATE INDEX IF NOT EXISTS idx_customer_profiles_phone ON customer_profiles(phone);
+CREATE INDEX IF NOT EXISTS idx_customer_profiles_erp ON customer_profiles(erp_reference_id);
+CREATE INDEX IF NOT EXISTS idx_customer_profiles_marketplace ON customer_profiles(marketplace_buyer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_profiles_vat ON customer_profiles(vat_number);
+CREATE TABLE IF NOT EXISTS customer_addresses (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, type TEXT NOT NULL, name TEXT, line1 TEXT, line2 TEXT, city TEXT, region TEXT, postal_code TEXT, country TEXT, fingerprint TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer ON customer_addresses(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_fingerprint ON customer_addresses(fingerprint);
+CREATE TABLE IF NOT EXISTS customer_notes (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, body TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, archived_at TEXT, safe_metadata TEXT, created_by TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_customer_notes_customer ON customer_notes(customer_id, created_at);
+CREATE TABLE IF NOT EXISTS customer_tags (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, tag TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_tags_unique ON customer_tags(customer_id, tag);
+CREATE TABLE IF NOT EXISTS customer_watchlist (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, reason TEXT, severity TEXT NOT NULL DEFAULT 'Info', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_customer_watchlist_customer ON customer_watchlist(customer_id, active);
+CREATE TABLE IF NOT EXISTS customer_events (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, event_type TEXT NOT NULL, entity_type TEXT, entity_id TEXT, safe_metadata TEXT, occurred_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_customer_events_customer ON customer_events(customer_id, occurred_at);
+CREATE TABLE IF NOT EXISTS customer_statistics (customer_id TEXT PRIMARY KEY, lifetime_value REAL, order_count INTEGER, average_order_value REAL, refund_percent REAL, return_percent REAL, last_purchase_at TEXT, favourite_category TEXT, favourite_marketplace TEXT, favourite_brand TEXT, country TEXT, currency TEXT, customer_score REAL, days_since_last_purchase INTEGER, calculated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS customer_preferences (customer_id TEXT PRIMARY KEY, language TEXT, currency TEXT, preferred_marketplace TEXT, safe_metadata TEXT, updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE TABLE IF NOT EXISTS customer_consents (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, consent_type TEXT NOT NULL, granted INTEGER NOT NULL, privacy_version TEXT, request_type TEXT, safe_metadata TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_customer_consents_customer ON customer_consents(customer_id, created_at);
+CREATE TABLE IF NOT EXISTS customer_merge_history (id TEXT PRIMARY KEY, source_customer_id TEXT NOT NULL, target_customer_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, safe_metadata TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_merge_history_key ON customer_merge_history(idempotency_key);
+CREATE TABLE IF NOT EXISTS customer_identity_links (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, provider TEXT NOT NULL, external_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_identity_links_unique ON customer_identity_links(provider, external_id);
+CREATE INDEX IF NOT EXISTS idx_customer_identity_links_customer ON customer_identity_links(customer_id);
+`);
 }
