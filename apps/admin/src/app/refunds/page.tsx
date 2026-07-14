@@ -1,0 +1,3 @@
+export const dynamic = "force-dynamic";
+import { canRetryRefund, listRefunds, safeReturnError } from "../../lib/returns";
+export default async function RefundsPage() { const rows = await listRefunds(); return <main><h1>Refunds</h1><table><tbody>{rows.map((r)=><tr key={r.id}><td><a href={`/refunds/${r.id}`}>{r.id}</a></td><td><a href={`/orders/${r.orderId}`}>{r.orderId}</a></td><td>{r.returnRequestId ? <a href={`/returns/${r.returnRequestId}`}>{r.returnRequestId}</a> : "—"}</td><td>{r.type}</td><td>{r.status}</td><td>{r.totalAmount} {r.currency}</td><td>{r.channel ?? "manual"}</td><td>{r.externalRefundId ?? "—"}</td><td>{String(canRetryRefund(r))}</td><td>{safeReturnError(r.lastError)}</td></tr>)}</tbody></table></main>; }

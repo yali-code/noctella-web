@@ -15,6 +15,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [readiness, setReadiness] = useState<{ ready: boolean; issues: string[] } | null>(null);
   const [financials, setFinancials] = useState<any>(null);
+  const [returns, setReturns] = useState<any[]>([]);
+  const [refunds, setRefunds] = useState<any[]>([]);
+  const [reversal, setReversal] = useState<any>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -25,6 +28,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         setStatus(loaded.status);
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/shipments`).then((r) => r.ok ? r.json() : []).then(setShipments).catch(() => setShipments([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/sale-reversal/readiness`).then((r) => r.ok ? r.json() : null).then(setReversal).catch(() => setReversal(null));
       })
       .catch((err) => setError(err.message ?? "Failed to load order"))
       .finally(() => setLoading(false));
@@ -142,6 +148,18 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         {readiness && !readiness.ready && <p style={{ color: "#c86a6a" }}>{readiness.issues.join(", ")}</p>}
         <Row label="Readiness" value={readiness?.ready ? "Ready" : "Blocked"} />
         <Row label="Financial profit" value={String(financialSummary(financials).profit)} />
+      </section>
+
+      <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
+        <h3>Returns, Refunds & Sale Reversal</h3>
+        <button style={buttonStyle}>Create Return</button>
+        <Row label="Return requests" value={String(returns.length)} />
+        {returns.map((ret) => <Row key={ret.id} label={`Return ${ret.id}`} value={`${ret.status} / ${ret.reason}`} />)}
+        <Row label="Refund summary" value={`${refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0).toFixed(2)} refunded`} />
+        <Row label="Refundable balance" value={(order.totalAmount - refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0)).toFixed(2)} />
+        <Row label="Sale reversal readiness" value={reversal?.ready ? "Ready" : (reversal?.reasons?.join(", ") ?? "Unknown")} />
+        <Row label="Adjusted net revenue" value={(order.totalAmount - refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0)).toFixed(2)} />
+        <Row label="Adjusted financial summary" value={financials ? JSON.stringify(financials) : "Pending sale financials"} />
       </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20, overflowX: "auto" }}>

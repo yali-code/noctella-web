@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload, type ShipmentUpdateResult } from "@noctella/shared";
+import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload, type ShipmentUpdateResult, type MarketplaceReturnResult } from "@noctella/shared";
 
 export interface MarketplaceTokens { accessToken: string; refreshToken?: string; expiresAt?: string; scopes?: string[]; externalAccountId?: string; }
 export interface MarketplaceInventoryResult { externalListingId: string; stock: number; raw?: unknown; }
@@ -30,6 +30,12 @@ export interface MarketplaceAdapter {
   fetchShipmentStatus(accessToken: string, externalFulfillmentId: string): Promise<ShipmentUpdateResult & { raw?: unknown }>;
   normalizeShipmentError(error: unknown): MarketplaceApiError;
   normalizeInventoryError(error: unknown): MarketplaceApiError;
+  createReturnAuthorization(accessToken: string, payload: unknown): Promise<MarketplaceReturnResult>;
+  submitRefund(accessToken: string, payload: unknown): Promise<MarketplaceReturnResult>;
+  fetchReturnStatus(accessToken: string, externalReturnId: string): Promise<MarketplaceReturnResult>;
+  fetchRefundStatus(accessToken: string, externalRefundId: string): Promise<MarketplaceReturnResult>;
+  closeReturn(accessToken: string, externalReturnId: string): Promise<MarketplaceReturnResult>;
+  normalizeReturnError(error: unknown): MarketplaceApiError;
   acknowledgeWebhook?(event: ParsedMarketplaceWebhookEvent): Promise<void>;
 }
 
@@ -62,8 +68,14 @@ abstract class HttpAdapter implements MarketplaceAdapter {
   async updateShipmentTracking(accessToken: string, externalFulfillmentId: string, payload: unknown) { const raw = await requestJson(`${this.base()}/fulfillment/${externalFulfillmentId}/tracking`, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { shipment: (payload as any).shipment, marketplaceStatus: "accepted", raw } as any; }
   async cancelShipmentFulfillment(accessToken: string, externalFulfillmentId: string) { const raw = await requestJson(`${this.base()}/fulfillment/${externalFulfillmentId}/cancel`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { shipment: {} as any, marketplaceStatus: "cancelled", raw } as any; }
   async fetchShipmentStatus(accessToken: string, externalFulfillmentId: string) { const raw = await requestJson(`${this.base()}/fulfillment/${externalFulfillmentId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { shipment: {} as any, marketplaceStatus: String(raw.status ?? "submitted"), raw } as any; }
+  async createReturnAuthorization(accessToken: string, payload: any) { const raw = await requestJson(`${this.base()}/returns`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { status: String(raw.status ?? "authorized"), externalReturnId: String(raw.id ?? raw.return_id ?? payload.returnRequestId), raw }; }
+  async submitRefund(accessToken: string, payload: any) { const raw = await requestJson(`${this.base()}/refunds`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { status: String(raw.status ?? "succeeded"), externalRefundId: String(raw.id ?? raw.refund_id ?? payload.refundId), raw }; }
+  async fetchReturnStatus(accessToken: string, externalReturnId: string) { const raw = await requestJson(`${this.base()}/returns/${externalReturnId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { status: String(raw.status ?? "open"), externalReturnId, raw }; }
+  async fetchRefundStatus(accessToken: string, externalRefundId: string) { const raw = await requestJson(`${this.base()}/refunds/${externalRefundId}`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { status: String(raw.status ?? "succeeded"), externalRefundId, raw }; }
+  async closeReturn(accessToken: string, externalReturnId: string) { const raw = await requestJson(`${this.base()}/returns/${externalReturnId}/close`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { status: String(raw.status ?? "closed"), externalReturnId, raw }; }
   normalizeShipmentError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
   normalizeInventoryError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
+  normalizeReturnError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
   normalizeError(error: unknown): MarketplaceApiError { const e = error as { status?: number; message?: string; name?: string }; const type = e.name === "AbortError" ? "Timeout" : e.status === 401 ? "Authentication" : e.status === 403 ? "Authorization" : e.status === 429 ? "RateLimit" : e.status && e.status >= 500 ? "Temporary" : e.status && e.status >= 400 ? "Permanent" : "Unknown"; return { type, code: e.status ? String(e.status) : undefined, message: type, retryable: ["RateLimit","Timeout","Temporary","Unknown"].includes(type) }; }
 }
 export class EbayAdapter extends HttpAdapter { constructor(env=process.env){ super(env,"EBAY"); } }

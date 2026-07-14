@@ -1,0 +1,3 @@
+export const dynamic = "force-dynamic";
+import { listReturns, returnOrderLink, safeReturnError } from "../../lib/returns";
+export default async function ReturnsPage() { const rows = await listReturns(); return <main><h1>Returns</h1><table><tbody>{rows.map((r)=><tr key={r.id}><td><a href={`/returns/${r.id}`}>{r.id}</a></td><td><a href={returnOrderLink(r)}>{r.orderId}</a></td><td>{r.channel ?? "manual"}</td><td>{r.reason}</td><td>{r.requestedResolution}</td><td>{r.approvedResolution ?? "—"}</td><td>{r.status}</td><td>{r.requestedAt}</td><td>{r.receivedAt ?? "—"}</td><td>{r.completedAt ?? "—"}</td><td>{safeReturnError(r.lastError)}</td></tr>)}</tbody></table></main>; }
