@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { primaryProductImage, productThumbnailUrl } from "@/lib/productImages";
 import type { PublicProduct } from "@/lib/types";
 
 export function ProductCard({ product }: { product: PublicProduct }) {
-  const primaryImage = product.images.find((img) => img.isPrimary) ?? product.images[0];
+  const primaryImage = primaryProductImage(product);
 
   return (
     <Link
@@ -19,7 +20,7 @@ export function ProductCard({ product }: { product: PublicProduct }) {
         {primaryImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={primaryImage.url}
+            src={productThumbnailUrl(primaryImage)}
             alt={primaryImage.altText || product.title}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />

@@ -18,6 +18,7 @@ import publicProductsRouter from "./routes/publicProducts";
 import settingsRouter from "./routes/settings";
 import stockMovementsRouter from "./routes/stockMovements";
 import { db } from "./db/client";
+import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photoStorage";
 import { seedInitialCategoriesIfEmpty } from "./services/categories";
 
 const app = express();
@@ -25,6 +26,7 @@ const port = process.env.API_PORT ?? 4000;
 
 app.use(cors());
 app.use(express.json());
+app.use(productPhotoStaticPath, express.static(productPhotoStaticRoot));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

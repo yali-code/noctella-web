@@ -5,6 +5,7 @@ import { DimensionUnit } from "../enums/dimensionUnit";
 import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
+import { PublishChannel } from "../enums/publishChannel";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { OfferStatus } from "../enums/offerStatus";
 import { PaymentProvider } from "../enums/paymentProvider";
@@ -74,6 +75,21 @@ export interface Collection extends Timestamps {
   metaDescription?: string;
   displayOrder: number;
   isActive: boolean;
+}
+
+export interface ProductPhoto extends Timestamps {
+  id: ID;
+  productId: ID;
+  url: string;
+  thumbnailUrl: string;
+  altText?: string;
+  sortOrder: number;
+  isPrimary: boolean;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
 }
 
 export interface ProductImage extends Timestamps {
@@ -191,6 +207,57 @@ export interface ProductMarketplaceReadiness {
   ebay: MarketplaceReadiness;
   etsy: MarketplaceReadiness;
   woocommerce: MarketplaceReadiness;
+}
+
+
+export interface PublishValidationIssue {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+export interface PublishValidation {
+  channel: PublishChannel;
+  productId: ID;
+  isReady: boolean;
+  errors: PublishValidationIssue[];
+  warnings: PublishValidationIssue[];
+}
+
+export interface PublishPreviewPhoto {
+  id: ID;
+  url: string;
+  thumbnailUrl?: string;
+  altText?: string;
+  sortOrder: number;
+  isPrimary: boolean;
+}
+
+export interface PublishPreview {
+  channel: PublishChannel;
+  productId: ID;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  price: number;
+  currency: PriceCurrency;
+  category?: string;
+  condition?: string;
+  sku: string;
+  stock: number;
+  photos: PublishPreviewPhoto[];
+  shippingSummary?: string;
+  validation: PublishValidation;
+}
+
+export interface PublishPayload extends PublishPreview {
+  status: ListingStatus;
+  data: Record<string, unknown>;
+}
+
+export interface PublishReadinessSummary {
+  productId: ID;
+  channels: PublishValidation[];
 }
 
 export interface Address {

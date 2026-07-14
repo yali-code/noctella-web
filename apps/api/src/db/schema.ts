@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * Sprint 2 persistence: SQLite via Drizzle ORM. Schema mirrors the shapes in
@@ -155,6 +155,31 @@ export const products = sqliteTable("products", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+
+export const productPhotos = sqliteTable("product_photos", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  url: text("url").notNull(),
+  thumbnailUrl: text("thumbnail_url").notNull(),
+  altText: text("alt_text"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [
+  index("idx_product_photos_product").on(table.productId),
+  index("idx_product_photos_product_sort").on(table.productId, table.sortOrder),
+]);
 
 export const productImages = sqliteTable("product_images", {
   id: text("id").primaryKey(),

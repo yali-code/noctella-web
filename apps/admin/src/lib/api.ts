@@ -43,4 +43,14 @@ export const api = {
     request<T>(path, { method: "PUT", body: JSON.stringify(data) }),
   patch: <T>(path: string, data: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+
+
+export async function uploadForm<T>(path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body: formData });
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const body = isJson ? await res.json() : undefined;
+  if (!res.ok) throw new ApiError(body?.error ?? res.statusText, res.status, body?.details);
+  return body as T;
+}

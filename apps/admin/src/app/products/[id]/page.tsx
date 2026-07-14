@@ -39,11 +39,18 @@ export default function ProductViewPage({ params }: { params: { id: string } }) 
         <h1>{product.title}</h1>
         <div style={{ display: "flex", gap: 12 }}>
           <Link
-            href={`/products/${product.id}/edit`}
+            href={`/products/${product.id}/photos`}
             className="noctella-panel"
             style={{ padding: "10px 18px", fontSize: 14, color: "var(--noctella-bright-star-gold)" }}
           >
-            Edit
+            Photos
+          </Link>
+          <Link
+            href={`/products/${product.id}/publishing`}
+            className="noctella-panel"
+            style={{ padding: "10px 18px", fontSize: 14, color: "var(--noctella-bright-star-gold)" }}
+          >
+            Publishing
           </Link>
           <button
             onClick={handleArchive}

@@ -1,6 +1,11 @@
 export enum ListingStatus {
-  NotListed = "not_listed",
   Draft = "draft",
+  Ready = "ready",
+  Published = "published",
+  Ended = "ended",
+  Archived = "archived",
+  Error = "error",
+  NotListed = "not_listed",
   Listed = "listed",
 }
 
