@@ -7,3 +7,15 @@ export enum ExternalListingSyncState { Unchanged = "unchanged", Changed = "chang
 export const MARKETPLACE_WEBHOOK_EVENT_STATUS_VALUES = Object.values(MarketplaceWebhookEventStatus);
 export const MARKETPLACE_ORDER_STATUS_VALUES = Object.values(MarketplaceOrderStatus);
 export const MARKETPLACE_SYNC_STATUS_VALUES = Object.values(MarketplaceSyncStatus);
+
+export enum BackgroundJobType { StockSyncProduct = "stock_sync_product", StockSyncChannel = "stock_sync_channel", StockSyncListing = "stock_sync_listing" }
+export enum BackgroundJobStatus { Pending = "pending", Processing = "processing", Succeeded = "succeeded", Failed = "failed", RetryPending = "retry_pending", Cancelled = "cancelled", DeadLetter = "dead_letter" }
+export enum StockSyncStatus { Skipped = "skipped", Updated = "updated", Failed = "failed", Conflict = "conflict", AutoResolved = "auto_resolved" }
+export enum StockSyncConflictType { LocalHigherThanMarketplace = "local_higher_than_marketplace", MarketplaceHigherThanLocal = "marketplace_higher_than_local", ListingMissing = "listing_missing", ProductMissing = "product_missing", NegativeMarketplaceStock = "negative_marketplace_stock", ConcurrentSale = "concurrent_sale", ManualReview = "manual_review", Authentication = "authentication" }
+export enum StockSyncConflictStatus { Open = "open", Resolved = "resolved", Ignored = "ignored", AutoResolved = "auto_resolved" }
+export type StockSyncJobPayload = { productId?: string; channel?: string; externalListingId?: string; requestedStock?: number; scheduled?: boolean };
+export type BackgroundJob = { id: string; type: BackgroundJobType | string; status: BackgroundJobStatus | string; channel?: string; productId?: string; externalListingId?: string; payloadSnapshot: string; idempotencyKey: string; priority: number; attemptCount: number; maxAttempts: number; runAfter: string; lockedAt?: string; lockedBy?: string; lastError?: string; createdAt: string; updatedAt: string; completedAt?: string };
+export type MarketplaceInventorySnapshot = { id: string; channel: string; productId: string; externalListingId: string; localStock: number; marketplaceStock: number; capturedAt: string; createdAt: string };
+export type MarketplaceStockUpdateResult = { externalListingId: string; requestedStock: number; confirmedStock: number; status: StockSyncStatus | string; raw?: unknown };
+export type StockSyncConflict = { id: string; channel: string; productId?: string; externalListingId?: string; conflictType: StockSyncConflictType | string; status: StockSyncConflictStatus | string; localStock?: number; marketplaceStock?: number; detailsSnapshot?: string; resolution?: string; detectedAt: string; resolvedAt?: string; createdAt: string; updatedAt: string };
+export type StockSyncResult = { status: StockSyncStatus | string; channel: string; productId: string; externalListingId?: string; localStock: number; marketplaceStock?: number; confirmedMarketplaceStock?: number; conflictId?: string; error?: string };
