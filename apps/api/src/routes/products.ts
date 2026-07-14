@@ -7,6 +7,7 @@ import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
 import { handleRouteError } from "./errorHandler";
 import { getPublishPreview, getPublishValidation } from "../services/publishing";
+import { executePublish, listExternalListings, endExternalListing } from "../services/marketplacePublishing";
 import { publishRequestSchema } from "../validation/publishing";
 
 const router = Router();
@@ -48,6 +49,21 @@ router.post("/:id/publish/preview", async (req, res) => {
   } catch (err) {
     handleRouteError(err, res);
   }
+});
+
+router.post("/:id/publish/execute", async (req, res) => {
+  try {
+    const input = publishRequestSchema.parse(req.body);
+    res.json(await executePublish(db, req.params.id, input.channel, req.body?.idempotencyKey));
+  } catch (err) { handleRouteError(err, res); }
+});
+
+router.get("/:id/external-listings", async (req, res) => {
+  try { res.json(await listExternalListings(db, req.params.id)); } catch (err) { handleRouteError(err, res); }
+});
+
+router.post("/:id/external-listings/:listingId/end", async (req, res) => {
+  try { res.json(await endExternalListing(db, req.params.id, req.params.listingId)); } catch (err) { handleRouteError(err, res); }
 });
 
 router.get("/:id", async (req, res) => {

@@ -13,6 +13,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   sqlite.exec(sql);
   ensureMarketplaceColumns(sqlite);
   ensureOrderColumns(sqlite);
+  ensureMarketplacePublishTables(sqlite);
 }
 
 /**
@@ -83,4 +84,41 @@ function ensureOrderColumns(sqlite: Database.Database): void {
     }
   }
   sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_draft ON orders(order_draft_id)");
+}
+
+
+function ensureMarketplacePublishTables(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS marketplace_connections (
+  id TEXT PRIMARY KEY, channel TEXT NOT NULL, account_label TEXT NOT NULL, external_account_id TEXT,
+  encrypted_access_token TEXT, encrypted_refresh_token TEXT, token_expires_at TEXT, scopes TEXT,
+  status TEXT NOT NULL, last_error TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_connections_channel_account ON marketplace_connections(channel, account_label);
+CREATE INDEX IF NOT EXISTS idx_marketplace_connections_channel ON marketplace_connections(channel);
+CREATE TABLE IF NOT EXISTS publish_jobs (
+  id TEXT PRIMARY KEY, product_id TEXT NOT NULL, channel TEXT NOT NULL, status TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE, payload_snapshot TEXT NOT NULL, external_listing_id TEXT,
+  external_listing_url TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_publish_jobs_product ON publish_jobs(product_id);
+CREATE INDEX IF NOT EXISTS idx_publish_jobs_channel ON publish_jobs(channel);
+CREATE INDEX IF NOT EXISTS idx_publish_jobs_status ON publish_jobs(status);
+CREATE TABLE IF NOT EXISTS publish_attempts (
+  id TEXT PRIMARY KEY, publish_job_id TEXT NOT NULL, attempt_number INTEGER NOT NULL,
+  request_snapshot TEXT NOT NULL, response_snapshot TEXT, error_code TEXT, error_message TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_publish_attempts_job ON publish_attempts(publish_job_id);
+CREATE TABLE IF NOT EXISTS external_listings (
+  id TEXT PRIMARY KEY, product_id TEXT NOT NULL, channel TEXT NOT NULL, connection_id TEXT NOT NULL,
+  external_listing_id TEXT NOT NULL, external_listing_url TEXT, external_status TEXT NOT NULL,
+  payload_snapshot TEXT NOT NULL, published_at TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_listings_channel_external ON external_listings(channel, external_listing_id);
+CREATE INDEX IF NOT EXISTS idx_external_listings_product ON external_listings(product_id);
+CREATE INDEX IF NOT EXISTS idx_external_listings_channel ON external_listings(channel);
+CREATE INDEX IF NOT EXISTS idx_external_listings_connection ON external_listings(connection_id);
+`);
 }

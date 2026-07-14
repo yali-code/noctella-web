@@ -7,6 +7,8 @@ export const adminMenuItems: AdminMenuItem[] = [
   { label: "Dashboard", href: "/" },
   { label: "Live Visitors", href: "/live-visitors" },
   { label: "Products", href: "/products" },
+  { label: "Marketplaces", href: "/marketplaces" },
+  { label: "Publish Jobs", href: "/publish-jobs" },
   { label: "Categories", href: "/categories" },
   { label: "Collections", href: "/collections" },
   { label: "AI Drafts", href: "/ai-drafts" },

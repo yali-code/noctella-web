@@ -1,0 +1,5 @@
+"use client";
+import { useEffect, useState } from "react";
+import type { PublishAttempt, PublishJob } from "@noctella/shared";
+import { canRetry, marketplaceApi } from "@/lib/marketplaces";
+export default function PublishJobDetail({ params }: { params: { id: string } }) { const [data,setData]=useState<{job:PublishJob;attempts:PublishAttempt[]} | null>(null); useEffect(() => { void marketplaceApi.getJob(params.id).then((d)=>setData(d as {job:PublishJob;attempts:PublishAttempt[]})); }, [params.id]); const reload=()=>marketplaceApi.getJob(params.id).then((d)=>setData(d as {job:PublishJob;attempts:PublishAttempt[]})); if(!data) return <p>Loading…</p>; return <div><h1>Publish Job {data.job.id}</h1><p>Status: {data.job.status}</p><p>External: {data.job.externalListingId ?? "—"}</p>{canRetry(data.job)&&<button onClick={()=>marketplaceApi.retry(data.job.id).then(reload)}>Retry</button>}<h2>Payload snapshot</h2><pre>{JSON.stringify(data.job.payloadSnapshot,null,2)}</pre><h2>Attempts</h2><pre>{JSON.stringify(data.attempts,null,2)}</pre></div> }
