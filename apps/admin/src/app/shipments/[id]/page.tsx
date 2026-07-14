@@ -1,0 +1,6 @@
+import { canAct, getShipment, getShipmentEvents, getShipmentTracking, marketplaceOrderLink, safeErrorSummary, shipmentOrderLink } from "../../../lib/shipments";
+import Link from "next/link";
+export default async function ShipmentDetailPage({ params }: { params: { id: string } }) {
+  const [s, events, tracking] = await Promise.all([getShipment(params.id), getShipmentEvents(params.id).catch(()=>[]), getShipmentTracking(params.id).catch(()=>[])]);
+  return <main><h1>Shipment {s.id}</h1><p>Order: <Link href={shipmentOrderLink(s)}>{s.orderId}</Link> {marketplaceOrderLink(s) ? <Link href={marketplaceOrderLink(s)!}>Marketplace order</Link> : null}</p><p>{s.carrierCode} {s.trackingNumber} {s.status}</p><p>Marketplace fulfillment: {s.marketplaceFulfillmentStatus ?? "n/a"}</p><p>Error: {safeErrorSummary(s.lastError)}</p><section><h2>Actions</h2>{["ready","ship","deliver","fail","cancel","return"].map(a=><button key={a} disabled={!canAct(s.status,a)}>{a}</button>)}<button>Retry fulfillment</button></section><section><h2>Items</h2><pre>{JSON.stringify(s.items,null,2)}</pre></section><section><h2>Events</h2><pre>{JSON.stringify(events,null,2)}</pre></section><section><h2>Tracking timeline</h2><pre>{JSON.stringify(tracking,null,2)}</pre></section></main>;
+}

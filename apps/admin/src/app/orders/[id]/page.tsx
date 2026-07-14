@@ -4,6 +4,7 @@ import { ORDER_STATUS_VALUES } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getOrder, updateOrderStatus, type OrderWithItems } from "@/lib/orders";
+import { canAct, financialSummary, readinessSummary, safeErrorSummary, type ShipmentRow } from "@/lib/shipments";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
@@ -11,6 +12,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shipments, setShipments] = useState<ShipmentRow[]>([]);
+  const [readiness, setReadiness] = useState<{ ready: boolean; issues: string[] } | null>(null);
+  const [financials, setFinancials] = useState<any>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -19,6 +23,8 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       .then((loaded) => {
         setOrder(loaded);
         setStatus(loaded.status);
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/shipments`).then((r) => r.ok ? r.json() : []).then(setShipments).catch(() => setShipments([]));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
       })
       .catch((err) => setError(err.message ?? "Failed to load order"))
       .finally(() => setLoading(false));
@@ -114,6 +120,29 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           <Row label="Updated" value={new Date(order.updatedAt).toLocaleString()} />
         </section>
       </div>
+
+
+
+      <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
+        <h3>Shipment & Complete Sale</h3>
+        {shipments.length === 0 ? <p>No shipment yet. Use Create Shipment to start fulfillment.</p> : shipments.map((shipment) => (
+          <div key={shipment.id} style={{ marginBottom: 12 }}>
+            <Row label="Shipment" value={`${shipment.carrierCode} / ${shipment.status}`} />
+            <Row label="Tracking" value={shipment.trackingNumber ?? "—"} />
+            <Row label="Marketplace fulfillment" value={shipment.marketplaceFulfillmentStatus ?? "n/a"} />
+            <Row label="Error" value={safeErrorSummary(shipment.lastError) || "—"} />
+            <button disabled={!canAct(shipment.status, "ready")} style={buttonStyle}>Mark Ready</button>
+            <button disabled={!canAct(shipment.status, "ship")} style={buttonStyle}>Ship</button>
+            <button disabled={!canAct(shipment.status, "deliver")} style={buttonStyle}>Deliver</button>
+          </div>
+        ))}
+        <button style={buttonStyle}>Create Shipment</button>
+        <button style={buttonStyle}>Assign Tracking</button>
+        <button disabled={!readiness?.ready} style={buttonStyle}>Complete Sale</button>
+        {readiness && !readiness.ready && <p style={{ color: "#c86a6a" }}>{readiness.issues.join(", ")}</p>}
+        <Row label="Readiness" value={readiness?.ready ? "Ready" : "Blocked"} />
+        <Row label="Financial profit" value={String(financialSummary(financials).profit)} />
+      </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20, overflowX: "auto" }}>
         <h3>Order Items</h3>

@@ -16,6 +16,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketplacePublishTables(sqlite);
   ensureMarketplaceSyncTables(sqlite);
   ensureStockSyncTables(sqlite);
+  ensureShippingTables(sqlite);
 }
 
 /**
@@ -179,4 +180,13 @@ CREATE TABLE IF NOT EXISTS stock_sync_audit (id TEXT PRIMARY KEY, job_id TEXT, c
 CREATE INDEX IF NOT EXISTS idx_stock_sync_audit_job ON stock_sync_audit(job_id);
 CREATE INDEX IF NOT EXISTS idx_stock_sync_audit_listing ON stock_sync_audit(channel, external_listing_id, created_at);
 `);
+}
+
+
+function ensureShippingTables(sqlite: Database.Database): void {
+  const sqlPath = path.join(__dirname, "schema.sql");
+  const all = fs.readFileSync(sqlPath, "utf-8");
+  const marker = "-- Sprint 14 shipping, tracking and complete sale workflow";
+  const chunk = all.includes(marker) ? all.slice(all.indexOf(marker)) : "";
+  if (chunk) sqlite.exec(chunk);
 }
