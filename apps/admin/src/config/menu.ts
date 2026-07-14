@@ -43,4 +43,10 @@ export const adminMenuItems: AdminMenuItem[] = [
   { label: "AI Support", href: "/ai-support" },
   { label: "Users & Roles", href: "/users-roles" },
   { label: "Settings", href: "/settings" },
+
+  { label: "Warehouses", href: "/warehouses" },
+  { label: "Reservations", href: "/reservations" },
+  { label: "Picking", href: "/picking" },
+  { label: "Packing", href: "/packing" },
+  { label: "Shipment Ready", href: "/warehouse/shipment-ready" },
 ];
