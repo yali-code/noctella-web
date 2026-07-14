@@ -1,0 +1,1 @@
+export default function SuppliersPage() { return <main><h1>Suppliers</h1><p>Supplier list shows status, type, country/city, ERP reference, purchase count, last purchase, and active/inactive state.</p><table><thead><tr><th>Name</th><th>Status</th><th>Type</th><th>Location</th><th>ERP reference</th><th>Purchases</th><th>Last purchase</th></tr></thead><tbody /></table></main>; }

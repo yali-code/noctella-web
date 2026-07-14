@@ -1,0 +1,1 @@
+export default function SupplierDetailPage() { return <main><h1>Supplier detail</h1><p>Safe ERP supplier view with contact details only for authorized admin/ERP, status, references, purchases, and conflicts.</p></main>; }

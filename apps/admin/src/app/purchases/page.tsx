@@ -1,0 +1,1 @@
+export default function PurchasesPage() { return <main><h1>Purchases</h1><p>Purchase list supports supplier, source, status, date, external reference, and invoice reference filters.</p><table><thead><tr><th>Supplier</th><th>Source</th><th>References</th><th>Dates</th><th>Status</th><th>Total</th></tr></thead><tbody /></table></main>; }
