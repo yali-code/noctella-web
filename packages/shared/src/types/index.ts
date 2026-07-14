@@ -5,6 +5,7 @@ import { DimensionUnit } from "../enums/dimensionUnit";
 import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
+import { PublishChannel } from "../enums/publishChannel";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { OfferStatus } from "../enums/offerStatus";
 import { PaymentProvider } from "../enums/paymentProvider";
@@ -334,4 +335,47 @@ export interface StockMovement extends Timestamps {
   note?: string;
   createdByAdminUserId?: ID;
   idempotencyKey?: string;
+}
+
+export type PublishValidationIssueSeverity = "error" | "warning";
+
+export type PublishValidationIssueType =
+  | "missing_required_field"
+  | "invalid_listing_status"
+  | "inventory_unavailable"
+  | "price_missing"
+  | "content_warning";
+
+export interface PublishValidationIssue {
+  type: PublishValidationIssueType;
+  severity: PublishValidationIssueSeverity;
+  field?: string;
+  message: string;
+}
+
+export interface PublishValidation {
+  productId: ID;
+  channel: PublishChannel;
+  valid: boolean;
+  errors: PublishValidationIssue[];
+  warnings: PublishValidationIssue[];
+}
+
+export interface PublishPayload {
+  productId: ID;
+  channel: PublishChannel;
+  listingStatus: ListingStatus;
+  title: string;
+  description: string;
+  priceEur: number;
+  category?: string;
+  images: ProductImage[];
+  metadata: Record<string, string | string[] | number | boolean | undefined>;
+}
+
+export interface PublishPreview {
+  productId: ID;
+  channel: PublishChannel;
+  validation: PublishValidation;
+  payload?: PublishPayload;
 }
