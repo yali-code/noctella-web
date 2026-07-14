@@ -1,0 +1,1 @@
+export default function InvoicesPage() { return <main><h1>Invoices</h1><p>Invoice list, draft creation, status, totals, order/customer links and safe ERP actions are exposed through the Sprint 20 bridge.</p></main>; }

@@ -20,6 +20,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureReturnRefundTables(sqlite);
   ensureErpIntegrationTables(sqlite);
   ensurePurchasingTables(sqlite);
+  ensureSalesFinanceBridgeTables(sqlite);
 }
 
 /**
@@ -238,6 +239,15 @@ function ensurePurchasingTables(sqlite: Database.Database): void {
   const sqlPath = path.join(__dirname, "schema.sql");
   const sqlText = fs.readFileSync(sqlPath, "utf-8");
   const marker = "-- Sprint 19 purchasing, suppliers and landed cost bridge.";
+  const index = sqlText.indexOf(marker);
+  if (index >= 0) sqlite.exec(sqlText.slice(index));
+}
+
+
+function ensureSalesFinanceBridgeTables(sqlite: Database.Database): void {
+  const sqlPath = path.join(__dirname, "schema.sql");
+  const sqlText = fs.readFileSync(sqlPath, "utf-8");
+  const marker = "-- Sprint 20 sales, invoices and finance bridge.";
   const index = sqlText.indexOf(marker);
   if (index >= 0) sqlite.exec(sqlText.slice(index));
 }

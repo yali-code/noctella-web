@@ -32,6 +32,8 @@ export const adminMenuItems: AdminMenuItem[] = [
   { label: "Shipping", href: "/shipping" },
   { label: "Shipments", href: "/shipments" },
   { label: "Complete Sales", href: "/complete-sales" },
+  { label: "Invoices", href: "/invoices" },
+  { label: "Finance", href: "/finance" },
   { label: "Payments", href: "/payments" },
   { label: "Currencies", href: "/currencies" },
   { label: "Coupons", href: "/coupons" },

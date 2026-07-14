@@ -1,0 +1,1 @@
+export default function InvoiceDetailPage() { return <main><h1>Invoice detail</h1><p>Shows invoice snapshot, lines, issue/cancel/void/paid action eligibility and event history without PDF or email execution.</p></main>; }

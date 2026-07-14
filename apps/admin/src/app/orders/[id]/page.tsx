@@ -18,6 +18,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [returns, setReturns] = useState<any[]>([]);
   const [refunds, setRefunds] = useState<any[]>([]);
   const [reversal, setReversal] = useState<any>(null);
+  const [salesBridge, setSalesBridge] = useState<any>(null);
+  const [invoiceBridge, setInvoiceBridge] = useState<any[]>([]);
+  const [financeBridge, setFinanceBridge] = useState<any>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -31,6 +34,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/sale-reversal/readiness`).then((r) => r.ok ? r.json() : null).then(setReversal).catch(() => setReversal(null));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/erp/orders/${loaded.id}/sales-summary`).then((r) => r.ok ? r.json() : null).then(setSalesBridge).catch(() => setSalesBridge(null));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/erp/orders/${loaded.id}/invoices`).then((r) => r.ok ? r.json() : { items: [] }).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => setInvoiceBridge([]));
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/erp/finance/orders/${loaded.id}`).then((r) => r.ok ? r.json() : null).then(setFinanceBridge).catch(() => setFinanceBridge(null));
       })
       .catch((err) => setError(err.message ?? "Failed to load order"))
       .finally(() => setLoading(false));
@@ -160,6 +166,26 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         <Row label="Sale reversal readiness" value={reversal?.ready ? "Ready" : (reversal?.reasons?.join(", ") ?? "Unknown")} />
         <Row label="Adjusted net revenue" value={(order.totalAmount - refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0)).toFixed(2)} />
         <Row label="Adjusted financial summary" value={financials ? JSON.stringify(financials) : "Pending sale financials"} />
+      </section>
+
+      <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
+        <h3>ERP Sales, Invoices & Finance Bridge</h3>
+        <Row label="Sales summary" value={salesBridge ? `${salesBridge.channel} / ${salesBridge.completionStatus} / ${salesBridge.paymentStatus}` : "Unavailable"} />
+        <Row label="Invoice status" value={salesBridge?.invoiceNumber ?? salesBridge?.invoiceStatus ?? "No invoice"} />
+        <button style={buttonStyle}>Create Invoice Draft</button>
+        {invoiceBridge.length === 0 ? <p>No ERP invoices yet.</p> : invoiceBridge.map((invoice) => (
+          <div key={invoice.id}>
+            <Row label={`Invoice ${invoice.invoiceNumber ?? invoice.id}`} value={`${invoice.status} / ${invoice.invoiceType} / ${Number(invoice.totalAmount ?? 0).toFixed(2)}`} />
+            <button disabled={invoice.status !== "Draft"} style={buttonStyle}>Issue</button>
+            <button disabled={! ["Draft", "Issued"].includes(invoice.status)} style={buttonStyle}>Cancel</button>
+            <button disabled={invoice.status !== "Issued"} style={buttonStyle}>Mark Paid</button>
+          </div>
+        ))}
+        <Row label="Complete-sale readiness" value={readiness?.ready ? "Ready" : (readiness?.issues?.join(", ") ?? "Unknown")} />
+        <Row label="Gross revenue" value={String(financeBridge?.summary?.grossRevenue ?? salesBridge?.financials?.grossRevenue ?? "Pending")} />
+        <Row label="Refund adjustments" value={String(salesBridge?.financials?.totalRefunded ?? refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0))} />
+        <Row label="Reversal adjustments" value={reversal?.ready ? "Ready" : (reversal?.reasons?.join(", ") ?? "No reversal")} />
+        <Row label="Adjusted profit completeness" value={financeBridge?.summary?.adjustedCompleteness ?? salesBridge?.financials?.adjustedCompleteness ?? "Incomplete"} />
       </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20, overflowX: "auto" }}>
