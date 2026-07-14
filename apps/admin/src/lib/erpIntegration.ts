@@ -1,5 +1,5 @@
 import { api, ApiError } from "./api";
-export interface ErpIntegrationOverview { version: any; health: any; capabilities: any; clients: any[]; checkpoints: any[]; audit: any[]; mappingSummary: any[]; }
+export interface ErpIntegrationOverview { version: any; health: any; capabilities: any; clients: any[]; checkpoints: any[]; audit: any[]; mappingSummary: any[]; recentCommandExecutions?: any[]; writeCapabilities?: string[]; }
 export function redactErpError(message: string): string { return message.replace(/(X-Noctella-ERP-Key|erp[_-]?key|secret|token)[:=][^\s]+/gi, "$1=[REDACTED]"); }
 export function mapVersionStatus(version: any): string { return version?.compatible === false ? "Version mismatch" : "Compatible"; }
 export function mapReadOnlyLabel(capabilities: any): string { return capabilities?.writesEnabled ? "Writes enabled" : "Read-only integration foundation"; }

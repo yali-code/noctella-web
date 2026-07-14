@@ -1,11 +1,15 @@
 import { Router } from "express";
+import multer from "multer";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { categories, collections, erpIntegrationAudit, erpIntegrationClients, erpSyncCheckpoints, productPhotos, stockMovements, products } from "../db/schema";
 import { acknowledge, authenticateErp, capabilities, checkpoint, getProductProjection, health, identityCheck, isVersionSupported, listProductProjections, PRODUCT_FIELD_MAPPING, validateCommandEnvelope, versionInfo, audit } from "../services/erpIntegration";
+import { barcode, deleteProductPhoto, executeCreateProduct, executeStockAdjustment, executeUpdateProduct, labelData, reorderProductPhotos, setPrimaryProductPhoto, updateProductPhoto, uploadProductPhoto, workspace } from "../services/erpInventoryBridge";
+import { handleRouteError } from "./errorHandler";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const key = (req: any) => req.header("X-Noctella-ERP-Key");
 const version = (req: any) => req.header("X-Noctella-ERP-Client-Version");
 const requestId = (req: any) => req.header("X-Noctella-ERP-Request-Id");
@@ -37,5 +41,17 @@ router.get("/mapping/product-fields", requireErp, (_req, res) => res.json({ fiel
 router.get("/sync/checkpoint", requireErp, async (_req, res) => res.json(await checkpoint(db)));
 router.post("/sync/acknowledge", requireErp, async (req:any, res) => res.json(await acknowledge(db, req.erp.clientId, requestId(req), req.body?.checkpointToken, req.body?.safeMetadata)));
 router.post("/commands/validate", requireErp, (req, res) => res.json(validateCommandEnvelope(req.body)));
-router.get("/admin/overview", async (_req, res) => res.json({ version: versionInfo(), health: await health(db), capabilities: capabilities(), clients: await db.select({ id:erpIntegrationClients.id, name:erpIntegrationClients.name, keyVersion:erpIntegrationClients.keyVersion, isActive:erpIntegrationClients.isActive, lastSeenAt:erpIntegrationClients.lastSeenAt, lastClientVersion:erpIntegrationClients.lastClientVersion }).from(erpIntegrationClients), checkpoints: await db.select().from(erpSyncCheckpoints).orderBy(erpSyncCheckpoints.createdAt).limit(10), audit: await db.select().from(erpIntegrationAudit).orderBy(erpIntegrationAudit.createdAt).limit(20), mappingSummary: PRODUCT_FIELD_MAPPING }));
+router.post("/commands/products/create", requireErp, async (req:any, res) => { try { res.status(201).json(await executeCreateProduct(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/products/:productId/update", requireErp, async (req:any, res) => { try { res.json(await executeUpdateProduct(db, req.erp.clientId, req.params.productId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/products/:productId/adjust-stock", requireErp, async (req:any, res) => { try { res.json(await executeStockAdjustment(db, req.erp.clientId, req.params.productId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:id/workspace", requireErp, async (req, res) => { try { res.json(await workspace(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:id/barcode", requireErp, async (req, res) => { try { res.json(await barcode(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/products/:id/label-data", requireErp, async (req, res) => { try { res.json(await labelData(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.post("/products/:id/photos/upload", requireErp, upload.single("photo"), async (req:any, res) => { try { if (!req.file) return res.status(400).json({ error:"Photo file is required" }); res.status(201).json(await uploadProductPhoto(db, req.params.id, req.file, typeof req.body.altText === "string" ? req.body.altText : undefined)); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoUpload", "Succeeded", { productId:req.params.id }); } catch (err) { handleRouteError(err, res); } });
+router.patch("/products/:id/photos/:photoId", requireErp, async (req:any, res) => { try { const out=await updateProductPhoto(db, req.params.id, req.params.photoId, typeof req.body.altText === "string" ? req.body.altText : undefined); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoUpdate", "Succeeded", { productId:req.params.id, photoId:req.params.photoId }); res.json(out); } catch (err) { handleRouteError(err, res); } });
+router.post("/products/:id/photos/:photoId/primary", requireErp, async (req:any, res) => { try { const out=await setPrimaryProductPhoto(db, req.params.id, req.params.photoId); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoPrimary", "Succeeded", { productId:req.params.id, photoId:req.params.photoId }); res.json(out); } catch (err) { handleRouteError(err, res); } });
+router.post("/products/:id/photos/reorder", requireErp, async (req:any, res) => { try { const out=await reorderProductPhotos(db, req.params.id, req.body.photoIds); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoReorder", "Succeeded", { productId:req.params.id, count:req.body.photoIds?.length }); res.json(out); } catch (err) { handleRouteError(err, res); } });
+router.delete("/products/:id/photos/:photoId", requireErp, async (req:any, res) => { try { const out=await deleteProductPhoto(db, req.params.id, req.params.photoId); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoDelete", "Succeeded", { productId:req.params.id, photoId:req.params.photoId }); res.json(out); } catch (err) { handleRouteError(err, res); } });
+
+router.get("/admin/overview", async (_req, res) => res.json({ writeCapabilities:["CreateProduct","UpdateProduct","AdjustStock"], recentCommandExecutions: await db.select().from((await import("../db/schema")).erpCommandExecutions).orderBy((await import("../db/schema")).erpCommandExecutions.createdAt).limit(20), version: versionInfo(), health: await health(db), capabilities: capabilities(), clients: await db.select({ id:erpIntegrationClients.id, name:erpIntegrationClients.name, keyVersion:erpIntegrationClients.keyVersion, isActive:erpIntegrationClients.isActive, lastSeenAt:erpIntegrationClients.lastSeenAt, lastClientVersion:erpIntegrationClients.lastClientVersion }).from(erpIntegrationClients), checkpoints: await db.select().from(erpSyncCheckpoints).orderBy(erpSyncCheckpoints.createdAt).limit(10), audit: await db.select().from(erpIntegrationAudit).orderBy(erpIntegrationAudit.createdAt).limit(20), mappingSummary: PRODUCT_FIELD_MAPPING }));
 export default router;
