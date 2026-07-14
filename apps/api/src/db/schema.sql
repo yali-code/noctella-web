@@ -521,3 +521,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_erp_command_executions_client_key_unique O
 CREATE INDEX IF NOT EXISTS idx_erp_command_executions_client_key ON erp_command_executions(client_id, idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_erp_command_executions_entity ON erp_command_executions(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_erp_command_executions_status ON erp_command_executions(status, created_at);
+
+-- Sprint 19 purchasing, suppliers and landed cost bridge.
+CREATE TABLE IF NOT EXISTS suppliers (id TEXT PRIMARY KEY, erp_reference_id TEXT, name TEXT NOT NULL, normalized_name TEXT NOT NULL, supplier_type TEXT NOT NULL, country_code TEXT, city TEXT, email TEXT, phone TEXT, website TEXT, tax_number TEXT, notes TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_suppliers_erp_reference_unique ON suppliers(erp_reference_id) WHERE erp_reference_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_suppliers_status ON suppliers(status);
+CREATE INDEX IF NOT EXISTS idx_suppliers_ref ON suppliers(erp_reference_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_name_country ON suppliers(normalized_name, country_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_suppliers_name_country_unique ON suppliers(normalized_name, country_code) WHERE country_code IS NOT NULL;
+CREATE TABLE IF NOT EXISTS purchases (id TEXT PRIMARY KEY, erp_reference_id TEXT, supplier_id TEXT, source_type TEXT NOT NULL, external_reference TEXT, invoice_reference_number TEXT, auction_house TEXT, auction_date TEXT, currency TEXT NOT NULL DEFAULT 'EUR', item_subtotal REAL NOT NULL, buyer_premium REAL, shipping_cost REAL, customs_cost REAL, packaging_cost REAL, tax_vat REAL, miscellaneous_cost REAL, total_cost REAL, status TEXT NOT NULL, ordered_at TEXT, received_at TEXT, notes TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_purchases_erp_reference_unique ON purchases(erp_reference_id) WHERE erp_reference_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_purchases_status ON purchases(status);
+CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_dates ON purchases(ordered_at, received_at);
+CREATE INDEX IF NOT EXISTS idx_purchases_ref ON purchases(erp_reference_id, external_reference, invoice_reference_number);
+CREATE TABLE IF NOT EXISTS purchase_lines (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, product_id TEXT, source_line_reference TEXT, title_snapshot TEXT NOT NULL, quantity INTEGER NOT NULL, received_quantity INTEGER NOT NULL DEFAULT 0, unit_purchase_cost REAL NOT NULL, weight REAL, manual_allocated_cost REAL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_purchase_lines_purchase ON purchase_lines(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_lines_product ON purchase_lines(product_id);
+CREATE TABLE IF NOT EXISTS purchase_allocations (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, purchase_line_id TEXT NOT NULL, product_id TEXT, allocation_method TEXT NOT NULL, allocated_shipping_cost REAL, allocated_customs_cost REAL, allocated_packaging_cost REAL, allocated_buyer_premium REAL, allocated_misc_cost REAL, allocated_tax_vat REAL, allocated_total_cost REAL NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_purchase_allocations_purchase ON purchase_allocations(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_allocations_line ON purchase_allocations(purchase_line_id);
+CREATE TABLE IF NOT EXISTS purchase_receipts (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, received_at TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_purchase_receipts_purchase ON purchase_receipts(purchase_id);
+CREATE TABLE IF NOT EXISTS purchase_receipt_lines (id TEXT PRIMARY KEY, receipt_id TEXT NOT NULL, purchase_line_id TEXT NOT NULL, quantity_received INTEGER NOT NULL, stock_movement_id TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_purchase_receipt_lines_receipt ON purchase_receipt_lines(receipt_id);
+CREATE TABLE IF NOT EXISTS purchase_events (id TEXT PRIMARY KEY, purchase_id TEXT NOT NULL, event_type TEXT NOT NULL, safe_metadata TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_purchase_events_purchase ON purchase_events(purchase_id, created_at);

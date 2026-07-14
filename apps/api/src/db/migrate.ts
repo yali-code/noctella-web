@@ -19,6 +19,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureShippingTables(sqlite);
   ensureReturnRefundTables(sqlite);
   ensureErpIntegrationTables(sqlite);
+  ensurePurchasingTables(sqlite);
 }
 
 /**
@@ -230,4 +231,13 @@ CREATE INDEX IF NOT EXISTS idx_erp_command_executions_entity ON erp_command_exec
 CREATE INDEX IF NOT EXISTS idx_erp_command_executions_status ON erp_command_executions(status, created_at);
 
 `);
+}
+
+
+function ensurePurchasingTables(sqlite: Database.Database): void {
+  const sqlPath = path.join(__dirname, "schema.sql");
+  const sqlText = fs.readFileSync(sqlPath, "utf-8");
+  const marker = "-- Sprint 19 purchasing, suppliers and landed cost bridge.";
+  const index = sqlText.indexOf(marker);
+  if (index >= 0) sqlite.exec(sqlText.slice(index));
 }

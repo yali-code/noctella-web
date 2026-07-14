@@ -1,0 +1,1 @@
+export default function PurchaseDetailPage() { return <main><h1>Purchase detail</h1><p>Financial summary, line items, linked/unlinked products, received quantities, allocations, landed cost, receipt history, events, and safe errors/conflicts.</p></main>; }
