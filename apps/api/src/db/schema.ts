@@ -157,6 +157,60 @@ export const products = sqliteTable("products", {
 });
 
 
+export const productErpMetadata = sqliteTable("product_erp_metadata", {
+  productId: text("product_id").primaryKey(),
+  noctellaId: text("noctella_id"),
+  barcodeValue: text("barcode_value"),
+  purchaseSource: text("purchase_source"),
+  provenance: text("provenance"),
+  previousOwner: text("previous_owner"),
+  auctionHouse: text("auction_house"),
+  invoiceReferenceNumber: text("invoice_reference_number"),
+  storageLocationReference: text("storage_location_reference"),
+  shippingCostEur: real("shipping_cost_eur"),
+  packagingCostEur: real("packaging_cost_eur"),
+  miscCostsEur: real("misc_costs_eur"),
+  actualSalePriceEur: real("actual_sale_price_eur"),
+  productWorkflowStatus: text("product_workflow_status"),
+  photoStatus: text("photo_status"),
+  authenticationStatus: text("authentication_status"),
+  marketplacePreparationStatus: text("marketplace_preparation_status"),
+  internalPriority: text("internal_priority"),
+  operationalNotes: text("operational_notes"),
+  depthValue: real("depth_value"),
+  depthUnit: text("depth_unit"),
+  diameterValue: real("diameter_value"),
+  diameterUnit: text("diameter_unit"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [
+  index("idx_product_erp_metadata_noctella").on(table.noctellaId),
+  index("idx_product_erp_metadata_barcode").on(table.barcodeValue),
+  index("idx_product_erp_metadata_location").on(table.storageLocationReference),
+]);
+
+export const erpCommandExecutions = sqliteTable("erp_command_executions", {
+  id: text("id").primaryKey(),
+  clientId: text("client_id").notNull(),
+  commandId: text("command_id").notNull(),
+  requestId: text("request_id"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  commandType: text("command_type").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  status: text("status").notNull(),
+  resultReference: text("result_reference"),
+  requestChecksum: text("request_checksum").notNull(),
+  safeResultMetadata: text("safe_result_metadata"),
+  safeErrorCode: text("safe_error_code"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  completedAt: text("completed_at"),
+}, (table) => [
+  index("idx_erp_command_executions_client_key").on(table.clientId, table.idempotencyKey),
+  index("idx_erp_command_executions_entity").on(table.entityType, table.entityId),
+  index("idx_erp_command_executions_status").on(table.status, table.createdAt),
+]);
+
 export const productPhotos = sqliteTable("product_photos", {
   id: text("id").primaryKey(),
   productId: text("product_id").notNull(),

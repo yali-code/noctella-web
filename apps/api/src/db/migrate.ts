@@ -216,5 +216,18 @@ CREATE TABLE IF NOT EXISTS erp_sync_checkpoints (id TEXT PRIMARY KEY, client_id 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_erp_checkpoints_request_unique ON erp_sync_checkpoints(request_id) WHERE request_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_erp_checkpoints_client ON erp_sync_checkpoints(client_id);
 CREATE INDEX IF NOT EXISTS idx_erp_checkpoints_token ON erp_sync_checkpoints(checkpoint_token);
+
+-- Sprint 18 ERP inventory and product workspace bridge.
+CREATE TABLE IF NOT EXISTS product_erp_metadata (product_id TEXT PRIMARY KEY, noctella_id TEXT, barcode_value TEXT, purchase_source TEXT, provenance TEXT, previous_owner TEXT, auction_house TEXT, invoice_reference_number TEXT, storage_location_reference TEXT, shipping_cost_eur REAL, packaging_cost_eur REAL, misc_costs_eur REAL, actual_sale_price_eur REAL, product_workflow_status TEXT, photo_status TEXT, authentication_status TEXT, marketplace_preparation_status TEXT, internal_priority TEXT, operational_notes TEXT, depth_value REAL, depth_unit TEXT, diameter_value REAL, diameter_unit TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_erp_metadata_noctella_unique ON product_erp_metadata(noctella_id) WHERE noctella_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_product_erp_metadata_noctella ON product_erp_metadata(noctella_id);
+CREATE INDEX IF NOT EXISTS idx_product_erp_metadata_barcode ON product_erp_metadata(barcode_value);
+CREATE INDEX IF NOT EXISTS idx_product_erp_metadata_location ON product_erp_metadata(storage_location_reference);
+CREATE TABLE IF NOT EXISTS erp_command_executions (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, command_id TEXT NOT NULL, request_id TEXT, idempotency_key TEXT NOT NULL, command_type TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT, status TEXT NOT NULL, result_reference TEXT, request_checksum TEXT NOT NULL, safe_result_metadata TEXT, safe_error_code TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), completed_at TEXT);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_erp_command_executions_client_key_unique ON erp_command_executions(client_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_erp_command_executions_client_key ON erp_command_executions(client_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_erp_command_executions_entity ON erp_command_executions(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_erp_command_executions_status ON erp_command_executions(status, created_at);
+
 `);
 }
