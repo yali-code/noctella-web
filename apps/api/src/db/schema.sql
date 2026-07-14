@@ -497,3 +497,15 @@ CREATE INDEX IF NOT EXISTS idx_sale_reversals_order ON sale_reversals(order_id);
 
 CREATE TABLE IF NOT EXISTS refund_attempts (id TEXT PRIMARY KEY, refund_id TEXT NOT NULL, attempt_number INTEGER NOT NULL, channel TEXT, status TEXT NOT NULL, external_refund_id TEXT, request_snapshot TEXT NOT NULL, response_snapshot TEXT, error_code TEXT, error_message TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
 CREATE INDEX IF NOT EXISTS idx_refund_attempts_refund ON refund_attempts(refund_id); CREATE INDEX IF NOT EXISTS idx_refund_attempts_status ON refund_attempts(status);
+
+CREATE TABLE IF NOT EXISTS erp_integration_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT NOT NULL, key_version TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, last_seen_at TEXT, last_client_version TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_erp_clients_active ON erp_integration_clients(is_active);
+CREATE INDEX IF NOT EXISTS idx_erp_clients_key_version ON erp_integration_clients(key_version);
+CREATE TABLE IF NOT EXISTS erp_integration_audit (id TEXT PRIMARY KEY, client_id TEXT, request_id TEXT, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, result TEXT NOT NULL, safe_metadata TEXT, error_code TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_erp_audit_client ON erp_integration_audit(client_id);
+CREATE INDEX IF NOT EXISTS idx_erp_audit_request ON erp_integration_audit(request_id);
+CREATE INDEX IF NOT EXISTS idx_erp_audit_created ON erp_integration_audit(created_at);
+CREATE TABLE IF NOT EXISTS erp_sync_checkpoints (id TEXT PRIMARY KEY, client_id TEXT NOT NULL, request_id TEXT, checkpoint_token TEXT NOT NULL, acknowledged_at TEXT NOT NULL, safe_metadata TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_erp_checkpoints_request_unique ON erp_sync_checkpoints(request_id) WHERE request_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_erp_checkpoints_client ON erp_sync_checkpoints(client_id);
+CREATE INDEX IF NOT EXISTS idx_erp_checkpoints_token ON erp_sync_checkpoints(checkpoint_token);

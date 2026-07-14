@@ -427,3 +427,5 @@ export interface RefundResult { refund: Refund; allocations?: RefundAllocation[]
 export interface SaleReversalResult { id: ID; orderId: ID; returnRequestId?: ID; refundId?: ID; reversalType: string; stockReversed: boolean; financialsReversed: boolean; originalSaleFinancialId?: ID; sourceSnapshot: string; idempotencyKey: string; createdAt: string; }
 export interface ReturnFinancialSummary { orderId: ID; originalGrossRevenue: number; refundedSubtotal: number; refundedShipping: number; refundedTax: number; marketplaceFeeAdjustment?: number; paymentFeeAdjustment?: number; totalRefunded: number; netRetainedRevenue: number; returnedItemCost?: number; stockDispositionWriteOffValue?: number; adjustedProfit?: number; adjustedProfitComplete: boolean; }
 export interface MarketplaceReturnResult { status: MarketplaceReturnStatus | string; externalReturnId?: string; externalRefundId?: string; raw?: unknown; }
+
+export * from "./erpIntegration";
