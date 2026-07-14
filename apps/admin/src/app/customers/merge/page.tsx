@@ -1,0 +1,1 @@
+export default function CustomerMergePage(){ return <main><h1>Customer Merge</h1><p>Duplicate detection covers ERP reference, marketplace buyer ID, email, phone, VAT number, shipping address and billing address.</p><p>Never merge automatically; explicit execution through the ERP Integration API is required.</p></main>; }

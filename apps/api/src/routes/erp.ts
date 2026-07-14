@@ -9,6 +9,7 @@ import { acknowledge, authenticateErp, capabilities, checkpoint, getProductProje
 import { barcode, deleteProductPhoto, executeCreateProduct, executeStockAdjustment, executeUpdateProduct, labelData, reorderProductPhotos, setPrimaryProductPhoto, updateProductPhoto, uploadProductPhoto, workspace } from "../services/erpInventoryBridge";
 import { handleRouteError } from "./errorHandler";
 import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchaseEvents, getPurchaseLandedCostSummary, listPurchases, listSuppliers, productPurchaseHistory } from "../services/erpPurchasingBridge";
+import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
 const router = Router();
@@ -40,8 +41,26 @@ router.get("/orders/:id/financials", requireErp, async (req, res) => { try { res
 router.get("/orders/:id/refund-summary", requireErp, async (req, res) => { try { res.json(await refundSummary(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
 router.get("/orders/:id/reversal-summary", requireErp, async (req, res) => { try { res.json(await reversalSummary(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
 router.get("/orders/:orderId/complete-sale/readiness", requireErp, async (req, res) => { try { res.json(await getSaleCompletionReadiness(db, req.params.orderId)); } catch (err) { handleRouteError(err, res); } });
-router.get("/customers", requireErp, async (req, res) => { try { const sales=await listSales(db, req.query); res.json({items:sales.items.map((s:any)=>s.customer), page:sales.page, pageSize:sales.pageSize}); } catch (err) { handleRouteError(err, res); } });
-router.get("/customers/:id", requireErp, async (_req, res) => res.json({ id: _req.params.id, source:"order-snapshot", noDuplicateCustomerTruth:true }));
+router.get("/customers", requireErp, async (req, res) => { try { res.json(await listCustomers(db, req.query)); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id", requireErp, async (req, res) => { try { const c=await getCustomer(db, req.params.id); if(!c) return res.status(404).json({ error:"Customer not found" }); res.json(c); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/orders", requireErp, async (req, res) => { try { res.json(await related(db, req.params.id, "orders")); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/invoices", requireErp, async (req, res) => { try { res.json(await related(db, req.params.id, "invoices")); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/refunds", requireErp, async (req, res) => { try { res.json(await related(db, req.params.id, "refunds")); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/returns", requireErp, async (req, res) => { try { res.json(await related(db, req.params.id, "returns")); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/history", requireErp, async (req, res) => { try { res.json(await timeline(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/preferences", requireErp, async (req, res) => { try { res.json(await getPreferences(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/statistics", requireErp, async (req, res) => { try { res.json(await getStatistics(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/consents", requireErp, async (req, res) => { try { res.json(await getConsents(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/watchlist", requireErp, async (req, res) => { try { res.json(await related(db, req.params.id, "watchlist")); } catch (err) { handleRouteError(err, res); } });
+router.get("/customers/:id/notes", requireErp, async (req, res) => { try { res.json(await listNotes(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/create", requireErp, async (req:any, res) => { try { res.status(201).json(await createCustomer(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/update", requireErp, async (req:any, res) => { try { res.json(await updateCustomer(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/add-note", requireErp, async (req:any, res) => { try { res.status(201).json(await addNote(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/tag", requireErp, async (req:any, res) => { try { res.json(await tagCustomer(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/preferences", requireErp, async (req:any, res) => { try { res.json(await setPreferences(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/consents", requireErp, async (req:any, res) => { try { res.status(201).json(await addConsent(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/merge-candidates", requireErp, async (req, res) => { try { res.json(await mergeCandidates(db, req.body)); } catch (err) { handleRouteError(err, res); } });
+router.post("/customers/merge", requireErp, async (req:any, res) => { try { res.json(await executeMerge(db, req.erp.clientId, req.body)); } catch (err) { handleRouteError(err, res); } });
 router.get("/orders/:orderId/customer", requireErp, async (req, res) => { try { res.json(await customerProjection(db, req.params.orderId, true)); } catch (err) { handleRouteError(err, res); } });
 router.get("/invoices", requireErp, async (req, res) => { try { res.json(await listInvoices(db, req.query)); } catch (err) { handleRouteError(err, res); } });
 router.get("/invoices/:id", requireErp, async (req, res) => { try { res.json(await getInvoice(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
