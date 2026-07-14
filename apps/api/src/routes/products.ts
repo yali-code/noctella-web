@@ -6,6 +6,8 @@ import { createProductSchema, productListQuerySchema, updateProductSchema } from
 import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
 import { handleRouteError } from "./errorHandler";
+import { getPublishPreview, getPublishValidation } from "../services/publishing";
+import { publishRequestSchema } from "../validation/publishing";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -15,6 +17,34 @@ router.get("/", async (req, res) => {
     const query = productListQuerySchema.parse(req.query);
     const result = await listProducts(db, query);
     res.json(result);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+
+router.get("/:id/publish", async (req, res) => {
+  try {
+    const input = publishRequestSchema.parse(req.query);
+    res.json(await getPublishPreview(db, req.params.id, input.channel));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.post("/:id/publish/validate", async (req, res) => {
+  try {
+    const input = publishRequestSchema.parse(req.body);
+    res.json(await getPublishValidation(db, req.params.id, input.channel));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.post("/:id/publish/preview", async (req, res) => {
+  try {
+    const input = publishRequestSchema.parse(req.body);
+    res.json(await getPublishPreview(db, req.params.id, input.channel));
   } catch (err) {
     handleRouteError(err, res);
   }
