@@ -379,3 +379,31 @@ export interface PublishPreview {
   validation: PublishValidation;
   payload?: PublishPayload;
 }
+
+export enum MarketplaceConnectionStatus {
+  Disconnected = "disconnected",
+  Pending = "pending",
+  Connected = "connected",
+  Expired = "expired",
+  Error = "error",
+  Revoked = "revoked",
+}
+
+export enum PublishJobStatus {
+  Pending = "pending",
+  Processing = "processing",
+  Succeeded = "succeeded",
+  Failed = "failed",
+  RetryPending = "retry_pending",
+  Cancelled = "cancelled",
+}
+
+export type MarketplaceApiErrorType = "Validation" | "Authentication" | "Authorization" | "RateLimit" | "Timeout" | "Temporary" | "Permanent" | "Unknown";
+
+export interface MarketplaceApiError { type: MarketplaceApiErrorType; code?: string; message: string; retryable: boolean; }
+export interface MarketplaceCredentialMetadata { status: MarketplaceConnectionStatus; tokenExpiresAt?: string; scopes?: string[]; externalAccountId?: string; }
+export interface MarketplaceConnection extends Timestamps { id: ID; channel: PublishChannel; accountLabel: string; externalAccountId?: string; tokenExpiresAt?: string; scopes?: string[]; status: MarketplaceConnectionStatus; lastError?: string; }
+export interface PublishJob extends Timestamps { id: ID; productId: ID; channel: PublishChannel; status: PublishJobStatus; idempotencyKey: string; payloadSnapshot: PublishPayload; externalListingId?: string; externalListingUrl?: string; attemptCount: number; lastError?: string; completedAt?: string; }
+export interface PublishAttempt { id: ID; publishJobId: ID; attemptNumber: number; requestSnapshot: unknown; responseSnapshot?: unknown; errorCode?: string; errorMessage?: string; createdAt: string; }
+export interface ExternalListing { id: ID; productId: ID; channel: PublishChannel; connectionId: ID; externalListingId: string; externalListingUrl?: string; externalStatus: string; payloadSnapshot: PublishPayload; publishedAt: string; updatedAt: string; }
+export interface PublishExecutionResult { job: PublishJob; externalListing?: ExternalListing; attempts?: PublishAttempt[]; error?: MarketplaceApiError; }

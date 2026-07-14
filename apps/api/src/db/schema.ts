@@ -326,3 +326,16 @@ export const stockMovements = sqliteTable("stock_movements", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+export const marketplaceConnections = sqliteTable("marketplace_connections", {
+  id: text("id").primaryKey(), channel: text("channel").notNull(), accountLabel: text("account_label").notNull(), externalAccountId: text("external_account_id"), encryptedAccessToken: text("encrypted_access_token"), encryptedRefreshToken: text("encrypted_refresh_token"), tokenExpiresAt: text("token_expires_at"), scopes: text("scopes"), status: text("status").notNull(), lastError: text("last_error"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [index("idx_marketplace_connections_channel").on(table.channel)]);
+export const publishJobs = sqliteTable("publish_jobs", {
+  id: text("id").primaryKey(), productId: text("product_id").notNull(), channel: text("channel").notNull(), status: text("status").notNull(), idempotencyKey: text("idempotency_key").notNull().unique(), payloadSnapshot: text("payload_snapshot").notNull(), externalListingId: text("external_listing_id"), externalListingUrl: text("external_listing_url"), attemptCount: integer("attempt_count").notNull().default(0), lastError: text("last_error"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), completedAt: text("completed_at"),
+}, (table) => [index("idx_publish_jobs_product").on(table.productId), index("idx_publish_jobs_channel").on(table.channel), index("idx_publish_jobs_status").on(table.status)]);
+export const publishAttempts = sqliteTable("publish_attempts", {
+  id: text("id").primaryKey(), publishJobId: text("publish_job_id").notNull(), attemptNumber: integer("attempt_number").notNull(), requestSnapshot: text("request_snapshot").notNull(), responseSnapshot: text("response_snapshot"), errorCode: text("error_code"), errorMessage: text("error_message"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [index("idx_publish_attempts_job").on(table.publishJobId)]);
+export const externalListings = sqliteTable("external_listings", {
+  id: text("id").primaryKey(), productId: text("product_id").notNull(), channel: text("channel").notNull(), connectionId: text("connection_id").notNull(), externalListingId: text("external_listing_id").notNull(), externalListingUrl: text("external_listing_url"), externalStatus: text("external_status").notNull(), payloadSnapshot: text("payload_snapshot").notNull(), publishedAt: text("published_at").notNull(), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [index("idx_external_listings_product").on(table.productId), index("idx_external_listings_channel").on(table.channel), index("idx_external_listings_connection").on(table.connectionId)]);
