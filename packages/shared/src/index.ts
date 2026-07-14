@@ -19,3 +19,5 @@ export * from "./theme/tokens";
 export * from "./enums/shipping";
 export * from "./enums/returns";
 export * from "./types/purchasing";
+
+export * from "./types/salesFinanceBridge";

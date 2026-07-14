@@ -1,0 +1,22 @@
+export enum ErpInvoiceStatus { Draft="Draft", Issued="Issued", Paid="Paid", Cancelled="Cancelled", Voided="Voided" }
+export enum ErpInvoiceType { SalesInvoice="SalesInvoice", Proforma="Proforma", CreditNote="CreditNote" }
+export type ErpFinancialCompleteness = "Complete" | "Incomplete";
+export interface ErpCustomerProjection { id: string | null; guest: boolean; email: string | null; maskedEmail?: string | null; name: string | null; billingAddress?: unknown; shippingAddress?: unknown; }
+export interface ErpSaleItemProjection { orderItemId: string; productId: string | null; sku: string | null; title: string; quantity: number; unitPrice: number; lineTotal: number; itemCost: number | null; }
+export interface ErpSaleFinancialProjection { currency: "EUR"; grossRevenue: number; shippingCharged: number; discounts: number; taxVat: number; marketplaceFee: number | null; promotedFee: number | null; paymentFee: number | null; shippingCost: number | null; itemCost: number | null; netRevenue: number | null; profit: number | null; completeness: ErpFinancialCompleteness; }
+export interface ErpAdjustedSaleFinancialProjection extends ErpSaleFinancialProjection { totalRefunded: number; feeAdjustments: number | null; netRetainedRevenue: number | null; adjustedProfit: number | null; adjustedCompleteness: ErpFinancialCompleteness; }
+export interface ErpSaleProjection { centralOrderId: string; marketplaceOrderId: string | null; channel: string; orderNumber: string; customer: ErpCustomerProjection; saleDate: string; paymentStatus: string; orderStatus: string; shipmentStatus: string | null; completionStatus: string; items: ErpSaleItemProjection[]; financials: ErpAdjustedSaleFinancialProjection; invoiceStatus: ErpInvoiceStatus | null; invoiceNumber: string | null; updatedAt: string; }
+export type ErpSalesOrderProjection = ErpSaleProjection;
+export interface ErpInvoiceLine { id: string; invoiceId: string; orderItemId: string | null; productId: string | null; skuSnapshot: string | null; titleSnapshot: string; quantity: number; unitPrice: number; discountAmount: number; taxVatAmount: number; lineTotal: number; }
+export interface ErpInvoice { id: string; erpReferenceId: string | null; orderId: string; customerId: string | null; invoiceNumber: string | null; invoiceType: ErpInvoiceType; status: ErpInvoiceStatus; currency: "EUR"; issuedAt: string | null; dueAt: string | null; paidAt: string | null; cancelledAt: string | null; subtotal: number; shippingAmount: number; discountAmount: number; taxVatAmount: number; totalAmount: number; notes: string | null; createdAt: string; updatedAt: string; lines: ErpInvoiceLine[]; }
+export interface ErpInvoiceSnapshot { invoice: ErpInvoice; sellerSnapshot: unknown; customerSnapshot: unknown; billingAddressSnapshot: unknown; shippingAddressSnapshot: unknown; sourceSnapshot: unknown; }
+export interface ErpInvoiceCreateCommand { erpReferenceId?: string; invoiceType?: ErpInvoiceType; dueAt?: string | null; notes?: string | null; }
+export interface ErpInvoiceUpdateCommand extends ErpInvoiceCreateCommand { expectedUpdatedAt: string; lines?: Partial<ErpInvoiceLine>[]; }
+export interface ErpInvoiceIssueCommand { issueAt?: string; invoiceNumber?: string; }
+export interface ErpInternalSaleCreateCommand { channel: "Internal"|"Direct"|"LocalPickup"|"Other"; currency: "EUR"; paymentStatus: string; customer?: Partial<ErpCustomerProjection>; lines: Array<{ productId: string; quantity: number }>; }
+export interface ErpSaleCompletionCommand { idempotencyKey: string; }
+export interface ErpFinanceEntryProjection { id: string; orderId: string | null; invoiceId: string | null; refundId: string | null; saleReversalId: string | null; entryType: string; currency: "EUR"; amount: number; sourceReference: string; occurredAt: string; createdAt: string; }
+export interface ErpFinanceSummary { currency: "EUR"; grossRevenue: number; totalRefunds: number; netRevenue: number; itemCost: number; fees: number | null; shippingCost: number | null; profit: number | null; adjustedProfit: number | null; completeness: ErpFinancialCompleteness; }
+export interface ErpRefundSummary { orderId: string; totalRefunded: number; refunds: unknown[]; }
+export interface ErpSaleReversalSummary { orderId: string; reversed: boolean; reversals: unknown[]; }
+export interface ErpInvoiceExecutionResult { status: string; invoiceId?: string; orderId?: string; resultReference?: string; safeResultMetadata?: unknown; }

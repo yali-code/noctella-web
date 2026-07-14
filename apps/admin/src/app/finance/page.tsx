@@ -1,0 +1,1 @@
+export default function FinancePage() { return <main><h1>Finance</h1><p>Summary cards for gross revenue, refunds, net revenue, costs, fees, shipping, profit and adjusted-profit completeness.</p></main>; }
