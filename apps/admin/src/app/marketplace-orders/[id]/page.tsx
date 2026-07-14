@@ -1,0 +1,4 @@
+export const dynamic = "force-dynamic";
+import Link from "next/link";
+import { getMarketplaceOrder, unmatchedWarnings, safeError } from "../../../lib/marketplaceSync";
+export default async function MarketplaceOrderDetail({ params }: { params:{id:string} }) { const o=await getMarketplaceOrder(params.id); const warnings=unmatchedWarnings(o.items); return <main><h1>Marketplace Order {o.externalOrderNumber??o.externalOrderId}</h1><p>{o.channel} · {o.status} · {o.total} {o.currency}</p>{o.internalOrderId&&<p>Internal order: <Link href={`/orders/${o.internalOrderId}`}>{o.internalOrderId}</Link></p>}{warnings.map((w)=><p key={w} role="alert">{w}</p>)}<h2>Items</h2><ul>{o.items.map((i:any)=><li key={i.id}>{i.titleSnapshot} × {i.quantity} — {i.productId?<Link href={`/products/${i.productId}`}>{i.productId}</Link>:"unmatched"}</li>)}</ul><h2>Raw payload snapshot</h2><pre>{JSON.stringify(o.rawPayloadSnapshot,null,2)}</pre><p>{safeError(o.lastError)}</p></main>; }

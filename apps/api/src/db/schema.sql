@@ -337,3 +337,104 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_external_listings_channel_external ON exte
 CREATE INDEX IF NOT EXISTS idx_external_listings_product ON external_listings(product_id);
 CREATE INDEX IF NOT EXISTS idx_external_listings_channel ON external_listings(channel);
 CREATE INDEX IF NOT EXISTS idx_external_listings_connection ON external_listings(connection_id);
+
+CREATE TABLE IF NOT EXISTS marketplace_webhook_events (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  external_event_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  signature_valid INTEGER NOT NULL DEFAULT 0,
+  payload_snapshot TEXT NOT NULL,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  received_at TEXT NOT NULL,
+  processed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_channel_external ON marketplace_webhook_events(channel, external_event_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_channel_status ON marketplace_webhook_events(channel, status);
+CREATE INDEX IF NOT EXISTS idx_webhook_received ON marketplace_webhook_events(received_at);
+
+CREATE TABLE IF NOT EXISTS marketplace_orders (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  external_order_id TEXT NOT NULL,
+  external_order_number TEXT,
+  marketplace_connection_id TEXT NOT NULL,
+  internal_order_id TEXT,
+  status TEXT NOT NULL,
+  import_status TEXT NOT NULL DEFAULT 'pending',
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  last_error_type TEXT,
+  retryable INTEGER NOT NULL DEFAULT 1,
+  currency TEXT NOT NULL,
+  subtotal REAL NOT NULL,
+  shipping REAL NOT NULL DEFAULT 0,
+  tax REAL NOT NULL DEFAULT 0,
+  total REAL NOT NULL,
+  buyer_email TEXT,
+  buyer_name TEXT,
+  shipping_address_snapshot TEXT,
+  billing_address_snapshot TEXT,
+  raw_payload_snapshot TEXT NOT NULL,
+  ordered_at TEXT NOT NULL,
+  imported_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (marketplace_connection_id) REFERENCES marketplace_connections(id),
+  FOREIGN KEY (internal_order_id) REFERENCES orders(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_orders_channel_external ON marketplace_orders(channel, external_order_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_orders_channel_status ON marketplace_orders(channel, status);
+CREATE INDEX IF NOT EXISTS idx_marketplace_orders_connection ON marketplace_orders(marketplace_connection_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_orders_ordered ON marketplace_orders(ordered_at);
+
+CREATE TABLE IF NOT EXISTS marketplace_order_items (
+  id TEXT PRIMARY KEY,
+  marketplace_order_id TEXT NOT NULL,
+  external_order_item_id TEXT,
+  external_listing_id TEXT,
+  product_id TEXT,
+  sku TEXT,
+  title_snapshot TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  unit_price REAL NOT NULL,
+  line_total REAL NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (marketplace_order_id) REFERENCES marketplace_orders(id),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+CREATE INDEX IF NOT EXISTS idx_marketplace_items_order ON marketplace_order_items(marketplace_order_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_items_product ON marketplace_order_items(product_id);
+
+CREATE TABLE IF NOT EXISTS marketplace_import_attempts (
+  id TEXT PRIMARY KEY,
+  marketplace_order_id TEXT NOT NULL,
+  attempt_number INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  error_type TEXT,
+  error_message TEXT,
+  retryable INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (marketplace_order_id) REFERENCES marketplace_orders(id)
+);
+CREATE INDEX IF NOT EXISTS idx_marketplace_import_attempts_order ON marketplace_import_attempts(marketplace_order_id);
+
+CREATE TABLE IF NOT EXISTS marketplace_sync_runs (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  sync_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  processed_count INTEGER NOT NULL DEFAULT 0,
+  success_count INTEGER NOT NULL DEFAULT 0,
+  failure_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_sync_runs_channel_status ON marketplace_sync_runs(channel, status);
+CREATE INDEX IF NOT EXISTS idx_sync_runs_started ON marketplace_sync_runs(started_at);

@@ -1,0 +1,18 @@
+import express from "express";
+import { db } from "../db/client";
+import { PublishChannel } from "@noctella/shared";
+import { getExternalListing, getMarketplaceOrder, getSyncRun, importMarketplaceOrder, listExternalListingsForAdmin, listMarketplaceOrders, listSyncRuns, retryMarketplaceOrder, syncExternalListing, listWebhookEvents } from "../services/marketplaceSync";
+const router=express.Router();
+const ch=(v:string)=>v==="ebay"?PublishChannel.Ebay:v==="etsy"?PublishChannel.Etsy:undefined;
+router.get("/external-listings",async(req,res,next)=>{try{res.json(await listExternalListingsForAdmin(db,req.query));}catch(e){next(e)}});
+router.get("/external-listings/:id",async(req,res,next)=>{try{res.json(await getExternalListing(db,req.params.id));}catch(e){next(e)}});
+router.post("/external-listings/:id/sync",async(req,res,next)=>{try{res.json(await syncExternalListing(db,req.params.id));}catch(e){next(e)}});
+router.post("/marketplaces/:channel/orders/import",async(req,res,next)=>{try{const c=ch(req.params.channel); if(!c) return res.status(400).json({error:"Unsupported channel"}); res.json(await importMarketplaceOrder(db,c,String(req.body.externalOrderId)));}catch(e){next(e)}});
+router.post("/marketplaces/:channel/orders/:externalOrderId/import",async(req,res,next)=>{try{const c=ch(req.params.channel); if(!c) return res.status(400).json({error:"Unsupported channel"}); res.json(await importMarketplaceOrder(db,c,req.params.externalOrderId));}catch(e){next(e)}});
+router.get("/marketplace-orders",async(req,res,next)=>{try{res.json(await listMarketplaceOrders(db,req.query));}catch(e){next(e)}});
+router.get("/marketplace-orders/:id",async(req,res,next)=>{try{res.json(await getMarketplaceOrder(db,req.params.id));}catch(e){next(e)}});
+router.post("/marketplace-orders/:id/retry",async(req,res,next)=>{try{res.json(await retryMarketplaceOrder(db,req.params.id));}catch(e){next(e)}});
+router.get("/marketplace-sync-runs",async(req,res,next)=>{try{res.json(await listSyncRuns(db,req.query));}catch(e){next(e)}});
+router.get("/marketplace-sync-runs/:id",async(req,res,next)=>{try{res.json(await getSyncRun(db,req.params.id));}catch(e){next(e)}});
+router.get("/marketplace-webhook-events",async(req,res,next)=>{try{res.json(await listWebhookEvents(db,req.query));}catch(e){next(e)}});
+export default router;

@@ -407,3 +407,9 @@ export interface PublishJob extends Timestamps { id: ID; productId: ID; channel:
 export interface PublishAttempt { id: ID; publishJobId: ID; attemptNumber: number; requestSnapshot: unknown; responseSnapshot?: unknown; errorCode?: string; errorMessage?: string; createdAt: string; }
 export interface ExternalListing { id: ID; productId: ID; channel: PublishChannel; connectionId: ID; externalListingId: string; externalListingUrl?: string; externalStatus: string; payloadSnapshot: PublishPayload; publishedAt: string; updatedAt: string; }
 export interface PublishExecutionResult { job: PublishJob; externalListing?: ExternalListing; attempts?: PublishAttempt[]; error?: MarketplaceApiError; }
+
+
+export interface MarketplaceWebhookEvent extends Timestamps { id: ID; channel: PublishChannel; externalEventId: string; eventType: string; status: string; signatureValid: boolean; payloadSnapshot: unknown; attemptCount: number; lastError?: string; receivedAt: string; processedAt?: string; }
+export interface MarketplaceOrder extends Timestamps { id: ID; channel: PublishChannel; externalOrderId: string; externalOrderNumber?: string; marketplaceConnectionId: ID; internalOrderId?: ID; status: string; currency: string; subtotal: number; shipping: number; tax: number; total: number; buyerEmail?: string; buyerName?: string; shippingAddressSnapshot?: unknown; billingAddressSnapshot?: unknown; rawPayloadSnapshot: unknown; orderedAt: string; importedAt: string; }
+export interface MarketplaceOrderItem { id: ID; marketplaceOrderId: ID; externalOrderItemId?: string; externalListingId?: string; productId?: ID; sku?: string; titleSnapshot: string; quantity: number; unitPrice: number; lineTotal: number; createdAt: string; }
+export interface MarketplaceSyncResult { status: string; processedCount: number; successCount: number; failureCount: number; errors?: Array<{ type: string; message: string }>; }

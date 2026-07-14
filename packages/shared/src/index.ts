@@ -12,5 +12,6 @@ export * from "./enums/paymentProvider";
 export * from "./enums/paymentStatus";
 export * from "./enums/orderStatus";
 export * from "./enums/stockMovementType";
+export * from "./enums/marketplaceSync";
 export * from "./types";
 export * from "./theme/tokens";
