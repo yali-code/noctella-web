@@ -2,7 +2,8 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { categories, collections, erpIntegrationAudit, erpIntegrationClients, erpSyncCheckpoints, productPhotos, stockMovements, products } from "../db/schema";
-import { acknowledge, authenticateErp, capabilities, checkpoint, getProductProjection, health, identityCheck, isVersionSupported, listProductProjections, PRODUCT_FIELD_MAPPING, validateCommandEnvelope, versionInfo } from "../services/erpIntegration";
+import { acknowledge, authenticateErp, capabilities, checkpoint, getProductProjection, health, identityCheck, isVersionSupported, listProductProjections, PRODUCT_FIELD_MAPPING, validateCommandEnvelope, versionInfo, audit } from "../services/erpIntegration";
+import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
 const router = Router();
 const key = (req: any) => req.header("X-Noctella-ERP-Key");
@@ -14,6 +15,15 @@ router.options("*", (req, res) => { const allow=(process.env.ERP_CORS_ORIGINS??"
 router.get("/version", (req, res) => res.json(versionInfo(version(req))));
 router.get("/health", async (req, res) => { const publicOnly=!key(req); const h=await health(db); res.json(publicOnly ? { status: h.status, apiVersion: h.apiVersion, serverTime: h.serverTime } : h); });
 router.get("/capabilities", requireErp, (_req, res) => res.json(capabilities()));
+
+function parseMigrationPayload(req: any, res: any) { const len=Number(req.header("content-length") ?? 0); if (len > ERP_MIGRATION_MAX_BYTES) { res.status(413).json({ error:"ERP migration preview payload is too large" }); return null; } return req.body?.source ?? req.body ?? {}; }
+async function auditMigration(req:any, action:string, result:any, success=true, errorCode?:string) { await audit(db, req.erp?.clientId ?? null, requestId(req), action, success?"Success":"Failure", { sourceType:result?.sourceType, sourceFingerprint:result?.fingerprint?.value, entityCounts:result?.entityCounts, conflictCount:result?.conflicts?.length ?? 0, blockingCount:result?.summary?.blockingCount ?? result?.issues?.filter?.((i:any)=>i.severity==="Blocking")?.length ?? 0, dryRun:true }, errorCode); }
+router.get("/migration/capabilities", requireErp, (_req, res) => res.json(migrationCapabilities()));
+router.get("/migration/mapping", requireErp, (_req, res) => res.json({ mappingVersion:"sprint17-preview-v1", productFields: PRODUCT_FIELD_MAPPING, classifications:["mapped","metadata","derived","deferred","unsupported"], dryRun:true }));
+router.post("/migration/validate", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const result=validateErpMigrationSource(payload, req.body?.sourceType); await auditMigration(req,"ErpMigrationValidate",result,result.ok,result.ok?undefined:"VALIDATION_FAILED"); res.status(result.ok?200:400).json(result); });
+router.post("/migration/preview", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const result=await buildErpMigrationPreview(db,payload,req.body?.sourceType); await auditMigration(req,"ErpMigrationPreview",result,result.ok,result.ok?undefined:"PREVIEW_BLOCKED"); res.status(result.ok?200:400).json(result); });
+router.post("/migration/conflicts", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const conflicts=await detectErpMigrationConflicts(db,payload); res.json({ dryRun:true, conflicts }); });
+router.post("/migration/manifest-preview", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const result=await buildErpMigrationManifestPreview(db,payload,req.body?.sourceType); await auditMigration(req,"ErpMigrationManifestPreview",result,result.ok,result.ok?undefined:"MANIFEST_BLOCKED"); res.status(result.ok?200:400).json(result.manifestPreview); });
 router.get("/products", requireErp, async (req, res) => res.json(await listProductProjections(db, req.query)));
 router.get("/products/by-erp-reference/:erpReferenceId", requireErp, async (req, res) => { const [p]=await db.select().from(products).where(eq(products.erpReferenceId, req.params.erpReferenceId)).limit(1); if(!p) return res.status(404).json({ error:"Product not found" }); res.json(await getProductProjection(db,p.id)); });
 router.get("/products/:id", requireErp, async (req, res) => { const p=await getProductProjection(db, req.params.id); if(!p) return res.status(404).json({ error:"Product not found" }); res.json(p); });
