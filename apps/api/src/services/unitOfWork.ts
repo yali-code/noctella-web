@@ -1,6 +1,8 @@
 import type { DbClient } from "../db/client";
 import { createProductWriteRepositoryBundleForDb } from "../repositories/product-write/factory";
 import type { ProductWriteRepositoryBundle } from "../repositories/product-write/types";
+import { createStockMovementRepositoryBundleForDb } from "../repositories/stock/factory";
+import type { StockMovementRepositoryBundle } from "../repositories/stock/types";
 
 export interface UnitOfWorkResult<T> { ok: true; value: T }
 export interface UnitOfWorkError { code: string; message: string; cause?: unknown }
@@ -10,6 +12,7 @@ export interface ApplicationUseCase<I, O> { execute(input: I): Promise<O> }
 export interface TransactionScopedRepositories {
   db: DbClient;
   productWrite: ProductWriteRepositoryBundle;
+  stock: StockMovementRepositoryBundle;
 }
 
 export interface UnitOfWorkContext {
@@ -29,7 +32,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
   async run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T> {
     let result!: T;
     const txRunner = this.db.transaction((tx) => {
-      const maybe = work({ repositories: { db: tx as unknown as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as unknown as DbClient, "sqlite") } });
+      const maybe = work({ repositories: { db: tx as unknown as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), stock: createStockMovementRepositoryBundleForDb(tx as unknown as DbClient, "sqlite") } });
       if (isPromiseLike(maybe)) throw new Error("SQLITE_ASYNC_TRANSACTION_CALLBACK_REJECTED");
       result = maybe;
     });
@@ -46,7 +49,7 @@ export class PostgresUnitOfWork implements UnitOfWork {
   constructor(private readonly adapter: PostgresTransactionAdapter) {}
   async run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T> {
     try {
-      return await this.adapter.transaction(async (tx) => work({ repositories: { db: tx as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as DbClient, "postgres") } }));
+      return await this.adapter.transaction(async (tx) => work({ repositories: { db: tx as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as DbClient, "postgres"), stock: createStockMovementRepositoryBundleForDb(tx as DbClient, "postgres") } }));
     } catch (cause) {
       const err = new Error("POSTGRES_TRANSACTION_FAILED");
       (err as Error & { cause?: unknown }).cause = cause;
