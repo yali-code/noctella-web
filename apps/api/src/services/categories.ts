@@ -8,6 +8,8 @@ import { slugify } from "../validation/common";
 import type { CategoryListQuery, CreateCategoryInput, UpdateCategoryInput } from "../validation/category";
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
+import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
+import { createCategoryUseCase, updateCategoryUseCase, archiveCategoryUseCase, restoreCategoryUseCase } from "../use-cases/product-write/useCases";
 
 /** Seeded only when the categories table is empty (Sprint 2 spec §3). */
 const INITIAL_CATEGORY_NAMES = [
@@ -19,6 +21,12 @@ const INITIAL_CATEGORY_NAMES = [
   "Gentleman Series",
   "Archive / Sold Gallery",
 ];
+
+
+function productWriteUseCaseContext(db: DbClient) {
+  const write = createProductWriteServiceContextForDb(db);
+  return { unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories: write.repositories };
+}
 
 function toCategory(row: typeof categories.$inferSelect): Category {
   return {
@@ -77,27 +85,8 @@ export async function getCategoryById(db: DbClient, id: string, context?: Produc
 }
 
 export async function createCategory(db: DbClient, input: CreateCategoryInput): Promise<Category> {
-  const slug = input.slug ? slugify(input.slug) : slugify(input.name);
-  await assertSlugAvailable(db, slug);
-
-  const now = new Date().toISOString();
-  const id = randomUUID();
-  await db.insert(categories).values({
-    id,
-    name: input.name,
-    slug,
-    description: input.description,
-    parentId: input.parentId,
-    displayImageUrl: input.displayImageUrl,
-    seoTitle: input.seoTitle,
-    metaDescription: input.metaDescription,
-    displayOrder: input.displayOrder,
-    isActive: input.isActive,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  return getCategoryById(db, id);
+  const result = await createCategoryUseCase(productWriteUseCaseContext(db), input);
+  return getCategoryById(db, result.id);
 }
 
 export async function updateCategory(
@@ -105,47 +94,16 @@ export async function updateCategory(
   id: string,
   input: UpdateCategoryInput,
 ): Promise<Category> {
-  await getCategoryById(db, id); // 404 if missing
-
-  let slug: string | undefined;
-  if (input.slug !== undefined) {
-    slug = slugify(input.slug);
-    await assertSlugAvailable(db, slug, id);
-  }
-
-  await db
-    .update(categories)
-    .set({
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(slug !== undefined ? { slug } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
-      ...(input.displayImageUrl !== undefined ? { displayImageUrl: input.displayImageUrl } : {}),
-      ...(input.seoTitle !== undefined ? { seoTitle: input.seoTitle } : {}),
-      ...(input.metaDescription !== undefined ? { metaDescription: input.metaDescription } : {}),
-      ...(input.displayOrder !== undefined ? { displayOrder: input.displayOrder } : {}),
-      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(categories.id, id));
-
+  await updateCategoryUseCase(productWriteUseCaseContext(db), id, input);
   return getCategoryById(db, id);
 }
 
 export async function archiveCategory(db: DbClient, id: string): Promise<Category> {
-  await getCategoryById(db, id);
-  await db
-    .update(categories)
-    .set({ isActive: false, updatedAt: new Date().toISOString() })
-    .where(eq(categories.id, id));
+  await archiveCategoryUseCase(productWriteUseCaseContext(db), id);
   return getCategoryById(db, id);
 }
 
 export async function restoreCategory(db: DbClient, id: string): Promise<Category> {
-  await getCategoryById(db, id);
-  await db
-    .update(categories)
-    .set({ isActive: true, updatedAt: new Date().toISOString() })
-    .where(eq(categories.id, id));
+  await restoreCategoryUseCase(productWriteUseCaseContext(db), id);
   return getCategoryById(db, id);
 }

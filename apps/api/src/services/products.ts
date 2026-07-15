@@ -18,6 +18,14 @@ import { slugify } from "../validation/common";
 import type { CreateProductInput, ProductListQuery, UpdateProductInput } from "../validation/product";
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
+import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
+import { createProductUseCase, updateProductUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
+
+
+function productWriteUseCaseContext(db: DbClient) {
+  const write = createProductWriteServiceContextForDb(db);
+  return { unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories: write.repositories };
+}
 
 function toProduct(row: typeof products.$inferSelect): Product {
   return {
@@ -234,10 +242,7 @@ async function ensureSinglePrimary(db: DbClient, productId: string, primaryId?: 
   const photos = await getPhotosForProduct(db, productId);
   const selected = primaryId ?? photos.find((photo) => photo.isPrimary)?.id ?? photos[0]?.id;
   if (!selected) return;
-  const now = new Date().toISOString();
-  for (const photo of photos) {
-    await db.update(productPhotos).set({ isPrimary: photo.id === selected, updatedAt: now }).where(eq(productPhotos.id, photo.id));
-  }
+  await createProductWriteServiceContextForDb(db).repositories.photos.setPrimary({ productId, photoId: selected });
 }
 
 function photoToLegacyImage(photo: ProductPhoto): ProductImage {
@@ -328,97 +333,11 @@ export async function createProduct(
   db: DbClient,
   input: CreateProductInput,
 ): Promise<ProductWithImages> {
-  await assertSkuAvailable(db, input.sku);
-  const slug = input.slug ? slugify(input.slug) : slugify(input.title);
-  await assertSlugAvailable(db, slug);
   await assertCategoryExists(db, input.categoryId);
-  if (input.collectionId) {
-    await assertCollectionExists(db, input.collectionId);
-  }
-
-  const stockQuantity = resolveStockQuantity(input.type, input.stockQuantity);
-
-  const now = new Date().toISOString();
-  const id = randomUUID();
-
-  await db.insert(products).values({
-    id,
-    sku: input.sku,
-    title: input.title,
-    slug,
-    type: input.type,
-    status: input.status,
-    categoryId: input.categoryId,
-    collectionId: input.collectionId,
-    brand: input.brand,
-    model: input.model,
-    manufacturer: input.manufacturer,
-    countryOfOrigin: input.countryOfOrigin,
-    period: input.period,
-    materials: input.materials,
-    description: input.description,
-    productStory: input.productStory,
-    condition: input.condition,
-    conditionDescription: input.conditionDescription,
-    lengthValue: input.lengthValue,
-    widthValue: input.widthValue,
-    heightValue: input.heightValue,
-    dimensionUnit: input.dimensionUnit,
-    weightValue: input.weightValue,
-    weightUnit: input.weightUnit,
-    stockQuantity,
-    lotItemCount: input.lotItemCount,
-    purchaseCost: input.purchaseCost,
-    purchaseCurrency: input.purchaseCurrency,
-    internalNotes: input.internalNotes,
-    priceEur: input.priceEur,
-    priceUsd: input.priceUsd,
-    minOfferPrice: input.minOfferPrice,
-    videoUrl: input.videoUrl,
-    shippingProfile: input.shippingProfile,
-    shippingNote: input.shippingNote,
-    customsWarning: input.customsWarning,
-    seoTitle: input.seoTitle,
-    metaDescription: input.metaDescription,
-    keywords: input.keywords ? JSON.stringify(input.keywords) : undefined,
-    isFeatured: input.isFeatured,
-    allowMakeOffer: input.allowMakeOffer,
-    allowCashOnDelivery: input.allowCashOnDelivery,
-    showInArchiveAfterSale: input.showInArchiveAfterSale,
-    ebayTitle: input.ebayTitle,
-    ebaySubtitle: input.ebaySubtitle,
-    ebayDescription: input.ebayDescription,
-    ebayConditionDescription: input.ebayConditionDescription,
-    ebayCategory: input.ebayCategory,
-    ebayItemSpecifics: input.ebayItemSpecifics,
-    ebayListingPriceEur: input.ebayListingPriceEur,
-    ebayListingStatus: input.ebayListingStatus,
-    etsyTitle: input.etsyTitle,
-    etsyDescription: input.etsyDescription,
-    etsyTags: input.etsyTags ? JSON.stringify(input.etsyTags) : undefined,
-    etsyMaterials: input.etsyMaterials,
-    etsyStyle: input.etsyStyle,
-    etsyOccasion: input.etsyOccasion,
-    etsyListingPriceEur: input.etsyListingPriceEur,
-    etsyListingStatus: input.etsyListingStatus,
-    wooProductName: input.wooProductName,
-    wooShortDescription: input.wooShortDescription,
-    wooLongDescription: input.wooLongDescription,
-    wooSlug: input.wooSlug,
-    wooSeoTitle: input.wooSeoTitle,
-    wooMetaDescription: input.wooMetaDescription,
-    wooFocusKeyword: input.wooFocusKeyword,
-    wooListingPriceEur: input.wooListingPriceEur,
-    wooListingStatus: input.wooListingStatus,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  if (input.images) {
-    await replaceImages(db, id, input.images);
-  }
-
-  return getProductById(db, id);
+  if (input.collectionId) await assertCollectionExists(db, input.collectionId);
+  const result = await createProductUseCase(productWriteUseCaseContext(db), input);
+  if (input.images) await replaceImages(db, result.id, input.images);
+  return getProductById(db, result.id);
 }
 
 export async function updateProduct(
@@ -427,139 +346,21 @@ export async function updateProduct(
   input: UpdateProductInput,
 ): Promise<ProductWithImages> {
   const existing = await getProductById(db, id);
-
-  if (input.sku !== undefined) {
-    await assertSkuAvailable(db, input.sku, id);
-  }
-  let slug: string | undefined;
-  if (input.slug !== undefined) {
-    slug = slugify(input.slug);
-    await assertSlugAvailable(db, slug, id);
-  }
-  if (input.categoryId !== undefined) {
-    await assertCategoryExists(db, input.categoryId);
-  }
-  if (input.collectionId !== undefined) {
-    await assertCollectionExists(db, input.collectionId);
-  }
-
+  if (input.categoryId !== undefined) await assertCategoryExists(db, input.categoryId);
+  if (input.collectionId !== undefined) await assertCollectionExists(db, input.collectionId);
   const effectiveType = input.type ?? existing.type;
-  let stockQuantity: number | undefined;
+  const patch: UpdateProductInput & { expectedUpdatedAt?: string } = { ...input };
   if (input.stockQuantity !== undefined || input.type !== undefined) {
-    stockQuantity = resolveStockQuantity(
-      effectiveType,
-      input.stockQuantity !== undefined ? input.stockQuantity : existing.stockQuantity,
-    );
+    patch.stockQuantity = resolveStockQuantity(effectiveType, input.stockQuantity !== undefined ? input.stockQuantity : existing.stockQuantity);
   }
-
-  await db
-    .update(products)
-    .set({
-      ...(input.sku !== undefined ? { sku: input.sku } : {}),
-      ...(slug !== undefined ? { slug } : {}),
-      ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.type !== undefined ? { type: input.type } : {}),
-      ...(input.status !== undefined ? { status: input.status } : {}),
-      ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
-      ...(input.collectionId !== undefined ? { collectionId: input.collectionId } : {}),
-      ...(input.brand !== undefined ? { brand: input.brand } : {}),
-      ...(input.model !== undefined ? { model: input.model } : {}),
-      ...(input.manufacturer !== undefined ? { manufacturer: input.manufacturer } : {}),
-      ...(input.countryOfOrigin !== undefined ? { countryOfOrigin: input.countryOfOrigin } : {}),
-      ...(input.period !== undefined ? { period: input.period } : {}),
-      ...(input.materials !== undefined ? { materials: input.materials } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.productStory !== undefined ? { productStory: input.productStory } : {}),
-      ...(input.condition !== undefined ? { condition: input.condition } : {}),
-      ...(input.conditionDescription !== undefined
-        ? { conditionDescription: input.conditionDescription }
-        : {}),
-      ...(input.lengthValue !== undefined ? { lengthValue: input.lengthValue } : {}),
-      ...(input.widthValue !== undefined ? { widthValue: input.widthValue } : {}),
-      ...(input.heightValue !== undefined ? { heightValue: input.heightValue } : {}),
-      ...(input.dimensionUnit !== undefined ? { dimensionUnit: input.dimensionUnit } : {}),
-      ...(input.weightValue !== undefined ? { weightValue: input.weightValue } : {}),
-      ...(input.weightUnit !== undefined ? { weightUnit: input.weightUnit } : {}),
-      ...(stockQuantity !== undefined ? { stockQuantity } : {}),
-      ...(input.lotItemCount !== undefined ? { lotItemCount: input.lotItemCount } : {}),
-      ...(input.purchaseCost !== undefined ? { purchaseCost: input.purchaseCost } : {}),
-      ...(input.purchaseCurrency !== undefined ? { purchaseCurrency: input.purchaseCurrency } : {}),
-      ...(input.internalNotes !== undefined ? { internalNotes: input.internalNotes } : {}),
-      ...(input.priceEur !== undefined ? { priceEur: input.priceEur } : {}),
-      ...(input.priceUsd !== undefined ? { priceUsd: input.priceUsd } : {}),
-      ...(input.minOfferPrice !== undefined ? { minOfferPrice: input.minOfferPrice } : {}),
-      ...(input.videoUrl !== undefined ? { videoUrl: input.videoUrl } : {}),
-      ...(input.shippingProfile !== undefined ? { shippingProfile: input.shippingProfile } : {}),
-      ...(input.shippingNote !== undefined ? { shippingNote: input.shippingNote } : {}),
-      ...(input.customsWarning !== undefined ? { customsWarning: input.customsWarning } : {}),
-      ...(input.seoTitle !== undefined ? { seoTitle: input.seoTitle } : {}),
-      ...(input.metaDescription !== undefined ? { metaDescription: input.metaDescription } : {}),
-      ...(input.keywords !== undefined ? { keywords: JSON.stringify(input.keywords) } : {}),
-      ...(input.isFeatured !== undefined ? { isFeatured: input.isFeatured } : {}),
-      ...(input.allowMakeOffer !== undefined ? { allowMakeOffer: input.allowMakeOffer } : {}),
-      ...(input.allowCashOnDelivery !== undefined
-        ? { allowCashOnDelivery: input.allowCashOnDelivery }
-        : {}),
-      ...(input.showInArchiveAfterSale !== undefined
-        ? { showInArchiveAfterSale: input.showInArchiveAfterSale }
-        : {}),
-      ...(input.ebayTitle !== undefined ? { ebayTitle: input.ebayTitle } : {}),
-      ...(input.ebaySubtitle !== undefined ? { ebaySubtitle: input.ebaySubtitle } : {}),
-      ...(input.ebayDescription !== undefined ? { ebayDescription: input.ebayDescription } : {}),
-      ...(input.ebayConditionDescription !== undefined
-        ? { ebayConditionDescription: input.ebayConditionDescription }
-        : {}),
-      ...(input.ebayCategory !== undefined ? { ebayCategory: input.ebayCategory } : {}),
-      ...(input.ebayItemSpecifics !== undefined ? { ebayItemSpecifics: input.ebayItemSpecifics } : {}),
-      ...(input.ebayListingPriceEur !== undefined
-        ? { ebayListingPriceEur: input.ebayListingPriceEur }
-        : {}),
-      ...(input.ebayListingStatus !== undefined ? { ebayListingStatus: input.ebayListingStatus } : {}),
-      ...(input.etsyTitle !== undefined ? { etsyTitle: input.etsyTitle } : {}),
-      ...(input.etsyDescription !== undefined ? { etsyDescription: input.etsyDescription } : {}),
-      ...(input.etsyTags !== undefined ? { etsyTags: JSON.stringify(input.etsyTags) } : {}),
-      ...(input.etsyMaterials !== undefined ? { etsyMaterials: input.etsyMaterials } : {}),
-      ...(input.etsyStyle !== undefined ? { etsyStyle: input.etsyStyle } : {}),
-      ...(input.etsyOccasion !== undefined ? { etsyOccasion: input.etsyOccasion } : {}),
-      ...(input.etsyListingPriceEur !== undefined
-        ? { etsyListingPriceEur: input.etsyListingPriceEur }
-        : {}),
-      ...(input.etsyListingStatus !== undefined ? { etsyListingStatus: input.etsyListingStatus } : {}),
-      ...(input.wooProductName !== undefined ? { wooProductName: input.wooProductName } : {}),
-      ...(input.wooShortDescription !== undefined
-        ? { wooShortDescription: input.wooShortDescription }
-        : {}),
-      ...(input.wooLongDescription !== undefined
-        ? { wooLongDescription: input.wooLongDescription }
-        : {}),
-      ...(input.wooSlug !== undefined ? { wooSlug: input.wooSlug } : {}),
-      ...(input.wooSeoTitle !== undefined ? { wooSeoTitle: input.wooSeoTitle } : {}),
-      ...(input.wooMetaDescription !== undefined
-        ? { wooMetaDescription: input.wooMetaDescription }
-        : {}),
-      ...(input.wooFocusKeyword !== undefined ? { wooFocusKeyword: input.wooFocusKeyword } : {}),
-      ...(input.wooListingPriceEur !== undefined
-        ? { wooListingPriceEur: input.wooListingPriceEur }
-        : {}),
-      ...(input.wooListingStatus !== undefined ? { wooListingStatus: input.wooListingStatus } : {}),
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(products.id, id));
-
-  if (input.images !== undefined) {
-    await replaceImages(db, id, input.images);
-  }
-
+  await updateProductUseCase(productWriteUseCaseContext(db), id, patch);
+  if (input.images !== undefined) await replaceImages(db, id, input.images);
   return getProductById(db, id);
 }
 
 /** Archive only — Sprint 2 explicitly forbids permanent deletion. */
 export async function archiveProduct(db: DbClient, id: string): Promise<ProductWithImages> {
-  await getProductById(db, id);
-  await db
-    .update(products)
-    .set({ status: ProductStatus.Archived, updatedAt: new Date().toISOString() })
-    .where(eq(products.id, id));
+  await archiveProductUseCase(productWriteUseCaseContext(db), id);
   return getProductById(db, id);
 }
 
@@ -582,7 +383,7 @@ export async function uploadProductPhoto(
       productId,
       url: stored.url,
       thumbnailUrl: stored.thumbnailUrl,
-      altText,
+      altText: altText ?? null,
       sortOrder: existing.length,
       isPrimary: existing.length === 0,
       filename: stored.filename,
@@ -599,11 +400,11 @@ export async function uploadProductPhoto(
     };
     const eventValues = { id: randomUUID(), eventType: OutboxEventType.ProductPhotoPromoteRequested, aggregateType: "ProductPhoto", aggregateId: id, idempotencyKey: `product-photo-promote:${id}`, payload: JSON.stringify({ photoId: id, productId }), status: OutboxEventStatus.Pending, attemptCount: 0, maxAttempts: 3, availableAt: now, createdAt: now, updatedAt: now };
     const runSync = (tx: DbClient) => {
-      (tx.insert(productPhotos).values(values) as unknown as { run(): void }).run();
+      void createProductWriteServiceContextForDb(tx).repositories.photos.createMetadata({ values });
       (tx.insert(outboxEvents).values(eventValues) as unknown as { run(): void }).run();
     };
     const runAsync = async (tx: DbClient) => {
-      await tx.insert(productPhotos).values(values);
+      await createProductWriteServiceContextForDb(tx).repositories.photos.createMetadata({ values });
       await tx.insert(outboxEvents).values(eventValues);
     };
     if (typeof (db as DbClient & { transaction?: unknown }).transaction === "function" && !Object.prototype.hasOwnProperty.call(db, "insert")) {
@@ -621,17 +422,13 @@ export async function uploadProductPhoto(
 
 export async function updateProductPhoto(db: DbClient, productId: string, photoId: string, altText?: string): Promise<ProductPhoto> {
   await getProductById(db, productId);
-  const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
-  if (!photo) throw new NotFoundError("Product photo not found");
-  await db.update(productPhotos).set({ altText, updatedAt: new Date().toISOString() }).where(eq(productPhotos.id, photoId));
+  await updateProductPhotoAltUseCase(productWriteUseCaseContext(db), { productId, photoId, altText: altText ?? null });
   return (await getPhotosForProduct(db, productId)).find((item) => item.id === photoId)!;
 }
 
 export async function setPrimaryProductPhoto(db: DbClient, productId: string, photoId: string): Promise<ProductPhoto[]> {
   await getProductById(db, productId);
-  const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
-  if (!photo) throw new NotFoundError("Product photo not found");
-  await ensureSinglePrimary(db, productId, photoId);
+  await setPrimaryProductPhotoUseCase(productWriteUseCaseContext(db), { productId, photoId });
   return getPhotosForProduct(db, productId);
 }
 
@@ -641,10 +438,7 @@ export async function reorderProductPhotos(db: DbClient, productId: string, phot
   if (photos.length !== photoIds.length || photos.some((photo) => !photoIds.includes(photo.id))) {
     throw new BadRequestError("Reorder payload must include every product photo exactly once");
   }
-  const now = new Date().toISOString();
-  for (const [sortOrder, photoId] of photoIds.entries()) {
-    await db.update(productPhotos).set({ sortOrder, updatedAt: now }).where(eq(productPhotos.id, photoId));
-  }
+  await reorderProductPhotosUseCase(productWriteUseCaseContext(db), { productId, photoIds });
   return getPhotosForProduct(db, productId);
 }
 
@@ -655,15 +449,31 @@ export async function deleteProductPhoto(
   storage: PhotoStorage = photoStorage,
 ): Promise<ProductPhoto[]> {
   await getProductById(db, productId);
-  const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
+  const photo = await createProductWriteServiceContextForDb(db).repositories.photos.getForUpdate(productId, photoId);
   if (!photo) throw new NotFoundError("Product photo not found");
-  await db.delete(productPhotos).where(eq(productPhotos.id, photoId));
-  await db.insert(outboxEvents).values({ id: randomUUID(), eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: photoId, idempotencyKey: `product-photo-delete:${photoId}`, payload: JSON.stringify({ photoId, productId }), status: OutboxEventStatus.Pending, attemptCount: 0, maxAttempts: 3, availableAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-  await storage.deleteProductPhoto({ url: photo.url, thumbnailUrl: photo.thumbnailUrl });
-  const remaining = await getPhotosForProduct(db, productId);
-  for (const [sortOrder, item] of remaining.entries()) {
-    await db.update(productPhotos).set({ sortOrder }).where(eq(productPhotos.id, item.id));
+  const beforeDelete = await getPhotosForProduct(db, productId);
+  const remainingIds = beforeDelete.filter((item) => item.id !== photoId).map((item) => item.id);
+  const nextPrimary = beforeDelete.find((item) => item.id !== photoId)?.id;
+  const now = new Date().toISOString();
+  const eventValues = { id: randomUUID(), eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: photoId, idempotencyKey: `product-photo-delete:${photoId}`, payload: JSON.stringify({ photoId, productId }), status: OutboxEventStatus.Pending, attemptCount: 0, maxAttempts: 3, availableAt: now, createdAt: now, updatedAt: now };
+  const applyMetadata = async (tx: DbClient) => {
+    const repos = createProductWriteServiceContextForDb(tx).repositories;
+    await repos.photos.deleteMetadata({ productId, photoId });
+    await repos.photos.reorder({ productId, photoIds: remainingIds });
+    if (nextPrimary) await repos.photos.setPrimary({ productId, photoId: nextPrimary });
+  };
+  const runSync = (tx: DbClient) => {
+    const repos = createProductWriteServiceContextForDb(tx).repositories;
+    void repos.photos.deleteMetadata({ productId, photoId });
+    void repos.photos.reorder({ productId, photoIds: remainingIds });
+    if (nextPrimary) void repos.photos.setPrimary({ productId, photoId: nextPrimary });
+    (tx.insert(outboxEvents).values(eventValues) as unknown as { run(): void }).run();
+  };
+  if (typeof (db as DbClient & { transaction?: unknown }).transaction === "function" && !Object.prototype.hasOwnProperty.call(db, "insert")) {
+    (db as DbClient & { transaction: (work: (tx: DbClient) => void) => void }).transaction(runSync);
+  } else {
+    await applyMetadata(db);
+    await db.insert(outboxEvents).values(eventValues);
   }
-  await ensureSinglePrimary(db, productId);
   return getPhotosForProduct(db, productId);
 }

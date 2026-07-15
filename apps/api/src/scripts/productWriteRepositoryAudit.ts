@@ -1,0 +1,8 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+export interface ProductWriteAuditResult { status: "PASS" | "FAIL"; violations: string[] }
+const root = path.resolve(__dirname, "..");
+const forbidden = [/from "\.\.\/db\//, /schema\.sqlite|schema\.postgres|\.\.\/db\/schema/, /better-sqlite3|pg\b/, /db\.(select|insert|update|delete)/, /sql`/, /sharp|node:fs|fetch\(/, /Repository\.transaction\(/];
+export function auditProductWriteSource(files: Record<string,string>): ProductWriteAuditResult { const violations: string[] = []; for (const [file, source] of Object.entries(files)) for (const rule of forbidden) if (rule.test(source)) violations.push(`${file}: ${rule}`); return { status: violations.length ? "FAIL" : "PASS", violations }; }
+export function runProductWriteRepositoryAudit(): ProductWriteAuditResult { const files = ["use-cases/product-write/useCases.ts", "services/unitOfWork.ts"]; const map = Object.fromEntries(files.map(f => [f, readFileSync(path.join(root, f), "utf8")])); const result = auditProductWriteSource({ "use-cases/product-write/useCases.ts": map["use-cases/product-write/useCases.ts"] }); if (map["services/unitOfWork.ts"].match(/sharp|node:fs|fetch\(/)) result.violations.push("UnitOfWork contains forbidden side effect import"); result.status = result.violations.length ? "FAIL" : "PASS"; return result; }
+if (require.main === module) { const result = runProductWriteRepositoryAudit(); console.log(`Product write repository direct-access audit ${result.status}`); if (result.violations.length) { console.error(result.violations.join("\n")); process.exit(1); } }
