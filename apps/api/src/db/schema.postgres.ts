@@ -444,22 +444,60 @@ export const stockSyncAudit = pgTable("stock_sync_audit", {
 
 export const shipments = pgTable("shipments", {
   id: text("id").primaryKey().notNull(),
-  customCarrierName: numeric("custom_carrier_name", { precision: 18, scale: 6 }).notNull().default("0"),
+  orderId: text("order_id").notNull(),
+  marketplaceOrderId: text("marketplace_order_id"),
+  channel: text("channel"),
+  carrierCode: text("carrier_code").notNull(),
+  customCarrierName: text("custom_carrier_name"),
+  trackingNumber: text("tracking_number"),
+  trackingUrl: text("tracking_url"),
+  status: text("status").notNull(),
+  shippingCost: numeric("shipping_cost", { precision: 18, scale: 6 }).notNull().default("0"),
   currency: text("currency").notNull().default("EUR"),
+  shippedAt: timestamp("shipped_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  returnedAt: timestamp("returned_at", { withTimezone: true }),
   externalFulfillmentId: text("external_fulfillment_id"),
+  marketplaceFulfillmentStatus: text("marketplace_fulfillment_status"),
+  lastError: text("last_error"),
+  customsSnapshot: jsonb("customs_snapshot"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 export const shipmentItems = pgTable("shipment_items", {
-  id: integer("id").primaryKey().notNull().default(sql`now()`),
+  id: text("id").primaryKey().notNull(),
+  shipmentId: text("shipment_id").notNull(),
+  orderItemId: text("order_item_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 export const shipmentEvents = pgTable("shipment_events", {
-  id: text("id").primaryKey().notNull().default(sql`now()`),
+  id: text("id").primaryKey().notNull(),
+  shipmentId: text("shipment_id").notNull(),
+  eventType: text("event_type").notNull(),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  payloadSnapshot: jsonb("payload_snapshot"),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  idempotencyKey: text("idempotency_key"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 export const shipmentTrackingUpdates = pgTable("shipment_tracking_updates", {
-  id: text("id").primaryKey().notNull().default(sql`now()`),
+  id: text("id").primaryKey().notNull(),
+  shipmentId: text("shipment_id").notNull(),
+  source: text("source").notNull(),
+  externalStatus: text("external_status"),
+  normalizedStatus: text("normalized_status"),
+  location: text("location"),
+  description: text("description"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }),
+  payloadSnapshot: jsonb("payload_snapshot"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 export const saleFinancials = pgTable("sale_financials", {
