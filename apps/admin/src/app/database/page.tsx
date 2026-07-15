@@ -1,0 +1,2 @@
+import { DRY_RUN_WARNING } from "../../lib/databaseMigration";
+export default function DatabasePage(){ return <main><h1>Database</h1><p>{DRY_RUN_WARNING}</p><section><h2>Overview</h2><ul><li>Active driver: safe health metadata</li><li>Cutover state: SQLiteOnly by default</li><li>SQLite status and Supabase configured status</li><li>Schema parity, migration readiness, blocking and warning counts</li></ul></section><a href="/database/migration">Migration</a><a href="/database/health">Health</a></main>; }

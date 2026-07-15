@@ -1,0 +1,2 @@
+import { DRY_RUN_WARNING } from "../../../lib/databaseMigration";
+export default function DatabaseMigrationPage(){ return <main><h1>Database Migration</h1><p>{DRY_RUN_WARNING}</p><button>Run static parity check</button><button>Run migration preview</button><section><h2>Preview</h2><p>Table counts, transformation warnings, orphan and uniqueness issues.</p><a download="sprint-24-migration-manifest-dry-run.json">Download safe manifest JSON</a></section></main>; }

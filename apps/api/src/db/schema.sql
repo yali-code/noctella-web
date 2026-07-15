@@ -585,3 +585,41 @@ CREATE TABLE IF NOT EXISTS warehouse_events (id TEXT PRIMARY KEY, warehouse_id T
 CREATE INDEX IF NOT EXISTS idx_warehouse_events_product_time ON warehouse_events(product_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_warehouse_events_order_time ON warehouse_events(order_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_warehouse_events_type_time ON warehouse_events(event_type, created_at);
+
+-- Sprint 24 compatibility placeholders for domains previously served by adapters.
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  order_id TEXT,
+  provider TEXT NOT NULL,
+  status TEXT NOT NULL,
+  amount REAL NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  idempotency_key TEXT NOT NULL UNIQUE,
+  safe_metadata TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+
+CREATE TABLE IF NOT EXISTS customers (
+  id TEXT PRIMARY KEY,
+  email TEXT,
+  display_name TEXT,
+  phone TEXT,
+  erp_reference_id TEXT UNIQUE,
+  safe_metadata TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_email_unique ON customers(email);
+
+CREATE TABLE IF NOT EXISTS erp_customer_links (
+  id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL,
+  erp_reference_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_erp_customer_links_customer ON erp_customer_links(customer_id);

@@ -6,6 +6,7 @@ import analyticsRouter from "./routes/analytics";
 import categoriesRouter from "./routes/categories";
 import collectionsRouter from "./routes/collections";
 import customersRouter from "./routes/customers";
+import databaseAdminRouter from "./routes/databaseAdmin";
 import erpRouter from "./routes/erp";
 import marketplacesRouter from "./routes/marketplaces";
 import marketplaceAdminRouter from "./routes/marketplaceAdmin";
@@ -50,6 +51,7 @@ app.get("/health", (_req, res) => {
 // storefront read endpoints, offers, and order read persistence are now functional (SQLite +
 // Drizzle). Remaining routers are still Sprint 1 placeholders awaiting real
 // ERP sync and business logic in later sprints.
+app.use("/api", databaseAdminRouter);
 app.use("/api/erp", erpRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/ai-drafts", aiDraftsRouter);
