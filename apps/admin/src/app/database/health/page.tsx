@@ -1,0 +1,1 @@
+export default function DatabaseHealthPage(){ return <main><h1>Database Health</h1><section><h2>Readiness</h2><ul><li>SQLite integrity</li><li>Supabase connection and latency</li><li>Schema version and last preview</li><li>Backup readiness and rollback readiness</li></ul></section></main>; }
