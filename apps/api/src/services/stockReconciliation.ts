@@ -1,0 +1,7 @@
+import { eq, sql } from "drizzle-orm";
+import type { DbClient } from "../db/client";
+import { products, stockMovements } from "../db/schema";
+export type StockReconciliationStatus = "Match" | "Mismatch";
+export interface StockReconciliationResult { productId: string; projectedQuantity: number; ledgerQuantity: number; status: StockReconciliationStatus }
+export async function reconcileProductStock(db: DbClient, productId: string): Promise<StockReconciliationResult | undefined> { const productRows = await db.select({ id: products.id, stockQuantity: products.stockQuantity }).from(products).where(eq(products.id, productId)).limit(1); const product = productRows[0]; if (!product) return undefined; const sumRows = await db.select({ quantity: sql<number>`coalesce(sum(${stockMovements.quantityDelta}), 0)` }).from(stockMovements).where(eq(stockMovements.productId, productId)); const ledgerQuantity = Number(sumRows[0]?.quantity ?? 0); return { productId, projectedQuantity: product.stockQuantity, ledgerQuantity, status: product.stockQuantity === ledgerQuantity ? "Match" : "Mismatch" }; }
+export async function reconcileStock(db: DbClient, productIds: string[], strict = false) { const results = (await Promise.all(productIds.map((id) => reconcileProductStock(db, id)))).filter((r): r is StockReconciliationResult => Boolean(r)); const mismatches = results.filter((r) => r.status === "Mismatch"); if (strict && mismatches.length) throw new Error("STOCK_RECONCILIATION_MISMATCH"); return { status: mismatches.length ? "Mismatch" as const : "Match" as const, results }; }
