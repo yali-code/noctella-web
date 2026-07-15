@@ -6,6 +6,8 @@ import { erpCommandExecutions, productErpMetadata, productPhotos, products, stoc
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { audit } from "./erpIntegration";
 import { createProduct, updateProduct, uploadProductPhoto, updateProductPhoto, setPrimaryProductPhoto, reorderProductPhotos, deleteProductPhoto } from "./products";
+import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
+import { upsertProductErpMetadataUseCase } from "../use-cases/product-write/useCases";
 import { applyStockMovementSync } from "./stockMovements";
 import { enqueueProductStockSync } from "./stockSync";
 import type { PhotoStorage } from "./photoStorage";
@@ -35,14 +37,14 @@ async function complete(db: DbClient, clientId: string, env: Envelope, status: s
 }
 function prior(row: any) { return { status: row.status, entityId: row.entityId, resultReference: row.resultReference, metadata: row.safeResultMetadata ? JSON.parse(row.safeResultMetadata) : {} }; }
 function metaFrom(payload: any) { return Object.fromEntries(metadataFields.filter(k => payload?.[k] !== undefined).map(k => [k, payload[k]])); }
-async function upsertMeta(tx: any, productId: string, meta: any) { if (!Object.keys(meta).length) return; const now = new Date().toISOString(); const [row]=tx.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productId)).all(); if (meta.noctellaId) { const conflicts=tx.select().from(productErpMetadata).where(eq(productErpMetadata.noctellaId, meta.noctellaId)).all().filter((r:any)=>r.productId!==productId); if(conflicts.length) throw new ConflictError("noctellaId is already in use"); } if(row) tx.update(productErpMetadata).set({ ...meta, updatedAt: now }).where(eq(productErpMetadata.productId, productId)).run(); else tx.insert(productErpMetadata).values({ productId, ...meta, createdAt: now, updatedAt: now }).run(); }
+async function upsertMeta(db: DbClient, productId: string, meta: any) { const write = createProductWriteServiceContextForDb(db); await upsertProductErpMetadataUseCase({ unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories: write.repositories }, productId, meta); }
 
 export async function executeCreateProduct(db: DbClient, clientId: string, env: Envelope) {
   const ex = await execution(db, clientId, env); if (ex.existing) return prior(ex.existing);
   const p = env.payload ?? {}; if (!p.sku || !p.title || !p.categoryId || p.priceEur == null) throw new BadRequestError("sku, title, categoryId and priceEur are required");
-  if (p.erpReferenceId) { const [dup]=await db.select().from(products).where(eq(products.erpReferenceId, String(p.erpReferenceId))).limit(1); if(dup) throw new ConflictError("erpReferenceId is already in use"); }
-  if (p.noctellaId) { const [dup]=await db.select().from(productErpMetadata).where(eq(productErpMetadata.noctellaId, String(p.noctellaId))).limit(1); if(dup) throw new ConflictError("noctellaId is already in use"); }
-  const result = await (async () => { const product = await createProduct(db, { sku:String(p.sku), title:String(p.title), slug:p.slug, type:p.type ?? ProductType.UniqueItem, status:p.status ?? ProductStatus.Draft, categoryId:String(p.categoryId), collectionId:p.collectionId, brand:p.brand, countryOfOrigin:p.countryOfOrigin, period:p.period, materials:p.materials, condition:p.condition, lengthValue:p.lengthValue, widthValue:p.widthValue, heightValue:p.heightValue, dimensionUnit:p.dimensionUnit, weightValue:p.weightValue, weightUnit:p.weightUnit, stockQuantity:0, purchaseCost:p.purchaseCost, purchaseCurrency:"EUR", internalNotes:p.internalNotes, priceEur:Number(p.priceEur), erpReferenceId:p.erpReferenceId } as any); if (p.erpReferenceId) await db.update(products).set({ erpReferenceId:String(p.erpReferenceId) }).where(eq(products.id, product.id)); await upsertMeta(db, product.id, metaFrom(p)); return { productId: product.id, sku: product.sku, erpReferenceId:p.erpReferenceId }; })();
+  if (p.erpReferenceId && await createProductWriteServiceContextForDb(db).repositories.products.existsByErpReference(String(p.erpReferenceId))) throw new ConflictError("erpReferenceId is already in use");
+  if (p.noctellaId && await createProductWriteServiceContextForDb(db).repositories.products.existsByNoctellaId(String(p.noctellaId))) throw new ConflictError("noctellaId is already in use");
+  const result = await (async () => { const product = await createProduct(db, { sku:String(p.sku), title:String(p.title), slug:p.slug, type:p.type ?? ProductType.UniqueItem, status:p.status ?? ProductStatus.Draft, categoryId:String(p.categoryId), collectionId:p.collectionId, brand:p.brand, countryOfOrigin:p.countryOfOrigin, period:p.period, materials:p.materials, condition:p.condition, lengthValue:p.lengthValue, widthValue:p.widthValue, heightValue:p.heightValue, dimensionUnit:p.dimensionUnit, weightValue:p.weightValue, weightUnit:p.weightUnit, stockQuantity:0, purchaseCost:p.purchaseCost, purchaseCurrency:"EUR", internalNotes:p.internalNotes, priceEur:Number(p.priceEur), erpReferenceId:p.erpReferenceId } as any); await upsertMeta(db, product.id, metaFrom(p)); return { productId: product.id, sku: product.sku, erpReferenceId:p.erpReferenceId }; })();
   await complete(db, clientId, env, "Succeeded", result.productId, result); return { status:"Succeeded", ...result };
 }
 export async function executeUpdateProduct(db: DbClient, clientId: string, productId: string, env: Envelope) {

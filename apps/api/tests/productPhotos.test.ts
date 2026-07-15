@@ -1,5 +1,6 @@
 import { ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { createCategory } from "../src/services/categories";
 import { BadRequestError } from "../src/services/errors";
 import type { PhotoStorage } from "../src/services/photoStorage";
@@ -13,6 +14,7 @@ import {
   uploadProductPhoto,
 } from "../src/services/products";
 import { createTestDb } from "./testDb";
+import { outboxEvents } from "../src/db/schema";
 
 function mockStorage(): PhotoStorage {
   let counter = 0;
@@ -90,12 +92,14 @@ describe("product photo workflow", () => {
     expect(product.images[0].url).toBe("https://legacy.example/only.jpg");
   });
 
-  it("deletes uploaded files when deleting product photos", async () => {
+  it("enqueues outbox deletion without synchronous physical delete", async () => {
     const storage = mockStorage();
     const photo = await uploadProductPhoto(db, productId, { buffer: Buffer.from("a"), mimetype: "image/webp", size: 1 }, undefined, storage);
     const remaining = await deleteProductPhoto(db, productId, photo.id, storage);
     expect(remaining).toEqual([]);
-    expect(storage.deleteProductPhoto).toHaveBeenCalledWith({ url: photo.url, thumbnailUrl: photo.thumbnailUrl });
+    expect(storage.deleteProductPhoto).not.toHaveBeenCalled();
+    const events = await db.select().from(outboxEvents).where(eq(outboxEvents.aggregateId, photo.id));
+    expect(events.some((event) => event.eventType === "product_photo.delete_requested")).toBe(true);
   });
 
   it("rolls back uploaded files if database persistence fails", async () => {

@@ -12,6 +12,14 @@ import type {
 } from "../validation/collection";
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
+import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
+import { createCollectionUseCase, updateCollectionUseCase, archiveCollectionUseCase, restoreCollectionUseCase } from "../use-cases/product-write/useCases";
+
+
+function productWriteUseCaseContext(db: DbClient) {
+  const write = createProductWriteServiceContextForDb(db);
+  return { unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories: write.repositories };
+}
 
 function toCollection(row: typeof collections.$inferSelect): Collection {
   return {
@@ -54,26 +62,8 @@ export async function createCollection(
   db: DbClient,
   input: CreateCollectionInput,
 ): Promise<Collection> {
-  const slug = input.slug ? slugify(input.slug) : slugify(input.name);
-  await assertSlugAvailable(db, slug);
-
-  const now = new Date().toISOString();
-  const id = randomUUID();
-  await db.insert(collections).values({
-    id,
-    name: input.name,
-    slug,
-    description: input.description,
-    coverImageUrl: input.coverImageUrl,
-    seoTitle: input.seoTitle,
-    metaDescription: input.metaDescription,
-    displayOrder: input.displayOrder,
-    isActive: input.isActive,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  return getCollectionById(db, id);
+  const result = await createCollectionUseCase(productWriteUseCaseContext(db), input);
+  return getCollectionById(db, result.id);
 }
 
 export async function updateCollection(
@@ -81,46 +71,16 @@ export async function updateCollection(
   id: string,
   input: UpdateCollectionInput,
 ): Promise<Collection> {
-  await getCollectionById(db, id);
-
-  let slug: string | undefined;
-  if (input.slug !== undefined) {
-    slug = slugify(input.slug);
-    await assertSlugAvailable(db, slug, id);
-  }
-
-  await db
-    .update(collections)
-    .set({
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(slug !== undefined ? { slug } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.coverImageUrl !== undefined ? { coverImageUrl: input.coverImageUrl } : {}),
-      ...(input.seoTitle !== undefined ? { seoTitle: input.seoTitle } : {}),
-      ...(input.metaDescription !== undefined ? { metaDescription: input.metaDescription } : {}),
-      ...(input.displayOrder !== undefined ? { displayOrder: input.displayOrder } : {}),
-      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(collections.id, id));
-
+  await updateCollectionUseCase(productWriteUseCaseContext(db), id, input);
   return getCollectionById(db, id);
 }
 
 export async function archiveCollection(db: DbClient, id: string): Promise<Collection> {
-  await getCollectionById(db, id);
-  await db
-    .update(collections)
-    .set({ isActive: false, updatedAt: new Date().toISOString() })
-    .where(eq(collections.id, id));
+  await archiveCollectionUseCase(productWriteUseCaseContext(db), id);
   return getCollectionById(db, id);
 }
 
 export async function restoreCollection(db: DbClient, id: string): Promise<Collection> {
-  await getCollectionById(db, id);
-  await db
-    .update(collections)
-    .set({ isActive: true, updatedAt: new Date().toISOString() })
-    .where(eq(collections.id, id));
+  await restoreCollectionUseCase(productWriteUseCaseContext(db), id);
   return getCollectionById(db, id);
 }
