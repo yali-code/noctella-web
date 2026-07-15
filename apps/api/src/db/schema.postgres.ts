@@ -120,9 +120,52 @@ export const productPhotos = pgTable("product_photos", {
   sizeBytes: integer("size_bytes").notNull(),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
+  processingStatus: text("processing_status").notNull().default("Ready"),
+  storageKey: text("storage_key"),
+  thumbnailStorageKey: text("thumbnail_storage_key"),
+  processingErrorCode: text("processing_error_code"),
+  processingUpdatedAt: timestamp("processing_updated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+
+
+export const outboxEvents = pgTable("outbox_events", {
+  id: text("id").primaryKey().notNull(),
+  eventType: text("event_type").notNull(),
+  aggregateType: text("aggregate_type").notNull(),
+  aggregateId: text("aggregate_id"),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by"),
+  lastErrorCode: text("last_error_code"),
+  lastErrorMessage: text("last_error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  deadLetteredAt: timestamp("dead_lettered_at", { withTimezone: true }),
+}, (table) => [
+  index("idx_outbox_events_due").on(table.status, table.availableAt),
+  index("idx_outbox_events_type").on(table.eventType),
+  index("idx_outbox_events_aggregate").on(table.aggregateType, table.aggregateId),
+  index("idx_outbox_events_locked").on(table.lockedAt),
+]);
+
+export const outboxAttempts = pgTable("outbox_attempts", {
+  id: text("id").primaryKey().notNull(),
+  outboxEventId: text("outbox_event_id").notNull(),
+  attemptNumber: integer("attempt_number").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  result: text("result").notNull(),
+  safeErrorCode: text("safe_error_code"),
+  safeErrorMessage: text("safe_error_message"),
+}, (table) => [index("idx_outbox_attempts_event").on(table.outboxEventId)]);
 
 export const productImages = pgTable("product_images", {
   id: text("id").primaryKey().notNull(),

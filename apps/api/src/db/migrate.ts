@@ -22,6 +22,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensurePurchasingTables(sqlite);
   ensureSalesFinanceBridgeTables(sqlite);
   ensureCustomerBridgeTables(sqlite);
+  ensureSprint25OutboxTables(sqlite);
 }
 
 /**
@@ -283,4 +284,24 @@ CREATE TABLE IF NOT EXISTS customer_identity_links (id TEXT PRIMARY KEY, custome
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_identity_links_unique ON customer_identity_links(provider, external_id);
 CREATE INDEX IF NOT EXISTS idx_customer_identity_links_customer ON customer_identity_links(customer_id);
 `);
+}
+
+
+function ensureSprint25OutboxTables(sqlite: Database.Database): void {
+  const photoColumns = new Set((sqlite.prepare("PRAGMA table_info(product_photos)").all() as Array<{ name: string }>).map((row) => row.name));
+  const columns: Array<{ name: string; ddl: string }> = [
+    { name: "processing_status", ddl: "TEXT NOT NULL DEFAULT 'Ready'" },
+    { name: "storage_key", ddl: "TEXT" },
+    { name: "thumbnail_storage_key", ddl: "TEXT" },
+    { name: "processing_error_code", ddl: "TEXT" },
+    { name: "processing_updated_at", ddl: "TEXT" },
+  ];
+  for (const column of columns) if (!photoColumns.has(column.name)) sqlite.exec(`ALTER TABLE product_photos ADD COLUMN ${column.name} ${column.ddl}`);
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS outbox_events (id TEXT PRIMARY KEY, event_type TEXT NOT NULL, aggregate_type TEXT NOT NULL, aggregate_id TEXT, idempotency_key TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, status TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL DEFAULT 3, available_at TEXT NOT NULL, locked_at TEXT, locked_by TEXT, last_error_code TEXT, last_error_message TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), completed_at TEXT, dead_lettered_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_due ON outbox_events(status, available_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_type ON outbox_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON outbox_events(aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_locked ON outbox_events(locked_at);
+CREATE TABLE IF NOT EXISTS outbox_attempts (id TEXT PRIMARY KEY, outbox_event_id TEXT NOT NULL, attempt_number INTEGER NOT NULL, started_at TEXT NOT NULL, completed_at TEXT, result TEXT NOT NULL, safe_error_code TEXT, safe_error_message TEXT);
+CREATE INDEX IF NOT EXISTS idx_outbox_attempts_event ON outbox_attempts(outbox_event_id);`);
 }

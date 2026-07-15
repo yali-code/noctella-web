@@ -9,10 +9,11 @@ import {
   ProductType,
 } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { categories, collections, productImages, productPhotos, products } from "../db/schema";
+import { categories, collections, outboxEvents, productImages, productPhotos, products } from "../db/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import type { PhotoStorage, StoredProductPhoto } from "./photoStorage";
 import { photoStorage } from "./photoStorage";
+import { OutboxEventStatus, OutboxEventType } from "./outbox";
 import { slugify } from "../validation/common";
 import type { CreateProductInput, ProductListQuery, UpdateProductInput } from "../validation/product";
 
@@ -107,6 +108,11 @@ function toProductPhoto(row: typeof productPhotos.$inferSelect): ProductPhoto {
     sizeBytes: row.sizeBytes,
     width: row.width,
     height: row.height,
+    processingStatus: (row.processingStatus as ProductPhoto["processingStatus"]) ?? "Ready",
+    storageKey: row.storageKey,
+    thumbnailStorageKey: row.thumbnailStorageKey,
+    processingErrorCode: row.processingErrorCode,
+    processingUpdatedAt: row.processingUpdatedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -591,7 +597,7 @@ export async function uploadProductPhoto(
   const now = new Date().toISOString();
   const id = randomUUID();
   try {
-    await db.insert(productPhotos).values({
+    const values = {
       id,
       productId,
       url: stored.url,
@@ -604,9 +610,27 @@ export async function uploadProductPhoto(
       sizeBytes: stored.sizeBytes,
       width: stored.width,
       height: stored.height,
+      processingStatus: "Processing",
+      storageKey: stored.filename,
+      thumbnailStorageKey: `${stored.filename}-thumb`,
+      processingUpdatedAt: now,
       createdAt: now,
       updatedAt: now,
-    });
+    };
+    const eventValues = { id: randomUUID(), eventType: OutboxEventType.ProductPhotoPromoteRequested, aggregateType: "ProductPhoto", aggregateId: id, idempotencyKey: `product-photo-promote:${id}`, payload: JSON.stringify({ photoId: id, productId }), status: OutboxEventStatus.Pending, attemptCount: 0, maxAttempts: 3, availableAt: now, createdAt: now, updatedAt: now };
+    const runSync = (tx: DbClient) => {
+      (tx.insert(productPhotos).values(values) as unknown as { run(): void }).run();
+      (tx.insert(outboxEvents).values(eventValues) as unknown as { run(): void }).run();
+    };
+    const runAsync = async (tx: DbClient) => {
+      await tx.insert(productPhotos).values(values);
+      await tx.insert(outboxEvents).values(eventValues);
+    };
+    if (typeof (db as DbClient & { transaction?: unknown }).transaction === "function" && !Object.prototype.hasOwnProperty.call(db, "insert")) {
+      (db as DbClient & { transaction: (work: (tx: DbClient) => void) => void }).transaction(runSync);
+    } else {
+      await runAsync(db);
+    }
     await ensureSinglePrimary(db, productId);
     return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
   } catch (err) {
@@ -654,6 +678,7 @@ export async function deleteProductPhoto(
   const [photo] = await db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId)));
   if (!photo) throw new NotFoundError("Product photo not found");
   await db.delete(productPhotos).where(eq(productPhotos.id, photoId));
+  await db.insert(outboxEvents).values({ id: randomUUID(), eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: photoId, idempotencyKey: `product-photo-delete:${photoId}`, payload: JSON.stringify({ photoId, productId }), status: OutboxEventStatus.Pending, attemptCount: 0, maxAttempts: 3, availableAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
   await storage.deleteProductPhoto({ url: photo.url, thumbnailUrl: photo.thumbnailUrl });
   const remaining = await getPhotosForProduct(db, productId);
   for (const [sortOrder, item] of remaining.entries()) {

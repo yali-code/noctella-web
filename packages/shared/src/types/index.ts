@@ -90,6 +90,11 @@ export interface ProductPhoto extends Timestamps {
   sizeBytes: number;
   width: number;
   height: number;
+  processingStatus?: "Processing" | "Ready" | "Failed";
+  storageKey?: string | null;
+  thumbnailStorageKey?: string | null;
+  processingErrorCode?: string | null;
+  processingUpdatedAt?: string | null;
 }
 
 export interface ProductImage extends Timestamps {

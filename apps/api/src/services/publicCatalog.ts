@@ -105,7 +105,7 @@ async function toPublicProduct(
   const photos = await db
     .select()
     .from(productPhotos)
-    .where(eq(productPhotos.productId, row.id))
+    .where(and(eq(productPhotos.productId, row.id), eq(productPhotos.processingStatus, "Ready")))
     .orderBy(asc(productPhotos.sortOrder));
   const images = photos.length > 0
     ? photos.map((photo) => ({ id: photo.id, url: photo.url, thumbnailUrl: photo.thumbnailUrl, altText: photo.altText, sortOrder: photo.sortOrder, isPrimary: photo.isPrimary }))
