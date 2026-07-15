@@ -10,6 +10,8 @@ import type {
   CreateCollectionInput,
   UpdateCollectionInput,
 } from "../validation/collection";
+import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
+import type { ProductReadServiceContext } from "../repositories/product-read/types";
 
 function toCollection(row: typeof collections.$inferSelect): Collection {
   return {
@@ -35,39 +37,15 @@ async function assertSlugAvailable(db: DbClient, slug: string, excludeId?: strin
   }
 }
 
-export async function listCollections(db: DbClient, query: CollectionListQuery) {
-  const conditions = [];
-  if (query.search) {
-    conditions.push(like(collections.name, `%${query.search}%`));
-  }
-  if (!query.includeInactive) {
-    conditions.push(eq(collections.isActive, true));
-  }
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const [{ total }] = await db
-    .select({ total: sql<number>`count(*)` })
-    .from(collections)
-    .where(whereClause);
-
-  const rows = await db
-    .select()
-    .from(collections)
-    .where(whereClause)
-    .orderBy(collections.displayOrder)
-    .limit(query.pageSize)
-    .offset((query.page - 1) * query.pageSize);
-
-  return {
-    items: rows.map(toCollection),
-    total,
-    page: query.page,
-    pageSize: query.pageSize,
-  };
+export async function listCollections(db: DbClient, query: CollectionListQuery, context?: ProductReadServiceContext) {
+  context ??= createProductReadServiceContextForDb(db);
+  const [items, total] = await Promise.all([context.repositories.collections.list(query), context.repositories.collections.count(query)]);
+  return { items: items.map(toCollection), total, page: query.page, pageSize: query.pageSize };
 }
 
-export async function getCollectionById(db: DbClient, id: string): Promise<Collection> {
-  const [row] = await db.select().from(collections).where(eq(collections.id, id));
+export async function getCollectionById(db: DbClient, id: string, context?: ProductReadServiceContext): Promise<Collection> {
+  context ??= createProductReadServiceContextForDb(db);
+  const row = await context.repositories.collections.getById(id);
   if (!row) throw new NotFoundError("Collection not found");
   return toCollection(row);
 }

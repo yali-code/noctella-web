@@ -13,7 +13,8 @@
     "db:migration-preview": "tsx src/scripts/dbMigrationPreview.ts",
     "db:integrity": "tsx src/scripts/dbIntegrity.ts",
     "db:backup-check": "tsx src/scripts/dbBackupCheck.ts",
-    "architecture:audit": "tsx src/scripts/architectureAudit.ts"
+    "architecture:audit": "tsx src/scripts/architectureAudit.ts",
+    "repo:parity": "tsx src/scripts/productReadRepositoryAudit.ts"
   },
   "dependencies": {
     "@noctella/shared": "0.1.0",
