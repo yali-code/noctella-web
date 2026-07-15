@@ -6,6 +6,8 @@ import { categories } from "../db/schema";
 import { ConflictError, NotFoundError } from "./errors";
 import { slugify } from "../validation/common";
 import type { CategoryListQuery, CreateCategoryInput, UpdateCategoryInput } from "../validation/category";
+import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
+import type { ProductReadServiceContext } from "../repositories/product-read/types";
 
 /** Seeded only when the categories table is empty (Sprint 2 spec §3). */
 const INITIAL_CATEGORY_NAMES = [
@@ -61,39 +63,15 @@ async function assertSlugAvailable(db: DbClient, slug: string, excludeId?: strin
   }
 }
 
-export async function listCategories(db: DbClient, query: CategoryListQuery) {
-  const conditions = [];
-  if (query.search) {
-    conditions.push(like(categories.name, `%${query.search}%`));
-  }
-  if (!query.includeInactive) {
-    conditions.push(eq(categories.isActive, true));
-  }
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const [{ total }] = await db
-    .select({ total: sql<number>`count(*)` })
-    .from(categories)
-    .where(whereClause);
-
-  const rows = await db
-    .select()
-    .from(categories)
-    .where(whereClause)
-    .orderBy(categories.displayOrder)
-    .limit(query.pageSize)
-    .offset((query.page - 1) * query.pageSize);
-
-  return {
-    items: rows.map(toCategory),
-    total,
-    page: query.page,
-    pageSize: query.pageSize,
-  };
+export async function listCategories(db: DbClient, query: CategoryListQuery, context?: ProductReadServiceContext) {
+  context ??= createProductReadServiceContextForDb(db);
+  const [items, total] = await Promise.all([context.repositories.categories.list(query), context.repositories.categories.count(query)]);
+  return { items: items.map(toCategory), total, page: query.page, pageSize: query.pageSize };
 }
 
-export async function getCategoryById(db: DbClient, id: string): Promise<Category> {
-  const [row] = await db.select().from(categories).where(eq(categories.id, id));
+export async function getCategoryById(db: DbClient, id: string, context?: ProductReadServiceContext): Promise<Category> {
+  context ??= createProductReadServiceContextForDb(db);
+  const row = await context.repositories.categories.getById(id);
   if (!row) throw new NotFoundError("Category not found");
   return toCategory(row);
 }

@@ -16,6 +16,8 @@ import { photoStorage } from "./photoStorage";
 import { OutboxEventStatus, OutboxEventType } from "./outbox";
 import { slugify } from "../validation/common";
 import type { CreateProductInput, ProductListQuery, UpdateProductInput } from "../validation/product";
+import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
+import type { ProductReadServiceContext } from "../repositories/product-read/types";
 
 function toProduct(row: typeof products.$inferSelect): Product {
   return {
@@ -298,48 +300,26 @@ export function computeMarketplaceReadiness(product: Product): ProductMarketplac
   };
 }
 
-export async function listProducts(db: DbClient, query: ProductListQuery) {
-  const conditions = [];
-  if (query.search) {
-    conditions.push(
-      or(like(products.title, `%${query.search}%`), like(products.sku, `%${query.search}%`)),
-    );
-  }
-  if (query.status) conditions.push(eq(products.status, query.status));
-  if (query.type) conditions.push(eq(products.type, query.type));
-  if (query.categoryId) conditions.push(eq(products.categoryId, query.categoryId));
-  if (query.collectionId) conditions.push(eq(products.collectionId, query.collectionId));
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const [{ total }] = await db
-    .select({ total: sql<number>`count(*)` })
-    .from(products)
-    .where(whereClause);
-
-  const rows = await db
-    .select()
-    .from(products)
-    .where(whereClause)
-    .orderBy(desc(products.updatedAt))
-    .limit(query.pageSize)
-    .offset((query.page - 1) * query.pageSize);
-
-  const items = await Promise.all(
-    rows.map(async (row) => {
-      const product = toProduct(row);
-      const primaryImage = (await getPreferredImagesForProduct(db, row.id)).find((img) => img.isPrimary) ?? (await getPreferredImagesForProduct(db, row.id))[0];
-      return { ...product, primaryImageUrl: primaryImage?.url };
-    }),
-  );
-
+export async function listProducts(db: DbClient, query: ProductListQuery, context?: ProductReadServiceContext) {
+  context ??= createProductReadServiceContextForDb(db);
+  const rows = await context.repositories.products.list(query);
+  const total = await context.repositories.products.count(query);
+  const items = await Promise.all(rows.map(async (row: any) => {
+    const product = toProduct(row);
+    const images = await context.repositories.photos.listLegacyCompatibleByProduct(row.id);
+    const primaryImage = images.find((img: any) => img.isPrimary) ?? images[0];
+    return { ...product, primaryImageUrl: primaryImage?.url };
+  }));
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
-export async function getProductById(db: DbClient, id: string): Promise<ProductWithImages> {
-  const [row] = await db.select().from(products).where(eq(products.id, id));
+export async function getProductById(db: DbClient, id: string, context?: ProductReadServiceContext): Promise<ProductWithImages> {
+  context ??= createProductReadServiceContextForDb(db);
+  const row = await context.repositories.products.getById(id);
   if (!row) throw new NotFoundError("Product not found");
-  const photos = await getPhotosForProduct(db, id);
-  const images = photos.length > 0 ? photos.map(photoToLegacyImage) : await getImagesForProduct(db, id);
+  const photos = (await context.repositories.photos.listAdminByProduct(id)).map(toProductPhoto);
+  const legacy = await context.repositories.photos.listLegacyCompatibleByProduct(id);
+  const images = legacy.map((img: any) => "filename" in img ? photoToLegacyImage(toProductPhoto(img)) : toProductImage(img));
   const product = toProduct(row);
   return { ...product, photos, images, marketplaceReadiness: computeMarketplaceReadiness(product) };
 }
