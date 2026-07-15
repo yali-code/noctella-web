@@ -1,11 +1,3 @@
-export default function Page() {
-  return (
-    <div>
-      <h1>Reports</h1>
-      <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
-      <p style={{ color: "var(--noctella-aged-bronze)" }}>
-        Placeholder screen — Sprint 1 foundation only.
-      </p>
-    </div>
-  );
-}
+import { exportUrl, periodLabels, comparisonLabels } from "../../lib/erpReportsAnalyticsBridge";
+const reports=["inventory","purchasing","suppliers","sales","channels","finance","customers","returns-refunds","shipping","warehouse"];
+export default function Page(){ return <main><h1>Reports</h1><section><h2>Filters</h2><p>Period: {periodLabels.Last30Days}; Comparison: {comparisonLabels.None}</p></section><section><h2>Summary cards</h2><p>ERP-authenticated reporting bridge with completeness warnings, tables, breakdowns and export actions.</p></section><ul>{reports.map(r=><li key={r}><a href={`/reports/${r}`}>{r}</a> — <a href={exportUrl(r,"json")}>JSON</a> / <a href={exportUrl(r,"csv")}>CSV</a></li>)}</ul></main> }
