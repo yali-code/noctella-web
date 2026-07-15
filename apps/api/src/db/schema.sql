@@ -122,6 +122,11 @@ CREATE TABLE IF NOT EXISTS product_photos (
   size_bytes INTEGER NOT NULL,
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
+  processing_status TEXT NOT NULL DEFAULT 'Ready',
+  storage_key TEXT,
+  thumbnail_storage_key TEXT,
+  processing_error_code TEXT,
+  processing_updated_at TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   FOREIGN KEY (product_id) REFERENCES products(id)
@@ -623,3 +628,12 @@ CREATE TABLE IF NOT EXISTS erp_customer_links (
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE INDEX IF NOT EXISTS idx_erp_customer_links_customer ON erp_customer_links(customer_id);
+
+-- Sprint 25 Unit of Work / transactional outbox foundation.
+CREATE TABLE IF NOT EXISTS outbox_events (id TEXT PRIMARY KEY, event_type TEXT NOT NULL, aggregate_type TEXT NOT NULL, aggregate_id TEXT, idempotency_key TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, status TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL DEFAULT 3, available_at TEXT NOT NULL, locked_at TEXT, locked_by TEXT, last_error_code TEXT, last_error_message TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), completed_at TEXT, dead_lettered_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_due ON outbox_events(status, available_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_type ON outbox_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON outbox_events(aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_locked ON outbox_events(locked_at);
+CREATE TABLE IF NOT EXISTS outbox_attempts (id TEXT PRIMARY KEY, outbox_event_id TEXT NOT NULL, attempt_number INTEGER NOT NULL, started_at TEXT NOT NULL, completed_at TEXT, result TEXT NOT NULL, safe_error_code TEXT, safe_error_message TEXT);
+CREATE INDEX IF NOT EXISTS idx_outbox_attempts_event ON outbox_attempts(outbox_event_id);

@@ -224,6 +224,11 @@ export const productPhotos = sqliteTable("product_photos", {
   sizeBytes: integer("size_bytes").notNull(),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
+  processingStatus: text("processing_status").notNull().default("Ready"),
+  storageKey: text("storage_key"),
+  thumbnailStorageKey: text("thumbnail_storage_key"),
+  processingErrorCode: text("processing_error_code"),
+  processingUpdatedAt: text("processing_updated_at"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
@@ -234,6 +239,45 @@ export const productPhotos = sqliteTable("product_photos", {
   index("idx_product_photos_product").on(table.productId),
   index("idx_product_photos_product_sort").on(table.productId, table.sortOrder),
 ]);
+
+
+export const outboxEvents = sqliteTable("outbox_events", {
+  id: text("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  aggregateType: text("aggregate_type").notNull(),
+  aggregateId: text("aggregate_id"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  payload: text("payload").notNull(),
+  status: text("status").notNull(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  availableAt: text("available_at").notNull(),
+  lockedAt: text("locked_at"),
+  lockedBy: text("locked_by"),
+  lastErrorCode: text("last_error_code"),
+  lastErrorMessage: text("last_error_message"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+  completedAt: text("completed_at"),
+  deadLetteredAt: text("dead_lettered_at"),
+}, (table) => [
+  uniqueIndex("idx_outbox_events_idempotency").on(table.idempotencyKey),
+  index("idx_outbox_events_due").on(table.status, table.availableAt),
+  index("idx_outbox_events_type").on(table.eventType),
+  index("idx_outbox_events_aggregate").on(table.aggregateType, table.aggregateId),
+  index("idx_outbox_events_locked").on(table.lockedAt),
+]);
+
+export const outboxAttempts = sqliteTable("outbox_attempts", {
+  id: text("id").primaryKey(),
+  outboxEventId: text("outbox_event_id").notNull(),
+  attemptNumber: integer("attempt_number").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  result: text("result").notNull(),
+  safeErrorCode: text("safe_error_code"),
+  safeErrorMessage: text("safe_error_message"),
+}, (table) => [index("idx_outbox_attempts_event").on(table.outboxEventId)]);
 
 export const productImages = sqliteTable("product_images", {
   id: text("id").primaryKey(),

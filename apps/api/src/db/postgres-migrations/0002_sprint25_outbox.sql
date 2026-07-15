@@ -1,0 +1,12 @@
+ALTER TABLE product_photos ADD COLUMN IF NOT EXISTS processing_status TEXT NOT NULL DEFAULT 'Ready';
+ALTER TABLE product_photos ADD COLUMN IF NOT EXISTS storage_key TEXT;
+ALTER TABLE product_photos ADD COLUMN IF NOT EXISTS thumbnail_storage_key TEXT;
+ALTER TABLE product_photos ADD COLUMN IF NOT EXISTS processing_error_code TEXT;
+ALTER TABLE product_photos ADD COLUMN IF NOT EXISTS processing_updated_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS outbox_events (id TEXT PRIMARY KEY, event_type TEXT NOT NULL, aggregate_type TEXT NOT NULL, aggregate_id TEXT, idempotency_key TEXT NOT NULL UNIQUE, payload JSONB NOT NULL, status TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, max_attempts INTEGER NOT NULL DEFAULT 3, available_at TIMESTAMPTZ NOT NULL, locked_at TIMESTAMPTZ, locked_by TEXT, last_error_code TEXT, last_error_message TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), completed_at TIMESTAMPTZ, dead_lettered_at TIMESTAMPTZ);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_due ON outbox_events(status, available_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_type ON outbox_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON outbox_events(aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_locked ON outbox_events(locked_at);
+CREATE TABLE IF NOT EXISTS outbox_attempts (id TEXT PRIMARY KEY, outbox_event_id TEXT NOT NULL, attempt_number INTEGER NOT NULL, started_at TIMESTAMPTZ NOT NULL, completed_at TIMESTAMPTZ, result TEXT NOT NULL, safe_error_code TEXT, safe_error_message TEXT);
+CREATE INDEX IF NOT EXISTS idx_outbox_attempts_event ON outbox_attempts(outbox_event_id);
