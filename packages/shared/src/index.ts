@@ -22,3 +22,4 @@ export * from "./types/purchasing";
 
 export * from "./types/salesFinanceBridge";
 export * from "./types/warehouseBridge";
+export * from "./types/reportsAnalyticsBridge";

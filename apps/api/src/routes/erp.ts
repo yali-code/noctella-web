@@ -11,6 +11,7 @@ import { handleRouteError } from "./errorHandler";
 import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchaseEvents, getPurchaseLandedCostSummary, listPurchases, listSuppliers, productPurchaseHistory } from "../services/erpPurchasingBridge";
 import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
 import * as warehouse from "../services/erpWarehouseBridge";
+import * as reports from "../services/erpReportsAnalyticsBridge";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
 const router = Router();
@@ -35,6 +36,19 @@ router.post("/migration/conflicts", requireErp, async (req:any, res) => { const 
 router.post("/migration/manifest-preview", requireErp, async (req:any, res) => { const payload=parseMigrationPayload(req,res); if (!payload) return; const result=await buildErpMigrationManifestPreview(db,payload,req.body?.sourceType); await auditMigration(req,"ErpMigrationManifestPreview",result,result.ok,result.ok?undefined:"MANIFEST_BLOCKED"); res.status(result.ok?200:400).json(result.manifestPreview); });
 
 
+
+
+router.get("/reports/capabilities", requireErp, (_req, res) => res.json(reports.capabilities()));
+router.get("/reports/dashboard", requireErp, async (req:any, res) => { try { res.json(await reports.dashboard(db, req.query)); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/inventory", requireErp, async (req:any, res) => { try { res.json(await reports.inventoryReport(db, req.query)); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/inventory/aging", requireErp, async (req:any, res) => { try { res.json(await reports.stockAging(db, req.query)); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/inventory/readiness", requireErp, async (req:any, res) => { try { res.json(await reports.inventoryReport(db, req.query)); } catch (err) { handleRouteError(err, res); } });
+for (const reportType of ["purchasing","suppliers","sales","channels","finance","profit","cashflow-summary","customers","returns-refunds","shipping","warehouse"]) router.get(`/reports/${reportType}`, requireErp, async (req:any, res) => { try { res.json(await reports.genericReport(db, reportType, req.query)); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/suppliers/:id", requireErp, async (req:any, res) => { try { const r:any=await reports.genericReport(db, "suppliers", req.query); res.json({ ...r, supplier:r.suppliers.find((s:any)=>s.id===req.params.id)??null }); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/channels/:channel", requireErp, async (req:any, res) => { try { res.json({ ...(await reports.genericReport(db, "channels", { ...req.query, channel:req.params.channel })), channel:req.params.channel }); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/customers/segments", requireErp, async (req:any, res) => { try { res.json(await reports.genericReport(db, "customers", req.query)); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/customers/:id", requireErp, async (req:any, res) => { try { const r:any=await reports.genericReport(db, "customers", req.query); res.json({ ...r, customer:r.customers.find((c:any)=>c.id===req.params.id)??null }); } catch (err) { handleRouteError(err, res); } });
+router.get("/reports/:reportType/export", requireErp, async (req:any, res) => { try { const out:any=await reports.exportReport(db, req.params.reportType, String(req.query.format??"json"), req.query, req.erp?.clientId, requestId(req)); if (out.contentType) { res.setHeader("Content-Type", out.contentType); res.setHeader("Content-Disposition", `attachment; filename="${out.filename}"`); res.send(out.body); } else res.json(out); } catch (err) { handleRouteError(err, res); } });
 
 router.get("/warehouses", requireErp, async (_req, res) => { try { res.json({ items: await warehouse.listWarehouses(db) }); } catch (err) { handleRouteError(err, res); } });
 router.get("/warehouses/:id", requireErp, async (req, res) => { try { res.json(await warehouse.getWarehouse(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });

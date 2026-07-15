@@ -1,0 +1,19 @@
+import { describe, expect, it } from "vitest";
+import { comparisonLabels, erpReportsApi, exportUrl, mapBreakdowns, mapCompletenessWarnings, mapCustomer, mapDashboard, mapFinance, mapInventory, mapMetric, mapPurchasing, mapReturnRefund, mapSalesChannel, mapSeries, mapShipping, mapSupplier, mapWarehouse, periodLabels, query, redactSafeError } from "./erpReportsAnalyticsBridge";
+
+const report={ issues:[{code:"UNKNOWN",message:"Missing fee"}], metrics:{grossRevenue:10}, series:[{period:"2026-01",value:1,comparisonValue:0,changePercent:null}], breakdowns:[{dimension:"channel",key:"Direct",label:"Direct",metrics:[]}], customers:[{id:"c",email:"secret@example.com",phone:"123",address:"raw"}], sections:{notice:"Operational"} };
+
+describe("ERP reports analytics bridge admin focused coverage", () => {
+  it("builds deterministic filter/query strings",()=>{ expect(query("/erp/reports/sales",{period:"Last30Days",channel:"Direct",empty:""})).toBe("/erp/reports/sales?channel=Direct&period=Last30Days"); expect(erpReportsApi.exportUrl("sales","json",{period:"Today"})).toContain("format=json"); });
+  it("maps period and comparison labels",()=>{ expect(periodLabels.Today).toBe("Today"); expect(periodLabels.Last30Days).toContain("30"); expect(comparisonLabels.None).toContain("No"); expect(comparisonLabels.PreviousPeriod).toContain("period"); expect(comparisonLabels.PreviousYear).toContain("year"); });
+  it("maps dashboard family",()=>{ const r=mapDashboard({inventory:{activeProductCount:1},purchasing:{},sales:{},returnsRefunds:{},customers:{},warehouse:{},issues:report.issues}); expect(r.inventory.activeProductCount).toBe(1); expect(r.warnings[0]).toContain("UNKNOWN"); });
+  it("maps inventory family with completeness warnings",()=>{ const r=mapInventory(report); expect(r.metrics.grossRevenue).toBe(10); expect(r.breakdowns[0].dimension).toBe("channel"); expect(r.warnings[0]).toContain("Missing fee"); });
+  it("maps purchasing and supplier families",()=>{ expect(mapPurchasing(report).series[0].label).toBe("2026-01"); expect(mapSupplier({suppliers:[{id:"s"}],supplier:{id:"s"}}).supplier.id).toBe("s"); });
+  it("maps sales/channel and finance families",()=>{ expect(mapSalesChannel({...report,channel:"eBay"}).channel).toBe("eBay"); expect(mapFinance(report).notice).toBe("Operational"); });
+  it("maps customer family and masks PII",()=>{ const r=mapCustomer(report); expect(r.customers[0].email).toBeUndefined(); expect(r.customers[0].phone).toBeUndefined(); expect(r.customers[0].address).toBeUndefined(); expect(r.customers[0].maskedEmail).toBe("se***"); });
+  it("maps return/refund, shipping and warehouse families",()=>{ expect(mapReturnRefund(report).breakdowns).toHaveLength(1); expect(mapShipping(report).metrics.grossRevenue).toBe(10); expect(mapWarehouse(report).breakdowns[0].key).toBe("Direct"); });
+  it("maps metric, series and breakdown helpers",()=>{ expect(mapMetric({a:null},"a").complete).toBe(false); expect(mapSeries(report)[0]).toMatchObject({label:"2026-01",value:1,comparison:0,changePercent:null}); expect(mapBreakdowns(report)[0].label).toBe("Direct"); });
+  it("builds JSON and CSV export URLs",()=>{ expect(exportUrl("inventory","json")).toContain("format=json"); expect(exportUrl("inventory","csv",{period:"ThisMonth"})).toContain("period=ThisMonth"); });
+  it("redacts secrets and customer identifiers from errors",()=>{ const safe=redactSafeError("bad secret@example.com abcdefghijklmnopqrstuvwxyz token_abcdefghijklmnopqrstuvwxyz"); expect(safe).not.toContain("secret@example.com"); expect(safe).toContain("[redacted]"); });
+  it("does not render raw report rows or secrets in helper projections",()=>{ const serialized=JSON.stringify(mapCustomer(report)); expect(serialized).not.toContain("secret@example.com"); expect(serialized).not.toContain("raw"); });
+});
