@@ -14,7 +14,7 @@
     "db:integrity": "tsx src/scripts/dbIntegrity.ts",
     "db:backup-check": "tsx src/scripts/dbBackupCheck.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",
-    "repo:parity": "tsx src/scripts/productReadRepositoryAudit.ts && tsx src/scripts/productWriteRepositoryAudit.ts && tsx src/scripts/orderRepositoryAudit.ts"
+    "repo:parity": "tsx src/scripts/productReadRepositoryAudit.ts && tsx src/scripts/productWriteRepositoryAudit.ts && tsx src/scripts/orderRepositoryAudit.ts && tsx src/scripts/returnRepositoryFoundationAudit.ts"
   },
   "dependencies": {
     "@noctella/shared": "0.1.0",
