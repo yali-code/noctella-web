@@ -3,6 +3,10 @@ import type { ProductRepository } from "../repositories/inventory/productReposit
 import type { StockLocationRepository } from "../repositories/inventory/stockLocationRepository";
 import type { StockMovementRepository } from "../repositories/inventory/stockMovementRepository";
 import type { UnitOfWork } from "./unitOfWork";
+import type { InventoryEventPublisher } from "../events/inventory";
+import type { InventoryObservability } from "../observability/inventory";
+import { noopInventoryEventPublisher } from "../events/inventory";
+import { noopInventoryObservability } from "../observability/inventory";
 
 export interface InventoryRepositoryBundle {
   products: ProductRepository;
@@ -40,6 +44,8 @@ export interface InventoryApplicationContext {
   readonly clock: InventoryClock;
   readonly idGenerator: InventoryIdGenerator;
   readonly logger: InventoryLogger;
+  readonly eventPublisher: InventoryEventPublisher;
+  readonly observability: InventoryObservability;
   readonly configuration: InventoryApplicationConfiguration;
 }
 
@@ -49,6 +55,8 @@ export interface BuildInventoryApplicationContextInput {
   readonly clock: InventoryClock;
   readonly idGenerator: InventoryIdGenerator;
   readonly logger: InventoryLogger;
+  readonly eventPublisher?: InventoryEventPublisher;
+  readonly observability?: InventoryObservability;
   readonly configuration?: InventoryApplicationConfiguration;
 }
 
@@ -78,7 +86,9 @@ export function buildInventoryApplicationContext(
 
   for (const key of requiredRepositoryKeys) {
     if (dependencies.repositories[key] == null) {
-      throw new Error(`INVENTORY_APPLICATION_CONTEXT_MISSING_REPOSITORY_${key}`);
+      throw new Error(
+        `INVENTORY_APPLICATION_CONTEXT_MISSING_REPOSITORY_${key}`,
+      );
     }
   }
 
@@ -93,6 +103,8 @@ export function buildInventoryApplicationContext(
     clock: dependencies.clock,
     idGenerator: dependencies.idGenerator,
     logger: dependencies.logger,
+    eventPublisher: dependencies.eventPublisher ?? noopInventoryEventPublisher,
+    observability: dependencies.observability ?? noopInventoryObservability,
     configuration:
       dependencies.configuration ??
       Object.freeze({ inventoryApplicationContext: true as const }),
