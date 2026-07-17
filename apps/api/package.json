@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json && cp src/db/schema.sql dist/db/schema.sql",
+    "build": "tsc -p tsconfig.json && node scripts/copy-build-asset.mjs src/db/schema.sql dist/db/schema.sql",
+    "test:build-copy": "node --test tests/build-copy.test.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
