@@ -1,7 +1,20 @@
 import type { RefundRepositories } from "../repositories/refund/types";
 import type { UnitOfWork } from "./unitOfWork";
-import type { RefundExecutionRequest as RefundProviderRequest, RefundProviderResponse, MarketplaceRefundPort, PaymentRefundPort, RefundProviderRegistry } from "../providers/refund";
-export type { RefundProviderRequest, RefundProviderResponse, MarketplaceRefundPort, PaymentRefundPort, RefundProviderRegistry };
+import type {
+  RefundExecutionRequest as RefundProviderRequest,
+  RefundProviderResponse,
+  MarketplaceRefundPort,
+  PaymentRefundPort,
+  RefundProviderRegistry,
+} from "../providers/refund";
+import type { RefundObservability } from "../observability/refund";
+export type {
+  RefundProviderRequest,
+  RefundProviderResponse,
+  MarketplaceRefundPort,
+  PaymentRefundPort,
+  RefundProviderRegistry,
+};
 
 export type RefundReadPortResult<T> = T | null | Promise<T | null>;
 export type RefundReadPortList<T> = T[] | Promise<T[]>;
@@ -62,18 +75,28 @@ export interface OrderRefundReadPort {
 }
 
 export interface ReturnRefundReadPort {
-  findApprovedReturn(returnRequestId: string): RefundReadPortResult<ApprovedReturnDto>;
-  findApprovedItems(returnRequestId: string): RefundReadPortList<ApprovedReturnItemDto>;
+  findApprovedReturn(
+    returnRequestId: string,
+  ): RefundReadPortResult<ApprovedReturnDto>;
+  findApprovedItems(
+    returnRequestId: string,
+  ): RefundReadPortList<ApprovedReturnItemDto>;
 }
 
 export interface MarketplaceConnectionReadPort {
-  findConnection(orderId: string): RefundReadPortResult<MarketplaceConnectionDto>;
-  resolveProvider(connection: MarketplaceConnectionDto): string | Promise<string>;
+  findConnection(
+    orderId: string,
+  ): RefundReadPortResult<MarketplaceConnectionDto>;
+  resolveProvider(
+    connection: MarketplaceConnectionDto,
+  ): string | Promise<string>;
 }
 
 export interface PaymentTransactionReadPort {
   findPayment(orderId: string): RefundReadPortResult<PaymentTransactionDto>;
-  findRemainingRefundAmount(paymentTransactionId: string): number | Promise<number>;
+  findRemainingRefundAmount(
+    paymentTransactionId: string,
+  ): number | Promise<number>;
 }
 
 export interface RefundReadPorts {
@@ -83,8 +106,12 @@ export interface RefundReadPorts {
   payments: PaymentTransactionReadPort;
 }
 
-export interface Clock { now(): Date; }
-export interface IdGenerator { newId(): string; }
+export interface Clock {
+  now(): Date;
+}
+export interface IdGenerator {
+  newId(): string;
+}
 
 export interface RefundExecutionQueue {
   enqueueRefundExecution(refundId: string): void | Promise<void>;
@@ -112,6 +139,7 @@ export interface RefundApplicationContext {
   enqueue: RefundExecutionQueue;
   logger: RefundLogger;
   errorNormalizer: RefundErrorNormalizer;
+  observability?: RefundObservability;
 }
 
 export type CreateRefundApplicationContextInput = RefundApplicationContext;
@@ -128,9 +156,12 @@ const requiredKeys: Array<keyof CreateRefundApplicationContextInput> = [
   "errorNormalizer",
 ];
 
-export function createRefundApplicationContext(dependencies: CreateRefundApplicationContextInput): RefundApplicationContext {
+export function createRefundApplicationContext(
+  dependencies: CreateRefundApplicationContextInput,
+): RefundApplicationContext {
   for (const key of requiredKeys) {
-    if (dependencies[key] == null) throw new Error(`REFUND_APPLICATION_CONTEXT_MISSING_${key}`);
+    if (dependencies[key] == null)
+      throw new Error(`REFUND_APPLICATION_CONTEXT_MISSING_${key}`);
   }
   return Object.freeze({ ...dependencies });
 }
