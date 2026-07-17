@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import type { DbClient } from "../db/client";
 import { createPurchaseRepositoriesForDb } from "../repositories/purchase/factory";
+import type { PurchaseEventPublisher } from "../events/purchase";
+import type { PurchaseObservability } from "../observability/purchase";
 import type { PurchaseRepositoryDriver } from "../repositories/purchase/types";
 import {
   buildPurchaseApplicationContext,
@@ -14,6 +16,8 @@ export interface CreatePurchaseApplicationContextForDbInput {
   readonly driver?: PurchaseRepositoryDriver;
   readonly unitOfWork?: UnitOfWork;
   readonly logger?: PurchaseLogger;
+  readonly eventPublisher?: PurchaseEventPublisher;
+  readonly observability?: PurchaseObservability;
 }
 
 function unitOfWorkForDb(db: DbClient, driver: PurchaseRepositoryDriver): UnitOfWork {
@@ -36,6 +40,8 @@ export function createPurchaseApplicationContextForDb(
     logger: options.logger ?? {},
     clock: { now: () => new Date() },
     idGenerator: { newId: () => crypto.randomUUID() },
+    eventPublisher: options.eventPublisher,
+    observability: options.observability,
     configuration: Object.freeze({ purchaseApplicationContext: true as const, driver }),
   });
 }
