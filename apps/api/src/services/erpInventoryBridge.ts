@@ -8,8 +8,7 @@ import { audit } from "./erpIntegration";
 import { createProduct, updateProduct, uploadProductPhoto, updateProductPhoto, setPrimaryProductPhoto, reorderProductPhotos, deleteProductPhoto } from "./products";
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
 import { upsertProductErpMetadataUseCase } from "../use-cases/product-write/useCases";
-import { applyStockMovementSync } from "./stockMovements";
-import { enqueueProductStockSync } from "./stockSync";
+import { applyStockMovement } from "./stockMovements";
 import type { PhotoStorage } from "./photoStorage";
 
 type Envelope = { commandId:string; requestId?:string; clientId?:string; clientVersion?:string; commandType:string; entityType?:string; entityId?:string; idempotencyKey:string; payload:any; createdAt?:string };
@@ -57,8 +56,7 @@ export async function executeUpdateProduct(db: DbClient, clientId: string, produ
 export async function executeStockAdjustment(db: DbClient, clientId: string, productId: string, env: Envelope) {
   const ex = await execution(db, clientId, { ...env, entityId: productId }); if (ex.existing) return prior(ex.existing);
   const p=env.payload??{}; const delta=Number(p.quantityDelta); if(!Number.isInteger(delta) || delta===0) throw new BadRequestError("Non-zero integer quantityDelta is required"); if(!p.reason && !p.note) throw new BadRequestError("reason or note is required"); let movement:any;
-  movement = db.transaction((tx:any)=> applyStockMovementSync(tx, { productId, type: StockMovementType.ManualAdjustment, quantityDelta: delta, note: String(p.reason ?? p.note), idempotencyKey: `erp:${clientId}:${env.idempotencyKey}` }));
-  await enqueueProductStockSync(db, productId, movement.idempotencyKey ?? movement.id);
+  movement = await applyStockMovement(db, { productId, type: StockMovementType.ManualAdjustment, quantityDelta: delta, note: String(p.reason ?? p.note), idempotencyKey: `erp:${clientId}:${env.idempotencyKey}` });
   const meta={ productId, previousQuantity: movement.stockBefore, delta, newQuantity: movement.stockAfter, movementId: movement.id }; await complete(db, clientId, env, "Succeeded", productId, meta); return { status:"Succeeded", ...meta };
 }
 export function calculateLandedCost(purchaseCost?: number|null, shipping?: number|null, packaging?: number|null, misc?: number|null, expected?: number|null) { const complete=[purchaseCost,shipping,packaging,misc].every(v=>typeof v==="number"); const landedCost=complete ? Number(purchaseCost!+shipping!+packaging!+misc!) : null; const expectedGrossProfit=landedCost!=null && typeof expected==="number" ? expected-landedCost : null; return { currency:"EUR", landedCost, complete, missing:[ ["purchaseCost",purchaseCost], ["shippingCostEur",shipping], ["packagingCostEur",packaging], ["miscCostsEur",misc] ].filter(([,v])=>typeof v!=="number").map(([k])=>k), expectedGrossProfit, expectedRoi: expectedGrossProfit!=null && landedCost ? expectedGrossProfit/landedCost : null }; }
