@@ -24,7 +24,7 @@ export function auditRefundApplicationContextSource(source: string): RefundAppli
 }
 
 export function runRefundApplicationContextAudit(): RefundApplicationContextAuditResult {
-  const source = readFileSync(join(process.cwd(), "src/services/refundApplicationContext.ts"), "utf8");
+  const source = readFileSync(join(process.cwd(), process.cwd().endsWith("apps/api") ? "src/services/refundApplicationContext.ts" : "apps/api/src/services/refundApplicationContext.ts"), "utf8");
   return auditRefundApplicationContextSource(source);
 }
 
