@@ -5,6 +5,7 @@ import type { DbClient } from "../db/client";
 import { marketplaceConnections, marketplaceOrders, orderItems, orders, returnItems, returnRequests } from "../db/schema";
 import { createRefundRepositoriesForDb } from "../repositories/refund/factory";
 import { createRefundApplicationContext } from "./refundApplicationContext";
+import { SqliteUnitOfWork } from "./unitOfWork";
 import { enqueueJob, sanitizeError } from "./backgroundJobs";
 import { getMarketplaceAdapter, type MarketplaceAdapter } from "./marketplaceAdapters";
 import { decryptCredential } from "./credentialEncryption";
@@ -16,7 +17,7 @@ export function setRefundServiceAdapterResolver(resolver?: AdapterResolver) { ad
 export function buildRefundServiceContext(db: DbClient) {
   const repositories = createRefundRepositoriesForDb(db);
   return createRefundApplicationContext({
-    unitOfWork: { run: async (work) => work({ repositories: { refund: createRefundRepositoriesForDb(db) } as any }) },
+    unitOfWork: new SqliteUnitOfWork(db),
     repositories,
     readPorts: {
       orders: {
