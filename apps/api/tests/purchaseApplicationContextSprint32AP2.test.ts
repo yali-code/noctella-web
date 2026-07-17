@@ -493,4 +493,15 @@ describe("Sprint 32A-P2 Purchase application context", () => {
   it.each(cases)("%s", async (_name, run) => {
     await run();
   });
+  it("database context accepts purchase event publisher", () => {
+    const publisher = { publish: vi.fn() };
+    const c = createPurchaseApplicationContextForDb({ db: sqliteDb(), eventPublisher: publisher });
+    expect(c.eventPublisher).toBe(publisher);
+  });
+  it("database context accepts purchase observability", () => {
+    const observability = { purchaseEventPublished: vi.fn() };
+    const c = createPurchaseApplicationContextForDb({ db: sqliteDb(), observability });
+    expect(c.observability).toBe(observability);
+  });
+
 });
