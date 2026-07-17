@@ -5,6 +5,10 @@ import type {
   SupplierRepository,
 } from "../repositories/purchase/types";
 import type { UnitOfWork } from "./unitOfWork";
+import type { PurchaseEventPublisher } from "../events/purchase";
+import type { PurchaseObservability } from "../observability/purchase";
+import { noopPurchaseEventPublisher } from "../events/purchase";
+import { noopPurchaseObservability } from "../observability/purchase";
 
 export interface PurchaseClock {
   now(): Date;
@@ -35,6 +39,8 @@ export interface PurchaseApplicationContext {
   readonly logger: PurchaseLogger;
   readonly clock: PurchaseClock;
   readonly idGenerator: PurchaseIdGenerator;
+  readonly eventPublisher: PurchaseEventPublisher;
+  readonly observability: PurchaseObservability;
   readonly configuration: PurchaseApplicationConfiguration;
 }
 
@@ -44,6 +50,8 @@ export interface BuildPurchaseApplicationContextInput {
   readonly logger: PurchaseLogger;
   readonly clock: PurchaseClock;
   readonly idGenerator: PurchaseIdGenerator;
+  readonly eventPublisher?: PurchaseEventPublisher;
+  readonly observability?: PurchaseObservability;
   readonly configuration?: PurchaseApplicationConfiguration;
 }
 
@@ -88,6 +96,8 @@ export function buildPurchaseApplicationContext(
     logger: dependencies.logger,
     clock: dependencies.clock,
     idGenerator: dependencies.idGenerator,
+    eventPublisher: dependencies.eventPublisher ?? noopPurchaseEventPublisher,
+    observability: dependencies.observability ?? noopPurchaseObservability,
     configuration:
       dependencies.configuration ??
       Object.freeze({ purchaseApplicationContext: true as const }),
