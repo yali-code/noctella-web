@@ -1,0 +1,3 @@
+export interface RefundProviderCapabilities { readonly supportsExecuteRefund: boolean; readonly supportsCancelRefund: boolean; readonly supportsRefundStatus: boolean; readonly supportsPartialRefund: boolean; readonly supportsItemLevelRefund: boolean; readonly supportsProviderIdempotency: boolean; }
+export const defaultRefundProviderCapabilities: RefundProviderCapabilities = Object.freeze({ supportsExecuteRefund: true, supportsCancelRefund: false, supportsRefundStatus: false, supportsPartialRefund: true, supportsItemLevelRefund: false, supportsProviderIdempotency: true });
+export function capabilities(input: Partial<RefundProviderCapabilities> = {}): RefundProviderCapabilities { return Object.freeze({ ...defaultRefundProviderCapabilities, ...input }); }

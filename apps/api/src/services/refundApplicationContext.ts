@@ -1,5 +1,7 @@
 import type { RefundRepositories } from "../repositories/refund/types";
 import type { UnitOfWork } from "./unitOfWork";
+import type { RefundExecutionRequest as RefundProviderRequest, RefundProviderResponse, MarketplaceRefundPort, PaymentRefundPort, RefundProviderRegistry } from "../providers/refund";
+export type { RefundProviderRequest, RefundProviderResponse, MarketplaceRefundPort, PaymentRefundPort, RefundProviderRegistry };
 
 export type RefundReadPortResult<T> = T | null | Promise<T | null>;
 export type RefundReadPortList<T> = T[] | Promise<T[]>;
@@ -79,39 +81,6 @@ export interface RefundReadPorts {
   returns: ReturnRefundReadPort;
   marketplaceConnections: MarketplaceConnectionReadPort;
   payments: PaymentTransactionReadPort;
-}
-
-export interface RefundProviderRequest {
-  refundId: string;
-  orderId: string;
-  amount: number;
-  currency: string;
-  idempotencyKey: string;
-  reason?: string | null;
-  items?: Array<{ id: string; amount: number; quantity?: number | null }>;
-}
-
-export interface RefundProviderResponse {
-  providerRefundId: string;
-  status: string;
-  raw?: unknown;
-}
-
-export interface MarketplaceRefundPort {
-  executeRefund(request: RefundProviderRequest): RefundProviderResponse | Promise<RefundProviderResponse>;
-  cancelRefund(providerRefundId: string): RefundProviderResponse | Promise<RefundProviderResponse>;
-  getRefundStatus(providerRefundId: string): RefundProviderResponse | Promise<RefundProviderResponse>;
-}
-
-export interface PaymentRefundPort {
-  executeRefund(request: RefundProviderRequest): RefundProviderResponse | Promise<RefundProviderResponse>;
-  cancelRefund(providerRefundId: string): RefundProviderResponse | Promise<RefundProviderResponse>;
-  getRefundStatus(providerRefundId: string): RefundProviderResponse | Promise<RefundProviderResponse>;
-}
-
-export interface RefundProviderRegistry {
-  resolveMarketplaceProvider(providerKey: string): MarketplaceRefundPort | Promise<MarketplaceRefundPort>;
-  resolvePaymentProvider(providerKey: string): PaymentRefundPort | Promise<PaymentRefundPort>;
 }
 
 export interface Clock { now(): Date; }
