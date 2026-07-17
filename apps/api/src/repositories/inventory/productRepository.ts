@@ -1,0 +1,2 @@
+import type { CreateProductInput, ProductId, ProductRecord, SKU, UpdateProductInput, Version } from "./types";
+export interface ProductRepository { create(input:CreateProductInput):Promise<ProductRecord>; findById(id:ProductId):Promise<ProductRecord|null>; findBySku(sku:SKU):Promise<ProductRecord|null>; list():Promise<ProductRecord[]>; update(id:ProductId,input:UpdateProductInput):Promise<ProductRecord>; updateWithVersion(id:ProductId,input:UpdateProductInput,expectedVersion:Version):Promise<ProductRecord>; existsBySku(sku:SKU,excludeId?:ProductId):Promise<boolean>; }

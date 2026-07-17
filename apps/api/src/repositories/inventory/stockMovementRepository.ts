@@ -1,0 +1,2 @@
+import type { AppendStockMovementInput, ProductId, StockMovementId, StockMovementRecord } from "./types";
+export interface StockMovementRepository { append(input:AppendStockMovementInput):Promise<StockMovementRecord>; findById(id:StockMovementId):Promise<StockMovementRecord|null>; listByProduct(productId:ProductId):Promise<StockMovementRecord[]>; listByReference(reference:{orderId?:string; orderItemId?:string}):Promise<StockMovementRecord[]>; findByIdempotencyKey(key:string):Promise<StockMovementRecord|null>; }
