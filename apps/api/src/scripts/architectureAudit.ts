@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-const targets = process.argv.slice(2).length ? process.argv.slice(2) : ["src/services/unitOfWork.ts", "src/services/productPhotoOutboxWorkflow.ts"];
+const targets = process.argv.slice(2).length ? process.argv.slice(2) : ["src/services/unitOfWork.ts", "src/services/productPhotoOutboxWorkflow.ts", "src/services/returnsCore.ts", "src/use-cases/return/useCases.ts"];
 const rules: Array<[RegExp,string]> = [
   [/from\s+["']sharp["']/, "Sharp import inside UnitOfWork/workflow boundary"],
   [/from\s+["']node:fs|from\s+["']fs["']/, "filesystem import inside UnitOfWork/workflow boundary"],
