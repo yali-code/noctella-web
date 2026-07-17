@@ -510,21 +510,17 @@ export const returnItems = pgTable("return_items", { id: text("id").primaryKey()
 
 export const returnEvents = pgTable("return_events", { id: text("id").primaryKey().notNull(), returnRequestId: text("return_request_id").notNull(), orderId: text("order_id"), eventType: text("event_type").notNull(), previousStatus: text("previous_status"), newStatus: text("new_status"), payloadSnapshot: jsonb("payload_snapshot"), errorCode: text("error_code"), errorMessage: text("error_message"), idempotencyKey: text("idempotency_key"), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`) }, (table) => [index("idx_return_events_request").on(table.returnRequestId, table.createdAt), uniqueIndex("idx_return_events_idempotency").on(table.idempotencyKey)]);
 
-export const refunds = pgTable("refunds", {
-  id: numeric("id", { precision: 18, scale: 6 }).primaryKey().notNull().default(sql`now()`),
-});
+export const refunds = pgTable("refunds", { id: text("id").primaryKey().notNull(), orderId: text("order_id").notNull(), returnRequestId: text("return_request_id"), channel: text("channel"), externalRefundId: text("external_refund_id"), type: text("type").notNull(), status: text("status").notNull(), currency: text("currency").notNull().default("EUR"), subtotalAmount: numeric("subtotal_amount", { precision: 18, scale: 6 }).notNull(), shippingAmount: numeric("shipping_amount", { precision: 18, scale: 6 }).notNull().default("0"), taxAmount: numeric("tax_amount", { precision: 18, scale: 6 }).notNull().default("0"), marketplaceFeeAdjustment: numeric("marketplace_fee_adjustment", { precision: 18, scale: 6 }), paymentFeeAdjustment: numeric("payment_fee_adjustment", { precision: 18, scale: 6 }), totalAmount: numeric("total_amount", { precision: 18, scale: 6 }).notNull(), reason: text("reason"), idempotencyKey: text("idempotency_key").notNull(), submittedAt: timestamp("submitted_at", { withTimezone: true }), succeededAt: timestamp("succeeded_at", { withTimezone: true }), failedAt: timestamp("failed_at", { withTimezone: true }), lastError: text("last_error"), version: integer("version").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`) }, (table) => [index("idx_refunds_order").on(table.orderId), index("idx_refunds_return").on(table.returnRequestId), index("idx_refunds_status").on(table.status), uniqueIndex("idx_refunds_idempotency").on(table.idempotencyKey)]);
 
-export const refundAllocations = pgTable("refund_allocations", {
-  id: numeric("id", { precision: 18, scale: 6 }).primaryKey().notNull().default(sql`now()`),
-});
+export const refundAllocations = pgTable("refund_allocations", { id: text("id").primaryKey().notNull(), refundId: text("refund_id").notNull(), orderItemId: text("order_item_id"), returnItemId: text("return_item_id"), quantity: integer("quantity"), amount: numeric("amount", { precision: 18, scale: 6 }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`) }, (table) => [index("idx_refund_allocations_refund").on(table.refundId)]);
+
+export const refundEvents = pgTable("refund_events", { id: text("id").primaryKey().notNull(), refundId: text("refund_id").notNull(), orderId: text("order_id"), eventType: text("event_type").notNull(), previousStatus: text("previous_status"), newStatus: text("new_status"), payloadSnapshot: jsonb("payload_snapshot"), actor: text("actor"), source: text("source"), idempotencyKey: text("idempotency_key"), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`) }, (table) => [index("idx_refund_events_refund").on(table.refundId, table.createdAt), uniqueIndex("idx_refund_events_idempotency").on(table.idempotencyKey)]);
 
 export const saleReversals = pgTable("sale_reversals", {
   id: integer("id").primaryKey().notNull().default(sql`now()`),
 });
 
-export const refundAttempts = pgTable("refund_attempts", {
-  id: integer("id").primaryKey().notNull().default(sql`now()`),
-});
+export const refundAttempts = pgTable("refund_attempts", { id: text("id").primaryKey().notNull(), refundId: text("refund_id").notNull(), attemptNumber: integer("attempt_number").notNull(), channel: text("channel"), status: text("status").notNull(), externalRefundId: text("external_refund_id"), requestSnapshot: jsonb("request_snapshot").notNull(), responseSnapshot: jsonb("response_snapshot"), errorCode: text("error_code"), errorMessage: text("error_message"), orderId: text("order_id"), idempotencyKey: text("idempotency_key"), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`) }, (table) => [index("idx_refund_attempts_refund").on(table.refundId), index("idx_refund_attempts_status").on(table.status)]);
 
 export const erpIntegrationClients = pgTable("erp_integration_clients", {
   id: integer("id").primaryKey().notNull().default(sql`now()`),
