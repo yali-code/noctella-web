@@ -1,0 +1,20 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+type Signal={name:string;pass:boolean;metadata:Record<string,unknown>;blockers:string[]};
+const root=join(__dirname,"..");
+const file=(p:string)=>readFileSync(join(root,p),"utf8");
+const sig=(name:string,checks:string[],blockers:string[]=[]):Signal=>({name,pass:blockers.length===0,metadata:{checks,checksum:createHash("sha256").update(JSON.stringify({name,checks,blockers})).digest("hex")},blockers});
+const core=()=>file("services/returnsCore.ts");
+const useCases=()=>file("use-cases/return/useCases.ts");
+const uow=()=>file("services/unitOfWork.ts");
+const compat=()=>file("services/returnsCompatibility.ts");
+function directAccessBlockers(text:string){const blockers:string[]=[]; if(/drizzle-orm|db\/schema|DbClient|\.insert\(|\.update\(|\.select\(|\.delete\(/.test(text)) blockers.push("direct DB/schema/Drizzle persistence"); if(/RefundStatus|createRefund|executeMarketplaceRefund|finance|payment/i.test(text)) blockers.push("Refund/Finance/payment logic"); return blockers;}
+export const returnTransactionalStatus=()=>sig("returnTransactionalStatus",["UnitOfWork transaction-scoped Return repositories","SQLite async guard","PostgreSQL async transaction"],[...(!uow().includes("returnRepositories")?["Return repositories not injected"]:[]),...(!uow().includes("SQLITE_ASYNC_TRANSACTION_CALLBACK_REJECTED")?["SQLite async guard missing"]:[])]);
+export const returnServiceMigrationStatus=()=>sig("returnServiceMigrationStatus",["returns facade","returnsCore use-case delegation","compatibility split"],[...(!file("services/returns.ts").includes("returnsCore")?["facade missing core export"]:[]),...directAccessBlockers(core())]);
+export const returnUseCaseStatus=()=>sig("returnUseCaseStatus",["repository-backed workflows","no DB/schema/Drizzle imports","no Refund/Finance"],directAccessBlockers(useCases()));
+export const returnAtomicityStatus=()=>sig("returnAtomicityStatus",["create/status/inspect/complete inside UnitOfWork","event appended in transaction"],useCases().includes("unitOfWork.run")&&useCases().includes("events.write.append")?[]:["use cases missing UnitOfWork/event atomic path"]);
+export const returnPostCommitStatus=()=>sig("returnPostCommitStatus",["stock sync after UnitOfWork commit"],/await c\.unitOfWork\.run[\s\S]*for\(const p/.test(useCases())?[]:["post-commit sync not isolated after UnitOfWork"]);
+export const returnLegacyCompatibilityIsolationStatus=()=>sig("returnLegacyCompatibilityIsolationStatus",["deferred Refund/Finance functions remain in returnsCompatibility","core/use cases do not import compatibility"],[...(!compat().includes("createRefund")?["compatibility exports missing"]:[]),...(/returnsCompatibility/.test(core()+useCases())?["core/use-cases import compatibility"]:[])]);
+export const returnStockBoundaryStatus=()=>sig("returnStockBoundaryStatus",["ReturnIn through Stock repository","no direct Product stock update in core"],useCases().includes("stockMovements.write.create")&&!/products\.stockQuantity/.test(core()+useCases())?[]:["stock boundary incomplete"]);
+export const returnServiceMigrationHealthSignals=()=>[returnTransactionalStatus(),returnServiceMigrationStatus(),returnUseCaseStatus(),returnAtomicityStatus(),returnPostCommitStatus(),returnLegacyCompatibilityIsolationStatus(),returnStockBoundaryStatus()];
