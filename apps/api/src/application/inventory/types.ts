@@ -1,0 +1,15 @@
+import type { ProductStatus, ProductType, StockMovementType } from "@noctella/shared";
+export type CurrencyCode="EUR";
+export type ProductDto=Readonly<{id:string;sku:string;title:string;slug:string;type:string;status:ProductStatus|string;stockQuantity:number;priceEur:number;purchaseCost:number|null;purchaseCurrency:CurrencyCode|null;categoryId:string|null;collectionId:string|null;createdAt:string;updatedAt:string;marketplace:Readonly<{ebayTitle?:string|null;etsyTitle?:string|null;wooProductName?:string|null}>}>;
+export type InventoryDto=Readonly<{productId:string;locationId:string|null;quantity:number;updatedAt:string}>;
+export type StockMovementDto=Readonly<{id:string;productId:string;type:string;quantityDelta:number;stockBefore:number;stockAfter:number;orderId:string|null;orderItemId:string|null;note:string|null;idempotencyKey:string|null;createdAt:string;updatedAt:string}>;
+export type StockLocationDto=Readonly<{id:string;warehouseId:string;code:string;name:string;status:string;locationType:string;sortOrder:number;createdAt:string;updatedAt:string}>;
+export type CreateProductInput=Readonly<{sku:string;title:string;slug:string;type:ProductType|string;status:ProductStatus;priceEur:number;stockQuantity?:number;categoryId?:string|null;collectionId?:string|null;purchaseCost?:number|null;purchaseCurrency?:CurrencyCode|null}>;
+export type UpdateProductInput=Readonly<{id:string;expectedVersion:string;sku?:string;title?:string;slug?:string;type?:ProductType|string;status?:ProductStatus;priceEur?:number;categoryId?:string|null;collectionId?:string|null;purchaseCost?:number|null;purchaseCurrency?:CurrencyCode|null}>;
+export type ProductIdInput=Readonly<{productId:string}>; export type ProductSkuInput=Readonly<{sku:string}>;
+export type InitializeInventoryInput=Readonly<{productId:string;quantity:number;expectedVersion?:string;idempotencyKey?:string;note?:string|null}>;
+export type InventoryMutationInput=Readonly<{productId:string;quantity:number;expectedVersion:string;idempotencyKey?:string;note?:string|null;orderId?:string|null;orderItemId?:string|null}>;
+export type SetInventoryQuantityInput=Readonly<{productId:string;quantity:number;expectedVersion:string;idempotencyKey?:string;note:string;}>;
+export type CreateStockLocationInput=Readonly<{warehouseId:string;code:string;name:string;status:string;locationType:string;sortOrder:number}>;
+export type GetStockLocationInput=Readonly<{id:string}>; export type ListStockLocationsInput=Readonly<{warehouseId?:string}>;
+export type MovementKind=StockMovementType|string;
