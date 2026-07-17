@@ -1,0 +1,20 @@
+import { describe, expect, test } from "vitest";
+import { auditInventoryUseCaseSource, runInventoryUseCaseAudit } from "../src/scripts/inventoryUseCaseAudit";
+describe("Sprint 31A-I3 inventory use case audit",()=>{
+ test("production audit passes",()=>expect(runInventoryUseCaseAudit().status).toBe("PASS"));
+ test("schema import fixture fails",()=>expect(auditInventoryUseCaseSource("import { products } from '../../db/schema';").status).toBe("FAIL"));
+ test("Drizzle fixture fails",()=>expect(auditInventoryUseCaseSource("import { eq } from 'drizzle-orm';").status).toBe("FAIL"));
+ test("DbClient fixture fails",()=>expect(auditInventoryUseCaseSource("let x: DbClient;").status).toBe("FAIL"));
+ test("repository factory fixture fails",()=>expect(auditInventoryUseCaseSource("import { createInventoryRepositoryBundleForDb } from '../../repositories/inventory/factory';").status).toBe("FAIL"));
+ test("Date.now fixture fails",()=>expect(auditInventoryUseCaseSource("Date.now()").status).toBe("FAIL"));
+ test("new Date fixture fails",()=>expect(auditInventoryUseCaseSource("new Date()").status).toBe("FAIL"));
+ test("randomUUID fixture fails",()=>expect(auditInventoryUseCaseSource("randomUUID()").status).toBe("FAIL"));
+ test("HTTP fixture fails",()=>expect(auditInventoryUseCaseSource("fetch('x')").status).toBe("FAIL"));
+ test("SDK fixture fails",()=>expect(auditInventoryUseCaseSource("import OpenAI from 'openai';").status).toBe("FAIL"));
+ test("direct mutation outside UnitOfWork fixture fails",()=>expect(auditInventoryUseCaseSource("ctx.inventoryRepository.setQuantity('p',1,'t')").issues).toContain("direct repository mutation outside UnitOfWork"));
+ test("commit fixture fails",()=>expect(auditInventoryUseCaseSource("tx.commit()").status).toBe("FAIL"));
+ test("rollback fixture fails",()=>expect(auditInventoryUseCaseSource("tx.rollback()").status).toBe("FAIL"));
+ test("movement update/delete fixture fails",()=>expect(auditInventoryUseCaseSource("stockMovements.delete('m')").status).toBe("FAIL"));
+ test("marketplace mandatory validation fixture fails",()=>expect(auditInventoryUseCaseSource("marketplace fields are required").status).toBe("FAIL"));
+ test("unrestricted patch fixture fails",()=>expect(auditInventoryUseCaseSource("type Patch = Record<string, unknown>").status).toBe("FAIL"));
+});
