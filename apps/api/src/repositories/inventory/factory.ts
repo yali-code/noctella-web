@@ -1,0 +1,3 @@
+import { createSqliteInventoryRepositories } from "./sqlite"; import { createPostgresInventoryRepositories } from "./postgres";
+export type InventoryRepositoryDriver="sqlite"|"postgres"|"supabase-postgres"|"test-memory";
+export function createInventoryRepositoryBundleForDb(db:unknown,driver:InventoryRepositoryDriver=(process.env.DATABASE_DRIVER as InventoryRepositoryDriver)||"sqlite"){ if(!db) throw new Error("INVENTORY_REPOSITORY_CLIENT_REQUIRED"); if(driver==="postgres"||driver==="supabase-postgres") return createPostgresInventoryRepositories(db); if(driver==="sqlite"||driver==="test-memory") return createSqliteInventoryRepositories(db); throw new Error(`UNSUPPORTED_INVENTORY_REPOSITORY_DRIVER:${driver}`); }

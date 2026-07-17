@@ -1,0 +1,2 @@
+import type { CreateStockLocationInput, StockLocationId, StockLocationRecord, UpdateStockLocationInput, Version } from "./types";
+export interface StockLocationRepository { create(input:CreateStockLocationInput):Promise<StockLocationRecord>; findById(id:StockLocationId):Promise<StockLocationRecord|null>; findByCode(warehouseId:string,code:string):Promise<StockLocationRecord|null>; list(warehouseId?:string):Promise<StockLocationRecord[]>; updateWithVersion(id:StockLocationId,input:UpdateStockLocationInput,expectedVersion:Version):Promise<StockLocationRecord>; }
