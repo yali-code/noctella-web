@@ -1,0 +1,10 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+export interface SalesUseCaseAuditResult { readonly status: "PASS" | "FAIL"; readonly issues: readonly string[] }
+const rules: readonly [string, RegExp][] = [
+  ["SQL", /\b(select|insert|update|delete)\s+(from|into|\w+\s+set)\b/i], ["DbClient", /\bDbClient\b/], ["Drizzle", /drizzle-orm|\bDrizzle\b/i], ["schema", /db\/schema|schema\.(sqlite|postgres)/i], ["repository implementation", /repositories\/sales\/(sqlite|postgres)|repositories\/inventory/i], ["HTTP", /\b(Request|Response|Router|Controller)\b|express/i], ["provider SDK", /stripe|paypal|adyen/i], ["queue or worker", /\b(queue|worker|enqueue)\b/i], ["EventEmitter", /EventEmitter/], ["Date.now", /Date\.now/], ["randomUUID", /randomUUID/], ["Math.random", /Math\.random/], ["generic patch", /\bpatch\s*[:=]|Record<string,\s*unknown>/i], ["manual transaction", /\.transaction\s*\(/], ["Inventory access", /inventoryRepository|repositories\/inventory|stockMovements?\.(write|create|update)/i], ["Complete Sale", /class\s+CompleteSaleUseCase|function\s+CompleteSaleUseCase/], ["shipping coordination", /shipmentRepository|shippingService|marketplaceFulfillment/i], ["finance coordination", /financeEntry|createInvoice/i],
+];
+export function auditSalesUseCaseSource(source: string): SalesUseCaseAuditResult { const issues = rules.filter(([, rule]) => rule.test(source)).map(([issue]) => issue); return Object.freeze({ status: issues.length ? "FAIL" : "PASS", issues: Object.freeze(issues) }); }
+export function runSalesUseCaseAudit(): SalesUseCaseAuditResult { const root = resolve(__dirname, ".."); const source = ["application/sales/types.ts", "application/sales/errors.ts", "application/sales/useCases.ts"].map((file) => readFileSync(resolve(root, file), "utf8")).join("\n"); return auditSalesUseCaseSource(source); }
+if (require.main === module) { const result = runSalesUseCaseAudit(); console.log(JSON.stringify(result)); if (result.status === "FAIL") process.exitCode = 1; }
