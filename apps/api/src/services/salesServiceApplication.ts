@@ -8,7 +8,9 @@ import {
   UpdateSaleUseCase,
 } from "../application/sales";
 import type { SalesRepositoryDriver } from "../repositories/sales/types";
+import { createInternalOrderUseCase } from "../use-cases/order/useCases";
 import { createSalesApplicationContextForDb } from "./salesApplicationContextForDb";
+import { enqueueProductStockSync } from "./stockSync";
 import type { SalesClock, SalesIdGenerator, SalesLogger } from "./salesApplicationContext";
 
 export interface SalesServiceApplicationDependencies {
@@ -27,8 +29,15 @@ export function createSalesServiceApplication(db: DbClient, dependencies: SalesS
     clock: dependencies.clock ?? { now: () => new Date() },
     idGenerator: dependencies.idGenerator ?? { newId: () => randomUUID() },
   });
+  const createInternalSale = createInternalOrderUseCase(
+    context.unitOfWork,
+    { enqueue: (productId, key) => enqueueProductStockSync(db, productId, key).then(() => undefined) },
+    context.clock,
+    { id: () => context.idGenerator.newId() },
+  );
   return Object.freeze({
     context,
+    createInternalSale,
     createSale: new CreateSaleUseCase(context),
     updateSale: new UpdateSaleUseCase(context),
     getSale: new GetSaleUseCase(context),

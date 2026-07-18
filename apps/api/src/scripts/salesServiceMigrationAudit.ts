@@ -45,6 +45,7 @@ export function runSalesServiceMigrationAudit():SalesServiceMigrationAuditResult
   const completion=shipment.slice(shipment.indexOf("export async function completeSale"),shipment.indexOf("export async function reopenSale"));
   if(count(completion,"new CompleteSaleApplicationAdapter")!==1||count(completion,".execute(orderId)")!==1)issues.push("S3D adapter delegation must occur exactly once");
   for(const symbol of ["CreateSaleUseCase","UpdateSaleUseCase","GetSaleUseCase","ListSalesUseCase","CancelSaleUseCase"]){if(!composition.includes(symbol))issues.push(`${symbol} composition missing`);}
+  if(!composition.includes("createInternalOrderUseCase")||!composition.includes("createInternalSale"))issues.push("atomic internal-sale capability missing");
   if(!composition.includes("createSalesApplicationContextForDb"))issues.push("approved Sales composition factory missing");
   return Object.freeze({status:issues.length?"FAIL":"PASS",issues:Object.freeze(issues)});
 }
