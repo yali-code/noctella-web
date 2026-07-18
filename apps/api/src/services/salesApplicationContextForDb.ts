@@ -9,6 +9,7 @@ import {
   type SalesLogger,
 } from "./salesApplicationContext";
 import { PostgresUnitOfWork, SqliteUnitOfWork, type UnitOfWork } from "./unitOfWork";
+import type { SalesCompletionCoordinator } from "../application/sales/completionCoordination";
 
 export interface CreateSalesApplicationContextForDbInput {
   readonly db: DbClient;
@@ -17,6 +18,7 @@ export interface CreateSalesApplicationContextForDbInput {
   readonly logger: SalesLogger;
   readonly clock: SalesClock;
   readonly idGenerator: SalesIdGenerator;
+  readonly completionCoordinator?: SalesCompletionCoordinator;
 }
 
 function unitOfWorkForDb(db: DbClient, driver: SalesRepositoryDriver): UnitOfWork {
@@ -35,6 +37,7 @@ export function createSalesApplicationContextForDb(
     logger: input.logger,
     clock: input.clock,
     idGenerator: input.idGenerator,
+    completionCoordinator: input.completionCoordinator,
     configuration: Object.freeze({ salesApplicationContext: true as const, driver: input.driver }),
   });
 }

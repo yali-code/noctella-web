@@ -1,5 +1,6 @@
 import type { SaleRepository, SalesRepositories } from "../repositories/sales/types";
 import type { UnitOfWork } from "./unitOfWork";
+import { unavailableSalesCompletionCoordinator, type SalesCompletionCoordinator } from "../application/sales/completionCoordination";
 
 export interface SalesClock {
   now(): Date;
@@ -28,6 +29,7 @@ export interface SalesApplicationContext {
   readonly logger: SalesLogger;
   readonly clock: SalesClock;
   readonly idGenerator: SalesIdGenerator;
+  readonly completionCoordinator: SalesCompletionCoordinator;
   readonly configuration: SalesApplicationConfiguration;
 }
 
@@ -37,6 +39,7 @@ export interface BuildSalesApplicationContextInput {
   readonly logger: SalesLogger;
   readonly clock: SalesClock;
   readonly idGenerator: SalesIdGenerator;
+  readonly completionCoordinator?: SalesCompletionCoordinator;
   readonly configuration?: SalesApplicationConfiguration;
 }
 
@@ -73,6 +76,7 @@ export function buildSalesApplicationContext(
     logger: dependencies.logger,
     clock: dependencies.clock,
     idGenerator: dependencies.idGenerator,
+    completionCoordinator: dependencies.completionCoordinator ?? unavailableSalesCompletionCoordinator,
     configuration: Object.freeze({
       ...(dependencies.configuration ?? { salesApplicationContext: true as const }),
     }),

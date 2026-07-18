@@ -52,7 +52,7 @@ describe("Sales application context Sprint 33A-S2", () => {
     ["creates distinct contexts", () => expect(buildSalesApplicationContext(deps())).not.toBe(buildSalesApplicationContext(deps()))],
     ["copies repository bundle", () => { const d = deps(); expect(buildSalesApplicationContext(d).salesRepositories).not.toBe(d.salesRepositories); }],
     ["does not clone repository", () => { const d = deps(); expect(buildSalesApplicationContext(d).saleRepository).toBe(d.salesRepositories.saleRepository); }],
-    ["only expected context keys", () => expect(Object.keys(buildSalesApplicationContext(deps())).sort()).toEqual(["clock", "configuration", "idGenerator", "logger", "saleRepository", "salesRepositories", "unitOfWork"].sort())],
+    ["only expected context keys", () => expect(Object.keys(buildSalesApplicationContext(deps())).sort()).toEqual(["clock", "completionCoordinator", "configuration", "idGenerator", "logger", "saleRepository", "salesRepositories", "unitOfWork"].sort())],
     ["only expected repository keys", () => expect(Object.keys(buildSalesApplicationContext(deps()).salesRepositories)).toEqual(["saleRepository"])],
     ["no event publisher", () => expect("eventPublisher" in buildSalesApplicationContext(deps())).toBe(false)],
     ["no observability", () => expect("observability" in buildSalesApplicationContext(deps())).toBe(false)],

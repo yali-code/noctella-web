@@ -5,3 +5,17 @@ export class SaleConcurrencyConflictError extends SalesUseCaseError { constructo
 export class SaleDuplicateReferenceError extends SalesUseCaseError { constructor() { super("Sale reference already exists", "sale_duplicate_reference"); } }
 export class InvalidSaleStatusTransitionError extends SalesUseCaseError { constructor() { super("Invalid sale status transition", "invalid_sale_status_transition"); } }
 export class InvalidSaleAmountError extends SalesUseCaseError { constructor(message = "Invalid sale amount") { super(message, "invalid_sale_amount"); } }
+export class SalesCompletionCapabilityUnavailableError extends SalesUseCaseError {
+  readonly metadata: Readonly<{ capability: string }>;
+  constructor(capability: string) {
+    super(`Sales completion capability unavailable: ${capability}`, "sales_completion_capability_unavailable");
+    this.metadata = Object.freeze({ capability });
+  }
+}
+export class SalesCompletionCoordinationError extends SalesUseCaseError {
+  readonly metadata: Readonly<{ capability: string; causeCode: string | null }>;
+  constructor(capability: string, causeCode: string | null = null) {
+    super(`Sales completion coordination failed: ${capability}`, "sales_completion_coordination_error");
+    this.metadata = Object.freeze({ capability, causeCode });
+  }
+}
