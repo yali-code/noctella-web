@@ -10,6 +10,8 @@ const forbidden = [
   { name: "SQL", pattern: /\bsql`|\bselect\b|\binsert\b|\bupdate\b|\bdelete\b|\bSQL\b/i },
   { name: "DbClient", pattern: /DbClient/ },
   { name: "Drizzle", pattern: /drizzle|Drizzle/ },
+  { name: "schema", pattern: /(?:from\s+["'][^"']*schema|import\s+[^;]*\bschema\b)/i },
+  { name: "repository implementation", pattern: /repositories\/sales\/(?:sqlite|postgres)/i },
   { name: "HTTP", pattern: /fetch\(|axios|node:http|node:https|http\.request|https\.request|\bRequest\b|\bResponse\b/i },
   { name: "routes", pattern: /routes?/i },
   { name: "controllers", pattern: /controllers?/i },
@@ -23,6 +25,10 @@ const forbidden = [
   { name: "OpenTelemetry", pattern: /OpenTelemetry|otel/i },
   { name: "Date.now", pattern: /Date\.now/ },
   { name: "randomUUID", pattern: /randomUUID/ },
+  { name: "Math.random", pattern: /Math\.random/ },
+  { name: "environment access", pattern: /process\.(?:env|argv)|globalThis|\bglobal\b/ },
+  { name: "transaction implementation", pattern: /\.(?:transaction|commit|rollback)\s*\(|new\s+(?:Sqlite|Postgres)UnitOfWork/ },
+  { name: "mutable context", pattern: /\blet\s+context\b|Object\.assign\(|\.push\(|\.splice\(/ },
   { name: "service construction", pattern: /new\s+(?!Error\b)[A-Z][A-Za-z]+Service|create[A-Z][A-Za-z]*Service/ },
   { name: "use case construction", pattern: /new\s+(?!Error\b)[A-Z][A-Za-z]+UseCase|create[A-Z][A-Za-z]*UseCase/ },
 ];
@@ -33,10 +39,31 @@ export function auditSalesApplicationContextSource(source: string): SalesApplica
   return { status: issues.length === 0 ? "PASS" : "FAIL", issues };
 }
 
+export function auditSalesApplicationContextFactorySource(
+  source: string,
+): SalesApplicationContextAuditResult {
+  const issues: string[] = [];
+  const returnType = source.match(
+    /function\s+createSalesApplicationContextForDb[\s\S]*?\)\s*:\s*([^\s{]+)/,
+  )?.[1];
+  if (returnType !== "SalesApplicationContext") issues.push("DB type in return contract");
+  if (/return\s+Object\.freeze\([\s\S]*?\b(?:db|client|transaction)\s*:/i.test(source)) {
+    issues.push("DB implementation leakage");
+  }
+  return { status: issues.length === 0 ? "PASS" : "FAIL", issues };
+}
+
 export function runSalesApplicationContextAudit(): SalesApplicationContextAuditResult {
   const root = process.cwd().endsWith("apps/api") ? process.cwd() : join(process.cwd(), "apps/api");
   const source = readFileSync(join(root, "src/services/salesApplicationContext.ts"), "utf8");
-  return auditSalesApplicationContextSource(source);
+  const factorySource = readFileSync(
+    join(root, "src/services/salesApplicationContextForDb.ts"),
+    "utf8",
+  );
+  const contextResult = auditSalesApplicationContextSource(source);
+  const factoryResult = auditSalesApplicationContextFactorySource(factorySource);
+  const issues = [...contextResult.issues, ...factoryResult.issues];
+  return { status: issues.length === 0 ? "PASS" : "FAIL", issues };
 }
 
 if (process.argv[1]?.endsWith("salesApplicationContextAudit.ts")) {

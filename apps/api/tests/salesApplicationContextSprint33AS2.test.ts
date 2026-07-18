@@ -13,6 +13,7 @@ import { createSalesApplicationContextForDb } from "../src/services/salesApplica
 import { SqliteUnitOfWork } from "../src/services/unitOfWork";
 import {
   auditSalesApplicationContextSource,
+  auditSalesApplicationContextFactorySource,
   runSalesApplicationContextAudit,
 } from "../src/scripts/salesApplicationContextAudit";
 
@@ -36,7 +37,10 @@ describe("Sales application context Sprint 33A-S2", () => {
     ["exposes idGenerator", () => expect(buildSalesApplicationContext(deps()).idGenerator.newId()).toBe("id-1")],
     ["exposes default configuration", () => expect(buildSalesApplicationContext(deps()).configuration).toEqual({ salesApplicationContext: true })],
     ["freezes default configuration", () => expect(Object.isFrozen(buildSalesApplicationContext(deps()).configuration)).toBe(true)],
-    ["preserves provided configuration", () => { const c = Object.freeze({ salesApplicationContext: true as const, driver: "sqlite" }); expect(buildSalesApplicationContext({ ...deps(), configuration: c }).configuration).toBe(c); }],
+    ["preserves provided configuration values", () => { const c = { salesApplicationContext: true as const, driver: "sqlite" }; expect(buildSalesApplicationContext({ ...deps(), configuration: c }).configuration).toEqual(c); }],
+    ["freezes provided configuration", () => { const c = { salesApplicationContext: true as const, driver: "sqlite" }; expect(Object.isFrozen(buildSalesApplicationContext({ ...deps(), configuration: c }).configuration)).toBe(true); }],
+    ["copies provided configuration", () => { const c = { salesApplicationContext: true as const, driver: "sqlite" }; expect(buildSalesApplicationContext({ ...deps(), configuration: c }).configuration).not.toBe(c); }],
+    ["configuration mutation cannot alter values", () => { const c = buildSalesApplicationContext({ ...deps(), configuration: { salesApplicationContext: true, driver: "sqlite" } }).configuration as { driver?: string }; expect(() => { c.driver = "postgres"; }).toThrow(); expect(c.driver).toBe("sqlite"); }],
     ["requires salesRepositories", () => { const d = deps() as Partial<Record<keyof BuildSalesApplicationContextInput, unknown>>; delete d.salesRepositories; expect(() => buildSalesApplicationContext(d as never)).toThrow("SALES_APPLICATION_CONTEXT_MISSING_salesRepositories"); }],
     ["requires saleRepository", () => { const d = deps() as BuildSalesApplicationContextInput & { salesRepositories: SalesRepositories }; d.salesRepositories = {} as never; expect(() => buildSalesApplicationContext(d)).toThrow("SALES_APPLICATION_CONTEXT_MISSING_REPOSITORY_saleRepository"); }],
     ["requires UnitOfWork", () => { const d = deps() as Partial<Record<keyof BuildSalesApplicationContextInput, unknown>>; delete d.unitOfWork; expect(() => buildSalesApplicationContext(d as never)).toThrow("SALES_APPLICATION_CONTEXT_MISSING_unitOfWork"); }],
@@ -60,8 +64,14 @@ describe("Sales application context Sprint 33A-S2", () => {
     ["SQLite factory exposes UnitOfWork", () => { const h = db(); try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator }).unitOfWork).toBeInstanceOf(SqliteUnitOfWork); } finally { h.raw.close(); } }],
     ["SQLite factory accepts UnitOfWork", () => { const h = db(); const u = deps().unitOfWork; try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", unitOfWork: u, logger: {}, clock: deps().clock, idGenerator: deps().idGenerator }).unitOfWork).toBe(u); } finally { h.raw.close(); } }],
     ["SQLite factory carries driver", () => { const h = db(); try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator }).configuration.driver).toBe("sqlite"); } finally { h.raw.close(); } }],
+    ["test-memory factory selects SQLite repository", () => { const h = db(); try { const c = createSalesApplicationContextForDb({ db: h.db, driver: "test-memory", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator }); expect(c.saleRepository.findById("missing")).toBeNull(); expect(c.configuration.driver).toBe("test-memory"); } finally { h.raw.close(); } }],
     ["PostgreSQL factory smoke", () => { const h = db(); try { const c = createSalesApplicationContextForDb({ db: h.db, driver: "postgres", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator, unitOfWork: deps().unitOfWork }); expect(c.saleRepository.findById("missing")).toBeNull(); } finally { h.raw.close(); } }],
     ["PostgreSQL factory carries driver", () => { const h = db(); try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "postgres", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator, unitOfWork: deps().unitOfWork }).configuration.driver).toBe("postgres"); } finally { h.raw.close(); } }],
+    ["Supabase PostgreSQL factory selection", () => { const h = db(); try { const c = createSalesApplicationContextForDb({ db: h.db, driver: "supabase-postgres", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator, unitOfWork: deps().unitOfWork }); expect(c.saleRepository.findById("missing")).toBeNull(); expect(c.configuration.driver).toBe("supabase-postgres"); } finally { h.raw.close(); } }],
+    ["DB factory preserves logger", () => { const h = db(); const logger = { info: () => undefined }; try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger, clock: deps().clock, idGenerator: deps().idGenerator }).logger).toBe(logger); } finally { h.raw.close(); } }],
+    ["DB factory preserves clock", () => { const h = db(); const clock = deps().clock; try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger: {}, clock, idGenerator: deps().idGenerator }).clock).toBe(clock); } finally { h.raw.close(); } }],
+    ["DB factory preserves id generator", () => { const h = db(); const idGenerator = deps().idGenerator; try { expect(createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger: {}, clock: deps().clock, idGenerator }).idGenerator).toBe(idGenerator); } finally { h.raw.close(); } }],
+    ["DB factory exposes no database client", () => { const h = db(); try { const c = createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator }); expect(Object.keys(c)).not.toContain("db"); expect(Object.keys(c)).not.toContain("client"); } finally { h.raw.close(); } }],
     ["factory uses S1 factory immutable bundle", () => { const h = db(); try { expect(Object.isFrozen(createSalesRepositoriesForDb(h.db, "sqlite"))).toBe(true); } finally { h.raw.close(); } }],
     ["factory exposes same sale repository as bundle", () => { const h = db(); try { const c = createSalesApplicationContextForDb({ db: h.db, driver: "sqlite", logger: {}, clock: deps().clock, idGenerator: deps().idGenerator }); expect(c.saleRepository).toBe(c.salesRepositories.saleRepository); } finally { h.raw.close(); } }],
     ["legacy sale repository remains compatible", () => { const h = db(); try { expect(createSalesRepositoriesForDb(h.db, "sqlite").saleRepository.findById("x")).toBeNull(); } finally { h.raw.close(); } }],
@@ -85,6 +95,15 @@ describe("Sales application context Sprint 33A-S2", () => {
     ["audit rejects OpenTelemetry", () => expect(auditSalesApplicationContextSource("OpenTelemetry Object.freeze({})").issues).toContain("OpenTelemetry")],
     ["audit rejects Date.now", () => expect(auditSalesApplicationContextSource("Date.now Object.freeze({})").issues).toContain("Date.now")],
     ["audit rejects randomUUID", () => expect(auditSalesApplicationContextSource("randomUUID Object.freeze({})").issues).toContain("randomUUID")],
+    ["audit rejects Math.random", () => expect(auditSalesApplicationContextSource("Math.random Object.freeze({})").issues).toContain("Math.random")],
+    ["audit rejects schema imports", () => expect(auditSalesApplicationContextSource("import * as schema from '../db/schema' Object.freeze({})").issues).toContain("schema")],
+    ["audit rejects repository implementations", () => expect(auditSalesApplicationContextSource("import x from '../repositories/sales/sqlite' Object.freeze({})").issues).toContain("repository implementation")],
+    ["audit rejects mutable context construction", () => expect(auditSalesApplicationContextSource("let context = {} Object.freeze({})").issues).toContain("mutable context")],
+    ["audit rejects transaction implementation leakage", () => expect(auditSalesApplicationContextSource("new SqliteUnitOfWork(x) Object.freeze({})").issues).toContain("transaction implementation")],
+    ["audit rejects environment access", () => expect(auditSalesApplicationContextSource("process.env.X Object.freeze({})").issues).toContain("environment access")],
+    ["factory audit accepts abstraction return", () => expect(auditSalesApplicationContextFactorySource("function createSalesApplicationContextForDb(input: Input): SalesApplicationContext { return build(input); }").status).toBe("PASS")],
+    ["factory audit rejects DB return contract", () => expect(auditSalesApplicationContextFactorySource("function createSalesApplicationContextForDb(input: Input): DbClient { return input.db; }").issues).toContain("DB type in return contract")],
+    ["factory audit rejects DB implementation leakage", () => expect(auditSalesApplicationContextFactorySource("function createSalesApplicationContextForDb(input: Input): SalesApplicationContext { return Object.freeze({ db: input.db }); }").issues).toContain("DB implementation leakage")],
   ];
   it.each(cases)("%s", async (_name, run) => { await run(); });
 });

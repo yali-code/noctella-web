@@ -73,8 +73,8 @@ export function buildSalesApplicationContext(
     logger: dependencies.logger,
     clock: dependencies.clock,
     idGenerator: dependencies.idGenerator,
-    configuration:
-      dependencies.configuration ??
-      Object.freeze({ salesApplicationContext: true as const }),
+    configuration: Object.freeze({
+      ...(dependencies.configuration ?? { salesApplicationContext: true as const }),
+    }),
   });
 }
