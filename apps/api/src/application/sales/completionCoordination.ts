@@ -65,6 +65,39 @@ export interface SalesCompletionHistoryEntry {
   readonly financialSnapshot: SalesCompletionFinancialSnapshot;
 }
 
+export interface SalesCompletionCommitInput {
+  readonly idempotencyKey: string;
+  readonly payloadFingerprint: string;
+  readonly financialSnapshotId: string;
+  readonly financeEntryId: string;
+  readonly completionHistoryId: string | null;
+  readonly finalUpdatedAt: string;
+  readonly snapshot: SalesCompletionFinancialSnapshot;
+  readonly financeEntry: SalesCompletionFinanceEntry;
+  readonly historyEntry: SalesCompletionHistoryEntry | null;
+}
+
+export interface SalesCompletionCommitResult {
+  readonly saleId: string;
+  readonly completedAt: string;
+  readonly snapshot: SalesCompletionFinancialSnapshot;
+  readonly replay: boolean;
+}
+
+export interface TransactionalSalesCompletionCoordinator {
+  commit(input: SalesCompletionCommitInput): Promise<SalesCompletionCommitResult>;
+}
+
+export interface SalesCompletionUnitOfWork {
+  run<T>(work: (context: { readonly repositories: { readonly salesCompletion: {
+    commit(input: SalesCompletionCommitInput): SalesCompletionCommitResult | Promise<SalesCompletionCommitResult>;
+  } } }) => T | Promise<T>): Promise<T>;
+}
+
+export function createTransactionalSalesCompletionCoordinator(unitOfWork: SalesCompletionUnitOfWork): TransactionalSalesCompletionCoordinator {
+  return Object.freeze({ commit: (input: SalesCompletionCommitInput) => unitOfWork.run(({ repositories }) => repositories.salesCompletion.commit(input)) });
+}
+
 export interface SalesCompletionCoordinator {
   inspectFulfillment(reference: SalesCompletionReference): Promise<SalesCompletionFulfillmentState>;
   getProductCosts(request: SalesCompletionCostRequest): Promise<readonly SalesCompletionProductCost[]>;
