@@ -3,3 +3,4 @@ export * from "./errors";
 export * from "./useCases";
 export * from "./completeSaleUseCase";
 export * from "./completeSaleTypes";
+export * from "./completeSaleApplicationAdapter";
