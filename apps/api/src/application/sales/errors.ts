@@ -26,3 +26,10 @@ export class SalesCompletionIdempotencyConflictError extends SalesUseCaseError {
     this.metadata = Object.freeze({ idempotencyKey });
   }
 }
+export class SaleAlreadyCompletedConflictError extends SalesUseCaseError {
+  readonly metadata: Readonly<{ saleId: string; completedWithIdempotencyKey: string }>;
+  constructor(saleId: string, completedWithIdempotencyKey: string) {
+    super("Sale was already completed with a different idempotency key", "sale_already_completed_conflict");
+    this.metadata = Object.freeze({ saleId, completedWithIdempotencyKey });
+  }
+}
