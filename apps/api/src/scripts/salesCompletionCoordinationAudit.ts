@@ -9,5 +9,14 @@ const rules: readonly [string,RegExp][] = [
   ["silent required no-op",/inspectFulfillment:\s*async\s*\(.*=>\s*(undefined|true|\{)/i],["Complete Sale use case",/class\s+CompleteSaleUseCase|function\s+CompleteSaleUseCase/i],["service migration",/shipmentsCompatibility|erpSalesFinanceBridge/i],
 ];
 export function auditSalesCompletionCoordinationSource(source:string):SalesCompletionCoordinationAuditResult { const issues=rules.filter(([,rule])=>rule.test(source)).map(([name])=>name); return Object.freeze({status:issues.length?"FAIL":"PASS",issues:Object.freeze(issues)}); }
-export function runSalesCompletionCoordinationAudit():SalesCompletionCoordinationAuditResult { const root=resolve(__dirname,".."); const source=["application/sales/completionCoordination.ts","application/sales/errors.ts","services/salesApplicationContext.ts"].map(file=>readFileSync(resolve(root,file),"utf8")).join("\n"); return auditSalesCompletionCoordinationSource(source); }
+export function auditSalesCompletionConcurrencySource(contract:string,sqlite:string,postgres:string):SalesCompletionCoordinationAuditResult { const checks:readonly [string,boolean][]=[
+  ["missing expectedVersion contract",/readonly expectedVersion:\s*SaleVersion/.test(contract)],
+  ["SQLite sale update is not version guarded",/and\(eq\(schema\.orders\.id, input\.snapshot\.saleId\), eq\(schema\.orders\.updatedAt, input\.expectedVersion\)\)/.test(sqlite)],
+  ["PostgreSQL sale update is not version guarded",/and\(eq\(schema\.orders\.id, input\.snapshot\.saleId\), eq\(schema\.orders\.updatedAt, new Date\(input\.expectedVersion\)\)\)/.test(postgres)],
+  ["SQLite silently accepts zero-row update",/finalized\.changes !== 1[\s\S]*throw new SaleConcurrencyConflictError/.test(sqlite)],
+  ["PostgreSQL silently accepts zero-row update",/finalized\.length !== 1[\s\S]*throw new SaleConcurrencyConflictError/.test(postgres)],
+  ["SQLite uses manual transaction",!sqlite.includes(".transaction(")],
+  ["PostgreSQL uses manual transaction",!postgres.includes(".transaction(")],
+]; const issues=checks.filter(([,ok])=>!ok).map(([name])=>name); return Object.freeze({status:issues.length?"FAIL":"PASS",issues:Object.freeze(issues)}); }
+export function runSalesCompletionCoordinationAudit():SalesCompletionCoordinationAuditResult { const root=resolve(__dirname,".."); const source=["application/sales/completionCoordination.ts","application/sales/errors.ts","services/salesApplicationContext.ts"].map(file=>readFileSync(resolve(root,file),"utf8")).join("\n"); const base=auditSalesCompletionCoordinationSource(source); const concurrency=auditSalesCompletionConcurrencySource(readFileSync(resolve(root,"application/sales/completionCoordination.ts"),"utf8"),readFileSync(resolve(root,"repositories/sales-completion/sqlite.ts"),"utf8"),readFileSync(resolve(root,"repositories/sales-completion/postgres.ts"),"utf8")); const issues=Object.freeze([...base.issues,...concurrency.issues]); return Object.freeze({status:issues.length?"FAIL":"PASS",issues}); }
 if(require.main===module){const result=runSalesCompletionCoordinationAudit();console.log(JSON.stringify(result));if(result.status==="FAIL")process.exitCode=1;}
