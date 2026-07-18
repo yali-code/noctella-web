@@ -63,6 +63,8 @@ describe("Sprint 33A-S4 Sales service migration (90+ executable tests)",()=>{
     ["GetSaleUseCase","new GetSaleUseCase(context)"],
     ["ListSalesUseCase","new ListSalesUseCase(context)"],
     ["CancelSaleUseCase","new CancelSaleUseCase(context)"],
+    ["atomic internal-sale capability","createInternalSale"],
+    ["reused internal-order logic","createInternalOrderUseCase"],
     ["custom logger","dependencies.logger"],
     ["custom clock","dependencies.clock"],
     ["custom id generator","dependencies.idGenerator"],
@@ -85,7 +87,7 @@ describe("Sprint 33A-S4 Sales service migration (90+ executable tests)",()=>{
   ])("bridge preserves %s",(_name,fragment)=>expect(bridge).toContain(fragment));
   it("ERP completion does not post finance twice",()=>expect(command).not.toContain("createFinanceEntry"));
   it("ERP complete delegates exactly once",()=>expect(command.split("out=await completeSale(db,id!)")).toHaveLength(2));
-  it("create is explicitly retained for atomic stock compatibility",()=>expect(salesServiceMigrationMatrix.find(x=>x.functionName==="createInternalSale")?.reason).toContain("atomic legacy stock"));
+  it("create records the new atomic stock capability and S5 deferral",()=>expect(salesServiceMigrationMatrix.find(x=>x.functionName==="createInternalSale")?.reason).toContain("atomic legacy stock capability"));
   it("update absence is explicitly retained",()=>expect(salesServiceMigrationMatrix.find(x=>x.functionName==="Update Sale workflow")?.reason).toContain("no active legacy"));
   it("cancel absence is explicitly retained",()=>expect(salesServiceMigrationMatrix.find(x=>x.functionName==="Cancel Sale workflow")?.reason).toContain("no active legacy"));
   it("payment remains rejected",()=>expect(salesServiceMigrationMatrix.find(x=>x.functionName==="RecordSalePayment")?.decision).toBe("reject"));
