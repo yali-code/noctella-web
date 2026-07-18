@@ -14,6 +14,8 @@ import { createPurchaseRepositoriesForDb } from "../repositories/purchase/factor
 import type { PurchaseRepositories } from "../repositories/purchase/types";
 import { createSalesRepositoriesForDb } from "../repositories/sales/factory";
 import type { SalesRepositories } from "../repositories/sales/types";
+import { createSalesCompletionTransactionRepositoryForDb } from "../repositories/sales-completion/factory";
+import type { SalesCompletionTransactionRepository } from "../repositories/sales-completion/types";
 
 export interface UnitOfWorkResult<T> { ok: true; value: T }
 export interface UnitOfWorkError { code: string; message: string; cause?: unknown }
@@ -30,6 +32,7 @@ export interface TransactionScopedRepositories {
   inventoryRepositories: ReturnType<typeof createInventoryRepositoryBundleForDb>;
   purchaseRepositories: PurchaseRepositories;
   sales: SalesRepositories;
+  salesCompletion: SalesCompletionTransactionRepository;
 }
 
 export interface UnitOfWorkContext {
@@ -49,7 +52,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
   async run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T> {
     let result!: T;
     const txRunner = this.db.transaction((tx) => {
-      const maybe = work({ repositories: { db: tx as unknown as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), stock: createStockMovementRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), order: createOrderRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), returnRepositories: createReturnRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), refund: createRefundRepositoriesForDb(tx as unknown as DbClient, "sqlite"), inventoryRepositories: createInventoryRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), purchaseRepositories: createPurchaseRepositoriesForDb(tx as unknown as DbClient, "sqlite"), sales: createSalesRepositoriesForDb(tx as unknown as DbClient, "sqlite") } });
+      const maybe = work({ repositories: { db: tx as unknown as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), stock: createStockMovementRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), order: createOrderRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), returnRepositories: createReturnRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), refund: createRefundRepositoriesForDb(tx as unknown as DbClient, "sqlite"), inventoryRepositories: createInventoryRepositoryBundleForDb(tx as unknown as DbClient, "sqlite"), purchaseRepositories: createPurchaseRepositoriesForDb(tx as unknown as DbClient, "sqlite"), sales: createSalesRepositoriesForDb(tx as unknown as DbClient, "sqlite"), salesCompletion: createSalesCompletionTransactionRepositoryForDb(tx as unknown as DbClient, "sqlite") } });
       if (isPromiseLike(maybe)) throw new Error("SQLITE_ASYNC_TRANSACTION_CALLBACK_REJECTED");
       result = maybe;
     });
@@ -66,8 +69,9 @@ export class PostgresUnitOfWork implements UnitOfWork {
   constructor(private readonly adapter: PostgresTransactionAdapter) {}
   async run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T> {
     try {
-      return await this.adapter.transaction(async (tx) => work({ repositories: { db: tx as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as DbClient, "postgres"), stock: createStockMovementRepositoryBundleForDb(tx as DbClient, "postgres"), order: createOrderRepositoryBundleForDb(tx as DbClient, "postgres"), returnRepositories: createReturnRepositoryBundleForDb(tx as DbClient, "postgres"), refund: createRefundRepositoriesForDb(tx as DbClient, "postgres"), inventoryRepositories: createInventoryRepositoryBundleForDb(tx as DbClient, "postgres"), purchaseRepositories: createPurchaseRepositoriesForDb(tx as DbClient, "postgres"), sales: createSalesRepositoriesForDb(tx as DbClient, "postgres") } }));
+      return await this.adapter.transaction(async (tx) => work({ repositories: { db: tx as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as DbClient, "postgres"), stock: createStockMovementRepositoryBundleForDb(tx as DbClient, "postgres"), order: createOrderRepositoryBundleForDb(tx as DbClient, "postgres"), returnRepositories: createReturnRepositoryBundleForDb(tx as DbClient, "postgres"), refund: createRefundRepositoriesForDb(tx as DbClient, "postgres"), inventoryRepositories: createInventoryRepositoryBundleForDb(tx as DbClient, "postgres"), purchaseRepositories: createPurchaseRepositoriesForDb(tx as DbClient, "postgres"), sales: createSalesRepositoriesForDb(tx as DbClient, "postgres"), salesCompletion: createSalesCompletionTransactionRepositoryForDb(tx as DbClient, "postgres") } }));
     } catch (cause) {
+      if ((cause as { code?: string })?.code?.startsWith("sales_completion_")) throw cause;
       const err = new Error("POSTGRES_TRANSACTION_FAILED");
       (err as Error & { cause?: unknown }).cause = cause;
       throw err;

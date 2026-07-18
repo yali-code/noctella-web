@@ -503,6 +503,13 @@ export const shipmentTrackingUpdates = pgTable("shipment_tracking_updates", {
 export const saleFinancials = pgTable("sale_financials", {
   id: numeric("id", { precision: 18, scale: 6 }).primaryKey().notNull().default(sql`now()`),
 });
+export const saleCompletionExecutions = pgTable("sale_completion_executions", {
+  idempotencyKey: text("idempotency_key").primaryKey().notNull(),
+  payloadFingerprint: text("payload_fingerprint").notNull(),
+  saleId: text("sale_id").notNull(),
+  resultPayload: jsonb("result_payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_sale_completion_executions_sale").on(table.saleId)]);
 
 export const returnRequests = pgTable("return_requests", { id: text("id").primaryKey().notNull(), orderId: text("order_id").notNull(), marketplaceOrderId: text("marketplace_order_id"), shipmentId: text("shipment_id"), channel: text("channel"), externalReturnId: text("external_return_id"), externalReturnNumber: text("external_return_number"), externalReference: text("external_reference"), idempotencyKey: text("idempotency_key"), status: text("status").notNull(), reason: text("reason").notNull(), reasonDetails: text("reason_details"), requestedResolution: text("requested_resolution").notNull(), approvedResolution: text("approved_resolution"), buyerMessage: text("buyer_message"), internalNote: text("internal_note"), requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(), authorizedAt: timestamp("authorized_at", { withTimezone: true }), receivedAt: timestamp("received_at", { withTimezone: true }), inspectedAt: timestamp("inspected_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), cancelledAt: timestamp("cancelled_at", { withTimezone: true }), returnCarrierCode: text("return_carrier_code"), returnTrackingNumber: text("return_tracking_number"), returnTrackingUrl: text("return_tracking_url"), buyerShippedAt: timestamp("buyer_shipped_at", { withTimezone: true }), lastError: text("last_error"), version: integer("version").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`) }, (table) => [index("idx_return_requests_order").on(table.orderId), index("idx_return_requests_status").on(table.status), uniqueIndex("idx_return_requests_idempotency").on(table.idempotencyKey)]);
 

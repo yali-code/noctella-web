@@ -7,6 +7,7 @@ import { migrationTransformations, schemaVersion } from "../db/schema.postgres";
 import { runProductReadRepositoryAudit } from "../scripts/productReadRepositoryAudit";
 
 export const requiredSprint24Tables = ["categories","collections","products","product_photos","product_images","ai_listing_drafts","offers","orders","order_items","payments","stock_movements","marketplace_connections","publish_jobs","publish_attempts","external_listings","marketplace_webhook_events","marketplace_orders","marketplace_order_items","marketplace_sync_runs","marketplace_import_attempts","background_jobs","marketplace_inventory_snapshots","stock_sync_conflicts","stock_sync_audit","shipments","shipment_items","shipment_events","shipment_tracking_updates","sale_financials","return_requests","return_items","return_events","refunds","refund_allocations","sale_reversals","refund_attempts","erp_integration_clients","erp_integration_audit","erp_sync_checkpoints","erp_command_executions","product_erp_metadata","suppliers","purchases","purchase_lines","purchase_allocations","purchase_receipts","purchase_receipt_lines","purchase_events","customers","customer_addresses","customer_consents","customer_events","erp_customer_links","invoices","invoice_lines","invoice_events","finance_entries","warehouses","warehouse_locations","stock_reservations","picking_tasks","picking_task_lines","packing_tasks","packing_task_lines","warehouse_events"];
+requiredSprint24Tables.splice(requiredSprint24Tables.indexOf("sale_financials") + 1, 0, "sale_completion_executions");
 export type Difference = { table?: string; column?: string; kind: string; message: string };
 export type ParityResult = { status: "PASS"|"FAIL"; blocking: Difference[]; warnings: Difference[]; tables: { name: string; sqlite: boolean; postgres: boolean; columns: number }[]; checksum: string };
 function schemaSql(){ return fs.readFileSync(path.join(__dirname,"../db/schema.sql"),"utf8") + "\n" + fs.readFileSync(path.join(__dirname,"../db/schema.sqlite.ts"),"utf8"); }
@@ -37,11 +38,16 @@ export function compareSchemaModels(sqliteModel: Record<string,{columns:string[]
   return {status:blocking.length?"FAIL":"PASS",blocking,warnings,tables,checksum};
 }
 
-export function validatePostgresMigrationSql(sqlText = fs.readFileSync(path.join(__dirname,"../db/postgres-migrations/0001_sprint24_foundation.sql"),"utf8")) {
+function readPostgresMigrationSet(): string {
+  const directory = path.join(__dirname, "../db/postgres-migrations");
+  return fs.readdirSync(directory).filter((file) => file.endsWith(".sql")).sort().map((file) => fs.readFileSync(path.join(directory, file), "utf8")).join("\n");
+}
+
+export function validatePostgresMigrationSql(sqlText = readPostgresMigrationSet()) {
   const createTables = [...sqlText.matchAll(/CREATE TABLE IF NOT EXISTS\s+(\w+)/g)].map((m)=>m[1]);
   const missingTables = requiredSprint24Tables.filter((table)=>!createTables.includes(table));
   const hasDrop = /DROP\s+TABLE|DROP\s+COLUMN/i.test(sqlText);
   const indexes = [...sqlText.matchAll(/CREATE INDEX IF NOT EXISTS\s+(\w+)/g)].map((m)=>m[1]);
   const foreignKeys = [...sqlText.matchAll(/FOREIGN KEY/g)].length;
-  return { status: missingTables.length || hasDrop ? "FAIL" as const : "PASS" as const, tableCount:createTables.length, missingTables, hasDrop, indexCount:indexes.length, foreignKeyCount:foreignKeys, repeatedMigrationStrategy:"CREATE TABLE/INDEX IF NOT EXISTS; constraints are additive and validated before cutover" };
+  return { status: missingTables.length || hasDrop ? "FAIL" as const : "PASS" as const, tableCount:new Set(createTables.filter((table) => requiredSprint24Tables.includes(table))).size, missingTables, hasDrop, indexCount:indexes.length, foreignKeyCount:foreignKeys, repeatedMigrationStrategy:"CREATE TABLE/INDEX IF NOT EXISTS; constraints are additive and validated before cutover" };
 }

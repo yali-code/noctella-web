@@ -19,3 +19,10 @@ export class SalesCompletionCoordinationError extends SalesUseCaseError {
     this.metadata = Object.freeze({ capability, causeCode });
   }
 }
+export class SalesCompletionIdempotencyConflictError extends SalesUseCaseError {
+  readonly metadata: Readonly<{ idempotencyKey: string }>;
+  constructor(idempotencyKey: string) {
+    super("Completion idempotency key was already used with a different payload", "sales_completion_idempotency_conflict");
+    this.metadata = Object.freeze({ idempotencyKey });
+  }
+}

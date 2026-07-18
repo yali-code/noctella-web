@@ -1,0 +1,3 @@
+import type { SalesCompletionCommitInput, SalesCompletionCommitResult } from "../../application/sales/completionCoordination";
+export const persistedResult = (input: SalesCompletionCommitInput): SalesCompletionCommitResult => Object.freeze({ saleId: input.snapshot.saleId, completedAt: input.snapshot.completedAt, snapshot: Object.freeze({ ...input.snapshot }), replay: false });
+export const replayResult = (payload: string): SalesCompletionCommitResult => { const value = JSON.parse(payload) as SalesCompletionCommitResult; return Object.freeze({ ...value, snapshot: Object.freeze({ ...value.snapshot }), replay: true }); };
