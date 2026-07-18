@@ -1,4 +1,5 @@
 import { SalesCompletionCapabilityUnavailableError } from "./errors";
+import type { SaleVersion } from "../../repositories/sales/types";
 
 export type SalesCompletionCurrency = "EUR";
 
@@ -66,6 +67,7 @@ export interface SalesCompletionHistoryEntry {
 }
 
 export interface SalesCompletionCommitInput {
+  readonly expectedVersion: SaleVersion;
   readonly idempotencyKey: string;
   readonly payloadFingerprint: string;
   readonly financialSnapshotId: string;
