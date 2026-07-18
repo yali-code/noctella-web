@@ -33,3 +33,6 @@ export class SaleAlreadyCompletedConflictError extends SalesUseCaseError {
     this.metadata = Object.freeze({ saleId, completedWithIdempotencyKey });
   }
 }
+export class SalesCompletionReadinessError extends SalesUseCaseError {
+  constructor() { super("Sale is not ready for completion", "sales_completion_readiness"); }
+}
