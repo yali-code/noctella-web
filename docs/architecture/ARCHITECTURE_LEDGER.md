@@ -218,3 +218,24 @@ Commit:
 
 - This audit receives architecture review and is merged without runtime, API, schema, migration, or test changes.
 - Any correction sprint selects one recorded execution path and defines its atomic boundary before implementation.
+
+## Sprint 35F — Purchase Inventory Runtime Migration
+
+### Capability Added
+
+- Purchase receipt Inventory balance and stock-movement mutations execute through the Inventory increase Use Case within the purchase receipt transaction boundary.
+- SQLite receipt transactions use synchronous transaction-scoped Inventory repositories; PostgreSQL retains asynchronous repository execution.
+
+### Dependencies Introduced or Changed
+
+- The receive-purchase Use Case delegates linked-line Inventory mutations to the Inventory application layer.
+- The general SQLite UnitOfWork supplies the existing synchronous Inventory repository capability inside its managed transaction.
+
+### Technical Debt
+
+- Order, return, ERP, reconciliation, and product-write Inventory mutation paths remain outside this migration scope.
+
+### Entry Conditions for Next Sprint
+
+- Sprint 35F focused regressions and required validation pass.
+- Final diff receives architecture review before merge.

@@ -40,6 +40,8 @@ import type {
   UpdatePurchaseLineInput,
   UpdateSupplierInput,
 } from "./types";
+import { increaseInventoryInTransactionUseCase } from "../inventory";
+import { InventoryNotInitializedError } from "../inventory/errors";
 
 const ro = <T extends object>(x: T): Readonly<T> => Object.freeze({ ...x });
 const supplier = (s: SupplierRecord) => ro(s);
@@ -49,6 +51,8 @@ const now = (ctx: PurchaseApplicationContext) => ctx.clock.now().toISOString();
 const norm = (s: string) =>
   s.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
 const num = (v: number | null | undefined) => (v == null ? null : Number(v));
+const chain = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>) =>
+  value instanceof Promise ? value.then(next) : next(value);
 function totalOf(
   p: Pick<
     PurchaseRecord,
@@ -577,15 +581,16 @@ export const receivePurchaseUseCase = (ctx: PurchaseApplicationContext) => ({
     if (!input.lines.length)
       throw new PurchaseValidationError("Receipt requires lines");
     let receipt: any;
-    const updated = await ctx.unitOfWork.run(async ({ repositories }) => {
-      const cur = await repositories.purchaseRepositories.purchases.findById(
-        input.purchaseId,
-      );
+    const updated = await ctx.unitOfWork.run(({ repositories }) => chain(
+      repositories.purchaseRepositories.purchases.findById(input.purchaseId),
+      (cur) => {
       if (!cur) throw new PurchaseNotFoundError();
       const t = now(ctx),
         rid = ctx.idGenerator.newId();
       const rlines: any[] = [];
-      for (const x of input.lines) {
+      const receiveLine = (index: number): any => {
+        if (index >= input.lines.length) return;
+        const x = input.lines[index];
         const line = cur.lines.find(
           (l: PurchaseLineRecord) => l.id === x.purchaseLineId,
         );
@@ -597,52 +602,44 @@ export const receivePurchaseUseCase = (ctx: PurchaseApplicationContext) => ({
           line.receivedQuantity + qty > line.quantity
         )
           throw new InvalidPurchaseQuantityError("Invalid receipt quantity");
-        let stockMovementId = null;
+        const finishLine = (stockMovementId: string | null) => {
+          rlines.push({
+            id: ctx.idGenerator.newId(), receiptId: rid, purchaseLineId: line.id,
+            quantityReceived: qty, stockMovementId, createdAt: t,
+          });
+          return chain(repositories.purchaseRepositories.purchases.updateLine(line.id, {
+            receivedQuantity: line.receivedQuantity + qty, updatedAt: t,
+          }), () => receiveLine(index + 1));
+        };
         if (line.productId) {
-          const inv =
-            await repositories.inventoryRepositories.inventory.findByProduct(
-              line.productId,
+          try {
+            const mutation = increaseInventoryInTransactionUseCase(
+              ctx,
+              repositories.inventoryRepositories,
+              {
+                productId: line.productId,
+                quantity: qty,
+                note: `Purchase receipt ${input.purchaseId}`,
+                idempotencyKey: `purchase-receipt:${input.idempotencyKey}:${line.id}`,
+              },
             );
-          if (!inv)
-            throw new PurchaseValidationError("Inventory is not initialized");
-          const next = inv.quantity + qty;
-          await repositories.inventoryRepositories.inventory.updateWithVersion(
-            line.productId,
-            next,
-            inv.updatedAt,
-            t,
-          );
-          const m =
-            await repositories.inventoryRepositories.stockMovements.append({
-              id: ctx.idGenerator.newId(),
-              productId: line.productId,
-              type: "PurchaseReceipt",
-              quantityDelta: qty,
-              stockBefore: inv.quantity,
-              stockAfter: next,
-              orderId: null,
-              orderItemId: null,
-              note: `Purchase receipt ${input.purchaseId}`,
-              idempotencyKey: `purchase-receipt:${input.idempotencyKey}:${line.id}`,
-              createdAt: t,
-              updatedAt: t,
-            });
-          stockMovementId = m.id;
+            const mapped = mutation instanceof Promise
+              ? mutation.catch((e) => {
+                  if (e instanceof InventoryNotInitializedError)
+                    throw new PurchaseValidationError("Inventory is not initialized");
+                  throw e;
+                })
+              : mutation;
+            return chain(mapped, ({ movement }) => finishLine(movement.id));
+          } catch (e) {
+            if (e instanceof InventoryNotInitializedError)
+              throw new PurchaseValidationError("Inventory is not initialized");
+            throw e;
+          }
         }
-        rlines.push({
-          id: ctx.idGenerator.newId(),
-          receiptId: rid,
-          purchaseLineId: line.id,
-          quantityReceived: qty,
-          stockMovementId,
-          createdAt: t,
-        });
-        await repositories.purchaseRepositories.purchases.updateLine(line.id, {
-          receivedQuantity: line.receivedQuantity + qty,
-          updatedAt: t,
-        });
-      }
-      receipt = await repositories.purchaseRepositories.receipts.append({
+        return finishLine(null);
+      };
+      return chain(receiveLine(0), () => chain(repositories.purchaseRepositories.receipts.append({
         id: rid,
         purchaseId: input.purchaseId,
         idempotencyKey: input.idempotencyKey,
@@ -650,20 +647,22 @@ export const receivePurchaseUseCase = (ctx: PurchaseApplicationContext) => ({
         note: input.note ?? null,
         createdAt: t,
         lines: rlines,
-      });
-      const after = (await repositories.purchaseRepositories.purchases.findById(
-        input.purchaseId,
-      ))!;
+      }), (createdReceipt) => {
+      receipt = createdReceipt;
+      return chain(repositories.purchaseRepositories.purchases.findById(input.purchaseId), (after) => {
+      if (!after) throw new PurchaseNotFoundError();
       const full = after.lines.every((l) => l.receivedQuantity >= l.quantity);
-      return (await repositories.purchaseRepositories.purchases.update(
-        input.purchaseId,
-        {
+      return chain(repositories.purchaseRepositories.purchases.update(input.purchaseId, {
           status: full ? "Received" : "PartiallyReceived",
           receivedAt: full ? t : null,
           updatedAt: t,
-        },
-      ))!;
-    });
+        }), (result) => {
+          if (!result) throw new PurchaseNotFoundError();
+          return result;
+        });
+      });
+      }));
+    }));
     await dispatchEvent(
       ctx,
       event(
