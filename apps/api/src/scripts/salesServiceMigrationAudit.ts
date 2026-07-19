@@ -39,6 +39,7 @@ export function runSalesServiceMigrationAudit():SalesServiceMigrationAuditResult
   const issues:string[]=[];
   if(!bridge.includes("createSalesServiceApplication(db).getSale.execute({saleId:id})"))issues.push("GetSaleUseCase delegation missing");
   if(!bridge.includes("application.listSales.execute"))issues.push("ListSalesUseCase delegation missing");
+  if(!bridge.includes("createSalesServiceApplication(db).createInternalSale.execute"))issues.push("CreateInternalSale delegation missing");
   if(count(bridge,"out=await completeSale(db,id!)")!==1)issues.push("ERP completion must delegate exactly once");
   const command=bridge.slice(bridge.indexOf("export async function executeSalesCommand"),bridge.indexOf("export { getSaleCompletionReadiness"));
   if(command.includes("createFinanceEntry"))issues.push("ERP completion duplicates finance persistence");
