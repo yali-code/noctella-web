@@ -58,7 +58,8 @@ Sales modernization is complete:
 - Capability audit completed.
 - Capability review completed.
 - Transaction capability types merged.
-- Sprint 35D synchronous SQLite execution compatibility implemented.
+- Sprint 35D has not started.
+- Next implementation: Inventory Driver-Aware Transaction Runtime.
 
 ## Inventory Invariants
 
@@ -175,23 +176,3 @@ Commit:
 - Sprint 35D branch created from updated `main`.
 - Existing Inventory capability types confirmed.
 - No source, schema, or API contract changes introduced.
-
-## Sprint 35D — Inventory Synchronous Execution Compatibility
-
-### Capability Added
-
-- SQLite Inventory mutations execute synchronous transaction-scoped persistence inside the managed transaction callback.
-- PostgreSQL Inventory repositories retain asynchronous execution.
-
-### Dependencies Introduced or Changed
-
-- None.
-
-### Technical Debt
-
-- None introduced.
-
-### Entry Conditions for Next Sprint
-
-- Sprint 35D focused regressions, typecheck, build, architecture audit, repository parity, and final diff review pass.
-- Sprint 35D is reviewed and merged before further Inventory transaction work begins.
