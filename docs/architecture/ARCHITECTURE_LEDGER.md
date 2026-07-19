@@ -1,0 +1,178 @@
+# Noctella ERP Architecture Ledger
+
+## Ledger Purpose
+
+Record architectural capabilities, decisions, invariants, technical debt, deferred work, validation results, and next-sprint entry conditions.
+
+## Existing Architecture Rules
+
+```text
+Repository
+↓
+Application Service
+↓
+Use Cases
+↓
+Domain
+↓
+Repository
+```
+
+- Repositories must remain persistence-only.
+- Routes must remain thin: validation, mapping, and delegation only.
+- Application Services orchestrate only.
+- Keep business rules inside Use Cases.
+- Preserve API contracts.
+- Do not duplicate business logic.
+- Do not duplicate repositories.
+- Do not duplicate services.
+- Reuse existing services and repositories whenever possible.
+
+## Development Policy
+
+- One sprint has one objective.
+- Every sprint starts from `main` on a dedicated branch.
+- Codex READY FOR PR does not authorize merge.
+- Merge requires ChatGPT architect review.
+- Required review includes build, typecheck, architecture audit, focused regression, repository audit, and final diff review.
+- Every major architectural milestone receives a GitHub Release and tag as a recovery checkpoint before the next risky implementation phase.
+
+## Sales Modernization Status
+
+Sales modernization is complete:
+
+- Repository Foundation
+- Application Context
+- Use Cases
+- Completion Coordinator
+- Complete Sale
+- Application Adapter
+- Service Migration
+- Atomic Internal Sale Capability
+- Route Migration
+- Legacy Cleanup
+
+## Inventory Status
+
+- Architecture audit completed.
+- Capability audit completed.
+- Capability review completed.
+- Transaction capability types merged.
+- Sprint 35D has not started.
+- Next implementation: Inventory Driver-Aware Transaction Runtime.
+
+## Inventory Invariants
+
+- `better-sqlite3` managed transaction callbacks must not return Promises.
+- SQLite managed transaction callbacks must remain genuinely synchronous.
+- `db.transaction(async () => {})` is prohibited.
+- Never emulate transactions using manual `BEGIN`/`COMMIT`.
+- Do not weaken atomicity.
+- Preserve rollback guarantees.
+- Balance mutation, optimistic version checking, idempotency reservation, and stock movement must share one transaction boundary.
+- Driver and transaction capability pairing must be explicit.
+- Pass-through UnitOfWork must not claim atomicity.
+- Post-commit failures must not report a committed transaction as failed.
+- Repositories remain persistence-only.
+- Routes remain thin.
+- Application Services orchestrate only.
+- Business rules remain inside Use Cases.
+- API contracts remain unchanged.
+
+## Validation Standard
+
+```text
+npm run typecheck
+npm run build
+npm run lint
+npm test --workspaces --if-present
+npm run architecture:audit -w apps/api
+npm run repo:parity -w apps/api
+```
+
+- Focused regressions are required for sprint scope.
+- A timeout is not a successful result.
+- Validation results must not be invented.
+- Final diff and unrelated-file review are mandatory.
+
+## Recovery Checkpoint
+
+- Release: Noctella ERP v1.4 — Sales Complete & Inventory Transaction Baseline
+- Tag: `v1.4`
+- Commit: `896b7cfaf5beb911ae24381bc29e56c5287c48df`
+- Purpose: Stable rollback checkpoint before Inventory Driver-Aware Transaction Runtime.
+
+## Reusable Sprint Template
+
+## Sprint <ID> — <Name>
+
+Date:
+Status:
+PR:
+Commit:
+
+### Capability Added
+- ...
+
+### Dependencies Introduced or Changed
+- ...
+
+### Architectural Decisions
+- ...
+
+### Invariants
+- ...
+
+### Technical Debt
+- None / ...
+
+### Deferred Work
+- ...
+
+### Entry Conditions for Next Sprint
+- ...
+
+### Validation
+- Build:
+- Typecheck:
+- Lint:
+- Tests:
+- Architecture audit:
+- Repository audit:
+- Focused regressions:
+- Full suite:
+- Final diff review:
+
+## Sprint 35C-L — Architecture Ledger Foundation
+
+### Capability Added
+
+- Architecture Ledger foundation created.
+
+### Dependencies Introduced or Changed
+
+- None.
+
+### Architectural Decisions
+
+- Sprint architecture history and validation are recorded in one living ledger.
+- Large future decisions may use separate ADR files.
+- Only factual changes and actual validation results may be recorded.
+
+### Technical Debt
+
+- None introduced.
+
+### Deferred Work
+
+- `CURRENT_INVARIANTS.md`
+- ADR files
+- Sprint 35D runtime implementation
+
+### Entry Conditions for Sprint 35D
+
+- Ledger merged into `main`.
+- Working tree clean.
+- Sprint 35D branch created from updated `main`.
+- Existing Inventory capability types confirmed.
+- No source, schema, or API contract changes introduced.
