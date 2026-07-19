@@ -2,7 +2,7 @@ import type { InventoryRepository } from "../repositories/inventory/inventoryRep
 import type { ProductRepository } from "../repositories/inventory/productRepository";
 import type { StockLocationRepository } from "../repositories/inventory/stockLocationRepository";
 import type { StockMovementRepository } from "../repositories/inventory/stockMovementRepository";
-import type { UnitOfWork } from "./unitOfWork";
+import type { PassThroughInventoryUnitOfWork } from "../application/inventory/transactionCapabilities";
 import type { InventoryEventPublisher } from "../events/inventory";
 import type { InventoryObservability } from "../observability/inventory";
 import { noopInventoryEventPublisher } from "../events/inventory";
@@ -40,7 +40,7 @@ export interface InventoryApplicationContext {
   readonly inventoryRepository: InventoryRepository;
   readonly stockMovementRepository: StockMovementRepository;
   readonly stockLocationRepository: StockLocationRepository;
-  readonly unitOfWork: UnitOfWork;
+  readonly unitOfWork: PassThroughInventoryUnitOfWork;
   readonly clock: InventoryClock;
   readonly idGenerator: InventoryIdGenerator;
   readonly logger: InventoryLogger;
@@ -51,7 +51,7 @@ export interface InventoryApplicationContext {
 
 export interface BuildInventoryApplicationContextInput {
   readonly repositories: InventoryRepositoryBundle;
-  readonly unitOfWork: UnitOfWork;
+  readonly unitOfWork: PassThroughInventoryUnitOfWork;
   readonly clock: InventoryClock;
   readonly idGenerator: InventoryIdGenerator;
   readonly logger: InventoryLogger;
