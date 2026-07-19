@@ -438,13 +438,14 @@ async function change(
     map(e);
   }
 }
-export function increaseInventoryInTransactionUseCase(
+function mutateInventoryInTransactionUseCase(
   ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
   repositories: InventoryMutationRepositories,
   input: Omit<InventoryMutationInput, "expectedVersion"> & { expectedVersion?: string },
+  quantityDelta: number,
+  type: StockMovementType,
 ) {
   if (!positive(input.quantity)) throw new InvalidInventoryQuantityError();
-  const type = StockMovementType.PurchaseReceipt;
   const key = input.idempotencyKey;
   try {
     const existing = key && typeof repositories.stockMovements.findByIdempotencyKey === "function"
@@ -452,7 +453,7 @@ export function increaseInventoryInTransactionUseCase(
       : null;
     const result = chain(existing, (found) => {
       if (found) {
-        if (!same(found, { ...input, type, quantity: input.quantity }))
+        if (!same(found, { ...input, type, quantity: quantityDelta }))
           throw new InventoryOperationConflictError();
         return chain(repositories.inventory.findByProduct(input.productId), (current) => {
           if (!current) throw new InventoryNotInitializedError();
@@ -461,19 +462,23 @@ export function increaseInventoryInTransactionUseCase(
       }
       return chain(repositories.inventory.findByProduct(input.productId), (current) => {
         if (!current) throw new InventoryNotInitializedError();
-        const stockAfter = current.quantity + input.quantity;
+        const stockAfter = current.quantity + quantityDelta;
+        if (stockAfter < 0) throw new InsufficientInventoryError();
         const t = now(ctx as InventoryApplicationContext);
         return chain(
           repositories.inventory.updateWithVersion(input.productId, stockAfter, input.expectedVersion ?? current.updatedAt, t),
-          (state) => chain(
-            repositories.stockMovements.append({
+          (state) => {
+            const append = () => chain(repositories.stockMovements.append({
               id: ctx.idGenerator.newId(), productId: input.productId, type,
-              quantityDelta: input.quantity, stockBefore: current.quantity, stockAfter,
+              quantityDelta, stockBefore: current.quantity, stockAfter,
               orderId: input.orderId ?? null, orderItemId: input.orderItemId ?? null,
               note: input.note ?? null, idempotencyKey: key ?? null, createdAt: t, updatedAt: t,
             }),
-            (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false }),
-          ),
+            (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false }));
+            return type === StockMovementType.Sale && stockAfter === 0
+              ? chain(repositories.products.update(input.productId, { status: ProductStatus.Sold, updatedAt: t }), append)
+              : append();
+          },
         );
       });
     });
@@ -481,6 +486,27 @@ export function increaseInventoryInTransactionUseCase(
   } catch (e) {
     map(e);
   }
+}
+export function increaseInventoryInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: Omit<InventoryMutationInput, "expectedVersion"> & { expectedVersion?: string },
+) {
+  return mutateInventoryInTransactionUseCase(ctx, repositories, input, input.quantity, StockMovementType.PurchaseReceipt);
+}
+export function decreaseInventoryForSaleInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: Omit<InventoryMutationInput, "expectedVersion"> & { expectedVersion?: string },
+) {
+  return mutateInventoryInTransactionUseCase(ctx, repositories, input, -input.quantity, StockMovementType.Sale);
+}
+export function restoreInventoryForSaleRollbackInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: Omit<InventoryMutationInput, "expectedVersion"> & { expectedVersion?: string },
+) {
+  return mutateInventoryInTransactionUseCase(ctx, repositories, input, input.quantity, StockMovementType.SaleRollback);
 }
 export const createIncreaseInventoryUseCase = (
   ctx: InventoryApplicationContext,
