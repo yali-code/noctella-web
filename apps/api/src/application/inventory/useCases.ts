@@ -57,6 +57,7 @@ const nonneg = (n: number) => Number.isInteger(n) && n >= 0;
 const ro = <T extends object>(x: T): Readonly<T> => Object.freeze({ ...x });
 const chain = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>) =>
   value instanceof Promise ? value.then(next) : next(value);
+type InventoryMutationRepositories = InventoryApplicationContext["repositories"];
 const product = (p: ProductRecord): ProductDto =>
   Object.freeze({
     ...p,
@@ -433,6 +434,50 @@ async function change(
       ),
     );
     return out;
+  } catch (e) {
+    map(e);
+  }
+}
+export function increaseInventoryInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: Omit<InventoryMutationInput, "expectedVersion"> & { expectedVersion?: string },
+) {
+  if (!positive(input.quantity)) throw new InvalidInventoryQuantityError();
+  const type = StockMovementType.PurchaseReceipt;
+  const key = input.idempotencyKey;
+  try {
+    const existing = key && typeof repositories.stockMovements.findByIdempotencyKey === "function"
+      ? repositories.stockMovements.findByIdempotencyKey(key)
+      : null;
+    const result = chain(existing, (found) => {
+      if (found) {
+        if (!same(found, { ...input, type, quantity: input.quantity }))
+          throw new InventoryOperationConflictError();
+        return chain(repositories.inventory.findByProduct(input.productId), (current) => {
+          if (!current) throw new InventoryNotInitializedError();
+          return Object.freeze({ inventory: inv(current), movement: movement(found), replayed: true });
+        });
+      }
+      return chain(repositories.inventory.findByProduct(input.productId), (current) => {
+        if (!current) throw new InventoryNotInitializedError();
+        const stockAfter = current.quantity + input.quantity;
+        const t = now(ctx as InventoryApplicationContext);
+        return chain(
+          repositories.inventory.updateWithVersion(input.productId, stockAfter, input.expectedVersion ?? current.updatedAt, t),
+          (state) => chain(
+            repositories.stockMovements.append({
+              id: ctx.idGenerator.newId(), productId: input.productId, type,
+              quantityDelta: input.quantity, stockBefore: current.quantity, stockAfter,
+              orderId: input.orderId ?? null, orderItemId: input.orderItemId ?? null,
+              note: input.note ?? null, idempotencyKey: key ?? null, createdAt: t, updatedAt: t,
+            }),
+            (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false }),
+          ),
+        );
+      });
+    });
+    return result instanceof Promise ? result.catch(map) : result;
   } catch (e) {
     map(e);
   }
