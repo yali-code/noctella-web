@@ -58,8 +58,7 @@ Sales modernization is complete:
 - Capability audit completed.
 - Capability review completed.
 - Transaction capability types merged.
-- Sprint 35D has not started.
-- Next implementation: Inventory Driver-Aware Transaction Runtime.
+- Sprint 35D driver-aware transaction runtime implemented.
 
 ## Inventory Invariants
 
@@ -176,3 +175,24 @@ Commit:
 - Sprint 35D branch created from updated `main`.
 - Existing Inventory capability types confirmed.
 - No source, schema, or API contract changes introduced.
+
+## Sprint 35D — Inventory Driver-Aware Transaction Runtime
+
+### Capability Added
+
+- SQLite Inventory transaction-scoped persistence executes synchronously inside managed transactions; PostgreSQL persistence remains asynchronous.
+- Driver and transaction capability mismatches are rejected before execution.
+
+### Dependencies Introduced or Changed
+
+- No package dependencies changed.
+- Inventory application contexts now pair repository drivers with matching transaction capabilities.
+
+### Technical Debt
+
+- None introduced.
+
+### Entry Conditions for Next Sprint
+
+- Sprint 35D focused regressions and required validation pass.
+- Final diff receives architecture review before merge.
