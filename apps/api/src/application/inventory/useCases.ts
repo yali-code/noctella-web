@@ -131,6 +131,17 @@ async function replay(
 function now(ctx: InventoryApplicationContext) {
   return ctx.clock.now().toISOString();
 }
+function drive<T>(iterator: Generator<any, T, any>): T | Promise<T> {
+  const advance = (value?: unknown): T | Promise<T> => {
+    const step = iterator.next(value);
+    if (step.done) return step.value;
+    return step.value &&
+      typeof (step.value as Promise<unknown>).then === "function"
+      ? (step.value as Promise<unknown>).then(advance)
+      : advance(step.value);
+  };
+  return advance();
+}
 async function publish(
   ctx: InventoryApplicationContext,
   event: InventoryEvent,
@@ -248,17 +259,18 @@ export const createProductUseCase = (ctx: InventoryApplicationContext) => ({
     const t = now(ctx),
       id = ctx.idGenerator.newId();
     try {
-      const out = await ctx.unitOfWork.run(async ({ repositories }) =>
-        product(
-          await repositories.inventoryRepositories.products.create({
+      const out = await ctx.unitOfWork.run(({ repositories }) =>
+        drive(function* () {
+          return product(
+          (yield repositories.inventoryRepositories.products.create({
             ...input,
             id,
             createdAt: t,
             updatedAt: t,
             status: input.status ?? ProductStatus.Draft,
             purchaseCurrency: "EUR",
-          }),
-        ),
+          })) as ProductRecord,
+        ); }()),
       );
       await publish(
         ctx,
@@ -287,14 +299,14 @@ export const createUpdateProductUseCase = (
     const { id, expectedVersion, ...patch } = input;
     try {
       const t = now(ctx);
-      const out = await ctx.unitOfWork.run(async ({ repositories }) =>
-        product(
-          await repositories.inventoryRepositories.products.updateWithVersion(
+      const out = await ctx.unitOfWork.run(({ repositories }) =>
+        drive(function* () { return product(
+          (yield repositories.inventoryRepositories.products.updateWithVersion(
             id,
             { ...patch, updatedAt: t },
             expectedVersion,
-          ),
-        ),
+          )) as ProductRecord,
+        ); }()),
       );
       await publish(
         ctx,
@@ -326,27 +338,27 @@ export const createInitializeInventoryUseCase = (
     if (rep) return rep;
     try {
       let meta: { before: number; after: number; time: string };
-      const out = await ctx.unitOfWork.run(async ({ repositories }) => {
-        const p = await repositories.inventoryRepositories.products.findById(
+      const out = await ctx.unitOfWork.run(({ repositories }) => drive(function* () {
+        const p = (yield repositories.inventoryRepositories.products.findById(
           input.productId,
-        );
+        )) as ProductRecord | null;
         if (!p) throw new ProductNotFoundApplicationError();
         if (p.stockQuantity !== 1 && p.stockQuantity !== input.quantity)
           throw new InventoryAlreadyInitializedError();
         const t = now(ctx);
         const state = input.expectedVersion
-          ? await repositories.inventoryRepositories.inventory.updateWithVersion(
+          ? yield repositories.inventoryRepositories.inventory.updateWithVersion(
               input.productId,
               input.quantity,
               input.expectedVersion,
               t,
             )
-          : await repositories.inventoryRepositories.inventory.create({
+          : yield repositories.inventoryRepositories.inventory.create({
               productId: input.productId,
               quantity: input.quantity,
               updatedAt: t,
             });
-        await repositories.inventoryRepositories.stockMovements.append({
+        yield repositories.inventoryRepositories.stockMovements.append({
           id: ctx.idGenerator.newId(),
           productId: input.productId,
           type: StockMovementType.ManualAdjustment,
@@ -361,8 +373,8 @@ export const createInitializeInventoryUseCase = (
           updatedAt: t,
         });
         meta = { before: p.stockQuantity, after: input.quantity, time: t };
-        return inv(state);
-      });
+        return inv(state as InventoryState);
+      }()));
       await publish(
         ctx,
         event(
@@ -400,23 +412,23 @@ async function change(
   if (rep) return rep;
   try {
     let meta: { before: number; after: number; time: string };
-    const out = await ctx.unitOfWork.run(async ({ repositories }) => {
+    const out = await ctx.unitOfWork.run(({ repositories }) => drive(function* () {
       const cur =
-        await repositories.inventoryRepositories.inventory.findByProduct(
+        (yield repositories.inventoryRepositories.inventory.findByProduct(
           input.productId,
-        );
+        )) as InventoryState | null;
       if (!cur) throw new InventoryNotInitializedError();
       const next = cur.quantity + q;
       if (next < 0) throw new InsufficientInventoryError();
       const t = now(ctx);
       const state =
-        await repositories.inventoryRepositories.inventory.updateWithVersion(
+        yield repositories.inventoryRepositories.inventory.updateWithVersion(
           input.productId,
           next,
           input.expectedVersion,
           t,
         );
-      await repositories.inventoryRepositories.stockMovements.append({
+      yield repositories.inventoryRepositories.stockMovements.append({
         id: ctx.idGenerator.newId(),
         productId: input.productId,
         type,
@@ -431,8 +443,8 @@ async function change(
         updatedAt: t,
       });
       meta = { before: cur.quantity, after: next, time: t };
-      return inv(state);
-    });
+      return inv(state as InventoryState);
+    }()));
     await publish(
       ctx,
       event(
@@ -478,21 +490,21 @@ export const createSetInventoryQuantityUseCase = (
     if (rep) return rep;
     try {
       let meta: { before: number; after: number; delta: number; time: string };
-      const out = await ctx.unitOfWork.run(async ({ repositories }) => {
+      const out = await ctx.unitOfWork.run(({ repositories }) => drive(function* () {
         const cur =
-          await repositories.inventoryRepositories.inventory.findByProduct(
+          (yield repositories.inventoryRepositories.inventory.findByProduct(
             input.productId,
-          );
+          )) as InventoryState | null;
         if (!cur) throw new InventoryNotInitializedError();
         const t = now(ctx);
         const state =
-          await repositories.inventoryRepositories.inventory.updateWithVersion(
+          yield repositories.inventoryRepositories.inventory.updateWithVersion(
             input.productId,
             input.quantity,
             input.expectedVersion,
             t,
           );
-        await repositories.inventoryRepositories.stockMovements.append({
+        yield repositories.inventoryRepositories.stockMovements.append({
           id: ctx.idGenerator.newId(),
           productId: input.productId,
           type: StockMovementType.ManualAdjustment,
@@ -512,8 +524,8 @@ export const createSetInventoryQuantityUseCase = (
           delta: input.quantity - cur.quantity,
           time: t,
         };
-        return inv(state);
-      });
+        return inv(state as InventoryState);
+      }()));
       await publish(
         ctx,
         event(
@@ -545,15 +557,15 @@ export const createStockLocationUseCase = (
     try {
       const t = now(ctx),
         id = ctx.idGenerator.newId();
-      const out = await ctx.unitOfWork.run(async ({ repositories }) =>
-        location(
-          await repositories.inventoryRepositories.stockLocations.create({
+      const out = await ctx.unitOfWork.run(({ repositories }) =>
+        drive(function* () { return location(
+          (yield repositories.inventoryRepositories.stockLocations.create({
             id,
             ...input,
             createdAt: t,
             updatedAt: t,
-          }),
-        ),
+          })) as StockLocationRecord,
+        ); }()),
       );
       await publish(
         ctx,
