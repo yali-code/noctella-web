@@ -196,3 +196,25 @@ Commit:
 
 - Sprint 35D focused regressions and required validation pass.
 - Final diff receives architecture review before merge.
+
+## Sprint 35E — Inventory Runtime Integration Audit
+
+### Capability Added
+
+- Inventory runtime entry points, UnitOfWork wiring, application-layer bypasses, and direct repository access were audited and recorded.
+
+### Dependencies Introduced or Changed
+
+- None.
+
+### Technical Debt
+
+- Purchase receipt mutates Inventory repositories through the general UnitOfWork instead of approved Inventory Use Cases and the Inventory-specific driver-aware capability.
+- Order, return, and product-write paths can mutate the same Inventory state outside the Inventory application layer.
+- ERP Inventory read routes and stock reconciliation query persistence directly.
+- Caller-supplied pass-through Inventory UnitOfWork implementations have no driver or execution identity and cannot prove atomicity.
+
+### Entry Conditions for Next Sprint
+
+- This audit receives architecture review and is merged without runtime, API, schema, migration, or test changes.
+- Any correction sprint selects one recorded execution path and defines its atomic boundary before implementation.
