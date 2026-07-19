@@ -35,11 +35,9 @@ export interface AsynchronousInventoryTransactionCapability {
 }
 
 export interface PassThroughInventoryUnitOfWork {
-  readonly driver?: InventoryTransactionDriver;
-  readonly execution?: "synchronous" | "asynchronous";
   run<T>(
     work: (context: InventoryTransactionContext) => T | Promise<T>,
-  ): T | Promise<Awaited<T>>;
+  ): Promise<Awaited<T>>;
 }
 
 export interface InventoryTransactionCapabilityByDriver {
