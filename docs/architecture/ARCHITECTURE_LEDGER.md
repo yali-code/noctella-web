@@ -321,3 +321,24 @@ Commit:
 
 - Sprint 35J focused regressions and required validation pass.
 - Final diff receives architecture review before merge.
+
+## Sprint 35K — Product Write Transaction Capability
+
+### Capability Added
+
+- Product Write product create and update persistence can execute through a driver-aware transaction capability.
+- SQLite execution is synchronous inside a better-sqlite3 managed transaction; PostgreSQL execution remains asynchronous.
+- Explicit driver and execution capability mismatches are rejected.
+
+### Dependencies Introduced or Changed
+
+- The capability reuses the existing Product Write repository implementation and mappings through transaction-scoped repository construction.
+
+### Technical Debt
+
+- Product Write Use Cases are not migrated to this capability in Sprint 35K.
+
+### Entry Conditions for Next Sprint
+
+- Sprint 35K focused regressions and required validation pass.
+- A later migration preserves the shared Product Write and Inventory atomic boundary and existing public repository contracts.

@@ -1,43 +1,47 @@
 import { and, asc, eq } from "drizzle-orm";
 import * as sqliteSchema from "../../db/schema.sqlite";
 import * as postgresSchema from "../../db/schema.postgres";
-import type { ProductWriteRepositoryBundle } from "./types";
+import type { ProductWriteRepositoryBundle, SynchronousProductWriteRepository } from "./types";
 
 const table = (schema: typeof sqliteSchema | typeof postgresSchema, name: keyof typeof sqliteSchema) => (schema as Record<string, any>)[name];
-const first = async (q: any) => Array.isArray(q) ? q[0] : (typeof q?.limit === "function" ? (await q.limit(1))[0] : (await q)[0]);
-const rows = async (q: any) => Array.isArray(q) ? q : await q;
-const run = async (q: any) => { if (typeof q?.run === "function") return q.run(); return q; };
+type Execution = "synchronous" | "asynchronous";
+type Result<T> = T | Promise<T>;
+const then = <T, U>(value: Result<T>, next: (value: T) => Result<U>): Result<U> => value instanceof Promise ? value.then(next) : next(value);
+const rows = (q: any, execution: Execution = "asynchronous"): Result<any[]> => execution === "synchronous" ? (Array.isArray(q) ? q : q.all()) : Promise.resolve(q);
+const first = (q: any, execution: Execution = "asynchronous"): Result<any> => then(typeof q?.limit === "function" ? rows(q.limit(1), execution) : rows(q, execution), values => values[0] ?? null);
+const run = (q: any, execution: Execution = "asynchronous"): Result<unknown> => execution === "synchronous" ? q.run() : Promise.resolve(q);
 const bool = (v: unknown) => v === true || v === 1;
 
-export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres"): ProductWriteRepositoryBundle {
+export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres", execution: Execution = "asynchronous"): any {
   const products = table(schema, "products"), productErpMetadata = table(schema, "productErpMetadata"), categories = table(schema, "categories"), collections = table(schema, "collections"), productPhotos = table(schema, "productPhotos");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v === undefined ? null : v]));
-  const exists = async (tbl: any, col: any, value: string, excludeId?: string, idCol = tbl.id) => (await rows(db.select({ id: idCol }).from(tbl).where(eq(col, value)))).some((r: any) => r.id !== excludeId);
-  return {
-    products: {
-      async create({ values }) { await run(db.insert(products).values(normalize(values))); return { id: String(values.id) }; },
-      async update({ id, values }) { await run(db.update(products).set(normalize(values)).where(eq(products.id, id))); return { id, updated: true }; },
-      existsBySku: (sku, excludeId) => exists(products, products.sku, sku, excludeId),
-      existsByErpReference: (erpReferenceId, excludeId) => exists(products, products.erpReferenceId, erpReferenceId, excludeId),
-      async existsByNoctellaId(noctellaId, excludeProductId) { return exists(productErpMetadata, productErpMetadata.noctellaId, noctellaId, excludeProductId, productErpMetadata.productId); },
-      async getVersionForUpdate(id) { return (await first(db.select({ updatedAt: products.updatedAt }).from(products).where(eq(products.id, id))))?.updatedAt ?? null; },
-      async updateWithExpectedVersion({ id, values, expectedUpdatedAt }) { const current = await this.getVersionForUpdate(id); if (!current) return { id, updated: false, conflict: { field: "id", value: id, message: "Product not found" } }; if (expectedUpdatedAt && current !== expectedUpdatedAt) return { id, updated: false, conflict: { field: "updatedAt", value: expectedUpdatedAt, message: "Product has changed since expectedUpdatedAt" } }; await this.update({ id, values }); return { id, updated: true }; },
-      async createErpMetadata(record) { await run(db.insert(productErpMetadata).values(normalize(record))); },
-      async updateErpMetadata(productId, values) { await run(db.update(productErpMetadata).set(normalize(values)).where(eq(productErpMetadata.productId, productId))); },
-      async getErpMetadataForUpdate(productId) { return (await first(db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productId)))) ?? null; },
-    },
+  const exists = (tbl: any, col: any, value: string, excludeId?: string, idCol = tbl.id) => then(rows(db.select({ id: idCol }).from(tbl).where(eq(col, value)), execution), values => values.some((r: any) => r.id !== excludeId));
+  const productRepository: SynchronousProductWriteRepository = {
+      create({ values }) { return then(run(db.insert(products).values(normalize(values)), execution), () => ({ id: String(values.id) })) as any; },
+      update({ id, values }) { return then(run(db.update(products).set(normalize(values)).where(eq(products.id, id)), execution), () => ({ id, updated: true })) as any; },
+      existsBySku: (sku, excludeId) => exists(products, products.sku, sku, excludeId) as any,
+      existsByErpReference: (erpReferenceId, excludeId) => exists(products, products.erpReferenceId, erpReferenceId, excludeId) as any,
+      existsByNoctellaId(noctellaId, excludeProductId) { return exists(productErpMetadata, productErpMetadata.noctellaId, noctellaId, excludeProductId, productErpMetadata.productId) as any; },
+      getVersionForUpdate(id) { return then(first(db.select({ updatedAt: products.updatedAt }).from(products).where(eq(products.id, id)), execution), row => row?.updatedAt ?? null); },
+      updateWithExpectedVersion({ id, values, expectedUpdatedAt }) { return then(this.getVersionForUpdate(id), current => { if (!current) return { id, updated: false, conflict: { field: "id", value: id, message: "Product not found" } }; if (expectedUpdatedAt && current !== expectedUpdatedAt) return { id, updated: false, conflict: { field: "updatedAt", value: expectedUpdatedAt, message: "Product has changed since expectedUpdatedAt" } }; return then(this.update({ id, values }), () => ({ id, updated: true })); }) as any; },
+      createErpMetadata(record) { return then(run(db.insert(productErpMetadata).values(normalize(record)), execution), () => undefined); },
+      updateErpMetadata(productId, values) { return then(run(db.update(productErpMetadata).set(normalize(values)).where(eq(productErpMetadata.productId, productId)), execution), () => undefined); },
+      getErpMetadataForUpdate(productId) { return then(first(db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productId)), execution), row => row ?? null); },
+    };
+  const bundle: ProductWriteRepositoryBundle = {
+    products: productRepository as unknown as ProductWriteRepositoryBundle["products"],
     categories: {
       async create({ values }) { await run(db.insert(categories).values(normalize(values))); return { id: String(values.id) }; },
       async update({ id, values }) { await run(db.update(categories).set(normalize(values)).where(eq(categories.id, id))); return { id }; },
-      existsByName: (name, excludeId) => exists(categories, categories.name, name, excludeId),
-      existsBySlug: (slug, excludeId) => exists(categories, categories.slug, slug, excludeId),
+      existsByName: (name, excludeId) => Promise.resolve(exists(categories, categories.name, name, excludeId)),
+      existsBySlug: (slug, excludeId) => Promise.resolve(exists(categories, categories.slug, slug, excludeId)),
       async getVersionForUpdate(id) { return (await first(db.select({ updatedAt: categories.updatedAt }).from(categories).where(eq(categories.id, id))))?.updatedAt ?? null; },
     },
     collections: {
       async create({ values }) { await run(db.insert(collections).values(normalize(values))); return { id: String(values.id) }; },
       async update({ id, values }) { await run(db.update(collections).set(normalize(values)).where(eq(collections.id, id))); return { id }; },
-      existsByName: (name, excludeId) => exists(collections, collections.name, name, excludeId),
-      existsBySlug: (slug, excludeId) => exists(collections, collections.slug, slug, excludeId),
+      existsByName: (name, excludeId) => Promise.resolve(exists(collections, collections.name, name, excludeId)),
+      existsBySlug: (slug, excludeId) => Promise.resolve(exists(collections, collections.slug, slug, excludeId)),
       async getVersionForUpdate(id) { return (await first(db.select({ updatedAt: collections.updatedAt }).from(collections).where(eq(collections.id, id))))?.updatedAt ?? null; },
     },
     photos: {
@@ -53,4 +57,5 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
       async listForUpdate(productId) { return rows(db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(asc(productPhotos.sortOrder))); },
     },
   };
+  return bundle;
 }

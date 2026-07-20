@@ -34,6 +34,11 @@ export interface ProductWriteRepository {
   updateErpMetadata(productId: string, values: Partial<ProductErpMetadataRecord>): Promise<void>;
   getErpMetadataForUpdate(productId: string): Promise<Nullable<ProductErpMetadataRecord>>;
 }
+export type SynchronousProductWriteRepository = {
+  [Key in keyof ProductWriteRepository]: ProductWriteRepository[Key] extends (...args: infer Args) => Promise<infer Result>
+    ? (...args: Args) => Result
+    : ProductWriteRepository[Key];
+};
 export interface CategoryWriteRepository {
   create(input: CreateCategoryInput): Promise<{ id: string }>;
   update(input: UpdateCategoryInput): Promise<{ id: string }>;
