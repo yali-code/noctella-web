@@ -21,6 +21,7 @@ import type { ProductReadServiceContext } from "../repositories/product-read/typ
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
 import { createProductWithInventoryUseCase, updateProductWithInventoryUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
 import { createInventoryApplicationContextForDb } from "./inventoryApplicationContextForDb";
+import { createProductWriteTransactionCapabilityForDb } from "./productWriteTransactionCapabilityForDb";
 
 
 function productWriteUseCaseContext(db: DbClient) {
@@ -336,7 +337,8 @@ export async function createProduct(
 ): Promise<ProductWithImages> {
   await assertCategoryExists(db, input.categoryId);
   if (input.collectionId) await assertCollectionExists(db, input.collectionId);
-  const result = await createProductWithInventoryUseCase(createInventoryApplicationContextForDb(db), input);
+  const driver = (process.env.DATABASE_DRIVER as "sqlite" | "postgres" | "supabase-postgres" | "test-memory") || "sqlite";
+  const result = await createProductWithInventoryUseCase(createInventoryApplicationContextForDb(db, driver, createProductWriteTransactionCapabilityForDb(db, driver) as never) as never, input);
   if (input.images) await replaceImages(db, result.id, input.images);
   return getProductById(db, result.id);
 }
@@ -354,7 +356,8 @@ export async function updateProduct(
   if (input.stockQuantity !== undefined || input.type !== undefined) {
     patch.stockQuantity = resolveStockQuantity(effectiveType, input.stockQuantity !== undefined ? input.stockQuantity : existing.stockQuantity);
   }
-  await updateProductWithInventoryUseCase(createInventoryApplicationContextForDb(db), id, patch);
+  const driver = (process.env.DATABASE_DRIVER as "sqlite" | "postgres" | "supabase-postgres" | "test-memory") || "sqlite";
+  await updateProductWithInventoryUseCase(createInventoryApplicationContextForDb(db, driver, createProductWriteTransactionCapabilityForDb(db, driver) as never) as never, id, patch);
   if (input.images !== undefined) await replaceImages(db, id, input.images);
   return getProductById(db, id);
 }

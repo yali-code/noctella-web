@@ -4,6 +4,7 @@ import type { ProductWriteRepositoryBundle } from "../../repositories/product-wr
 import { BadRequestError, ConflictError, NotFoundError } from "../../services/errors";
 import type { UnitOfWork } from "../../services/unitOfWork";
 import type { InventoryApplicationContext } from "../../services/inventoryApplicationContext";
+import type { AsynchronousProductWriteTransactionContext } from "../../application/product-write/transactionCapabilities";
 import { initializeInventoryInTransactionUseCase, setInventoryQuantityInTransactionUseCase } from "../../application/inventory";
 import { slugify } from "../../validation/common";
 import type { CreateProductInput, UpdateProductInput } from "../../validation/product";
@@ -11,21 +12,22 @@ import type { CreateCategoryInput, UpdateCategoryInput } from "../../validation/
 import type { CreateCollectionInput, UpdateCollectionInput } from "../../validation/collection";
 
 export interface ProductWriteUseCaseContext { unitOfWork: UnitOfWork; repositories: ProductWriteRepositoryBundle }
+type ProductInventoryWriteContext = Omit<InventoryApplicationContext, "unitOfWork"> & { unitOfWork: { run<T>(work: (context: AsynchronousProductWriteTransactionContext) => T | Promise<T>): Promise<Awaited<T>> } };
 const now = () => new Date().toISOString();
 const nullable = (v: unknown): string | number | boolean | null => v === undefined || v === null ? null : (typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? v : JSON.stringify(v));
 function stock(type: ProductType, requested?: number) { if (type === ProductType.UniqueItem) { const q = requested ?? 1; if (q > 1) throw new BadRequestError("Unique Item stock quantity cannot exceed 1"); return q; } return requested ?? 1; }
 function productValues(input: CreateProductInput | UpdateProductInput, extra: Record<string, unknown> = {}) { const out: Record<string, unknown> = { ...extra }; for (const [k,v] of Object.entries(input as Record<string, unknown>)) { if (k === "images" || k === "expectedUpdatedAt" || v === undefined) continue; out[k] = Array.isArray(v) ? JSON.stringify(v) : nullable(v); } return out as Record<string, string|number|boolean|null>; }
 const chain = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>) => value instanceof Promise ? value.then(next) : next(value);
-export function createProductWithInventoryUseCase(ctx: InventoryApplicationContext, input: CreateProductInput) {
+export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteContext, input: CreateProductInput) {
   const quantity = stock(input.type, input.stockQuantity);
   const slug = input.slug ? slugify(input.slug) : slugify(input.title);
   const t = now(), id = randomUUID();
   return chain(ctx.repositories.products.existsBySku(input.sku), (exists) => {
     if (exists) throw new ConflictError(`SKU "${input.sku}" is already in use`);
     return ctx.unitOfWork.run(({ repositories }) => chain(
-      repositories.inventoryRepositories.products.create(productValues(input, {
+      repositories.productWriteRepositories.products.create({ values: productValues(input, {
         id, slug, createdAt: t, updatedAt: t,
-      }) as never),
+      }) }),
       () => input.stockQuantity === undefined ? { id } : chain(
         initializeInventoryInTransactionUseCase(ctx, repositories.inventoryRepositories, {
           productId: id, quantity, idempotencyKey: `product-create-stock:${id}`, note: "Product creation stock quantity",
@@ -37,7 +39,7 @@ export function createProductWithInventoryUseCase(ctx: InventoryApplicationConte
 }
 
 export function updateProductWithInventoryUseCase(
-  ctx: InventoryApplicationContext,
+  ctx: ProductInventoryWriteContext,
   id: string,
   input: UpdateProductInput & { expectedUpdatedAt?: string },
 ) {
@@ -48,15 +50,15 @@ export function updateProductWithInventoryUseCase(
       const { stockQuantity, expectedUpdatedAt, ...metadata } = input;
       const values = productValues(metadata, { updatedAt: now(), ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}) });
       return ctx.unitOfWork.run(({ repositories }) => chain(
-        repositories.inventoryRepositories.products.updateWithVersion(id, values as never, expectedUpdatedAt ?? current.updatedAt),
-        (updated) => stockQuantity === undefined || stockQuantity === current.stockQuantity ? { id, updated: true } : chain(
+        repositories.productWriteRepositories.products.updateWithExpectedVersion({ id, values, expectedUpdatedAt: expectedUpdatedAt ?? current.updatedAt }),
+        (updated) => { if (!updated.updated) throw new ConflictError(updated.conflict?.message ?? "Product has changed"); return stockQuantity === undefined || stockQuantity === current.stockQuantity ? { id, updated: true } : chain(
           setInventoryQuantityInTransactionUseCase(ctx, repositories.inventoryRepositories, {
-            productId: id, quantity: stockQuantity, expectedVersion: updated.updatedAt,
+            productId: id, quantity: stockQuantity, expectedVersion: String(values.updatedAt),
             idempotencyKey: `product-update-stock:${id}:${current.updatedAt}:${stockQuantity}`,
             note: "Product update stock quantity",
           }),
           () => ({ id, updated: true }),
-        ),
+        ); },
       ));
     });
   });
