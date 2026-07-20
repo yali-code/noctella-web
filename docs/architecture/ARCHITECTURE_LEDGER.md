@@ -361,3 +361,28 @@ Commit:
 ### Entry Conditions
 
 - Product create and update callers must supply a Product Write transaction capability whose driver and execution mode match the database driver.
+
+## Sprint 35M — Inventory Runtime Final Parity Audit
+
+### Capability
+
+- Production Inventory mutation entry points and their transaction capability pairing were audited and recorded.
+
+### Dependency
+
+- Purchase receipt, order creation, sale rollback, and return completion depend on transaction-scoped Inventory repositories supplied by the general UnitOfWork.
+- Product create and update depend on the driver-aware Product Write capability and its transaction-scoped Inventory repositories.
+- ERP purchase receipt depends on a SQLite transaction and synchronous transaction-scoped Inventory repositories.
+
+### Technical Debt
+
+- The general UnitOfWork still exposes Inventory repositories and the legacy stock repository bundle.
+- Unused legacy stock mutation exports remain in production source.
+- Caller-supplied UnitOfWork interfaces for Inventory, purchase, sales, and return construction do not identify driver or execution mode.
+- The ERP purchasing bridge has no PostgreSQL transaction branch.
+
+### Entry Conditions
+
+- Migrate purchase, order, sale rollback, and return Inventory repository access away from the general UnitOfWork before removing its Inventory repositories.
+- Resolve the remaining legacy stock mutation exports before removing the general UnitOfWork stock repository bundle.
+- Preserve synchronous SQLite and asynchronous PostgreSQL pairing in any replacement composed transaction boundary.
