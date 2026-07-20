@@ -19,7 +19,8 @@ import type { CreateProductInput, ProductListQuery, UpdateProductInput } from ".
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
-import { createProductUseCase, updateProductUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
+import { createProductWithInventoryUseCase, updateProductWithInventoryUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
+import { createInventoryApplicationContextForDb } from "./inventoryApplicationContextForDb";
 
 
 function productWriteUseCaseContext(db: DbClient) {
@@ -335,7 +336,7 @@ export async function createProduct(
 ): Promise<ProductWithImages> {
   await assertCategoryExists(db, input.categoryId);
   if (input.collectionId) await assertCollectionExists(db, input.collectionId);
-  const result = await createProductUseCase(productWriteUseCaseContext(db), input);
+  const result = await createProductWithInventoryUseCase(createInventoryApplicationContextForDb(db), input);
   if (input.images) await replaceImages(db, result.id, input.images);
   return getProductById(db, result.id);
 }
@@ -353,7 +354,7 @@ export async function updateProduct(
   if (input.stockQuantity !== undefined || input.type !== undefined) {
     patch.stockQuantity = resolveStockQuantity(effectiveType, input.stockQuantity !== undefined ? input.stockQuantity : existing.stockQuantity);
   }
-  await updateProductUseCase(productWriteUseCaseContext(db), id, patch);
+  await updateProductWithInventoryUseCase(createInventoryApplicationContextForDb(db), id, patch);
   if (input.images !== undefined) await replaceImages(db, id, input.images);
   return getProductById(db, id);
 }

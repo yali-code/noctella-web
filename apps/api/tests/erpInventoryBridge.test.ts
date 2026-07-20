@@ -13,7 +13,7 @@ describe("ERP inventory bridge", () => {
   it("creates minimal ERP products, preserves identity/metadata and blocks duplicate idempotency drift", async () => {
     const out:any = await executeCreateProduct(db,"env",env("CreateProduct",{ sku:"ERP18-1", title:"ERP Bridge", categoryId, priceEur:100, erpReferenceId:"erp-18", noctellaId:"N-18", barcodeValue:"BC18", shippingCostEur:5, packagingCostEur:2, miscCostsEur:3, depthValue:4, diameterValue:6 }));
     expect(out.status).toBe("Succeeded");
-    expect((await db.select().from(stockMovements)).length).toBe(0);
+    expect((await db.select().from(stockMovements)).length).toBe(1);
     expect((await db.select().from(products).where(eq(products.id,out.productId)))[0]).toMatchObject({ sku:"ERP18-1", erpReferenceId:"erp-18", stockQuantity:0 });
     expect((await db.select().from(productErpMetadata))[0]).toMatchObject({ noctellaId:"N-18", barcodeValue:"BC18" });
     expect((await executeCreateProduct(db,"env",env("CreateProduct",{ sku:"ERP18-1", title:"ERP Bridge", categoryId, priceEur:100, erpReferenceId:"erp-18", noctellaId:"N-18", barcodeValue:"BC18", shippingCostEur:5, packagingCostEur:2, miscCostsEur:3, depthValue:4, diameterValue:6 }))).status).toBe("Succeeded");
@@ -27,7 +27,7 @@ describe("ERP inventory bridge", () => {
     expect(upd.updatedFields).toEqual(expect.arrayContaining(["title","shippingCostEur","barcodeValue"]));
     const stock:any = await executeStockAdjustment(db,"env",created.productId,env("AdjustStock",{ quantityDelta:5, reason:"opening stock" }, "stock-1"));
     expect(stock).toMatchObject({ previousQuantity:0, delta:5, newQuantity:5 });
-    expect((await db.select().from(stockMovements)).length).toBe(1);
+    expect((await db.select().from(stockMovements)).length).toBe(2);
     const dup:any = await executeStockAdjustment(db,"env",created.productId,env("AdjustStock",{ quantityDelta:5, reason:"opening stock" }, "stock-1"));
     expect(dup.metadata?.movementId ?? dup.movementId).toBe(stock.movementId);
     await expect(executeStockAdjustment(db,"env",created.productId,env("AdjustStock",{ quantityDelta:0, reason:"zero" }, "stock-zero"))).rejects.toThrow(/Non-zero/);

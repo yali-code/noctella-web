@@ -19,7 +19,7 @@ async function harness() {
     sku: "ORDER-RUNTIME-1", title: "Runtime item", slug: "runtime-item", type: ProductType.UniqueItem,
     status: ProductStatus.Published, categoryId: category.id, customsWarning: false, isFeatured: false,
     allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false, priceEur: 10,
-    stockQuantity: 1, images: [],
+    images: [],
   });
   const input = createOrderSchema.parse({
     orderDraftId: "draft-runtime", guestEmail: "buyer@example.com", status: OrderStatus.Pending,

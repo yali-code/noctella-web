@@ -301,3 +301,23 @@ Commit:
 
 - Sprint 35I focused regressions and required validation pass.
 - Final diff receives architecture review before merge.
+
+## Sprint 35J — Product Write Inventory Runtime Migration
+
+### Capability Added
+
+- Product creation and update stock quantities execute through Inventory Use Cases inside the product persistence transaction boundary.
+- SQLite product writes use synchronous transaction-scoped Inventory repositories; PostgreSQL product writes retain asynchronous execution.
+
+### Dependencies Introduced or Changed
+
+- Product create and update Use Cases delegate quantity initialization and adjustment to the Inventory application layer.
+
+### Technical Debt
+
+- None introduced.
+
+### Entry Conditions for Next Sprint
+
+- Sprint 35J focused regressions and required validation pass.
+- Final diff receives architecture review before merge.

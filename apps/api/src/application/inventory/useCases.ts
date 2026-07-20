@@ -373,6 +373,44 @@ export const createInitializeInventoryUseCase = (
     }
   },
 });
+export function initializeInventoryInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: InitializeInventoryInput,
+) {
+  if (!nonneg(input.quantity)) throw new InvalidInventoryQuantityError();
+  try {
+    const existing = input.idempotencyKey
+      ? repositories.stockMovements.findByIdempotencyKey(input.idempotencyKey)
+      : null;
+    return chain(existing, (found) => {
+      if (found) {
+        if (!same(found, { ...input, type: StockMovementType.ManualAdjustment, quantity: input.quantity }))
+          throw new InventoryOperationConflictError();
+        return chain(repositories.inventory.findByProduct(input.productId), (current) => {
+          if (!current) throw new InventoryNotInitializedError();
+          return Object.freeze({ inventory: inv(current), movement: movement(found), replayed: true });
+        });
+      }
+      return chain(repositories.products.findById(input.productId), (p) => {
+        if (!p) throw new ProductNotFoundApplicationError();
+        const t = now(ctx as InventoryApplicationContext);
+        return chain(
+          repositories.inventory.updateWithVersion(input.productId, input.quantity, input.expectedVersion ?? p.updatedAt, t),
+          (state) => chain(repositories.stockMovements.append({
+            id: ctx.idGenerator.newId(), productId: input.productId,
+            type: StockMovementType.ManualAdjustment, quantityDelta: input.quantity,
+            stockBefore: p.stockQuantity, stockAfter: input.quantity,
+            orderId: null, orderItemId: null, note: input.note ?? null,
+            idempotencyKey: input.idempotencyKey ?? null, createdAt: t, updatedAt: t,
+          }), (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false })),
+        );
+      });
+    });
+  } catch (e) {
+    map(e);
+  }
+}
 async function change(
   ctx: InventoryApplicationContext,
   input: InventoryMutationInput,
@@ -584,6 +622,43 @@ export const createSetInventoryQuantityUseCase = (
     }
   },
 });
+export function setInventoryQuantityInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: SetInventoryQuantityInput,
+) {
+  if (!nonneg(input.quantity)) throw new InvalidInventoryQuantityError();
+  if (!input.note.trim()) throw new InventoryOperationConflictError();
+  try {
+    const existing = input.idempotencyKey
+      ? repositories.stockMovements.findByIdempotencyKey(input.idempotencyKey)
+      : null;
+    return chain(existing, (found) => {
+      return chain(repositories.inventory.findByProduct(input.productId), (current) => {
+        if (!current) throw new InventoryNotInitializedError();
+        const delta = input.quantity - current.quantity;
+        if (found) {
+          if (!same(found, { ...input, type: StockMovementType.ManualAdjustment, quantity: found.quantityDelta }))
+            throw new InventoryOperationConflictError();
+          return Object.freeze({ inventory: inv(current), movement: movement(found), replayed: true });
+        }
+        const t = now(ctx as InventoryApplicationContext);
+        return chain(
+          repositories.inventory.updateWithVersion(input.productId, input.quantity, input.expectedVersion, t),
+          (state) => chain(repositories.stockMovements.append({
+            id: ctx.idGenerator.newId(), productId: input.productId,
+            type: StockMovementType.ManualAdjustment, quantityDelta: delta,
+            stockBefore: current.quantity, stockAfter: input.quantity,
+            orderId: null, orderItemId: null, note: input.note,
+            idempotencyKey: input.idempotencyKey ?? null, createdAt: t, updatedAt: t,
+          }), (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false })),
+        );
+      });
+    });
+  } catch (e) {
+    map(e);
+  }
+}
 export const createStockLocationUseCase = (
   ctx: InventoryApplicationContext,
 ) => ({
