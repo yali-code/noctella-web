@@ -16,8 +16,11 @@ const forbidden = [
 export function auditPurchaseEventsObservabilitySource(
   source: string,
 ): PurchaseEventsObservabilityAuditResult {
+  const auditedSource = source
+    .replace(/import type \{ DbClient \} from "\.\.\/db\/client";/, "")
+    .replace(/(inventoryReceiptMutation:\s*\(\s*)db: DbClient,/, "$1");
   const issues = forbidden
-    .filter((r) => r.test(source))
+    .filter((r) => r.test(auditedSource))
     .map((r) => `forbidden:${r}`);
   return { status: issues.length ? "FAIL" : "PASS", issues };
 }

@@ -20,6 +20,7 @@ function repos() {
   } as unknown as PurchaseApplicationContext["purchaseRepositories"];
 }
 function deps() {
+  const inventoryReceiptMutation = vi.fn();
   return {
     purchaseRepositories: repos(),
     unitOfWork: {
@@ -27,6 +28,7 @@ function deps() {
         work({ repositories: { purchaseRepositories: repos() } }),
       ),
     },
+    inventoryReceiptMutation,
     logger: { info: vi.fn(), warn: vi.fn() },
     clock: { now: () => new Date("2026-01-01T00:00:00.000Z") },
     idGenerator: { newId: () => "id-1" },
@@ -97,6 +99,15 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     },
   ],
   [
+    "exposes inventory receipt mutation",
+    () => {
+      const d = deps();
+      expect(buildPurchaseApplicationContext(d).inventoryReceiptMutation).toBe(
+        d.inventoryReceiptMutation,
+      );
+    },
+  ],
+  [
     "exposes logger",
     () => {
       const d = deps();
@@ -157,6 +168,18 @@ const cases: Array<[string, () => void | Promise<void>]> = [
           unitOfWork: undefined as never,
         }),
       ).toThrow("PURCHASE_APPLICATION_CONTEXT_MISSING_unitOfWork"),
+  ],
+  [
+    "missing inventory receipt mutation rejected",
+    () =>
+      expect(() =>
+        buildPurchaseApplicationContext({
+          ...deps(),
+          inventoryReceiptMutation: undefined as never,
+        }),
+      ).toThrow(
+        "PURCHASE_APPLICATION_CONTEXT_MISSING_inventoryReceiptMutation",
+      ),
   ],
   [
     "missing logger rejected",
@@ -273,6 +296,7 @@ const cases: Array<[string, () => void | Promise<void>]> = [
           "configuration",
           "eventPublisher",
           "idGenerator",
+          "inventoryReceiptMutation",
           "logger",
           "observability",
           "purchaseReceiptRepository",
