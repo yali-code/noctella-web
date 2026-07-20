@@ -1,4 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { auditRefundApplicationContextSource, runRefundApplicationContextAudit } from "../src/scripts/refundApplicationContextAudit";
 import { createRefundApplicationContext, type ApprovedReturnDto, type MarketplaceRefundPort, type OrderRefundReadPort, type PaymentRefundPort, type RefundApplicationContext, type RefundOrderDto, type RefundProviderRequest, type ReturnRefundReadPort } from "../src/services/refundApplicationContext";
 
@@ -45,6 +48,12 @@ describe("Sprint 30B-R2 Refund application context", () => {
   test("return read port DTO typing", () => { const port: ReturnRefundReadPort = { findApprovedReturn: (): ApprovedReturnDto => ({ id: "r1", orderId: "o1", status: "approved", approvedAt: "now" }), findApprovedItems: () => [] }; expect(port.findApprovedReturn("r1")).toMatchObject({ status: "approved" }); });
   test("error normalizer", () => expect(createRefundApplicationContext(deps()).errorNormalizer.normalize(new Error("x"))).toMatchObject({ code: "ERR" }));
   test("audit success", () => expect(runRefundApplicationContextAudit().status).toBe("PASS"));
+  test("audit success after changing to a temporary working directory", () => {
+    const originalDirectory = process.cwd();
+    const temporaryDirectory = mkdtempSync(resolve(tmpdir(), "refund-context-audit-"));
+    try { process.chdir(temporaryDirectory); expect(runRefundApplicationContextAudit().status).toBe("PASS"); }
+    finally { process.chdir(originalDirectory); rmSync(temporaryDirectory, { recursive: true, force: true }); }
+  });
   test("audit rejects forbidden source", () => expect(auditRefundApplicationContextSource("import type { DbClient } from '../db/client'; fetch('x')").status).toBe("FAIL"));
   test("factory stability", () => { const d = deps(); expect(createRefundApplicationContext(d)).toEqual(createRefundApplicationContext(d)); });
   test("multiple context creation", () => expect(createRefundApplicationContext(deps())).not.toBe(createRefundApplicationContext(deps()))); 

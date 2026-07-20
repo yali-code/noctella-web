@@ -1,13 +1,11 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { resolve } from "node:path";
 
 type AuditInput = Partial<
   Record<"events" | "observability" | "useCases", string>
 >;
-const root = process.cwd().endsWith("apps/api")
-  ? join(process.cwd(), "src")
-  : join(process.cwd(), "apps/api/src");
-const read = (p: string) => readFileSync(join(root, p), "utf8");
+const root = resolve(__dirname, "..");
+const read = (p: string) => readFileSync(resolve(root, p), "utf8");
 const prod = (): AuditInput => ({
   events: read("domain/refund/events.ts"),
   observability: [

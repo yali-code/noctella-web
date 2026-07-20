@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import { createRefundEvent, RefundEventNames } from "../src/domain/refund";
 import { auditRefundEventObservability } from "../src/scripts/refundEventObservabilityAudit";
 const clock = { now: () => new Date("2026-01-01T00:00:00.000Z") };
@@ -144,6 +145,11 @@ describe("refund events sprint 30B R7", () => {
     ).not.toHaveProperty("cardNumber"));
   it("production event observability audit passes", () =>
     expect(auditRefundEventObservability().pass).toBe(true));
+  it("production audit passes from the repository root", () => {
+    const originalDirectory = process.cwd();
+    try { process.chdir(resolve(__dirname, "../../..")); expect(auditRefundEventObservability().pass).toBe(true); }
+    finally { process.chdir(originalDirectory); }
+  });
   it("audit rejects DB fixture", () =>
     expect(
       auditRefundEventObservability({

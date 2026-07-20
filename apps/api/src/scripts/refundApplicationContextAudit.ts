@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { resolve } from "node:path";
 
 export interface RefundApplicationContextAuditResult { status: "PASS" | "FAIL"; issues: string[] }
 
@@ -24,7 +24,7 @@ export function auditRefundApplicationContextSource(source: string): RefundAppli
 }
 
 export function runRefundApplicationContextAudit(): RefundApplicationContextAuditResult {
-  const source = readFileSync(join(process.cwd(), process.cwd().endsWith("apps/api") ? "src/services/refundApplicationContext.ts" : "apps/api/src/services/refundApplicationContext.ts"), "utf8");
+  const source = readFileSync(resolve(__dirname, "../services/refundApplicationContext.ts"), "utf8");
   return auditRefundApplicationContextSource(source);
 }
 

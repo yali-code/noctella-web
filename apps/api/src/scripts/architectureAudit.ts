@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
-const targets = process.argv.slice(2).length ? process.argv.slice(2) : ["src/services/unitOfWork.ts", "src/services/productPhotoOutboxWorkflow.ts", "src/services/returnsCore.ts", "src/use-cases/return/useCases.ts"];
+import { isAbsolute, resolve } from "node:path";
+const apiRoot = resolve(__dirname, "../..");
+const requestedTargets = process.argv.slice(2);
+const targets = requestedTargets.length ? requestedTargets : ["src/services/unitOfWork.ts", "src/services/productPhotoOutboxWorkflow.ts", "src/services/returnsCore.ts", "src/use-cases/return/useCases.ts"];
 const rules: Array<[RegExp,string]> = [
   [/from\s+["']sharp["']/, "Sharp import inside UnitOfWork/workflow boundary"],
   [/from\s+["']node:fs|from\s+["']fs["']/, "filesystem import inside UnitOfWork/workflow boundary"],
@@ -11,7 +14,7 @@ const rules: Array<[RegExp,string]> = [
 const approvedRawSql = /(^|\/)(db\/|postgres-migrations\/|outboxRepository\.ts$|migrate\.ts$|schema\.sql$)/;
 let failed = false;
 for (const file of targets) {
-  const text = readFileSync(file,"utf8");
+  const text = readFileSync(isAbsolute(file) ? file : resolve(apiRoot, file),"utf8");
   for (const [pattern, message] of rules) {
     if (message.startsWith("raw SQL") && approvedRawSql.test(file)) continue;
     if (pattern.test(text)) { console.error(`${file}: ${message}`); failed = true; }

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-const root = process.cwd().endsWith("apps/api") ? join(process.cwd(), "src/providers/refund") : join(process.cwd(), "apps/api/src/providers/refund");
+import { join, resolve } from "node:path";
+const root = resolve(__dirname, "../providers/refund");
 const forbidden: Array<[RegExp,string]> = [
   [/(?:\.\.\/)+db\//, "DB import"], [/DbClient|schema|drizzle|sql`|raw SQL/i, "DB/schema/Drizzle/raw SQL"], [/(?:repository implementation|UnitOfWork|createTransaction|transaction\()/i, "repository/UnitOfWork/transaction"], [/stripe|paypal|ebay|etsy|woocommerce|sdk/i, "provider SDK"], [/fetch\(|axios|http\b|https\b|net\b|socket/i, "HTTP/network"], [/process\.env|credential|secret|accessToken|refreshToken|cardNumber|cvv/i, "credential/payment secret"], [/readFile|writeFile|readdir|node:fs/i, "filesystem"]
 ];

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import { auditRefundProviderBoundary } from "../src/scripts/refundProviderBoundaryAudit";
 import { normalizeRefundProviderError, toProviderResult, unsupportedRefundCapability, type RefundExecutionRequest, type RefundProviderRetryableFailureResult, type RefundProviderTerminalFailureResult, type RefundProviderSuccessResult } from "../src/providers/refund";
 import { FakeMarketplaceRefundProvider, FakePaymentRefundProvider } from "../src/providers/refund/testing/fakes";
@@ -31,6 +32,7 @@ describe("refund provider boundary Sprint 30B-R5", () => {
  it("no raw payment error leakage",()=>expect(normalizeRefundProviderError({message:"access_token abc",retryable:true})).toMatchObject({outcome:"retryable_failure"}));
  it("unsupported capability helper",()=>expect(unsupportedRefundCapability("executeRefund","x")).toMatchObject({code:"UNSUPPORTED_PROVIDER_CAPABILITY"}));
  it("production provider boundary passes",()=>expect(auditRefundProviderBoundary()).toBe(true));
+ it("production provider boundary passes from the API directory",()=>{const originalDirectory=process.cwd();try{process.chdir(resolve(__dirname,".."));expect(auditRefundProviderBoundary()).toBe(true)}finally{process.chdir(originalDirectory)}});
  it("DB import fixture fails",()=>expect(()=>auditRefundProviderBoundary({bad:"import '../db/schema'"})).toThrow(/DB/));
  it("SDK import fixture fails",()=>expect(()=>auditRefundProviderBoundary({bad:"import Stripe from 'stripe'"})).toThrow(/SDK/));
  it("HTTP fixture fails",()=>expect(()=>auditRefundProviderBoundary({bad:"fetch('https://x')"})).toThrow(/HTTP/));
