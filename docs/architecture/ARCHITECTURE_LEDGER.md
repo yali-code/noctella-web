@@ -281,3 +281,23 @@ Commit:
 
 - Sprint 35H focused regressions and required validation pass.
 - Final diff receives architecture review before merge.
+
+## Sprint 35I — Inventory Runtime Finalization (Phase 1)
+
+### Capability Added
+
+- ERP purchase receipt Inventory balance and stock-movement mutations execute through the approved Inventory increase Use Case inside the existing receipt transaction.
+- SQLite ERP receipt mutations use synchronous transaction-scoped Inventory repositories.
+
+### Dependencies Introduced or Changed
+
+- The ERP purchasing bridge delegates linked receipt-line Inventory mutations to the existing Inventory application layer.
+
+### Technical Debt
+
+- Product-write Inventory mutation paths remain outside this phase.
+
+### Entry Conditions for Next Sprint
+
+- Sprint 35I focused regressions and required validation pass.
+- Final diff receives architecture review before merge.
