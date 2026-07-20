@@ -189,6 +189,7 @@ describe("order service", () => {
     expect(invalid.success).toBe(false);
 
     const before = await getProductById(db, productId);
+    const movementsBefore = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
     await createOrder(db, createOrderSchema.parse(baseOrderInput()));
     const after = await getProductById(db, productId);
 
@@ -201,6 +202,6 @@ describe("order service", () => {
     const movements = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
     expect(duplicate.id).toBeDefined();
     expect(final.stockQuantity).toBe(after.stockQuantity);
-    expect(movements.items).toHaveLength(1);
+    expect(movements.items).toHaveLength(movementsBefore.items.length + 1);
   });
 });

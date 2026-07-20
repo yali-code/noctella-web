@@ -66,9 +66,10 @@ describe("stock movement service", () => {
   });
 
   it("lists movement timeline by product", async () => {
+    const before = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
     await createManualStockAdjustment(db, manualStockAdjustmentSchema.parse({ productId, quantityDelta: 1 }));
     const result = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
-    expect(result.items).toHaveLength(1);
+    expect(result.items).toHaveLength(before.items.length + 1);
     expect(result.items[0].productId).toBe(productId);
   });
 });
