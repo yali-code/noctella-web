@@ -40,7 +40,6 @@ import type {
   UpdatePurchaseLineInput,
   UpdateSupplierInput,
 } from "./types";
-import { increaseInventoryInTransactionUseCase } from "../inventory";
 import { InventoryNotInitializedError } from "../inventory/errors";
 
 const ro = <T extends object>(x: T): Readonly<T> => Object.freeze({ ...x });
@@ -613,9 +612,9 @@ export const receivePurchaseUseCase = (ctx: PurchaseApplicationContext) => ({
         };
         if (line.productId) {
           try {
-            const mutation = increaseInventoryInTransactionUseCase(
+            const mutation = ctx.inventoryReceiptMutation(
+              repositories.db,
               ctx,
-              repositories.inventoryRepositories,
               {
                 productId: line.productId,
                 quantity: qty,
