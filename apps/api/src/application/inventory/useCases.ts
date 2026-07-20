@@ -508,6 +508,13 @@ export function restoreInventoryForSaleRollbackInTransactionUseCase(
 ) {
   return mutateInventoryInTransactionUseCase(ctx, repositories, input, input.quantity, StockMovementType.SaleRollback);
 }
+export function restoreInventoryForReturnInTransactionUseCase(
+  ctx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  repositories: InventoryMutationRepositories,
+  input: Omit<InventoryMutationInput, "expectedVersion"> & { expectedVersion?: string },
+) {
+  return mutateInventoryInTransactionUseCase(ctx, repositories, input, input.quantity, StockMovementType.ReturnIn);
+}
 export const createIncreaseInventoryUseCase = (
   ctx: InventoryApplicationContext,
 ) => ({ execute: (input: InventoryMutationInput) => change(ctx, input, 1) });

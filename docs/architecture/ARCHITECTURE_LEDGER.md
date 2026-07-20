@@ -260,3 +260,24 @@ Commit:
 
 - Sprint 35G focused regressions and required validation pass.
 - Final diff receives architecture review before merge.
+
+## Sprint 35H — Return Inventory Runtime Migration
+
+### Capability Added
+
+- Return completion Inventory balance and stock-movement mutations execute through an Inventory Use Case inside the existing return transaction boundary.
+- SQLite return transactions use synchronous transaction-scoped Inventory repositories; PostgreSQL Inventory persistence retains asynchronous execution.
+
+### Dependencies Introduced or Changed
+
+- The return completion Use Case delegates ReturnIn Inventory mutations to the Inventory application layer.
+- The general UnitOfWork continues to provide the existing transaction-scoped Inventory repository capability.
+
+### Technical Debt
+
+- ERP, reconciliation, and product-write Inventory mutation paths remain outside this migration scope.
+
+### Entry Conditions for Next Sprint
+
+- Sprint 35H focused regressions and required validation pass.
+- Final diff receives architecture review before merge.
