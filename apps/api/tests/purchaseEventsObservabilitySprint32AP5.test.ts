@@ -48,6 +48,7 @@ function repos() {
   return { purchases: {}, suppliers: {}, receipts: {} } as any;
 }
 function ctx(overrides: any = {}) {
+  const inventoryReceiptMutation = vi.fn();
   return buildPurchaseApplicationContext({
     purchaseRepositories: repos(),
     unitOfWork: {
@@ -55,10 +56,10 @@ function ctx(overrides: any = {}) {
         fn({
           repositories: {
             purchaseRepositories: repos(),
-            inventoryRepositories: {},
           },
         }),
     },
+    inventoryReceiptMutation,
     logger: { warn: vi.fn() },
     clock: { now: () => new Date("2026-01-01T00:00:00.000Z") },
     idGenerator: { newId: () => "id" },
@@ -147,6 +148,17 @@ describe("Purchase events observability Sprint 32A-P5", () => {
   it("context accepts observability", () => {
     const o = { purchaseEventPublished: vi.fn() };
     expect(ctx({ observability: o }).observability).toBe(o);
+  });
+  it("receipt execution uses the inventory runtime dependency", async () => {
+    const c = ctx();
+    await c.inventoryReceiptMutation({} as never, c, {} as never);
+    expect(c.inventoryReceiptMutation).toHaveBeenCalledOnce();
+  });
+  it("general unit of work does not expose inventory mutation repositories", async () => {
+    const c = ctx();
+    await c.unitOfWork.run((unit: any) => {
+      expect(unit.repositories).not.toHaveProperty("inventoryRepositories");
+    });
   });
   it("commit publishes after unit of work", async () => {
     const order: string[] = [];
