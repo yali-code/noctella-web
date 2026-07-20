@@ -10,6 +10,8 @@ import {
   type PurchaseLogger,
 } from "./purchaseApplicationContext";
 import { PostgresUnitOfWork, SqliteUnitOfWork, type UnitOfWork } from "./unitOfWork";
+import { createInventoryRepositoryBundleForDb } from "../repositories/inventory/factory";
+import { increaseInventoryInTransactionUseCase } from "../application/inventory";
 
 export interface CreatePurchaseApplicationContextForDbInput {
   readonly db: DbClient;
@@ -37,6 +39,16 @@ export function createPurchaseApplicationContextForDb(
   return buildPurchaseApplicationContext({
     purchaseRepositories: createPurchaseRepositoriesForDb(options.db, driver),
     unitOfWork: options.unitOfWork ?? unitOfWorkForDb(options.db, driver),
+    inventoryReceiptMutation: (db, inventoryContext, mutation) =>
+      increaseInventoryInTransactionUseCase(
+        inventoryContext,
+        createInventoryRepositoryBundleForDb(
+          db,
+          driver,
+          driver === "sqlite",
+        ),
+        mutation,
+      ),
     logger: options.logger ?? {},
     clock: { now: () => new Date() },
     idGenerator: { newId: () => crypto.randomUUID() },

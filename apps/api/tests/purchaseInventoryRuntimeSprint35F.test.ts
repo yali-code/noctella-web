@@ -47,6 +47,27 @@ describe("Sprint 35F purchase receipt Inventory runtime", () => {
     await expect(receivePurchaseUseCase(context).execute(input)).resolves.toBeTruthy();
   });
 
+  test("purchase receipt does not access general UnitOfWork Inventory repositories", async () => {
+    const { context, input } = await harness();
+    const unitOfWork = {
+      run: <T>(work: Parameters<typeof context.unitOfWork.run<T>>[0]) =>
+        context.unitOfWork.run(({ repositories }) =>
+          work({
+            repositories: new Proxy(repositories, {
+              get(target, property, receiver) {
+                if (property === "inventoryRepositories")
+                  throw new Error("GENERAL_UOW_INVENTORY_ACCESSED");
+                return Reflect.get(target, property, receiver);
+              },
+            }),
+          }),
+        ),
+    };
+    await expect(
+      receivePurchaseUseCase({ ...context, unitOfWork }).execute(input),
+    ).resolves.toMatchObject({ purchase: { status: "Received" } });
+  });
+
   test("Inventory failure rolls back and preserves the purchase rejection", async () => {
     const { context, inventory, purchase, input } = await harness();
     await inventory.stockMovements.append({
@@ -85,6 +106,6 @@ describe("Sprint 35F purchase receipt Inventory runtime", () => {
     const source = readFileSync(new URL("../src/application/purchase/useCases.ts", import.meta.url), "utf8");
     const receive = source.slice(source.indexOf("export const receivePurchaseUseCase"));
     expect(receive).not.toMatch(/inventoryRepositories\.(inventory|stockMovements)\.(updateWithVersion|append)/);
-    expect(receive).toContain("increaseInventoryInTransactionUseCase");
+    expect(receive).toContain("inventoryReceiptMutation");
   });
 });

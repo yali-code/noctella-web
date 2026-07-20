@@ -7,6 +7,8 @@ import type {
 import type { UnitOfWork } from "./unitOfWork";
 import type { PurchaseEventPublisher } from "../events/purchase";
 import type { PurchaseObservability } from "../observability/purchase";
+import type { DbClient } from "../db/client";
+import type { increaseInventoryInTransactionUseCase } from "../application/inventory";
 import { noopPurchaseEventPublisher } from "../events/purchase";
 import { noopPurchaseObservability } from "../observability/purchase";
 
@@ -36,6 +38,11 @@ export interface PurchaseApplicationContext {
   readonly supplierRepository: SupplierRepository;
   readonly purchaseReceiptRepository: PurchaseReceiptRepository;
   readonly unitOfWork: UnitOfWork;
+  readonly inventoryReceiptMutation: (
+    db: DbClient,
+    inventoryContext: Pick<PurchaseApplicationContext, "clock" | "idGenerator">,
+    input: Parameters<typeof increaseInventoryInTransactionUseCase>[2],
+  ) => ReturnType<typeof increaseInventoryInTransactionUseCase>;
   readonly logger: PurchaseLogger;
   readonly clock: PurchaseClock;
   readonly idGenerator: PurchaseIdGenerator;
@@ -47,6 +54,7 @@ export interface PurchaseApplicationContext {
 export interface BuildPurchaseApplicationContextInput {
   readonly purchaseRepositories: PurchaseRepositories;
   readonly unitOfWork: UnitOfWork;
+  readonly inventoryReceiptMutation: PurchaseApplicationContext["inventoryReceiptMutation"];
   readonly logger: PurchaseLogger;
   readonly clock: PurchaseClock;
   readonly idGenerator: PurchaseIdGenerator;
@@ -58,6 +66,7 @@ export interface BuildPurchaseApplicationContextInput {
 const requiredKeys: Array<keyof BuildPurchaseApplicationContextInput> = [
   "purchaseRepositories",
   "unitOfWork",
+  "inventoryReceiptMutation",
   "logger",
   "clock",
   "idGenerator",
@@ -93,6 +102,7 @@ export function buildPurchaseApplicationContext(
     supplierRepository: purchaseRepositories.suppliers,
     purchaseReceiptRepository: purchaseRepositories.receipts,
     unitOfWork: dependencies.unitOfWork,
+    inventoryReceiptMutation: dependencies.inventoryReceiptMutation,
     logger: dependencies.logger,
     clock: dependencies.clock,
     idGenerator: dependencies.idGenerator,

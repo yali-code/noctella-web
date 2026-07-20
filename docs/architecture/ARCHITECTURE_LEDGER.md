@@ -386,3 +386,22 @@ Commit:
 - Migrate purchase, order, sale rollback, and return Inventory repository access away from the general UnitOfWork before removing its Inventory repositories.
 - Resolve the remaining legacy stock mutation exports before removing the general UnitOfWork stock repository bundle.
 - Preserve synchronous SQLite and asynchronous PostgreSQL pairing in any replacement composed transaction boundary.
+
+## Sprint 35N-A1 — Purchase Inventory Dependency Migration
+
+### Capability
+
+- Purchase receipt and ERP purchasing receipt Inventory mutations resolve driver-aware Inventory repositories from the active purchase transaction database without reading Inventory repositories from the general UnitOfWork.
+
+### Dependency
+
+- Purchase receipt depends on the existing Inventory increase Use Case and driver-aware Inventory repository runtime inside the existing purchase UnitOfWork transaction.
+- ERP purchasing receipt depends on the migrated purchase receipt Use Case.
+
+### Technical Debt
+
+- The general UnitOfWork still exposes Inventory repositories for order creation, sale rollback, and return completion.
+
+### Entry Conditions
+
+- Any later removal of general UnitOfWork Inventory repositories must first migrate order creation, sale rollback, and return completion while preserving their atomic boundaries.
