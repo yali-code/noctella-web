@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { createTestDb } from "./testDb";
 import { createSupplier, createPurchase, allocatePurchaseCosts, receivePurchase, getPurchaseLandedCostSummary, executeSupplierCommand, executePurchaseCommand, findSupplierCandidates } from "../src/services/erpPurchasingBridge";
-import { LandedCostAllocationMethod, ProductStatus, ProductType, SupplierType } from "@noctella/shared";
+import { LandedCostAllocationMethod, ProductStatus, ProductType, StockMovementType, SupplierType } from "@noctella/shared";
 import { createCategory } from "../src/services/categories";
 import { createProduct } from "../src/services/products";
 import { stockMovements, erpCommandExecutions, purchaseReceipts } from "../src/db/schema";
@@ -27,9 +27,11 @@ describe("ERP purchasing bridge", () => {
     expect(summary.reconciled).toBe(true);
     const receipt:any = await executePurchaseCommand(db,"client",env({ lines:[{purchaseLineId:purchase.lines[0].id, quantityReceived:1},{purchaseLineId:purchase.lines[1].id, quantityReceived:1}] },"r1"),"ReceivePurchase",purchase.id);
     expect(receipt.status).toBe("PartiallyReceived");
-    expect(await db.select().from(stockMovements)).toHaveLength(1);
+    const receiptMovements = (await db.select().from(stockMovements)).filter((movement) => movement.type === StockMovementType.PurchaseReceipt);
+    expect(receiptMovements).toHaveLength(1);
     await executePurchaseCommand(db,"client",env({ lines:[{purchaseLineId:purchase.lines[0].id, quantityReceived:1},{purchaseLineId:purchase.lines[1].id, quantityReceived:1}] },"r1"),"ReceivePurchase",purchase.id);
     expect(await db.select().from(purchaseReceipts)).toHaveLength(1);
+    expect((await db.select().from(stockMovements)).filter((movement) => movement.type === StockMovementType.PurchaseReceipt)).toHaveLength(1);
     expect((await getPurchaseLandedCostSummary(db,purchase.id)).complete).toBe(true);
   });
 });
