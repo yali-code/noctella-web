@@ -36,6 +36,9 @@ export function createPurchaseApplicationContextForDb(
     ? (input as CreatePurchaseApplicationContextForDbInput)
     : { db: input as DbClient };
   const driver = options.driver ?? "sqlite";
+  if (options.unitOfWork && options.unitOfWork.driver !== undefined && options.unitOfWork.driver !== driver) {
+    throw new Error(`PURCHASE_TRANSACTION_DRIVER_MISMATCH:${driver}:${options.unitOfWork.driver}`);
+  }
   return buildPurchaseApplicationContext({
     purchaseRepositories: createPurchaseRepositoriesForDb(options.db, driver),
     unitOfWork: options.unitOfWork ?? unitOfWorkForDb(options.db, driver),
