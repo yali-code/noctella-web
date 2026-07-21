@@ -218,6 +218,11 @@ export const createListInventoryByProductUseCase = (
   execute: async ({ productId }: ProductIdInput) =>
     (await ctx.inventoryRepository.listByProduct(productId)).map(inv),
 });
+export const createGetInventoryTotalQuantityUseCase = (
+  ctx: InventoryApplicationContext,
+) => ({
+  execute: async () => ctx.inventoryRepository.getTotalQuantity(),
+});
 export const createListStockMovementsUseCase = (
   ctx: InventoryApplicationContext,
 ) => ({
