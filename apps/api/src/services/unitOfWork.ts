@@ -34,7 +34,10 @@ export interface UnitOfWorkContext {
   repositories: TransactionScopedRepositories;
 }
 
+export type UnitOfWorkDriver = "sqlite" | "postgres" | "supabase-postgres";
+
 export interface UnitOfWork {
+  readonly driver?: UnitOfWorkDriver;
   run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T>;
 }
 
@@ -43,6 +46,7 @@ function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
 }
 
 export class SqliteUnitOfWork implements UnitOfWork {
+  readonly driver: UnitOfWorkDriver = "sqlite";
   constructor(private readonly db: DbClient) {}
   async run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T> {
     let result!: T;
@@ -61,7 +65,10 @@ export interface PostgresTransactionAdapter<TTx = DbClient> {
 }
 
 export class PostgresUnitOfWork implements UnitOfWork {
-  constructor(private readonly adapter: PostgresTransactionAdapter) {}
+  readonly driver: UnitOfWorkDriver;
+  constructor(private readonly adapter: PostgresTransactionAdapter, driver: "postgres" | "supabase-postgres" = "postgres") {
+    this.driver = driver;
+  }
   async run<T>(work: (context: UnitOfWorkContext) => T | Promise<T>): Promise<T> {
     try {
       return await this.adapter.transaction(async (tx) => work({ repositories: { db: tx as DbClient, productWrite: createProductWriteRepositoryBundleForDb(tx as DbClient, "postgres"), order: createOrderRepositoryBundleForDb(tx as DbClient, "postgres"), returnRepositories: createReturnRepositoryBundleForDb(tx as DbClient, "postgres"), refund: createRefundRepositoriesForDb(tx as DbClient, "postgres"), purchaseRepositories: createPurchaseRepositoriesForDb(tx as DbClient, "postgres"), sales: createSalesRepositoriesForDb(tx as DbClient, "postgres"), salesCompletion: createSalesCompletionTransactionRepositoryForDb(tx as DbClient, "postgres") } }));
