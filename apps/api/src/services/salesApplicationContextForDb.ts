@@ -31,6 +31,9 @@ function unitOfWorkForDb(db: DbClient, driver: SalesRepositoryDriver): UnitOfWor
 export function createSalesApplicationContextForDb(
   input: CreateSalesApplicationContextForDbInput,
 ): SalesApplicationContext {
+  if (input.unitOfWork && input.unitOfWork.driver !== undefined && input.unitOfWork.driver !== input.driver) {
+    throw new Error(`SALES_TRANSACTION_DRIVER_MISMATCH:${input.driver}:${input.unitOfWork.driver}`);
+  }
   return buildSalesApplicationContext({
     salesRepositories: createSalesRepositoriesForDb(input.db, input.driver),
     unitOfWork: input.unitOfWork ?? unitOfWorkForDb(input.db, input.driver),
