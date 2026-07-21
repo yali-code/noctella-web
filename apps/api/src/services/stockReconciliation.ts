@@ -1,7 +1,19 @@
-import { eq, sql } from "drizzle-orm";
 import type { DbClient } from "../db/client";
-import { products, stockMovements } from "../db/schema";
+import { createGetInventoryUseCase, createListStockMovementsUseCase, InventoryNotInitializedError } from "../application/inventory";
+import { createInventoryApplicationContextForDb } from "./inventoryApplicationContextForDb";
 export type StockReconciliationStatus = "Match" | "Mismatch";
 export interface StockReconciliationResult { productId: string; projectedQuantity: number; ledgerQuantity: number; status: StockReconciliationStatus }
-export async function reconcileProductStock(db: DbClient, productId: string): Promise<StockReconciliationResult | undefined> { const productRows = await db.select({ id: products.id, stockQuantity: products.stockQuantity }).from(products).where(eq(products.id, productId)).limit(1); const product = productRows[0]; if (!product) return undefined; const sumRows = await db.select({ quantity: sql<number>`coalesce(sum(${stockMovements.quantityDelta}), 0)` }).from(stockMovements).where(eq(stockMovements.productId, productId)); const ledgerQuantity = Number(sumRows[0]?.quantity ?? 0); return { productId, projectedQuantity: product.stockQuantity, ledgerQuantity, status: product.stockQuantity === ledgerQuantity ? "Match" : "Mismatch" }; }
+export async function reconcileProductStock(db: DbClient, productId: string): Promise<StockReconciliationResult | undefined> {
+  const ctx = createInventoryApplicationContextForDb(db);
+  let inventory;
+  try {
+    inventory = await createGetInventoryUseCase(ctx).execute({ productId });
+  } catch (e) {
+    if (e instanceof InventoryNotInitializedError) return undefined;
+    throw e;
+  }
+  const movements = await createListStockMovementsUseCase(ctx).execute({ productId });
+  const ledgerQuantity = movements.reduce((sum, m) => sum + m.quantityDelta, 0);
+  return { productId, projectedQuantity: inventory.quantity, ledgerQuantity, status: inventory.quantity === ledgerQuantity ? "Match" : "Mismatch" };
+}
 export async function reconcileStock(db: DbClient, productIds: string[], strict = false) { const results = (await Promise.all(productIds.map((id) => reconcileProductStock(db, id)))).filter((r): r is StockReconciliationResult => Boolean(r)); const mismatches = results.filter((r) => r.status === "Mismatch"); if (strict && mismatches.length) throw new Error("STOCK_RECONCILIATION_MISMATCH"); return { status: mismatches.length ? "Mismatch" as const : "Match" as const, results }; }
