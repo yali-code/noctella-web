@@ -38,3 +38,6 @@ apps/api/data/
 
 # TypeScript
 *.tsbuildinfo
+
+# Abacus AI local metadata
+.abacusai/

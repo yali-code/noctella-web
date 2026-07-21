@@ -34,6 +34,7 @@ export function createSalesServiceApplication(db: DbClient, dependencies: SalesS
     { enqueue: (productId, key) => enqueueProductStockSync(db, productId, key).then(() => undefined) },
     context.clock,
     { id: () => context.idGenerator.newId() },
+    driver,
   );
   return Object.freeze({
     context,
