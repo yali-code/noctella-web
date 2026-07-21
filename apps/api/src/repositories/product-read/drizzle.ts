@@ -39,6 +39,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     getByErpReference: async (erpReferenceId: string) => mapProduct((await db.select().from(products).where(eq(products.erpReferenceId, erpReferenceId)).limit(1))[0]),
     getByNoctellaId: async (id: string) => productsRepo.getById(id),
     list: async (q: ProductReadListQuery = {}) => (await db.select().from(products).where(await productWhere(q)).orderBy(...order(q)).limit(pageSize(q)).offset(offset(q))).map(mapProduct),
+    listForExport: async (q: ProductReadListQuery = {}) => (await db.select().from(products).where(await productWhere(q)).orderBy(...order(q)).limit(Number(q.limit ?? MAX_PAGE_SIZE)).offset(q.offset ?? 0)).map(mapProduct),
     search: async (query: string, q: ProductReadListQuery = {}) => productsRepo.list({ ...q, search: query }),
     count: async (q: ProductReadListQuery = {}) => Number((await db.select({ total: sql<number>`count(*)` }).from(products).where(await productWhere(q)))[0]?.total ?? 0),
     listUpdatedSince: async (updatedSince: string, q: ProductReadListQuery = {}) => productsRepo.list({ ...q, updatedSince }),
