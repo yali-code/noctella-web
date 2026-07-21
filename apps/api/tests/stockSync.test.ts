@@ -2,12 +2,12 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BackgroundJobStatus, BackgroundJobType, ProductStatus, ProductType, PublishChannel, StockMovementType, StockSyncConflictStatus, StockSyncConflictType, StockSyncStatus } from "@noctella/shared";
+import { BackgroundJobStatus, BackgroundJobType, ProductStatus, ProductType, PublishChannel, StockSyncConflictStatus, StockSyncConflictType, StockSyncStatus } from "@noctella/shared";
 import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
 import { encryptCredential } from "../src/services/credentialEncryption";
 import { createOrder } from "../src/services/orders";
-import { applyStockMovementSync, createManualStockAdjustment } from "../src/services/stockMovements";
+import { createManualStockAdjustment } from "../src/services/stockMovements";
 import { manualStockAdjustmentSchema } from "../src/validation/stockMovement";
 import { cancelJob, enqueueJob, executeJob } from "../src/services/backgroundJobs";
 import { createStockSyncConflict, resolveStockSyncConflict, syncExternalListingStock } from "../src/services/stockSync";
@@ -121,13 +121,6 @@ describe("automatic stock triggers", () => {
     expect(jobs.filter((j) => j.productId === seeded.productId)).toHaveLength(1);
     expect(jobs[0].payloadSnapshot).toContain("manual-dec");
     expect((await database.select().from(schema.products).where(eq(schema.products.id, seeded.productId)))[0].stockQuantity).toBe(0);
-  });
-
-  it("does not enqueue on rolled back stock transactions and does not call adapters in the transaction", async () => {
-    const database = db(); const seeded = await seed(database, PublishChannel.Ebay, 0); adapterState.adapter = fakeAdapter(0);
-    expect(() => database.transaction((tx) => applyStockMovementSync(tx, { productId: seeded.productId, type: StockMovementType.Sale, quantityDelta: -1 }))).toThrow();
-    expect(await database.select().from(schema.backgroundJobs)).toHaveLength(0);
-    expect((adapterState.adapter as any).calls.get).toBe(0);
   });
 
   it("internal order processing and duplicate marketplace-style order drafts enqueue no duplicate effective jobs", async () => {

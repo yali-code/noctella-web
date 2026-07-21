@@ -7,7 +7,7 @@ import { ensureSchema } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
 import { encryptCredential } from "../src/services/credentialEncryption";
 import { executeJob, failJob } from "../src/services/backgroundJobs";
-import { applyStockMovementSync, listStockMovements } from "../src/services/stockMovements";
+import { listStockMovements } from "../src/services/stockMovements";
 import { approveReturn, authorizeReturn, calculateMaximumRefund, cancelReturn, completeReturn, createRefund, createReturnRequest, executeMarketplaceRefund, getReturnEvents, getReturnFinancialSummary, getSaleReversalReadiness, inspectReturnItem, markReturnInTransit, receiveReturn, rejectReturn, reverseCompletedSale, setReturnMarketplaceAdapterResolver, submitRefund } from "../src/services/returns";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 
