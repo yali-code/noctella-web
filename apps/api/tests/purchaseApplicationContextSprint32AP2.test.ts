@@ -345,6 +345,25 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     },
   ],
   [
+    "db factory rejects mismatched unit of work driver",
+    () => {
+      const unitOfWork = { driver: "postgres", run: vi.fn() } as never;
+      expect(() =>
+        createPurchaseApplicationContextForDb({ db: sqliteDb(), driver: "sqlite", unitOfWork }),
+      ).toThrow("PURCHASE_TRANSACTION_DRIVER_MISMATCH:sqlite:postgres");
+    },
+  ],
+  [
+    "db factory accepts unit of work with undefined driver",
+    () => {
+      const unitOfWork = { run: vi.fn() } as never;
+      expect(
+        createPurchaseApplicationContextForDb({ db: sqliteDb(), driver: "postgres", unitOfWork })
+          .unitOfWork,
+      ).toBe(unitOfWork);
+    },
+  ],
+  [
     "db factory clock is available",
     () =>
       expect(
