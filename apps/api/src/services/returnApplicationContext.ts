@@ -12,6 +12,9 @@ function one<T>(q: { all?: () => T[] } | Promise<T[]> | T[]): T | undefined {
 }
 
 export function createReturnApplicationContext(db: DbClient, unitOfWork: UnitOfWork = new SqliteUnitOfWork(db)): ReturnApplicationContext {
+  if (unitOfWork.driver !== undefined && unitOfWork.driver !== "sqlite") {
+    throw new Error(`RETURN_TRANSACTION_DRIVER_MISMATCH:sqlite:${unitOfWork.driver}`);
+  }
   return {
     unitOfWork,
     ports: {
