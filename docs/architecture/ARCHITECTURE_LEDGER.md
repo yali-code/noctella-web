@@ -59,6 +59,8 @@ Sales modernization is complete:
 - Capability review completed.
 - Transaction capability types merged.
 - Sprint 35D driver-aware transaction runtime implemented.
+- Order creation, sale rollback, and return completion migrated to driver-aware, transaction-scoped Inventory repositories (Sprints 35N-B1, 35N-B2, 35N-C1).
+- Legacy general UnitOfWork Inventory and stock repository access removed (Sprint 35N-C2).
 
 ## Inventory Invariants
 
@@ -405,3 +407,77 @@ Commit:
 ### Entry Conditions
 
 - Any later removal of general UnitOfWork Inventory repositories must first migrate order creation, sale rollback, and return completion while preserving their atomic boundaries.
+
+## Sprint 35N-B1 — Order Inventory Runtime Migration
+
+### Capability
+
+- Order creation Inventory balance and stock-movement mutations resolve a driver-aware, transaction-scoped Inventory repository bundle built directly from the active order transaction database, replacing the general UnitOfWork's `inventoryRepositories` property for this path.
+
+### Dependency
+
+- `createInternalOrderUseCase` accepts a trailing optional `driver` parameter (default `sqlite`) and constructs Inventory repositories via `createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite")` inside the existing order transaction boundary.
+
+### Technical Debt
+
+- Sale rollback and return completion still read Inventory repositories from the general UnitOfWork.
+
+### Entry Conditions
+
+- Sale rollback migrates to the same pattern before the general UnitOfWork's Inventory repositories can be removed.
+
+## Sprint 35N-B2 — Sale Rollback Inventory Runtime Migration
+
+### Capability
+
+- Sale rollback Inventory restoration resolves the same driver-aware, transaction-scoped Inventory repository bundle pattern established in Sprint 35N-B1, replacing the general UnitOfWork's `inventoryRepositories` property for this path.
+
+### Dependency
+
+- `createSaleRollbackUseCase` accepts the same trailing optional `driver` parameter (default `sqlite`) and constructs Inventory repositories via `createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite")` inside the existing sale rollback transaction boundary.
+
+### Technical Debt
+
+- Return completion still reads Inventory repositories from the general UnitOfWork.
+
+### Entry Conditions
+
+- Return completion migrates to the same pattern before the general UnitOfWork's Inventory repositories can be removed.
+
+## Sprint 35N-C1 — Return Inventory Runtime Migration
+
+### Capability
+
+- Return completion Inventory restoration resolves the same driver-aware, transaction-scoped Inventory repository bundle pattern, replacing the general UnitOfWork's `inventoryRepositories` property for this path.
+
+### Dependency
+
+- `completeReturnUseCase` accepts the same trailing optional `driver` parameter (default `sqlite`) and constructs Inventory repositories via `createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite")` inside the existing return completion transaction boundary.
+
+### Technical Debt
+
+- No production caller of the general UnitOfWork's Inventory repositories remains; removal of `inventoryRepositories` and the legacy `stock` repository bundle from the general UnitOfWork is unblocked.
+
+### Entry Conditions
+
+- Remove `inventoryRepositories` and `stock` from the general UnitOfWork's `TransactionScopedRepositories` and remove confirmed dead legacy stock mutation code.
+
+## Sprint 35N-C2 — Legacy General UnitOfWork Inventory Removal
+
+### Capability
+
+- The general UnitOfWork no longer exposes `inventoryRepositories` or the legacy `stock` repository bundle; both were removed from `TransactionScopedRepositories` and from `SqliteUnitOfWork` and `PostgresUnitOfWork` construction.
+- Confirmed-dead legacy stock mutation code was removed: `createManualStockAdjustmentUseCase`, `applyStockMovementSync`, `applyStockMovementCompatibilitySync`, and `services/stockMovementCompatibility.ts`.
+
+### Dependency
+
+- No production path depends on the removed properties or functions. The canonical manual stock adjustment route continues to use `createInventoryApplicationContextForDb` and Inventory Use Cases, unaffected by this removal.
+
+### Technical Debt
+
+- `src/scripts/stockRepositoryAudit.ts` retains a legacy compatibility-audit path (`auditStockCompatibilitySource`, `runStockRepositoryAudit`) that reads the now-deleted `services/stockMovementCompatibility.ts` by path. It has no remaining caller and is not wired into any build, lint, or `repo:parity` script, so it is inert but not yet cleaned up.
+- `src/application/sales/completionWorkflowAudit.ts` retains a stale descriptive string reference to `applyStockMovementSync` inside a static planning-audit data table. It is not imported or executed as code.
+
+### Entry Conditions
+
+- A follow-up sprint may remove the dead `stockRepositoryAudit.ts` compatibility-audit path and update the stale `completionWorkflowAudit.ts` string reference. Neither blocks further Inventory or transaction-runtime work.
