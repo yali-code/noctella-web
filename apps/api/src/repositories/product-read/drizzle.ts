@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, ilike, like, or, sql } from "drizzle-orm";
-import type { ProductReadListQuery, ProductReadRepositoryBundle } from "./types";
+import type { ProductBreakdownDimension, ProductReadListQuery, ProductReadRepositoryBundle } from "./types";
 
 const MAX_PAGE_SIZE = 100;
 const pageSize = (q: ProductReadListQuery = {}) => Math.min(Math.max(Number(q.pageSize ?? q.limit ?? 25), 1), MAX_PAGE_SIZE);
@@ -25,6 +25,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     if (q.collectionSlug) { const c = await collectionsRepo.getBySlug(q.collectionSlug); filters.push(eq(products.collectionId, c?.id ?? "__no_match__")); }
     return filters.length ? and(...filters) : undefined;
   };
+  const breakdownColumns: Record<ProductBreakdownDimension, any> = { category: products.categoryId, brand: products.brand, condition: products.condition, workflowStatus: products.status };
   const order = (q: ProductReadListQuery = {}) => {
     if (q.sort === "sku_asc") return [asc(products.sku), asc(products.id)];
     if (q.sort === "price_asc") return [asc(products.priceEur), asc(products.id)];
@@ -40,6 +41,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     getByNoctellaId: async (id: string) => productsRepo.getById(id),
     list: async (q: ProductReadListQuery = {}) => (await db.select().from(products).where(await productWhere(q)).orderBy(...order(q)).limit(pageSize(q)).offset(offset(q))).map(mapProduct),
     listForExport: async (q: ProductReadListQuery = {}) => (await db.select().from(products).where(await productWhere(q)).orderBy(...order(q)).limit(Number(q.limit ?? MAX_PAGE_SIZE)).offset(q.offset ?? 0)).map(mapProduct),
+    breakdownByDimension: async (dimension: ProductBreakdownDimension) => { const key = sql<string>`coalesce(${breakdownColumns[dimension]}, 'Unknown')`; return db.select({ key, productCount: sql<number>`count(*)`, stockQuantity: sql<number>`sum(${products.stockQuantity})`, inventoryValue: sql<number>`sum(${products.priceEur} * ${products.stockQuantity})` }).from(products).groupBy(key).orderBy(asc(key)); },
     search: async (query: string, q: ProductReadListQuery = {}) => productsRepo.list({ ...q, search: query }),
     count: async (q: ProductReadListQuery = {}) => Number((await db.select({ total: sql<number>`count(*)` }).from(products).where(await productWhere(q)))[0]?.total ?? 0),
     listUpdatedSince: async (updatedSince: string, q: ProductReadListQuery = {}) => productsRepo.list({ ...q, updatedSince }),
