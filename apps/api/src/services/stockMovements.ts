@@ -5,8 +5,6 @@ import { createDecreaseInventoryUseCase, createGetInventoryUseCase, createIncrea
 import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError } from "./errors";
 import type { ManualStockAdjustmentInput, StockMovementListQuery } from "../validation/stockMovement";
-import { applyStockMovementCompatibilitySync, type CompatibleStockMovementInput } from "./stockMovementCompatibility";
-
 type ServiceContext = unknown | InventoryApplicationContext;
 function context(input: ServiceContext): InventoryApplicationContext { return (input as InventoryApplicationContext).configuration?.inventoryApplicationContext ? input as InventoryApplicationContext : createInventoryApplicationContextForDb(input as never); }
 function db(input: ServiceContext): unknown | null { return (input as InventoryApplicationContext).configuration?.inventoryApplicationContext ? null : input; }
@@ -47,6 +45,4 @@ export async function applyStockMovement(dbOrContext: ServiceContext, input: Man
   const legacyDb=db(dbOrContext); if (legacyDb) await enqueueProductStockSync(legacyDb as never, movement.productId, movement.idempotencyKey ?? movement.id);
   return movement;
 }
-/** @deprecated Temporary compatibility export. Use Stock use cases for new code. */
-export function applyStockMovementSync(db: unknown, input: CompatibleStockMovementInput) { return applyStockMovementCompatibilitySync(db, input); }
 export { StockMovementType };
