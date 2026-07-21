@@ -26,6 +26,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     return filters.length ? and(...filters) : undefined;
   };
   const order = (q: ProductReadListQuery = {}) => {
+    if (q.sort === "sku_asc") return [asc(products.sku), asc(products.id)];
     if (q.sort === "price_asc") return [asc(products.priceEur), asc(products.id)];
     if (q.sort === "price_desc") return [desc(products.priceEur), asc(products.id)];
     if (q.sort === "title_asc") return [asc(products.title), asc(products.id)];
