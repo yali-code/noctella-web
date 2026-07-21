@@ -31,7 +31,7 @@ describe("ERP inventory bridge", () => {
     const dup:any = await executeStockAdjustment(db,"env",created.productId,env("AdjustStock",{ quantityDelta:5, reason:"opening stock" }, "stock-1"));
     expect(dup.metadata?.movementId ?? dup.movementId).toBe(stock.movementId);
     await expect(executeStockAdjustment(db,"env",created.productId,env("AdjustStock",{ quantityDelta:0, reason:"zero" }, "stock-zero"))).rejects.toThrow(/Non-zero/);
-    const w:any = await workspace(db, created.productId); expect(w.landedCost).toMatchObject({ landedCost:26, complete:true, expectedGrossProfit:24 }); expect(w.landedCost.expectedRoi).toBeCloseTo(24/26);
+    const w:any = await workspace(db, created.productId); expect(w.landedCost).toMatchObject({ landedCost:26, complete:true, expectedGrossProfit:24 }); expect(w.landedCost.expectedRoi).toBeCloseTo(24/26); expect(w.physicalStock).toBe(5); expect(w.availableStock).toBe(5);
     const l:any = await labelData(db, created.productId); expect(l).toMatchObject({ sku:"ERP18-2", barcodeValue:"LBL", priceEur:50 });
     expect(JSON.stringify(await db.select().from(erpCommandExecutions))).not.toMatch(/opening stock.*quantityDelta/);
   });
