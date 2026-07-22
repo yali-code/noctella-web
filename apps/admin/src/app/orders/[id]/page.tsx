@@ -1,17 +1,23 @@
 "use client";
 
-import { ORDER_STATUS_VALUES } from "@noctella/shared";
+import { OrderStatus } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getOrder, updateOrderStatus, type OrderWithItems } from "@/lib/orders";
+import {
+  getAvailableOrderStatusActions,
+  getOrder,
+  updateOrderStatus,
+  type OrderStatusAction,
+  type OrderWithItems,
+} from "@/lib/orders";
 import { canAct, financialSummary, readinessSummary, safeErrorSummary, type ShipmentRow } from "@/lib/shipments";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
-  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [busyAction, setBusyAction] = useState<OrderStatusAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statusActionError, setStatusActionError] = useState<string | null>(null);
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [readiness, setReadiness] = useState<{ ready: boolean; issues: string[] } | null>(null);
   const [financials, setFinancials] = useState<any>(null);
@@ -28,7 +34,6 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     getOrder(params.id)
       .then((loaded) => {
         setOrder(loaded);
-        setStatus(loaded.status);
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/shipments`).then((r) => r.ok ? r.json() : []).then(setShipments).catch(() => setShipments([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
@@ -42,18 +47,17 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       .finally(() => setLoading(false));
   }, [params.id]);
 
-  async function handleStatusUpdate() {
+  async function handleOrderStatusAction(action: OrderStatusAction, target: OrderStatus) {
     if (!order) return;
-    setSaving(true);
-    setError(null);
+    setBusyAction(action);
+    setStatusActionError(null);
     try {
-      const updated = await updateOrderStatus(order.id, status);
+      const updated = await updateOrderStatus(order.id, target);
       setOrder(updated);
-      setStatus(updated.status);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update status");
+      setStatusActionError(err instanceof Error ? err.message : "Failed to update order status");
     } finally {
-      setSaving(false);
+      setBusyAction(null);
     }
   }
 
@@ -109,16 +113,26 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
 
         <section className="noctella-panel" style={{ padding: 20 }}>
           <h3>Order Status</h3>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
-            {ORDER_STATUS_VALUES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <button disabled={saving || status === order.status} onClick={handleStatusUpdate} style={buttonStyle}>
-            {saving ? "Saving..." : "Update Status"}
-          </button>
+          <Row label="Current Status" value={order.status} />
+          {statusActionError && (
+            <p role="alert" style={{ color: "#c86a6a" }}>
+              {statusActionError}
+            </p>
+          )}
+          {getAvailableOrderStatusActions(order.status).map((a) => (
+            <button
+              key={a.action}
+              disabled={busyAction !== null}
+              onClick={() => handleOrderStatusAction(a.action, a.target)}
+              style={buttonStyle}
+            >
+              {busyAction === a.action ? a.busyLabel : a.label}
+            </button>
+          ))}
+          {getAvailableOrderStatusActions(order.status).length === 0 &&
+            (order.status === OrderStatus.Completed || order.status === OrderStatus.Cancelled) && (
+              <p style={{ color: "var(--noctella-aged-bronze)" }}>No further status actions are available.</p>
+            )}
         </section>
 
         <section className="noctella-panel" style={{ padding: 20 }}>
