@@ -12,7 +12,7 @@ import {
   type OrderWithItems,
 } from "@/lib/orders";
 import { canAct, financialSummary, readinessSummary, safeErrorSummary, type ShipmentRow } from "@/lib/shipments";
-import { createInvoiceDraft } from "@/lib/erpSalesFinanceBridge";
+import { createInvoiceDraft, issueInvoice } from "@/lib/erpSalesFinanceBridge";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
@@ -35,6 +35,8 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [erpBridgeError, setErpBridgeError] = useState<string | null>(null);
   const [invoiceDraftBusy, setInvoiceDraftBusy] = useState(false);
   const [invoiceDraftError, setInvoiceDraftError] = useState<string | null>(null);
+  const [issuingInvoiceId, setIssuingInvoiceId] = useState<string | null>(null);
+  const [issueInvoiceError, setIssueInvoiceError] = useState<string | null>(null);
 
   function loadInvoiceAndSalesBridge(orderId: string) {
     fetch(`/api/erp/orders/${orderId}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
@@ -71,6 +73,20 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       setInvoiceDraftError(err instanceof Error ? err.message : "Failed to create invoice draft");
     } finally {
       setInvoiceDraftBusy(false);
+    }
+  }
+
+  async function handleIssueInvoice(invoiceId: string) {
+    if (!order || issuingInvoiceId) return;
+    setIssuingInvoiceId(invoiceId);
+    setIssueInvoiceError(null);
+    try {
+      await issueInvoice(invoiceId);
+      loadInvoiceAndSalesBridge(order.id);
+    } catch (err) {
+      setIssueInvoiceError(err instanceof Error ? err.message : "Failed to issue invoice");
+    } finally {
+      setIssuingInvoiceId(null);
     }
   }
 
@@ -255,10 +271,17 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           {invoiceDraftBusy ? "Creating Invoice..." : "Create Invoice Draft"}
         </button>
         {invoiceDraftError && <p role="alert">{invoiceDraftError}</p>}
+        {issueInvoiceError && <p role="alert">{issueInvoiceError}</p>}
         {invoiceBridge.length === 0 ? <p>No ERP invoices yet.</p> : invoiceBridge.map((invoice) => (
           <div key={invoice.id}>
             <Row label={`Invoice ${invoice.invoiceNumber ?? invoice.id}`} value={`${invoice.status} / ${invoice.invoiceType} / ${Number(invoice.totalAmount ?? 0).toFixed(2)}`} />
-            <button disabled={invoice.status !== "Draft"} style={buttonStyle}>Issue</button>
+            <button
+              disabled={invoice.status !== "Draft" || issuingInvoiceId === invoice.id}
+              style={buttonStyle}
+              onClick={() => handleIssueInvoice(invoice.id)}
+            >
+              {issuingInvoiceId === invoice.id ? "Issuing..." : "Issue"}
+            </button>
             <button disabled={! ["Draft", "Issued"].includes(invoice.status)} style={buttonStyle}>Cancel</button>
             <button disabled={invoice.status !== "Issued"} style={buttonStyle}>Mark Paid</button>
           </div>
