@@ -361,6 +361,7 @@ export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),
   orderDraftId: text("order_draft_id"),
+  offerId: text("offer_id").unique(),
   customerId: text("customer_id"),
   guestEmail: text("guest_email").notNull(),
   status: text("status").notNull(),

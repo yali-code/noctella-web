@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   order_number TEXT NOT NULL UNIQUE,
   order_draft_id TEXT UNIQUE,
+  offer_id TEXT UNIQUE,
   customer_id TEXT,
   guest_email TEXT NOT NULL,
   status TEXT NOT NULL,

@@ -8,6 +8,7 @@ export default function OffersPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftOrders, setDraftOrders] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     offersApi.list().then(setOffers).catch((e) => setError(e?.message ?? "Failed to load offers"));
@@ -25,6 +26,19 @@ export default function OffersPage() {
       load();
     } catch (e: any) {
       setError(e?.message ?? `Failed to ${action} offer`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function createDraftOrder(id: string) {
+    setBusyId(id);
+    setError(null);
+    try {
+      const order = await offersApi.createDraftOrder(id);
+      setDraftOrders((prev) => ({ ...prev, [id]: order.id }));
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to create draft order");
     } finally {
       setBusyId(null);
     }
@@ -62,6 +76,13 @@ export default function OffersPage() {
                     <button disabled={busyId === o.id} onClick={() => act(o.id, "accept")}>Accept</button>{" "}
                     <button disabled={busyId === o.id} onClick={() => act(o.id, "reject")}>Reject</button>
                   </>
+                ) : null}
+                {o.status === OfferStatus.Accepted ? (
+                  draftOrders[o.id] ? (
+                    <Link href={`/orders/${draftOrders[o.id]}`}>View Draft Order</Link>
+                  ) : (
+                    <button disabled={busyId === o.id} onClick={() => createDraftOrder(o.id)}>Create Draft Order</button>
+                  )
                 ) : null}
               </td>
             </tr>

@@ -5,6 +5,9 @@ import type { DbClient } from "../db/client";
 import { offers, products } from "../db/schema";
 import { BadRequestError, NotFoundError } from "./errors";
 import type { CreateOfferInput } from "../validation/offer";
+import { SqliteUnitOfWork } from "./unitOfWork";
+import { createDraftOrderFromOfferUseCase } from "../use-cases/order/useCases";
+import type { OrderDetailProjection } from "../repositories/order/types";
 
 function toOffer(row: typeof offers.$inferSelect): Offer {
   return {
@@ -55,6 +58,27 @@ export async function acceptOffer(db: DbClient, id: string): Promise<Offer> {
 
 export async function rejectOffer(db: DbClient, id: string): Promise<Offer> {
   return transitionOffer(db, id, OfferStatus.Rejected);
+}
+
+/**
+ * Creating a Draft Order is an explicit admin action, never an automatic
+ * consequence of accepting an offer. Only Accepted offers are eligible;
+ * the order/offer link and duplicate-prevention are enforced by
+ * createDraftOrderFromOfferUseCase.
+ */
+export async function createDraftOrderFromOffer(db: DbClient, id: string): Promise<OrderDetailProjection> {
+  const offer = await getOfferById(db, id);
+  if (offer.status !== OfferStatus.Accepted) {
+    throw new BadRequestError("Only accepted offers can create a draft order");
+  }
+  return createDraftOrderFromOfferUseCase(new SqliteUnitOfWork(db)).execute({
+    offerId: offer.id,
+    productId: offer.productId,
+    customerName: offer.customerName,
+    customerEmail: offer.customerEmail,
+    offeredAmount: offer.offeredAmount,
+    currency: offer.currency,
+  });
 }
 
 /**
