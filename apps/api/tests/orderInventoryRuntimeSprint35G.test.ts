@@ -6,6 +6,7 @@ import * as schema from "../src/db/schema";
 import { createCategory } from "../src/services/categories";
 import { createProduct } from "../src/services/products";
 import { createOrder, createSaleRollback } from "../src/services/orders";
+import { createPaymentSession } from "../src/payments/paymentRepository";
 import { createOrderSchema } from "../src/validation/order";
 import { decreaseInventoryForSaleInTransactionUseCase, restoreInventoryForSaleRollbackInTransactionUseCase } from "../src/application/inventory";
 import { createSaleRollbackUseCase } from "../src/use-cases/order/useCases";
@@ -21,6 +22,14 @@ async function harness() {
     allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false, priceEur: 10,
     images: [],
   });
+  await createPaymentSession(db, {
+    provider: PaymentProvider.Stripe,
+    providerReference: "payment-runtime",
+    status: PaymentStatus.Paid,
+    amount: 10,
+    currency: "EUR",
+    idempotencyKey: "test:payment-runtime",
+  });
   const input = createOrderSchema.parse({
     orderDraftId: "draft-runtime", guestEmail: "buyer@example.com", status: OrderStatus.Pending,
     paymentStatus: PaymentStatus.Paid, paymentProvider: PaymentProvider.Stripe, paymentReference: "payment-runtime",
@@ -35,7 +44,7 @@ describe("Sprint 35G order Inventory runtime", () => {
   test("order creation decrements Inventory and records one movement exactly once", async () => {
     const { db, product, input } = await harness();
     const first = await createOrder(db, input);
-    const duplicate = await createOrder(db, { ...input, paymentReference: "ignored-replay" });
+    const duplicate = await createOrder(db, input);
     expect(duplicate.id).toBe(first.id);
     expect((await db.select().from(schema.products).where(eq(schema.products.id, product.id)))[0].stockQuantity).toBe(0);
     expect(await db.select().from(schema.stockMovements).where(eq(schema.stockMovements.productId, product.id))).toHaveLength(1);

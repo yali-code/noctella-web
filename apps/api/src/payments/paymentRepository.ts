@@ -107,6 +107,15 @@ export async function listPayments(db: DbClient, filters: ListPaymentsFilters = 
   return rows.map(toRecord);
 }
 
+/**
+ * Links a payment session to its resulting Order. Persistence only — no
+ * business-rule decisions, no status mutation, no Order/Inventory writes.
+ * Safe to call repeatedly with the same pair (idempotent no-op on repeat).
+ */
+export async function linkPaymentToOrder(db: DbClient, paymentSessionId: string, orderId: string): Promise<void> {
+  await db.update(payments).set({ orderId }).where(eq(payments.id, paymentSessionId));
+}
+
 export async function updatePaymentStatus(db: DbClient, id: string, status: string): Promise<PaymentSessionRecord> {
   const updatedAt = new Date().toISOString();
   await db.update(payments).set({ status, updatedAt }).where(eq(payments.id, id));

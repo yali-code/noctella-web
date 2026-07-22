@@ -11,8 +11,9 @@ import {
   getOrderByOrderNumber,
   listOrders,
 } from "../src/services/orders";
-import { BadRequestError, NotFoundError } from "../src/services/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../src/services/errors";
 import { createOrderSchema, orderListQuerySchema } from "../src/validation/order";
+import { createPaymentSession, findPaymentByProviderReference } from "../src/payments/paymentRepository";
 import { createTestDb } from "./testDb";
 
 describe("order service", () => {
@@ -49,7 +50,24 @@ describe("order service", () => {
       images: [{ url: "https://example.com/watch.jpg", altText: "Watch", sortOrder: 0, isPrimary: true }],
     });
     productId = product.id;
+    await seedPayment(db, PaymentProvider.Stripe, "mock_stripe_ref_1", PaymentStatus.Paid);
   });
+
+  function seedPayment(
+    testDb: ReturnType<typeof createTestDb>,
+    provider: string,
+    providerReference: string,
+    status: string,
+  ) {
+    return createPaymentSession(testDb, {
+      provider,
+      providerReference,
+      status,
+      amount: 1200,
+      currency: "EUR",
+      idempotencyKey: `test:${provider}:${providerReference}:${Math.random()}`,
+    });
+  }
 
   function baseOrderInput(overrides: Record<string, unknown> = {}) {
     return {
@@ -89,8 +107,14 @@ describe("order service", () => {
   });
 
   it("rejects unpaid orders and missing payment references", async () => {
+    await seedPayment(db, PaymentProvider.Stripe, "not-yet-paid", PaymentStatus.Pending);
     await expect(
-      createOrder(db, createOrderSchema.parse(baseOrderInput({ paymentStatus: PaymentStatus.Pending }))),
+      createOrder(
+        db,
+        createOrderSchema.parse(
+          baseOrderInput({ paymentReference: "not-yet-paid", paymentStatus: PaymentStatus.Pending }),
+        ),
+      ),
     ).rejects.toBeInstanceOf(BadRequestError);
 
     const missingReference = createOrderSchema.safeParse(baseOrderInput({ paymentReference: "" }));
@@ -136,10 +160,7 @@ describe("order service", () => {
 
   it("returns the existing order for a duplicate orderDraftId", async () => {
     const first = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
-    const second = await createOrder(
-      db,
-      createOrderSchema.parse(baseOrderInput({ paymentReference: "another-reference", totalAmount: 999 })),
-    );
+    const second = await createOrder(db, createOrderSchema.parse(baseOrderInput({ totalAmount: 999 })));
     expect(second.id).toBe(first.id);
     expect(second.orderNumber).toBe(first.orderNumber);
   });
@@ -165,9 +186,23 @@ describe("order service", () => {
   });
 
   it("lists, searches, paginates, and filters by order/payment status", async () => {
-    const paid = await createOrder(db, createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-paid" })));
+    await seedPayment(db, PaymentProvider.Stripe, "ref-draft-paid", PaymentStatus.Paid);
+    await seedPayment(db, PaymentProvider.Stripe, "ref-draft-complete", PaymentStatus.Paid);
+    const paid = await createOrder(
+      db,
+      createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-paid", paymentReference: "ref-draft-paid" })),
+    );
     await updateProduct(db, productId, { status: ProductStatus.Published, stockQuantity: 1 });
-    await createOrder(db, createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-complete", status: OrderStatus.Completed })));
+    await createOrder(
+      db,
+      createOrderSchema.parse(
+        baseOrderInput({
+          orderDraftId: "draft-complete",
+          paymentReference: "ref-draft-complete",
+          status: OrderStatus.Completed,
+        }),
+      ),
+    );
 
     const pending = await listOrders(db, orderListQuerySchema.parse({ status: OrderStatus.Pending }));
     expect(pending.data.map((order) => order.id)).toEqual([paid.id]);
@@ -197,11 +232,108 @@ describe("order service", () => {
     expect(after.priceEur).toBe(before.priceEur);
     expect(after.status).toBe(ProductStatus.Sold);
 
-    const duplicate = await createOrder(db, createOrderSchema.parse(baseOrderInput({ paymentReference: "again" })));
+    const duplicate = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
     const final = await getProductById(db, productId);
     const movements = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
     expect(duplicate.id).toBeDefined();
     expect(final.stockQuantity).toBe(after.stockQuantity);
     expect(movements.items).toHaveLength(movementsBefore.items.length + 1);
+  });
+
+  describe("payment session order linkage", () => {
+    it("creates the Order and links payments.order_id when the persisted payment is Paid", async () => {
+      const order = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
+
+      const session = await findPaymentByProviderReference(db, PaymentProvider.Stripe, "mock_stripe_ref_1");
+      expect(session?.orderId).toBe(order.id);
+    });
+
+    it("rejects with NotFoundError for an unknown provider/reference", async () => {
+      await expect(
+        createOrder(db, createOrderSchema.parse(baseOrderInput({ paymentReference: "never-initialized" }))),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it("rejects a persisted Pending payment even when the client claims paymentStatus Paid", async () => {
+      await seedPayment(db, PaymentProvider.Stripe, "still-pending", PaymentStatus.Pending);
+      await expect(
+        createOrder(
+          db,
+          createOrderSchema.parse(
+            baseOrderInput({ paymentReference: "still-pending", paymentStatus: PaymentStatus.Paid }),
+          ),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    it("rejects persisted Failed and Cancelled payments", async () => {
+      await seedPayment(db, PaymentProvider.Stripe, "ref-failed", PaymentStatus.Failed);
+      await seedPayment(db, PaymentProvider.Stripe, "ref-cancelled", PaymentStatus.Cancelled);
+
+      await expect(
+        createOrder(db, createOrderSchema.parse(baseOrderInput({ paymentReference: "ref-failed" }))),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      await expect(
+        createOrder(db, createOrderSchema.parse(baseOrderInput({ paymentReference: "ref-cancelled" }))),
+      ).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    it("rejects when the payment is already linked to another Order, before creating a new Order or mutating Inventory", async () => {
+      await seedPayment(db, PaymentProvider.Stripe, "ref-shared", PaymentStatus.Paid);
+      const first = await createOrder(
+        db,
+        createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-first", paymentReference: "ref-shared" })),
+      );
+
+      const before = await getProductById(db, productId);
+      const ordersBefore = await listOrders(db, orderListQuerySchema.parse({}));
+
+      await expect(
+        createOrder(
+          db,
+          createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-second", paymentReference: "ref-shared" })),
+        ),
+      ).rejects.toBeInstanceOf(ConflictError);
+
+      const after = await getProductById(db, productId);
+      const ordersAfter = await listOrders(db, orderListQuerySchema.parse({}));
+      expect(ordersAfter.pagination.total).toBe(ordersBefore.pagination.total);
+      expect(after.stockQuantity).toBe(before.stockQuantity);
+
+      const session = await findPaymentByProviderReference(db, PaymentProvider.Stripe, "ref-shared");
+      expect(session?.orderId).toBe(first.id);
+    });
+
+    it("retrying with the same orderDraftId returns the same Order, keeps the same payment link, and causes no duplicate Inventory mutation", async () => {
+      const first = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
+      const afterFirst = await getProductById(db, productId);
+
+      const second = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
+      const afterSecond = await getProductById(db, productId);
+
+      expect(second.id).toBe(first.id);
+      expect(afterSecond.stockQuantity).toBe(afterFirst.stockQuantity);
+
+      const session = await findPaymentByProviderReference(db, PaymentProvider.Stripe, "mock_stripe_ref_1");
+      expect(session?.orderId).toBe(first.id);
+    });
+
+    it("re-linking the same payment session to the same Order is idempotent", async () => {
+      const order = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
+      await expect(createOrder(db, createOrderSchema.parse(baseOrderInput()))).resolves.toMatchObject({
+        id: order.id,
+      });
+
+      const session = await findPaymentByProviderReference(db, PaymentProvider.Stripe, "mock_stripe_ref_1");
+      expect(session?.orderId).toBe(order.id);
+    });
+
+    it("client-provided paymentStatus cannot override a persisted Paid session", async () => {
+      const order = await createOrder(
+        db,
+        createOrderSchema.parse(baseOrderInput({ paymentStatus: PaymentStatus.Pending })),
+      );
+      expect(order.paymentStatus).toBe(PaymentStatus.Paid);
+    });
   });
 });
