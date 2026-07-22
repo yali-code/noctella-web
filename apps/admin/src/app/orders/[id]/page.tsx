@@ -4,6 +4,7 @@ import { OrderStatus } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  completeSale,
   getAvailableOrderStatusActions,
   getOrder,
   updateOrderStatus,
@@ -18,6 +19,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [busyAction, setBusyAction] = useState<OrderStatusAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusActionError, setStatusActionError] = useState<string | null>(null);
+  const [completeSaleBusy, setCompleteSaleBusy] = useState(false);
+  const [completeSaleError, setCompleteSaleError] = useState<string | null>(null);
+  const [completeSaleIssues, setCompleteSaleIssues] = useState<string[] | null>(null);
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [readiness, setReadiness] = useState<{ ready: boolean; issues: string[] } | null>(null);
   const [financials, setFinancials] = useState<any>(null);
@@ -58,6 +62,29 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       setStatusActionError(err instanceof Error ? err.message : "Failed to update order status");
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function handleCompleteSale() {
+    if (!order) return;
+    setCompleteSaleBusy(true);
+    setCompleteSaleError(null);
+    setCompleteSaleIssues(null);
+    try {
+      const result = await completeSale(order.id);
+      if (result.status === "blocked") {
+        setCompleteSaleIssues(result.issues ?? []);
+        return;
+      }
+      // Success (freshly completed) or alreadyCompleted: reload from the server
+      // rather than constructing an optimistic Completed order locally.
+      const refreshed = await getOrder(order.id);
+      setOrder(refreshed);
+      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${refreshed.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
+    } catch (err) {
+      setCompleteSaleError(err instanceof Error ? err.message : "Failed to complete sale");
+    } finally {
+      setCompleteSaleBusy(false);
     }
   }
 
@@ -164,8 +191,22 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         ))}
         <button style={buttonStyle}>Create Shipment</button>
         <button style={buttonStyle}>Assign Tracking</button>
-        <button disabled={!readiness?.ready} style={buttonStyle}>Complete Sale</button>
+        {order.status !== OrderStatus.Completed && (
+          <button disabled={!readiness?.ready || completeSaleBusy} onClick={handleCompleteSale} style={buttonStyle}>
+            {completeSaleBusy ? "Completing Sale..." : "Complete Sale"}
+          </button>
+        )}
         {readiness && !readiness.ready && <p style={{ color: "#c86a6a" }}>{readiness.issues.join(", ")}</p>}
+        {completeSaleIssues && completeSaleIssues.length > 0 && (
+          <p role="alert" style={{ color: "#c86a6a" }}>
+            {completeSaleIssues.join(", ")}
+          </p>
+        )}
+        {completeSaleError && (
+          <p role="alert" style={{ color: "#c86a6a" }}>
+            {completeSaleError}
+          </p>
+        )}
         <Row label="Readiness" value={readiness?.ready ? "Ready" : "Blocked"} />
         <Row label="Financial profit" value={String(financialSummary(financials).profit)} />
       </section>

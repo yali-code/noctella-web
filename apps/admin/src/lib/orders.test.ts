@@ -1,13 +1,17 @@
 import { OrderStatus } from "@noctella/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { api } from "./api";
 import {
   canActOnOrderStatus,
+  completeSale,
   customerName,
   getAvailableOrderStatusActions,
   orderListQuery,
   ORDER_STATUS_ACTIONS,
   type OrderWithItems,
 } from "./orders";
+vi.mock("./api", () => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
+const mockedApi = vi.mocked(api);
 
 const order = {
   shippingAddress: { fullName: "Jane Collector" },
@@ -23,6 +27,13 @@ describe("admin order list helpers", () => {
     expect(
       orderListQuery({ page: 2, pageSize: 20, search: "NOC", status: "confirmed", paymentStatus: "paid" }),
     ).toBe("page=2&pageSize=20&search=NOC&status=confirmed&paymentStatus=paid");
+  });
+
+  it("posts to the existing complete-sale endpoint via the shared API client", async () => {
+    mockedApi.post.mockResolvedValueOnce({ status: "blocked", issues: ["Order is unpaid"] });
+    const result = await completeSale("order-1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/api/orders/order-1/complete-sale", {});
+    expect(result).toEqual({ status: "blocked", issues: ["Order is unpaid"] });
   });
 });
 
