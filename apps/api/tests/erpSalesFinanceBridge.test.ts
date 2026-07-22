@@ -37,7 +37,10 @@ describe("ERP sales finance bridge", () => {
 
   it("completes sale once, posts one financial record/entry, does not move stock again, and preserves sale movements", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); await shipment(db,order.id); const beforeStock=(await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity; const beforeMoves=(await db.select().from(schema.stockMovements)).length; const first=await completeSale(db,order.id); const second=await completeSale(db,order.id); expect(first.status).toBe(OrderStatus.Completed); expect(second.alreadyCompleted).toBe(true); expect((await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity).toBe(beforeStock); expect((await db.select().from(schema.stockMovements))).toHaveLength(beforeMoves); expect((await db.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.orderId,order.id)))).toHaveLength(1); expect((await listFinanceEntries(db,{entryType:"CompleteSale"})).items).toHaveLength(1); });
 
-  it("creates, updates, issues, cancels, voids and marks paid invoices without stock/payment/PDF/email side effects", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const stock=(await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity; const moves=(await db.select().from(schema.stockMovements)).length; const draft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv",notes:"draft"}); expect(draft.status).toBe(ErpInvoiceStatus.Draft); expect(draft.lines[0].lineTotal).toBe(draft.subtotal); const updated:any=await updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:draft.updatedAt,notes:"updated"}); expect(updated.notes).toBe("updated"); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:"stale"})).rejects.toBeInstanceOf(ConflictError); await expect(createInvoiceDraft(db,order.id,{discountAmount:-1})).rejects.toBeInstanceOf(BadRequestError); const issued:any=await issueInvoice(db,draft.id,{}); expect(issued.invoiceNumber).toMatch(/^NOCT-\d{4}-000001$/); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:issued.updatedAt,notes:"bad"})).rejects.toBeInstanceOf(ConflictError); expect((await issueInvoice(db,draft.id,{})).invoiceNumber).toBe(issued.invoiceNumber); expect((await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Cancelled)).invoiceNumber).toBe(issued.invoiceNumber); expect((await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Voided)).invoiceNumber).toBe(issued.invoiceNumber); expect((await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Paid)).paidAt).toBeTruthy(); expect(await getInvoiceEvents(db,draft.id)).not.toHaveLength(0); expect((await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity).toBe(stock); expect((await db.select().from(schema.stockMovements))).toHaveLength(moves); expect(JSON.stringify(await getInvoiceEvents(db,draft.id))).not.toMatch(/pdfReady|emailReady|payment_intent/i); });
+  it("creates, updates, issues, cancels, voids and marks paid invoices without stock/payment/PDF/email side effects", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const stock=(await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity; const moves=(await db.select().from(schema.stockMovements)).length; const draft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv",notes:"draft"}); expect(draft.status).toBe(ErpInvoiceStatus.Draft); expect(draft.lines[0].lineTotal).toBe(draft.subtotal); const updated:any=await updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:draft.updatedAt,notes:"updated"}); expect(updated.notes).toBe("updated"); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:"stale"})).rejects.toBeInstanceOf(ConflictError); await expect(createInvoiceDraft(db,order.id,{discountAmount:-1})).rejects.toBeInstanceOf(BadRequestError); const issued:any=await issueInvoice(db,draft.id,{}); expect(issued.invoiceNumber).toMatch(/^NOCT-\d{4}-000001$/); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:issued.updatedAt,notes:"bad"})).rejects.toBeInstanceOf(ConflictError); expect((await issueInvoice(db,draft.id,{})).invoiceNumber).toBe(issued.invoiceNumber); expect((await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Cancelled)).invoiceNumber).toBe(issued.invoiceNumber);
+    const voidDraft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv-void"}); const voided:any=await issueInvoice(db,voidDraft.id,{}); expect((await setInvoiceStatus(db,voided.id,ErpInvoiceStatus.Voided)).status).toBe(ErpInvoiceStatus.Voided);
+    const paidDraft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv-paid"}); const paidSource:any=await issueInvoice(db,paidDraft.id,{}); expect((await setInvoiceStatus(db,paidSource.id,ErpInvoiceStatus.Paid)).paidAt).toBeTruthy();
+    expect(await getInvoiceEvents(db,draft.id)).not.toHaveLength(0); expect((await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity).toBe(stock); expect((await db.select().from(schema.stockMovements))).toHaveLength(moves); expect(JSON.stringify(await getInvoiceEvents(db,draft.id))).not.toMatch(/pdfReady|emailReady|payment_intent/i); });
 
   it("allocates unique sequential invoice numbers under concurrent issue attempts and prevents duplicate invoice finance entries", async () => { const ps=await seed(db,2); const order=await paidOrder(db,ps); const d1:any=await createInvoiceDraft(db,order.id,{}); const d2:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"second"}); const [i1,i2]:any[]=await Promise.all([issueInvoice(db,d1.id,{}), issueInvoice(db,d2.id,{})]); expect(new Set([i1.invoiceNumber,i2.invoiceNumber]).size).toBe(2); await createFinanceEntry(db,{invoiceId:i1.id,orderId:order.id,entryType:"IssuedInvoice",amount:i1.totalAmount,sourceReference:i1.invoiceNumber,idempotencyKey:`invoice-issued:${i1.id}`}); expect((await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items).toHaveLength(2); });
 
@@ -73,9 +76,9 @@ describe("ERP sales finance bridge", () => {
       expect((await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===draft.id)).toHaveLength(0);
     });
 
-    it("Draft -> Voided posts no reversal entry", async () => {
+    it("Draft -> Voided is not a valid transition and posts no reversal entry", async () => {
       const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const draft:any=await createInvoiceDraft(db,order.id,{});
-      await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Voided);
+      await expect(setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Voided)).rejects.toBeInstanceOf(BadRequestError);
       expect((await listFinanceEntries(db,{entryType:"InvoiceVoided"})).items.filter((e:any)=>e.invoiceId===draft.id)).toHaveLength(0);
     });
 
@@ -86,11 +89,11 @@ describe("ERP sales finance bridge", () => {
       expect(entries.filter((e:any)=>e.entryType!=="IssuedInvoice")).toHaveLength(0);
     });
 
-    it("Cancelled and Voided source statuses do not create another reversal", async () => {
+    it("Cancelled and Voided are terminal — further transitions are rejected and never create another reversal", async () => {
       const { issued } = await issuedInvoice();
       await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
-      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Voided);
-      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      await expect(setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Voided)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Paid)).rejects.toBeInstanceOf(BadRequestError);
       const entries = (await listFinanceEntries(db,{})).items.filter((e:any)=>e.invoiceId===issued.id);
       expect(entries.filter((e:any)=>e.entryType==="InvoiceCancelled")).toHaveLength(1);
       expect(entries.filter((e:any)=>e.entryType==="InvoiceVoided")).toHaveLength(0);
@@ -116,6 +119,64 @@ describe("ERP sales finance bridge", () => {
       await executeSalesCommand(db,"erp-client",{ idempotencyKey: "void-key-a", payload: {} },"VoidInvoice",issued.id);
       await executeSalesCommand(db,"erp-client",{ idempotencyKey: "void-key-b", payload: {} },"VoidInvoice",issued.id);
       expect((await listFinanceEntries(db,{entryType:"InvoiceVoided"})).items.filter((e:any)=>e.invoiceId===issued.id)).toHaveLength(1);
+    });
+  });
+
+  describe("invoice status transition validation", () => {
+    async function draftInvoice() { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); return createInvoiceDraft(db,order.id,{}); }
+    async function issuedInvoice() { const draft:any=await draftInvoice(); return issueInvoice(db,draft.id,{}); }
+
+    it("allows every valid edge: Draft->Cancelled, Issued->Cancelled, Issued->Voided, Issued->Paid, Draft->Issued", async () => {
+      const d1:any=await draftInvoice(); expect((await setInvoiceStatus(db,d1.id,ErpInvoiceStatus.Cancelled)).status).toBe(ErpInvoiceStatus.Cancelled);
+      const i1:any=await issuedInvoice(); expect((await setInvoiceStatus(db,i1.id,ErpInvoiceStatus.Cancelled)).status).toBe(ErpInvoiceStatus.Cancelled);
+      const i2:any=await issuedInvoice(); expect((await setInvoiceStatus(db,i2.id,ErpInvoiceStatus.Voided)).status).toBe(ErpInvoiceStatus.Voided);
+      const i3:any=await issuedInvoice(); expect((await setInvoiceStatus(db,i3.id,ErpInvoiceStatus.Paid)).status).toBe(ErpInvoiceStatus.Paid);
+      const d2:any=await draftInvoice(); expect((await issueInvoice(db,d2.id,{})).status).toBe(ErpInvoiceStatus.Issued);
+    });
+
+    it("rejects every forbidden edge with BadRequestError", async () => {
+      const cancelled:any=await issuedInvoice(); await setInvoiceStatus(db,cancelled.id,ErpInvoiceStatus.Cancelled);
+      await expect(setInvoiceStatus(db,cancelled.id,ErpInvoiceStatus.Paid)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(setInvoiceStatus(db,cancelled.id,ErpInvoiceStatus.Voided)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(issueInvoice(db,cancelled.id,{})).rejects.toBeInstanceOf(BadRequestError);
+
+      const voided:any=await issuedInvoice(); await setInvoiceStatus(db,voided.id,ErpInvoiceStatus.Voided);
+      await expect(setInvoiceStatus(db,voided.id,ErpInvoiceStatus.Paid)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(setInvoiceStatus(db,voided.id,ErpInvoiceStatus.Cancelled)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(issueInvoice(db,voided.id,{})).rejects.toBeInstanceOf(BadRequestError);
+
+      const paid:any=await issuedInvoice(); await setInvoiceStatus(db,paid.id,ErpInvoiceStatus.Paid);
+      await expect(setInvoiceStatus(db,paid.id,ErpInvoiceStatus.Cancelled)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(setInvoiceStatus(db,paid.id,ErpInvoiceStatus.Voided)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(issueInvoice(db,paid.id,{})).rejects.toBeInstanceOf(BadRequestError);
+
+      const draft:any=await draftInvoice();
+      await expect(setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Voided)).rejects.toBeInstanceOf(BadRequestError);
+      await expect(setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Paid)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    it("same-status calls are idempotent no-ops: no status write, no new event, no new finance entry", async () => {
+      const issued:any=await issuedInvoice();
+      const eventsBeforeReissue=await getInvoiceEvents(db,issued.id);
+      const reIssued:any=await issueInvoice(db,issued.id,{});
+      expect(reIssued).toEqual(issued);
+      expect(await getInvoiceEvents(db,issued.id)).toEqual(eventsBeforeReissue);
+
+      const cancelled:any=await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      const eventsAfterCancel=await getInvoiceEvents(db,issued.id);
+      const reCancelled:any=await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      expect(reCancelled).toEqual(cancelled);
+      expect(await getInvoiceEvents(db,issued.id)).toEqual(eventsAfterCancel);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===issued.id)).toHaveLength(1);
+    });
+
+    it("standardizes IssueInvoice: only Draft->Issued is valid, Issued->Issued no-ops, every other source throws", async () => {
+      const draft:any=await draftInvoice();
+      const issued:any=await issueInvoice(db,draft.id,{});
+      expect(issued.status).toBe(ErpInvoiceStatus.Issued);
+      expect((await issueInvoice(db,draft.id,{})).invoiceNumber).toBe(issued.invoiceNumber);
+      const cancelled:any=await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      await expect(issueInvoice(db,cancelled.id,{})).rejects.toBeInstanceOf(BadRequestError);
     });
   });
 
