@@ -25,7 +25,6 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [completeSaleIssues, setCompleteSaleIssues] = useState<string[] | null>(null);
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [readiness, setReadiness] = useState<{ ready: boolean; issues: string[] } | null>(null);
-  const [financials, setFinancials] = useState<any>(null);
   const [returns, setReturns] = useState<any[]>([]);
   const [refunds, setRefunds] = useState<any[]>([]);
   const [reversal, setReversal] = useState<any>(null);
@@ -279,7 +278,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           </p>
         )}
         <Row label="Readiness" value={readiness?.ready ? "Ready" : "Blocked"} />
-        <Row label="Financial profit" value={String(financialSummary(financials).profit)} />
+        <Row label="Financial profit" value={String(financialSummary(financeBridge?.summary).profit)} />
       </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
@@ -291,7 +290,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         <Row label="Refundable balance" value={(order.totalAmount - refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0)).toFixed(2)} />
         <Row label="Sale reversal readiness" value={reversal?.ready ? "Ready" : (reversal?.reasons?.join(", ") ?? "Unknown")} />
         <Row label="Adjusted net revenue" value={(order.totalAmount - refunds.reduce((sum, refund) => sum + Number(refund.totalAmount ?? 0), 0)).toFixed(2)} />
-        <Row label="Adjusted financial summary" value={financials ? JSON.stringify(financials) : "Pending sale financials"} />
+        <Row label="Adjusted financial summary" value={financeBridge?.summary ? JSON.stringify(financeBridge.summary) : "Pending sale financials"} />
       </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
