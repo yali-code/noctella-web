@@ -9,7 +9,8 @@ export async function listShipments(filters: Record<string,string|undefined> = {
 export async function getShipment(id: string) { return api.get<ShipmentRow & { items: unknown[] }>(`/shipments/${id}`); }
 export async function getShipmentEvents(id: string) { return api.get<unknown[]>(`/shipments/${id}/events`); }
 export async function getShipmentTracking(id: string) { return api.get<unknown[]>(`/shipments/${id}/tracking`); }
-export const financialSummary = (sale: any) => ({ revenue: sale?.grossRevenue ?? 0, itemCost: sale?.itemCost ?? 0, fees: (sale?.marketplaceFee ?? 0) + (sale?.paymentFee ?? 0) + (sale?.promotedFee ?? 0), shippingCost: sale?.shippingCost ?? 0, profit: sale?.profit ?? 0 });
+export interface FinancialSummary { revenue: number; itemCost: number; fees: number; shippingCost: number; profit: number | null }
+export const financialSummary = (sale: any): FinancialSummary => ({ revenue: sale?.grossRevenue ?? 0, itemCost: sale?.itemCost ?? 0, fees: (sale?.marketplaceFee ?? 0) + (sale?.paymentFee ?? 0) + (sale?.promotedFee ?? 0), shippingCost: sale?.shippingCost ?? 0, profit: sale?.profit ?? null });
 export const readinessSummary = (r: any) => ({ ready: Boolean(r?.ready), issues: Array.isArray(r?.issues) ? r.issues : [] });
 export const canRetryFulfillment = (s: ShipmentRow) => Boolean(s.channel) && ["failed", "pending", "submitted"].includes(String(s.marketplaceFulfillmentStatus ?? "pending"));
 export const trackingTimeline = (updates: Array<{ externalStatus?: string; normalizedStatus?: string }>) => updates.map((u) => ({ externalStatus: u.externalStatus ?? "", status: u.normalizedStatus ?? "unknown" }));

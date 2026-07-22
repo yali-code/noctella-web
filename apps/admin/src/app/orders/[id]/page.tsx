@@ -172,6 +172,8 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
 
   if (!order) return null;
 
+  const financialProfit = financialSummary(financeBridge?.summary).profit;
+
   return (
     <div>
       <Link href="/orders" style={{ fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
@@ -278,7 +280,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           </p>
         )}
         <Row label="Readiness" value={readiness?.ready ? "Ready" : "Blocked"} />
-        <Row label="Financial profit" value={String(financialSummary(financeBridge?.summary).profit)} />
+        <Row label="Financial profit" value={financialProfit === null ? "Incomplete" : String(financialProfit)} />
       </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
