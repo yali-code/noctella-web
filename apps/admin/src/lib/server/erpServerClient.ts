@@ -44,6 +44,10 @@ export function financeOrderPath(orderId: string): string {
   return `/api/erp/finance/orders/${encodeURIComponent(orderId)}`;
 }
 
+export function createInvoiceDraftPath(orderId: string): string {
+  return `/api/erp/commands/orders/${encodeURIComponent(orderId)}/invoices/create`;
+}
+
 /**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key
@@ -53,4 +57,16 @@ export async function fetchErpBackend(path: string): Promise<Response> {
   const base = backendBaseUrl();
   const headers = buildErpRequestHeaders();
   return fetch(`${base}${path}`, { method: "GET", headers, cache: "no-store" });
+}
+
+/**
+ * Forwards a POST request (JSON body passthrough) to one of the fixed
+ * backend command paths above, attaching the server-only ERP key. Fails
+ * closed (throws before any fetch) if the key or backend base URL is
+ * missing.
+ */
+export async function postErpBackend(path: string, body: unknown): Promise<Response> {
+  const base = backendBaseUrl();
+  const headers = { ...buildErpRequestHeaders(), "Content-Type": "application/json" };
+  return fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body), cache: "no-store" });
 }

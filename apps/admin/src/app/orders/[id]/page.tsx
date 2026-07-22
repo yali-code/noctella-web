@@ -12,6 +12,7 @@ import {
   type OrderWithItems,
 } from "@/lib/orders";
 import { canAct, financialSummary, readinessSummary, safeErrorSummary, type ShipmentRow } from "@/lib/shipments";
+import { createInvoiceDraft } from "@/lib/erpSalesFinanceBridge";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
@@ -32,6 +33,13 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [invoiceBridge, setInvoiceBridge] = useState<any[]>([]);
   const [financeBridge, setFinanceBridge] = useState<any>(null);
   const [erpBridgeError, setErpBridgeError] = useState<string | null>(null);
+  const [invoiceDraftBusy, setInvoiceDraftBusy] = useState(false);
+  const [invoiceDraftError, setInvoiceDraftError] = useState<string | null>(null);
+
+  function loadInvoiceAndSalesBridge(orderId: string) {
+    fetch(`/api/erp/orders/${orderId}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
+    fetch(`/api/erp/orders/${orderId}/invoices`).then((r) => r.ok ? r.json() : Promise.reject(new Error("invoices"))).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => { setInvoiceBridge([]); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -45,13 +53,26 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/sale-reversal/readiness`).then((r) => r.ok ? r.json() : null).then(setReversal).catch(() => setReversal(null));
         setErpBridgeError(null);
-        fetch(`/api/erp/orders/${loaded.id}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
-        fetch(`/api/erp/orders/${loaded.id}/invoices`).then((r) => r.ok ? r.json() : Promise.reject(new Error("invoices"))).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => { setInvoiceBridge([]); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
+        loadInvoiceAndSalesBridge(loaded.id);
         fetch(`/api/erp/finance/orders/${loaded.id}`).then((r) => r.ok ? r.json() : Promise.reject(new Error("finance"))).then(setFinanceBridge).catch(() => { setFinanceBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
       })
       .catch((err) => setError(err.message ?? "Failed to load order"))
       .finally(() => setLoading(false));
   }, [params.id]);
+
+  async function handleCreateInvoiceDraft() {
+    if (!order) return;
+    setInvoiceDraftBusy(true);
+    setInvoiceDraftError(null);
+    try {
+      await createInvoiceDraft(order.id);
+      loadInvoiceAndSalesBridge(order.id);
+    } catch (err) {
+      setInvoiceDraftError(err instanceof Error ? err.message : "Failed to create invoice draft");
+    } finally {
+      setInvoiceDraftBusy(false);
+    }
+  }
 
   async function handleOrderStatusAction(action: OrderStatusAction, target: OrderStatus) {
     if (!order) return;
@@ -230,7 +251,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         {erpBridgeError && <p role="alert">{erpBridgeError}</p>}
         <Row label="Sales summary" value={salesBridge ? `${salesBridge.channel} / ${salesBridge.completionStatus} / ${salesBridge.paymentStatus}` : "Unavailable"} />
         <Row label="Invoice status" value={salesBridge?.invoiceNumber ?? salesBridge?.invoiceStatus ?? "No invoice"} />
-        <button style={buttonStyle}>Create Invoice Draft</button>
+        <button style={buttonStyle} onClick={handleCreateInvoiceDraft} disabled={invoiceDraftBusy}>
+          {invoiceDraftBusy ? "Creating Invoice..." : "Create Invoice Draft"}
+        </button>
+        {invoiceDraftError && <p role="alert">{invoiceDraftError}</p>}
         {invoiceBridge.length === 0 ? <p>No ERP invoices yet.</p> : invoiceBridge.map((invoice) => (
           <div key={invoice.id}>
             <Row label={`Invoice ${invoice.invoiceNumber ?? invoice.id}`} value={`${invoice.status} / ${invoice.invoiceType} / ${Number(invoice.totalAmount ?? 0).toFixed(2)}`} />
