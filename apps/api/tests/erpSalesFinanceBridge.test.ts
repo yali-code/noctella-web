@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { describe, expect, it, beforeEach } from "vitest";
 import Database from "better-sqlite3";
@@ -249,6 +250,86 @@ describe("ERP sales finance bridge", () => {
       expect(after.status).toBe(ErpInvoiceStatus.Issued);
       expect(after.cancelledAt).toBeNull();
       expect(await getInvoiceEvents(db,issued.id)).toEqual(eventsBefore);
+    });
+  });
+
+  describe("ERP command idempotency lifecycle (Sprint 46B)", () => {
+    function checksumFor(payload:any) { return createHash("sha256").update(JSON.stringify(payload??{})).digest("hex"); }
+    async function rowsFor(key:string) { return db.select().from(schema.erpCommandExecutions).where(eq(schema.erpCommandExecutions.idempotencyKey,key)); }
+
+    it("A: a successful command becomes Completed; replay returns the cached result without re-executing business logic", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]);
+      const env={idempotencyKey:"cmd-a",payload:{}};
+      const first:any = await executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id);
+      expect(first.status).toBe(ErpInvoiceStatus.Draft);
+      const [row]:any = await rowsFor("cmd-a");
+      expect(row.status).toBe("Completed");
+      expect(row.completedAt).toBeTruthy();
+      const second:any = await executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id);
+      expect(second.status).toBe("Completed");
+      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(1);
+    });
+
+    it("B: an ordinary validation failure marks the command Failed with a safe error code, and the original error still propagates", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]);
+      const env={idempotencyKey:"cmd-b",payload:{discountAmount:-1}};
+      await expect(executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id)).rejects.toBeInstanceOf(BadRequestError);
+      const [row]:any = await rowsFor("cmd-b");
+      expect(row.status).toBe("Failed");
+      expect(row.completedAt).toBeTruthy();
+      expect(row.safeErrorCode).toBe("BadRequestError");
+    });
+
+    it("C/G: retrying the same key and payload after Failed executes again, reuses the same row (no duplicate), and can become Completed", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]);
+      await db.update(schema.orders).set({currency:"USD"}).where(eq(schema.orders.id,order.id));
+      const env={idempotencyKey:"cmd-c",payload:{}};
+      await expect(executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id)).rejects.toBeInstanceOf(BadRequestError);
+      const failedRows:any = await rowsFor("cmd-c");
+      expect(failedRows).toHaveLength(1);
+      expect(failedRows[0].status).toBe("Failed");
+      await db.update(schema.orders).set({currency:"EUR"}).where(eq(schema.orders.id,order.id));
+      const retried:any = await executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id);
+      expect(retried.status).toBe(ErpInvoiceStatus.Draft);
+      const completedRows:any = await rowsFor("cmd-c");
+      expect(completedRows).toHaveLength(1);
+      expect(completedRows[0].id).toBe(failedRows[0].id);
+      expect(completedRows[0].status).toBe("Completed");
+    });
+
+    it("D: a Failed row still enforces checksum matching — a different payload throws ConflictError without executing", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]);
+      await db.update(schema.orders).set({currency:"USD"}).where(eq(schema.orders.id,order.id));
+      const env={idempotencyKey:"cmd-d",payload:{}};
+      await expect(executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id)).rejects.toBeInstanceOf(BadRequestError);
+      await db.update(schema.orders).set({currency:"EUR"}).where(eq(schema.orders.id,order.id));
+      const differentEnv={idempotencyKey:"cmd-d",payload:{notes:"different"}};
+      await expect(executeSalesCommand(db,"erp-client",differentEnv,"CreateInvoice",order.id)).rejects.toBeInstanceOf(ConflictError);
+      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(0);
+    });
+
+    it("E: a recent Accepted row with a matching checksum throws ConflictError and does not execute business logic", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]);
+      const payload={};
+      await db.insert(schema.erpCommandExecutions).values({id:"cmd-e-row",clientId:"erp-client",commandId:"cmd-e",requestId:null,idempotencyKey:"cmd-e",commandType:"CreateInvoice",entityType:"Invoice",entityId:order.id,status:"Accepted",requestChecksum:checksumFor(payload),createdAt:new Date().toISOString()});
+      const env={idempotencyKey:"cmd-e",payload};
+      await expect(executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id)).rejects.toThrow("ERP command is already in progress");
+      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(0);
+    });
+
+    it("F/G: a stale Accepted row (older than the 60s threshold) with a matching checksum is reset and reused (no duplicate), and executes to Completed", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]);
+      const payload={};
+      const staleCreatedAt = new Date(Date.now() - 61_000).toISOString();
+      await db.insert(schema.erpCommandExecutions).values({id:"cmd-f-row",clientId:"erp-client",commandId:"cmd-f",requestId:null,idempotencyKey:"cmd-f",commandType:"CreateInvoice",entityType:"Invoice",entityId:order.id,status:"Accepted",requestChecksum:checksumFor(payload),createdAt:staleCreatedAt});
+      const env={idempotencyKey:"cmd-f",payload};
+      const result:any = await executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id);
+      expect(result.status).toBe(ErpInvoiceStatus.Draft);
+      const rows:any = await rowsFor("cmd-f");
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe("cmd-f-row");
+      expect(rows[0].status).toBe("Completed");
+      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(1);
     });
   });
 
