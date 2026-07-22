@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
-import { buildSalesFinanceQuery, createInvoiceDraft, invoiceActionEligibility, invoiceCommand, issueInvoice, markInvoicePaid, mapFinanceSummary, mapInvoice, mapRefundSummary, mapReversalSummary, mapSale, maskCustomer, redactSafeError } from "./erpSalesFinanceBridge";
+import { buildSalesFinanceQuery, cancelInvoice, createInvoiceDraft, invoiceActionEligibility, invoiceCommand, issueInvoice, markInvoicePaid, mapFinanceSummary, mapInvoice, mapRefundSummary, mapReversalSummary, mapSale, maskCustomer, redactSafeError } from "./erpSalesFinanceBridge";
 
 describe("erpSalesFinanceBridge admin mappings", () => {
   it("maps sales list and sale detail with masked customers and adjusted completeness", () => { const sale=mapSale({centralOrderId:"o1",orderNumber:"N1",channel:"Internal",customer:{email:"a@example.com"},financials:{grossRevenue:10,adjustedProfit:null,adjustedCompleteness:"Incomplete"},invoiceStatus:"Draft"}); expect(sale.customer.email).toBe("[redacted]"); expect(sale.href).toBe("/orders/o1"); expect(sale.completeness).toBe("Incomplete"); expect(maskCustomer({maskedEmail:"a***@x"}).email).toBe("a***@x"); });
@@ -160,5 +160,55 @@ describe("markInvoicePaid", () => {
     );
     await expect(markInvoicePaid("inv-1")).rejects.toMatchObject({ status: 404 });
     await expect(markInvoicePaid("inv-1")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("cancelInvoice", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts to the same-origin Admin proxy path with a fresh idempotencyKey and empty payload", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "inv-1", status: "Cancelled" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await cancelInvoice("inv-1");
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/erp/commands/invoices/inv-1/cancel");
+    expect(init?.method).toBe("POST");
+    const body = JSON.parse(init?.body as string);
+    expect(typeof body.idempotencyKey).toBe("string");
+    expect(body.idempotencyKey.length).toBeGreaterThan(0);
+    expect(body.payload).toEqual({});
+    expect(result).toEqual({ id: "inv-1", status: "Cancelled" });
+  });
+
+  it("generates a different idempotencyKey on each call", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(async () =>
+      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    await cancelInvoice("inv-1");
+    await cancelInvoice("inv-1");
+    const mockFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const key1 = JSON.parse(mockFetch.mock.calls[0][1].body).idempotencyKey;
+    const key2 = JSON.parse(mockFetch.mock.calls[1][1].body).idempotencyKey;
+    expect(key1).not.toBe(key2);
+  });
+
+  it("throws an ApiError with the backend status on failure", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ error: "Invoice not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await expect(cancelInvoice("inv-1")).rejects.toMatchObject({ status: 404 });
+    await expect(cancelInvoice("inv-1")).rejects.toBeInstanceOf(ApiError);
   });
 });

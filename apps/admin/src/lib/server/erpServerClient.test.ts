@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildErpRequestHeaders,
+  cancelInvoicePath,
   createInvoiceDraftPath,
   ErpServerConfigError,
   fetchErpBackend,
@@ -203,6 +204,47 @@ describe("markInvoicePaidPath", () => {
     delete process.env.NEXT_PUBLIC_API_BASE_URL;
     const mockFetch = vi.spyOn(global, "fetch");
     await expect(postErpBackend(markInvoicePaidPath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelInvoicePath", () => {
+  it("builds the fixed command path for the given invoice id", () => {
+    expect(cancelInvoicePath("invoice-1")).toBe("/api/erp/commands/invoices/invoice-1/cancel");
+  });
+
+  it("encodes the invoice id so it cannot break out of the fixed template", () => {
+    expect(cancelInvoicePath("../../etc")).toBe("/api/erp/commands/invoices/..%2F..%2Fetc/cancel");
+  });
+
+  it("is forwarded correctly via the existing postErpBackend with only the injected ERP header plus Content-Type", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await postErpBackend(cancelInvoicePath("invoice-1"), { idempotencyKey: "key-1", payload: {} });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://backend.internal:4000/api/erp/commands/invoices/invoice-1/cancel",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "X-Noctella-ERP-Key": "test-erp-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),
+      }),
+    );
+  });
+
+  it("fails closed when the ERP key is missing", async () => {
+    delete process.env.ERP_INTEGRATION_KEY;
+    const mockFetch = vi.spyOn(global, "fetch");
+    await expect(postErpBackend(cancelInvoicePath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the backend base URL is missing", async () => {
+    delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    const mockFetch = vi.spyOn(global, "fetch");
+    await expect(postErpBackend(cancelInvoicePath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
