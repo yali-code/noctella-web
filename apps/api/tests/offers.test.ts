@@ -1,8 +1,8 @@
-import { OfferStatus, ProductStatus, ProductType } from "@noctella/shared";
+import { OfferStatus, OrderStatus, ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createCategory } from "../src/services/categories";
 import { createProduct, getProductById } from "../src/services/products";
-import { acceptOffer, createOffer, listOffers, rejectOffer } from "../src/services/offers";
+import { acceptOffer, createDraftOrderFromOffer, createOffer, listOffers, rejectOffer } from "../src/services/offers";
 import { BadRequestError, NotFoundError } from "../src/services/errors";
 import { createOfferSchema } from "../src/validation/offer";
 import { createTestDb } from "./testDb";
@@ -139,6 +139,59 @@ describe("offer service", () => {
     const product = await createProduct(db, baseProductInput({ priceEur: 1200, stockQuantity: 1 }));
     const offer = await createOffer(db, baseOfferInput(product.id));
     await acceptOffer(db, offer.id);
+
+    const unchanged = await getProductById(db, product.id);
+    expect(unchanged.status).toBe(ProductStatus.Published);
+    expect(unchanged.stockQuantity).toBe(1);
+    expect(unchanged.priceEur).toBe(1200);
+  });
+
+  it("creates a Draft Order from an accepted offer, linked and copied from the offer", async () => {
+    const product = await createProduct(db, baseProductInput());
+    const offer = await createOffer(db, baseOfferInput(product.id));
+    await acceptOffer(db, offer.id);
+
+    const order = await createDraftOrderFromOffer(db, offer.id);
+    expect(order.status).toBe(OrderStatus.Draft);
+    expect(order.totalAmount).toBe(900);
+    expect(order.currency).toBe("EUR");
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0].productId).toBe(product.id);
+  });
+
+  it("rejects creating a second Draft Order for the same offer", async () => {
+    const product = await createProduct(db, baseProductInput());
+    const offer = await createOffer(db, baseOfferInput(product.id));
+    await acceptOffer(db, offer.id);
+    await createDraftOrderFromOffer(db, offer.id);
+
+    await expect(createDraftOrderFromOffer(db, offer.id)).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("rejects creating a Draft Order from a pending offer", async () => {
+    const product = await createProduct(db, baseProductInput());
+    const offer = await createOffer(db, baseOfferInput(product.id));
+
+    await expect(createDraftOrderFromOffer(db, offer.id)).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("rejects creating a Draft Order from a rejected offer", async () => {
+    const product = await createProduct(db, baseProductInput());
+    const offer = await createOffer(db, baseOfferInput(product.id));
+    await rejectOffer(db, offer.id);
+
+    await expect(createDraftOrderFromOffer(db, offer.id)).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("rejects creating a Draft Order for an unknown offer id", async () => {
+    await expect(createDraftOrderFromOffer(db, "does-not-exist")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("creating a Draft Order never touches product stock, price, or status", async () => {
+    const product = await createProduct(db, baseProductInput({ priceEur: 1200, stockQuantity: 1 }));
+    const offer = await createOffer(db, baseOfferInput(product.id));
+    await acceptOffer(db, offer.id);
+    await createDraftOrderFromOffer(db, offer.id);
 
     const unchanged = await getProductById(db, product.id);
     expect(unchanged.status).toBe(ProductStatus.Published);

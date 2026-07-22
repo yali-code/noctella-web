@@ -239,6 +239,7 @@ export interface Order extends Timestamps {
   totalAmount: number;
   currency: PriceCurrency;
   orderDraftId?: string;
+  offerId?: string;
   paymentReference?: string;
   billingAddress: Address;
   shippingAddress: Address;

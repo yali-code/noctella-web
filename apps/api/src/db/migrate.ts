@@ -75,6 +75,7 @@ function ensureMarketplaceColumns(sqlite: Database.Database): void {
 
 const ORDER_COLUMNS: Array<{ table: string; name: string; ddl: string }> = [
   { table: "orders", name: "order_draft_id", ddl: "TEXT" },
+  { table: "orders", name: "offer_id", ddl: "TEXT" },
   { table: "orders", name: "payment_reference", ddl: "TEXT" },
   { table: "order_items", name: "product_slug", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "order_items", name: "product_type", ddl: "TEXT NOT NULL DEFAULT ''" },
@@ -93,6 +94,7 @@ function ensureOrderColumns(sqlite: Database.Database): void {
     }
   }
   sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_draft ON orders(order_draft_id)");
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_offer ON orders(offer_id)");
 }
 
 

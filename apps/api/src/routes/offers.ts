@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db/client";
-import { acceptOffer, createOffer, listOffers, rejectOffer } from "../services/offers";
+import { acceptOffer, createDraftOrderFromOffer, createOffer, listOffers, rejectOffer } from "../services/offers";
 import { createOfferSchema } from "../validation/offer";
 import { handleRouteError } from "./errorHandler";
 
@@ -42,6 +42,15 @@ router.post("/:id/reject", async (req, res) => {
   try {
     const offer = await rejectOffer(db, req.params.id);
     res.json(offer);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.post("/:id/draft-order", async (req, res) => {
+  try {
+    const order = await createDraftOrderFromOffer(db, req.params.id);
+    res.status(201).json(order);
   } catch (err) {
     handleRouteError(err, res);
   }

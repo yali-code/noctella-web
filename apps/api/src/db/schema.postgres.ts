@@ -223,6 +223,7 @@ export const orders = pgTable("orders", {
   id: text("id").primaryKey().notNull(),
   orderNumber: text("order_number").notNull().unique(),
   orderDraftId: text("order_draft_id").unique(),
+  offerId: text("offer_id").unique(),
   customerId: text("customer_id"),
   guestEmail: text("guest_email").notNull(),
   status: text("status").notNull(),
