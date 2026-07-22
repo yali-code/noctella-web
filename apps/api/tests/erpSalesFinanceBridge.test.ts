@@ -45,5 +45,79 @@ describe("ERP sales finance bridge", () => {
 
   it("summarizes finance with rounding, filters, nullable unknown fees and no free-form posting route", async () => { await createFinanceEntry(db,{orderId:"o1",entryType:"IssuedInvoice",amount:10.005,sourceReference:"I",idempotencyKey:"round"}); expect((await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items[0].amount).toBe(10.01); const summary=await financeSummary(db,{}); expect(summary.currency).toBe("EUR"); expect(summary.fees).toBe(0); const routes=require("fs").readFileSync(require("path").join(__dirname,"../src/routes/erp.ts"),"utf8"); expect(routes).not.toContain("commands/finance"); });
 
+  describe("finance ledger integrity on invoice cancel/void", () => {
+    async function issuedInvoice() { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const draft:any=await createInvoiceDraft(db,order.id,{}); const issued:any=await issueInvoice(db,draft.id,{}); return { order, issued }; }
+
+    it("Issued -> Cancelled posts exactly one InvoiceCancelled entry for the negative invoice total, leaving the original IssuedInvoice entry unchanged", async () => {
+      const { issued } = await issuedInvoice();
+      const originalBefore = (await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items.find((e:any)=>e.invoiceId===issued.id);
+      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      const cancelledEntries = (await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===issued.id);
+      expect(cancelledEntries).toHaveLength(1);
+      expect(cancelledEntries[0].amount).toBe(-issued.totalAmount);
+      const originalAfter = (await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items.find((e:any)=>e.invoiceId===issued.id);
+      expect(originalAfter).toEqual(originalBefore);
+    });
+
+    it("Issued -> Voided posts exactly one InvoiceVoided entry for the negative invoice total", async () => {
+      const { issued } = await issuedInvoice();
+      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Voided);
+      const voidedEntries = (await listFinanceEntries(db,{entryType:"InvoiceVoided"})).items.filter((e:any)=>e.invoiceId===issued.id);
+      expect(voidedEntries).toHaveLength(1);
+      expect(voidedEntries[0].amount).toBe(-issued.totalAmount);
+    });
+
+    it("Draft -> Cancelled posts no reversal entry", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const draft:any=await createInvoiceDraft(db,order.id,{});
+      await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Cancelled);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===draft.id)).toHaveLength(0);
+    });
+
+    it("Draft -> Voided posts no reversal entry", async () => {
+      const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const draft:any=await createInvoiceDraft(db,order.id,{});
+      await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Voided);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceVoided"})).items.filter((e:any)=>e.invoiceId===draft.id)).toHaveLength(0);
+    });
+
+    it("Mark Paid creates no finance entry", async () => {
+      const { issued } = await issuedInvoice();
+      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Paid);
+      const entries = (await listFinanceEntries(db,{})).items.filter((e:any)=>e.invoiceId===issued.id);
+      expect(entries.filter((e:any)=>e.entryType!=="IssuedInvoice")).toHaveLength(0);
+    });
+
+    it("Cancelled and Voided source statuses do not create another reversal", async () => {
+      const { issued } = await issuedInvoice();
+      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Voided);
+      await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
+      const entries = (await listFinanceEntries(db,{})).items.filter((e:any)=>e.invoiceId===issued.id);
+      expect(entries.filter((e:any)=>e.entryType==="InvoiceCancelled")).toHaveLength(1);
+      expect(entries.filter((e:any)=>e.entryType==="InvoiceVoided")).toHaveLength(0);
+    });
+
+    it("repeated Cancel with the same outer command idempotency key creates no duplicate reversal", async () => {
+      const { issued } = await issuedInvoice();
+      const env = { idempotencyKey: "cancel-key-1", payload: {} };
+      await executeSalesCommand(db,"erp-client",env,"CancelInvoice",issued.id);
+      await executeSalesCommand(db,"erp-client",env,"CancelInvoice",issued.id);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===issued.id)).toHaveLength(1);
+    });
+
+    it("repeated Cancel with a different outer command idempotency key still creates no duplicate reversal", async () => {
+      const { issued } = await issuedInvoice();
+      await executeSalesCommand(db,"erp-client",{ idempotencyKey: "cancel-key-a", payload: {} },"CancelInvoice",issued.id);
+      await executeSalesCommand(db,"erp-client",{ idempotencyKey: "cancel-key-b", payload: {} },"CancelInvoice",issued.id);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===issued.id)).toHaveLength(1);
+    });
+
+    it("repeated Void (different outer command idempotency keys) creates no duplicate reversal", async () => {
+      const { issued } = await issuedInvoice();
+      await executeSalesCommand(db,"erp-client",{ idempotencyKey: "void-key-a", payload: {} },"VoidInvoice",issued.id);
+      await executeSalesCommand(db,"erp-client",{ idempotencyKey: "void-key-b", payload: {} },"VoidInvoice",issued.id);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceVoided"})).items.filter((e:any)=>e.invoiceId===issued.id)).toHaveLength(1);
+    });
+  });
+
   it("has all requested ERP routes and safe command audit metadata without raw customer/invoice payloads", async () => { const routes=require("fs").readFileSync(require("path").join(__dirname,"../src/routes/erp.ts"),"utf8"); for(const fragment of ["/sales","/sales/:id","/orders/:id/sales-summary","/orders/:id/financials","/orders/:id/refund-summary","/orders/:id/reversal-summary","/commands/sales/create","/commands/orders/:orderId/complete-sale","/orders/:orderId/complete-sale/readiness","/customers","/customers/:id","/orders/:orderId/customer","/commands/orders/:orderId/invoices/create","/commands/invoices/:invoiceId/update","/commands/invoices/:invoiceId/issue","/commands/invoices/:invoiceId/cancel","/commands/invoices/:invoiceId/mark-paid","/invoices","/invoices/:id","/orders/:orderId/invoices","/invoices/:id/events","/finance/entries","/finance/summary","/finance/orders/:orderId"]) expect(routes).toContain(fragment); const [p]=await seed(db,1); const env={idempotencyKey:"audit",payload:{channel:"Internal",currency:"EUR",paymentStatus:PaymentStatus.Paid,customer:{email:"raw@example.com",address},subtotalAmount:p.priceEur,totalAmount:p.priceEur,lines:[{productId:p.id,quantity:1}]}}; await executeSalesCommand(db,"client",env,"CreateInternalSale"); const audit=(await db.select().from(schema.erpCommandExecutions))[0]; expect(audit.safeResultMetadata).not.toContain("raw@example.com"); expect(audit.safeResultMetadata).not.toContain("line1"); });
 });
