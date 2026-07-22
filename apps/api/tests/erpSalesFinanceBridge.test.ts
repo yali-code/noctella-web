@@ -11,7 +11,7 @@ import { createOrder } from "../src/services/orders";
 import { createPaymentSession } from "../src/payments/paymentRepository";
 import { createRefund, reverseCompletedSale } from "../src/services/returns";
 import { completeSale, getSaleCompletionReadiness } from "../src/services/shipments";
-import { adjustedFinancials, createFinanceEntry, createInternalSale, createInvoiceDraft, executeSalesCommand, financeSummary, getInvoiceEvents, issueInvoice, listFinanceEntries, listInvoices, listSales, refundSummary, reversalSummary, saleProjection, setInvoiceStatus, updateInvoiceDraft } from "../src/services/erpSalesFinanceBridge";
+import { adjustedFinancials, createFinanceEntry, createInternalSale, createInvoiceDraft, executeSalesCommand, financeSummary, getInvoice, getInvoiceEvents, issueInvoice, listFinanceEntries, listInvoices, listSales, refundSummary, reversalSummary, saleProjection, setInvoiceStatus, updateInvoiceDraft } from "../src/services/erpSalesFinanceBridge";
 import { BadRequestError, ConflictError } from "../src/services/errors";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
@@ -177,6 +177,78 @@ describe("ERP sales finance bridge", () => {
       expect((await issueInvoice(db,draft.id,{})).invoiceNumber).toBe(issued.invoiceNumber);
       const cancelled:any=await setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled);
       await expect(issueInvoice(db,cancelled.id,{})).rejects.toBeInstanceOf(BadRequestError);
+    });
+  });
+
+  describe("transaction atomicity: rollback on partial failure (Sprint 45B)", () => {
+    async function draftInvoiceHelper() { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); return createInvoiceDraft(db,order.id,{}); }
+    async function issuedInvoiceHelper() { const draft:any=await draftInvoiceHelper(); return issueInvoice(db,draft.id,{}); }
+    function disableTable(name:string) { sqlite.exec(`ALTER TABLE ${name} RENAME TO ${name}_disabled`); }
+    function restoreTable(name:string) { sqlite.exec(`ALTER TABLE ${name}_disabled RENAME TO ${name}`); }
+
+    it("A: issueInvoice rolls back the invoice update if the event insert fails", async () => {
+      const draft:any = await draftInvoiceHelper();
+      const eventsBefore = await getInvoiceEvents(db,draft.id);
+      disableTable("invoice_events");
+      try {
+        await expect(issueInvoice(db,draft.id,{})).rejects.toThrow();
+      } finally {
+        restoreTable("invoice_events");
+      }
+      const after:any = await getInvoice(db,draft.id);
+      expect(after.status).toBe(ErpInvoiceStatus.Draft);
+      expect(after.invoiceNumber).toBeNull();
+      expect(after.issuedAt).toBeNull();
+      expect(await getInvoiceEvents(db,draft.id)).toEqual(eventsBefore);
+      expect((await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items.filter((e:any)=>e.invoiceId===draft.id)).toHaveLength(0);
+    });
+
+    it("B: issueInvoice rolls back the invoice update and event if the finance entry insert fails", async () => {
+      const draft:any = await draftInvoiceHelper();
+      const eventsBefore = await getInvoiceEvents(db,draft.id);
+      disableTable("finance_entries");
+      try {
+        await expect(issueInvoice(db,draft.id,{})).rejects.toThrow();
+      } finally {
+        restoreTable("finance_entries");
+      }
+      const after:any = await getInvoice(db,draft.id);
+      expect(after.status).toBe(ErpInvoiceStatus.Draft);
+      expect(after.invoiceNumber).toBeNull();
+      expect(await getInvoiceEvents(db,draft.id)).toEqual(eventsBefore);
+      expect((await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items.filter((e:any)=>e.invoiceId===draft.id)).toHaveLength(0);
+    });
+
+    it("C: setInvoiceStatus rolls back the status update if the event insert fails", async () => {
+      const issued:any = await issuedInvoiceHelper();
+      const eventsBefore = await getInvoiceEvents(db,issued.id);
+      disableTable("invoice_events");
+      try {
+        await expect(setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled)).rejects.toThrow();
+      } finally {
+        restoreTable("invoice_events");
+      }
+      const after:any = await getInvoice(db,issued.id);
+      expect(after.status).toBe(ErpInvoiceStatus.Issued);
+      expect(after.cancelledAt).toBeNull();
+      expect(after.updatedAt).toBe(issued.updatedAt);
+      expect(await getInvoiceEvents(db,issued.id)).toEqual(eventsBefore);
+      expect((await listFinanceEntries(db,{entryType:"InvoiceCancelled"})).items.filter((e:any)=>e.invoiceId===issued.id)).toHaveLength(0);
+    });
+
+    it("D: setInvoiceStatus rolls back the status update and event if the reversal entry insert fails", async () => {
+      const issued:any = await issuedInvoiceHelper();
+      const eventsBefore = await getInvoiceEvents(db,issued.id);
+      disableTable("finance_entries");
+      try {
+        await expect(setInvoiceStatus(db,issued.id,ErpInvoiceStatus.Cancelled)).rejects.toThrow();
+      } finally {
+        restoreTable("finance_entries");
+      }
+      const after:any = await getInvoice(db,issued.id);
+      expect(after.status).toBe(ErpInvoiceStatus.Issued);
+      expect(after.cancelledAt).toBeNull();
+      expect(await getInvoiceEvents(db,issued.id)).toEqual(eventsBefore);
     });
   });
 
