@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { type Offer, OfferStatus, ProductStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { offers, products } from "../db/schema";
@@ -25,6 +25,36 @@ export async function getOfferById(db: DbClient, id: string): Promise<Offer> {
   const [row] = await db.select().from(offers).where(eq(offers.id, id));
   if (!row) throw new NotFoundError("Offer not found");
   return toOffer(row);
+}
+
+export async function listOffers(db: DbClient): Promise<Offer[]> {
+  const rows = await db.select().from(offers).orderBy(desc(offers.createdAt));
+  return rows.map(toOffer);
+}
+
+/**
+ * Accept/reject only change the offer's own status. Pending is the only
+ * state either transition may start from; Accepted and Rejected are
+ * terminal. Never touches products, inventory, orders, or payments.
+ */
+async function transitionOffer(db: DbClient, id: string, to: OfferStatus): Promise<Offer> {
+  const offer = await getOfferById(db, id);
+  if (offer.status !== OfferStatus.Pending) {
+    throw new BadRequestError("Invalid offer status transition");
+  }
+  await db
+    .update(offers)
+    .set({ status: to, updatedAt: new Date().toISOString() })
+    .where(eq(offers.id, id));
+  return getOfferById(db, id);
+}
+
+export async function acceptOffer(db: DbClient, id: string): Promise<Offer> {
+  return transitionOffer(db, id, OfferStatus.Accepted);
+}
+
+export async function rejectOffer(db: DbClient, id: string): Promise<Offer> {
+  return transitionOffer(db, id, OfferStatus.Rejected);
 }
 
 /**
