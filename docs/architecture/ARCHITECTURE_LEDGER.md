@@ -481,3 +481,25 @@ Commit:
 ### Entry Conditions
 
 - A follow-up sprint may remove the dead `stockRepositoryAudit.ts` compatibility-audit path and update the stale `completionWorkflowAudit.ts` string reference. Neither blocks further Inventory or transaction-runtime work.
+
+## Sprint 35N-P — Stock Aging Architecture Decision
+
+### Capability
+
+- No source code changed. This sprint records the architectural decision that closes the final Sprint 35E debt item.
+
+### Architectural Decisions
+
+- `stockAging()` in `apps/api/src/services/erpReportsAnalyticsBridge.ts` remains an intentional, dedicated cross-domain SQL query rather than being migrated into an existing or new repository.
+- Current behavior preserved as documented: reads every product (no `LIMIT`, since complete catalog coverage is required for accurate bucket totals), ordered by SKU; derives the aging date from the earliest non-null `purchases.received_at` linked through `purchase_lines`, falling back to `products.created_at`; marks `source` as `"purchase/received/created"` when any linked `purchase_line` exists, otherwise `"created"`; preserves `stock_quantity`; performs age-bucket aggregation in application code; remains one indexed SQL query.
+- Five options were evaluated: (A) `ProductReadRepository.stockAgingRows()`, (B) `InventoryRepository.stockAgingRows()`, (C) a Purchase-side read capability merged with Product-read data in the service layer, (D) a dedicated cross-domain ERP reporting read repository, (E) keep the existing dedicated query as a documented exception.
+- Decision: Option E. The query is genuinely cross-domain (`products` joined against `purchases`/`purchase_lines`). `ProductReadRepository` currently has a product-only boundary with no coupling to Purchase schema. `InventoryRepository` is a protected transactional-integrity surface (atomicity, idempotency, optimistic concurrency), not a reporting surface. A new Purchase-read layer built for this single consumer would be disproportionate. A generic cross-domain reporting repository would be premature abstraction with only one real consumer today. The existing query is already set-based, indexed (`idx_purchase_lines_product`, `idx_purchases_dates`), non-N+1, and production-safe. Documenting the exception is preferable to forcing the query into a repository whose domain it does not belong to.
+- `stockAging()` is not migrated into `ProductReadRepository`, `InventoryRepository`, a new `PurchaseReadRepository`, or a generic ERP reporting repository. The existing query is preserved until a broader reporting architecture need justifies a dedicated cross-domain reporting read layer.
+
+### Technical Debt
+
+- None introduced. Sprint 35E — Inventory Runtime Integration Audit is now fully closed: stock reconciliation, ERP inventory workspace reads, inventory aggregate summary, inventory report product list, export product list, and breakdown grouped aggregates were migrated to canonical repositories in prior sprints; `stockAging()` is closed by this explicit architectural decision rather than left as unreviewed debt.
+
+### Entry Conditions
+
+- None. A future sprint may revisit this decision if a broader cross-domain reporting architecture is introduced for other reasons.
