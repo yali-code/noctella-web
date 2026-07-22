@@ -31,6 +31,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [salesBridge, setSalesBridge] = useState<any>(null);
   const [invoiceBridge, setInvoiceBridge] = useState<any[]>([]);
   const [financeBridge, setFinanceBridge] = useState<any>(null);
+  const [erpBridgeError, setErpBridgeError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -43,9 +44,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/sale-reversal/readiness`).then((r) => r.ok ? r.json() : null).then(setReversal).catch(() => setReversal(null));
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/erp/orders/${loaded.id}/sales-summary`).then((r) => r.ok ? r.json() : null).then(setSalesBridge).catch(() => setSalesBridge(null));
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/erp/orders/${loaded.id}/invoices`).then((r) => r.ok ? r.json() : { items: [] }).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => setInvoiceBridge([]));
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/erp/finance/orders/${loaded.id}`).then((r) => r.ok ? r.json() : null).then(setFinanceBridge).catch(() => setFinanceBridge(null));
+        setErpBridgeError(null);
+        fetch(`/api/erp/orders/${loaded.id}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
+        fetch(`/api/erp/orders/${loaded.id}/invoices`).then((r) => r.ok ? r.json() : Promise.reject(new Error("invoices"))).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => { setInvoiceBridge([]); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
+        fetch(`/api/erp/finance/orders/${loaded.id}`).then((r) => r.ok ? r.json() : Promise.reject(new Error("finance"))).then(setFinanceBridge).catch(() => { setFinanceBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
       })
       .catch((err) => setError(err.message ?? "Failed to load order"))
       .finally(() => setLoading(false));
@@ -225,6 +227,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
         <h3>ERP Sales, Invoices & Finance Bridge</h3>
+        {erpBridgeError && <p role="alert">{erpBridgeError}</p>}
         <Row label="Sales summary" value={salesBridge ? `${salesBridge.channel} / ${salesBridge.completionStatus} / ${salesBridge.paymentStatus}` : "Unavailable"} />
         <Row label="Invoice status" value={salesBridge?.invoiceNumber ?? salesBridge?.invoiceStatus ?? "No invoice"} />
         <button style={buttonStyle}>Create Invoice Draft</button>
