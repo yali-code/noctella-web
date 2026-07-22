@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import type { DbClient } from "../db/client";
 import { audit } from "./erpIntegration";
+import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { customerAddresses, customerConsents, customerEvents, customerIdentityLinks, customerMergeHistory, customerNotes, customerPreferences, customerProfiles, customerStatistics, customerTags, customerWatchlist, erpCommandExecutions, erpIntegrationAudit, financeEntries, invoices, orders, refunds, returnRequests, shipments } from "../db/schema";
 
 const now = () => new Date().toISOString();
@@ -29,4 +30,60 @@ export async function getStatistics(db:DbClient, customerId:string){ const os=aw
 export async function related(db:DbClient, customerId:string, kind:string){ const map:any={orders,invoices,refunds,returns:returnRequests,watchlist:customerWatchlist}; const table=map[kind]; if(!table) return {items:[]}; return { items: await db.select().from(table).where(kind==="returns"?eq(table.orderId,customerId):eq(table.customerId,customerId)) }; }
 export async function timeline(db:DbClient, customerId:string){ const [os, inv, sh, ret, ref, notes, watch, pref, tags, audits, evs]=await Promise.all([db.select().from(orders).where(eq(orders.customerId,customerId)),db.select().from(invoices).where(eq(invoices.customerId,customerId)),db.select().from(shipments),db.select().from(returnRequests),db.select().from(refunds),db.select().from(customerNotes).where(eq(customerNotes.customerId,customerId)),db.select().from(customerWatchlist).where(eq(customerWatchlist.customerId,customerId)),db.select().from(customerPreferences).where(eq(customerPreferences.customerId,customerId)),db.select().from(customerTags).where(eq(customerTags.customerId,customerId)),db.select().from(erpIntegrationAudit),db.select().from(customerEvents).where(eq(customerEvents.customerId,customerId))]); const orderIds=new Set(os.map((o:any)=>o.id)); const items:any[]=[]; os.forEach((o:any)=>items.push({type:"Order",entityId:o.id,occurredAt:o.createdAt,readOnly:true})); inv.forEach((x:any)=>items.push({type:"Invoice",entityId:x.id,occurredAt:x.createdAt,readOnly:true})); sh.filter((x:any)=>orderIds.has(x.orderId)).forEach((x:any)=>items.push({type:"Shipment",entityId:x.id,occurredAt:x.createdAt,readOnly:true})); ret.filter((x:any)=>orderIds.has(x.orderId)).forEach((x:any)=>items.push({type:"Return",entityId:x.id,occurredAt:x.createdAt,readOnly:true})); ref.filter((x:any)=>orderIds.has(x.orderId)).forEach((x:any)=>items.push({type:"Refund",entityId:x.id,occurredAt:x.createdAt,readOnly:true})); notes.forEach((x:any)=>items.push({type:"Note",entityId:x.id,occurredAt:x.createdAt,body:maskText(x.body),readOnly:true})); watch.forEach((x:any)=>items.push({type:"Watcher",entityId:x.id,occurredAt:x.createdAt,readOnly:true})); pref.forEach((x:any)=>items.push({type:"Preference",entityId:x.customerId,occurredAt:x.updatedAt,readOnly:true})); tags.forEach((x:any)=>items.push({type:"Tag",entityId:x.id,occurredAt:x.createdAt,readOnly:true})); audits.filter((a:any)=>String(a.safeMetadata??"").includes(customerId)).forEach((a:any)=>items.push({type:"Audit",entityId:a.id,occurredAt:a.createdAt,readOnly:true})); evs.forEach((x:any)=>items.push({type:x.eventType,entityId:x.entityId,occurredAt:x.occurredAt,readOnly:true})); return { items:items.sort((a,b)=>String(b.occurredAt).localeCompare(String(a.occurredAt))), readOnly:true }; }
 export async function mergeCandidates(db:DbClient, input:any){ const p=input.payload??input; const rows=await db.select().from(customerProfiles); const cands=[] as any[]; const addrFp=fp(p.shippingAddress)||fp(p.billingAddress); for(const c of rows){ const reasons=[]; if(p.erpReferenceId&&p.erpReferenceId===c.erpReferenceId) reasons.push("ERP Reference"); if(p.marketplaceBuyerId&&p.marketplaceBuyerId===c.marketplaceBuyerId) reasons.push("Marketplace Buyer ID"); if(p.email&&p.email===c.email) reasons.push("Email"); if(p.phone&&p.phone===c.phone) reasons.push("Phone"); if(p.vatNumber&&p.vatNumber===c.vatNumber) reasons.push("VAT Number"); const addrs=await db.select().from(customerAddresses).where(eq(customerAddresses.customerId,c.id)); if(addrFp&&addrs.some((a:any)=>a.fingerprint===addrFp)) reasons.push("Shipping Address"); if(reasons.length) cands.push({ customer:redactCustomer(c), reasons, autoMerged:false }); } return { candidates:cands, autoMerge:false, executionRequired:true }; }
-export async function executeMerge(db:DbClient, clientId:string, body:any){ const p=body.payload??body, key=p.idempotencyKey??body.idempotencyKey; const [existing]=await db.select().from(erpCommandExecutions).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,key))).limit(1); if(existing) return { status:"Completed", idempotent:true, targetCustomerId:p.targetCustomerId, sourceCustomerId:p.sourceCustomerId }; await db.insert(erpCommandExecutions).values({ id:id(), clientId, commandId:p.commandId??id(), requestId:p.requestId??null, idempotencyKey:key, commandType:"MergeCustomer", entityType:"Customer", entityId:p.targetCustomerId, status:"Completed", resultReference:p.targetCustomerId, requestChecksum:"customer-merge", safeResultMetadata:JSON.stringify({sourceCustomerId:p.sourceCustomerId,targetCustomerId:p.targetCustomerId}), safeErrorCode:null, createdAt:now(), completedAt:now() }); await db.insert(customerMergeHistory).values({ id:id(), sourceCustomerId:p.sourceCustomerId, targetCustomerId:p.targetCustomerId, idempotencyKey:key, safeMetadata:JSON.stringify({explicit:true}), createdAt:now() }); await event(db,p.targetCustomerId,"CustomerMerged","Customer",p.sourceCustomerId); await audit(db,clientId,null,"CustomerMerge","Succeeded",{sourceCustomerId:p.sourceCustomerId,targetCustomerId:p.targetCustomerId}); return { status:"Completed", idempotent:false, targetCustomerId:p.targetCustomerId, sourceCustomerId:p.sourceCustomerId }; }
+/** Sprint 47B: an Accepted merge-command row older than this is treated as abandoned, not genuinely in-flight — same policy value as Sprint 46B's Sales/Invoice hardening, kept as a local constant rather than an import so this file's command lifecycle stays self-contained and independent of the Sales/Invoice bridge module. */
+const CUSTOMER_MERGE_ACCEPTED_STALE_MS = 60_000;
+function mergeChecksum(sourceCustomerId:unknown, targetCustomerId:unknown){ return crypto.createHash("sha256").update(JSON.stringify({ sourceCustomerId, targetCustomerId })).digest("hex"); }
+function safeErrorCodeFor(error:unknown):string{ if(error instanceof BadRequestError) return "BadRequestError"; if(error instanceof ConflictError) return "ConflictError"; if(error instanceof NotFoundError) return "NotFoundError"; return "InternalError"; }
+function parseMergeReplay(row:any){ const meta=row.safeResultMetadata?JSON.parse(row.safeResultMetadata):{}; return { status:"Completed", idempotent:true, targetCustomerId:meta.targetCustomerId, sourceCustomerId:meta.sourceCustomerId }; }
+/**
+ * Sprint 47B. The Accepted claim/reset (establishing which row this attempt
+ * owns) is deliberately done as a plain statement *outside* the transaction
+ * below, not folded into it. Reason: if it were inside and the transaction
+ * rolled back on failure, the row would revert to its pre-attempt state (or
+ * not exist at all for a brand-new key), and the post-failure "mark Failed"
+ * step would need a fragile update-or-insert fallback to cope with either
+ * case. Keeping the claim outside guarantees a row always exists by the time
+ * the transaction runs, so failure handling is always a single plain UPDATE.
+ * Everything from customerMergeHistory through the Completed update is one
+ * synchronous db.transaction() — it commits or rolls back as one unit, so a
+ * Completed row can never exist without its history/event/audit rows.
+ */
+export async function executeMerge(db:DbClient, clientId:string, body:any){
+  const p=body.payload??body, key=p.idempotencyKey??body.idempotencyKey;
+  const checksum=mergeChecksum(p.sourceCustomerId,p.targetCustomerId);
+  const [existing]=await db.select().from(erpCommandExecutions).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,key))).limit(1);
+
+  let rowId:string;
+  if(existing){
+    if(existing.requestChecksum!==checksum) throw new ConflictError("Idempotency key was already used with a different payload");
+    if(existing.status==="Completed") return parseMergeReplay(existing);
+    if(existing.status==="Accepted"){
+      const isStale=Date.now()-new Date(existing.createdAt).getTime()>CUSTOMER_MERGE_ACCEPTED_STALE_MS;
+      if(!isStale) throw new ConflictError("ERP command is already in progress");
+    }
+    rowId=existing.id;
+    await db.update(erpCommandExecutions).set({status:"Accepted",safeErrorCode:null,completedAt:null,createdAt:now()}).where(eq(erpCommandExecutions.id,rowId));
+  } else {
+    rowId=id();
+    try {
+      await db.insert(erpCommandExecutions).values({ id:rowId, clientId, commandId:p.commandId??key, requestId:p.requestId??null, idempotencyKey:key, commandType:"MergeCustomer", entityType:"Customer", entityId:p.targetCustomerId, status:"Accepted", requestChecksum:checksum, createdAt:now() });
+    } catch (error:any) {
+      if(String(error?.message??error).includes("UNIQUE constraint failed")) return executeMerge(db,clientId,body);
+      throw error;
+    }
+  }
+
+  try {
+    return db.transaction((tx) => {
+      tx.insert(customerMergeHistory).values({ id:crypto.randomUUID(), sourceCustomerId:p.sourceCustomerId, targetCustomerId:p.targetCustomerId, idempotencyKey:key, safeMetadata:JSON.stringify({explicit:true}), createdAt:now() }).run();
+      tx.insert(customerEvents).values({ id:crypto.randomUUID(), customerId:p.targetCustomerId, eventType:"CustomerMerged", entityType:"Customer", entityId:p.sourceCustomerId, safeMetadata:JSON.stringify({}), occurredAt:now() }).run();
+      tx.insert(erpIntegrationAudit).values({ id:crypto.randomUUID(), clientId, requestId:p.requestId??null, action:"CustomerMerge", result:"Succeeded", safeMetadata:JSON.stringify({sourceCustomerId:p.sourceCustomerId,targetCustomerId:p.targetCustomerId}), errorCode:null, createdAt:now() }).run();
+      const meta={sourceCustomerId:p.sourceCustomerId,targetCustomerId:p.targetCustomerId};
+      tx.update(erpCommandExecutions).set({status:"Completed",completedAt:now(),safeErrorCode:null,resultReference:p.targetCustomerId,safeResultMetadata:JSON.stringify(meta)}).where(eq(erpCommandExecutions.id,rowId)).run();
+      return { status:"Completed", idempotent:false, targetCustomerId:p.targetCustomerId, sourceCustomerId:p.sourceCustomerId };
+    });
+  } catch (error) {
+    await db.update(erpCommandExecutions).set({status:"Failed",safeErrorCode:safeErrorCodeFor(error),completedAt:now()}).where(eq(erpCommandExecutions.id,rowId));
+    throw error;
+  }
+}
