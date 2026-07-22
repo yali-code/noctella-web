@@ -46,6 +46,22 @@ export function updateOrderStatus(id: string, status: string): Promise<OrderWith
 }
 
 /**
+ * Completed is reached only through this endpoint (never the generic status
+ * PATCH). The response is not exception-based for a not-yet-ready order —
+ * a "blocked" status is a normal 200 result, not a thrown error.
+ */
+export interface CompleteSaleResult {
+  status: string;
+  issues?: string[];
+  financials?: unknown;
+  alreadyCompleted?: boolean;
+}
+
+export function completeSale(orderId: string): Promise<CompleteSaleResult> {
+  return api.post<CompleteSaleResult>(`/api/orders/${orderId}/complete-sale`, {});
+}
+
+/**
  * Visible Admin action buttons only — deliberately not a mirror of the
  * backend's full ORDER_STATUS_TRANSITIONS graph (use-cases/order/useCases.ts).
  * Completed (owned exclusively by completeSale()) and Shipped (driven only
