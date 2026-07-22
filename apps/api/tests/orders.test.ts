@@ -1,5 +1,6 @@
 import { OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { createCategory } from "../src/services/categories";
 import { createProduct, getProductById, updateProduct } from "../src/services/products";
 import { listStockMovements } from "../src/services/stockMovements";
@@ -11,9 +12,11 @@ import {
   getOrderByOrderNumber,
   listOrders,
 } from "../src/services/orders";
+import { createOffer, acceptOffer, createDraftOrderFromOffer } from "../src/services/offers";
 import { BadRequestError, ConflictError, NotFoundError } from "../src/services/errors";
 import { createOrderSchema, orderListQuerySchema } from "../src/validation/order";
 import { createPaymentSession, findPaymentByProviderReference } from "../src/payments/paymentRepository";
+import { products } from "../src/db/schema";
 import { createTestDb } from "./testDb";
 
 describe("order service", () => {
@@ -334,6 +337,204 @@ describe("order service", () => {
         createOrderSchema.parse(baseOrderInput({ paymentStatus: PaymentStatus.Pending })),
       );
       expect(order.paymentStatus).toBe(PaymentStatus.Paid);
+    });
+  });
+
+  describe("order status transitions", () => {
+    async function createOrderAtStatus(status: OrderStatus) {
+      const category = await createCategory(db, { name: `Status-${Math.random()}`, displayOrder: 0, isActive: true });
+      const product = await createProduct(db, {
+        sku: `SKU-STATUS-${Math.random()}`,
+        title: "Status Test Product",
+        type: ProductType.UniqueItem,
+        status: ProductStatus.Published,
+        categoryId: category.id,
+        customsWarning: false,
+        isFeatured: false,
+        allowMakeOffer: false,
+        allowCashOnDelivery: false,
+        showInArchiveAfterSale: false,
+        priceEur: 100,
+        stockQuantity: 1,
+      });
+      const suffix = `${status}-${Math.random()}`;
+      const reference = `ref-${suffix}`;
+      await seedPayment(db, PaymentProvider.Stripe, reference, PaymentStatus.Paid);
+      const order = await createOrder(
+        db,
+        createOrderSchema.parse({
+          orderDraftId: `draft-${suffix}`,
+          guestEmail: "jane@example.com",
+          status,
+          paymentStatus: PaymentStatus.Paid,
+          paymentProvider: PaymentProvider.Stripe,
+          paymentReference: reference,
+          currency: "EUR",
+          billingAddress: address,
+          shippingAddress: address,
+          subtotalAmount: 100,
+          totalAmount: 100,
+          items: [{ productId: product.id, quantity: 1 }],
+        }),
+      );
+      return { order, product };
+    }
+
+    const validEdges: Array<[OrderStatus, OrderStatus]> = [
+      [OrderStatus.Draft, OrderStatus.Pending],
+      [OrderStatus.Draft, OrderStatus.Confirmed],
+      [OrderStatus.Pending, OrderStatus.Confirmed],
+      [OrderStatus.Pending, OrderStatus.Processing],
+      [OrderStatus.Pending, OrderStatus.Cancelled],
+      [OrderStatus.Confirmed, OrderStatus.Processing],
+      [OrderStatus.Confirmed, OrderStatus.Cancelled],
+      [OrderStatus.Processing, OrderStatus.Shipped],
+      [OrderStatus.Processing, OrderStatus.Cancelled],
+    ];
+    for (const [from, to] of validEdges) {
+      it(`allows ${from} -> ${to}`, async () => {
+        const { order } = await createOrderAtStatus(from);
+        const updated = await updateOrderStatus(db, order.id, { status: to });
+        expect(updated.status).toBe(to);
+      });
+    }
+
+    const invalidEdges: Array<[OrderStatus, OrderStatus]> = [
+      [OrderStatus.Draft, OrderStatus.Shipped],
+      [OrderStatus.Pending, OrderStatus.Completed],
+      [OrderStatus.Confirmed, OrderStatus.Draft],
+      [OrderStatus.Processing, OrderStatus.Completed],
+      [OrderStatus.Shipped, OrderStatus.Cancelled],
+      [OrderStatus.Shipped, OrderStatus.Completed],
+      [OrderStatus.Completed, OrderStatus.Processing],
+      [OrderStatus.Completed, OrderStatus.Cancelled],
+      [OrderStatus.Cancelled, OrderStatus.Processing],
+    ];
+    for (const [from, to] of invalidEdges) {
+      it(`rejects ${from} -> ${to}`, async () => {
+        const { order } = await createOrderAtStatus(from);
+        await expect(updateOrderStatus(db, order.id, { status: to })).rejects.toBeInstanceOf(BadRequestError);
+      });
+    }
+
+    it("treats Processing -> Processing as an idempotent success", async () => {
+      const { order } = await createOrderAtStatus(OrderStatus.Processing);
+      const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      expect(updated.status).toBe(OrderStatus.Processing);
+    });
+
+    it("treats Completed -> Completed as an idempotent success", async () => {
+      const { order } = await createOrderAtStatus(OrderStatus.Completed);
+      const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Completed });
+      expect(updated.status).toBe(OrderStatus.Completed);
+    });
+
+    it("treats Cancelled -> Cancelled as an idempotent success", async () => {
+      const { order } = await createOrderAtStatus(OrderStatus.Cancelled);
+      const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      expect(updated.status).toBe(OrderStatus.Cancelled);
+    });
+
+    it("Processing -> Cancelled restores Inventory and updates status atomically", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Processing);
+      const before = await getProductById(db, product.id);
+      expect(before.stockQuantity).toBe(0);
+
+      const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      expect(updated.status).toBe(OrderStatus.Cancelled);
+
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(1);
+    });
+
+    it("Confirmed -> Cancelled restores Inventory", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Confirmed);
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(1);
+    });
+
+    it("Draft -> Cancelled does not restore Inventory, since Draft Orders never decrement it at creation", async () => {
+      const category = await createCategory(db, { name: `Draft-${Math.random()}`, displayOrder: 0, isActive: true });
+      const product = await createProduct(db, {
+        sku: `SKU-DRAFT-${Math.random()}`,
+        title: "Draft Test Product",
+        type: ProductType.UniqueItem,
+        status: ProductStatus.Published,
+        categoryId: category.id,
+        customsWarning: false,
+        isFeatured: false,
+        allowMakeOffer: true,
+        allowCashOnDelivery: false,
+        showInArchiveAfterSale: false,
+        priceEur: 900,
+        stockQuantity: 1,
+      });
+      const offer = await createOffer(db, {
+        productId: product.id,
+        customerName: "Jane Collector",
+        customerEmail: "jane@example.com",
+        offeredAmount: 900,
+        currency: "EUR",
+      });
+      await acceptOffer(db, offer.id);
+      const draftOrder = await createDraftOrderFromOffer(db, offer.id);
+      expect(draftOrder.status).toBe(OrderStatus.Draft);
+
+      const before = await getProductById(db, product.id);
+      expect(before.stockQuantity).toBe(1);
+
+      const updated = await updateOrderStatus(db, draftOrder.id, { status: OrderStatus.Cancelled });
+      expect(updated.status).toBe(OrderStatus.Cancelled);
+
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(1);
+    });
+
+    it("double cancellation does not double-restore Inventory and remains idempotent", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Processing);
+      const first = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      const second = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      expect(first.status).toBe(OrderStatus.Cancelled);
+      expect(second.status).toBe(OrderStatus.Cancelled);
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(1);
+    });
+
+    it("an invalid Shipped -> Cancelled attempt does not restore Inventory", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Shipped);
+      await expect(updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled })).rejects.toBeInstanceOf(
+        BadRequestError,
+      );
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(0);
+    });
+
+    it("an invalid Completed -> Cancelled attempt does not restore Inventory", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Completed);
+      await expect(updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled })).rejects.toBeInstanceOf(
+        BadRequestError,
+      );
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(0);
+    });
+
+    it("rolls back the whole transaction if Inventory restoration fails, leaving Order status unchanged", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Processing);
+      // Force restoreInventoryForSaleRollbackInTransactionUseCase's findByProduct
+      // lookup to fail by removing the product row it depends on. FK constraints
+      // (declared only in the raw schema.sql, not the Drizzle schema) must be
+      // relaxed for this one delete since order_items/stock_movements still
+      // reference it — that referential integrity isn't what this test targets.
+      const sqlite = (db as any).session.client;
+      sqlite.pragma("foreign_keys = OFF");
+      await db.delete(products).where(eq(products.id, product.id));
+      sqlite.pragma("foreign_keys = ON");
+
+      await expect(updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled })).rejects.toThrow();
+
+      const unchanged = await getOrderById(db, order.id);
+      expect(unchanged.status).toBe(OrderStatus.Processing);
     });
   });
 });
