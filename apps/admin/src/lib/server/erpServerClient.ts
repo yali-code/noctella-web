@@ -56,6 +56,10 @@ export function markInvoicePaidPath(invoiceId: string): string {
   return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/mark-paid`;
 }
 
+export function cancelInvoicePath(invoiceId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/cancel`;
+}
+
 /**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key

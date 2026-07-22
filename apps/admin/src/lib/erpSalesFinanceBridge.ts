@@ -61,3 +61,20 @@ export async function markInvoicePaid(invoiceId: string): Promise<any> {
   if (!res.ok) throw new ApiError(body?.error ?? res.statusText, res.status, body?.details);
   return body;
 }
+
+/**
+ * Same rationale as createInvoiceDraft/issueInvoice/markInvoicePaid: uses the
+ * same-origin Admin ERP proxy directly rather than `api.post`, which would
+ * target the direct backend.
+ */
+export async function cancelInvoice(invoiceId: string): Promise<any> {
+  const res = await fetch(`/api/erp/commands/invoices/${invoiceId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), payload: {} }),
+  });
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const body = isJson ? await res.json() : undefined;
+  if (!res.ok) throw new ApiError(body?.error ?? res.statusText, res.status, body?.details);
+  return body;
+}

@@ -12,7 +12,7 @@ import {
   type OrderWithItems,
 } from "@/lib/orders";
 import { canAct, financialSummary, readinessSummary, safeErrorSummary, type ShipmentRow } from "@/lib/shipments";
-import { createInvoiceDraft, issueInvoice, markInvoicePaid } from "@/lib/erpSalesFinanceBridge";
+import { cancelInvoice, createInvoiceDraft, issueInvoice, markInvoicePaid } from "@/lib/erpSalesFinanceBridge";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
@@ -39,6 +39,8 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [issueInvoiceError, setIssueInvoiceError] = useState<string | null>(null);
   const [markingPaidInvoiceId, setMarkingPaidInvoiceId] = useState<string | null>(null);
   const [markInvoicePaidError, setMarkInvoicePaidError] = useState<string | null>(null);
+  const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
+  const [cancelInvoiceError, setCancelInvoiceError] = useState<string | null>(null);
 
   function loadInvoiceAndSalesBridge(orderId: string) {
     fetch(`/api/erp/orders/${orderId}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
@@ -103,6 +105,20 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       setMarkInvoicePaidError(err instanceof Error ? err.message : "Failed to mark invoice paid");
     } finally {
       setMarkingPaidInvoiceId(null);
+    }
+  }
+
+  async function handleCancelInvoice(invoiceId: string) {
+    if (!order || cancellingInvoiceId) return;
+    setCancellingInvoiceId(invoiceId);
+    setCancelInvoiceError(null);
+    try {
+      await cancelInvoice(invoiceId);
+      loadInvoiceAndSalesBridge(order.id);
+    } catch (err) {
+      setCancelInvoiceError(err instanceof Error ? err.message : "Failed to cancel invoice");
+    } finally {
+      setCancellingInvoiceId(null);
     }
   }
 
@@ -289,6 +305,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         {invoiceDraftError && <p role="alert">{invoiceDraftError}</p>}
         {issueInvoiceError && <p role="alert">{issueInvoiceError}</p>}
         {markInvoicePaidError && <p role="alert">{markInvoicePaidError}</p>}
+        {cancelInvoiceError && <p role="alert">{cancelInvoiceError}</p>}
         {invoiceBridge.length === 0 ? <p>No ERP invoices yet.</p> : invoiceBridge.map((invoice) => (
           <div key={invoice.id}>
             <Row label={`Invoice ${invoice.invoiceNumber ?? invoice.id}`} value={`${invoice.status} / ${invoice.invoiceType} / ${Number(invoice.totalAmount ?? 0).toFixed(2)}`} />
@@ -299,7 +316,13 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
             >
               {issuingInvoiceId === invoice.id ? "Issuing..." : "Issue"}
             </button>
-            <button disabled={! ["Draft", "Issued"].includes(invoice.status)} style={buttonStyle}>Cancel</button>
+            <button
+              disabled={! ["Draft", "Issued"].includes(invoice.status) || cancellingInvoiceId === invoice.id}
+              style={buttonStyle}
+              onClick={() => handleCancelInvoice(invoice.id)}
+            >
+              {cancellingInvoiceId === invoice.id ? "Cancelling..." : "Cancel"}
+            </button>
             <button
               disabled={invoice.status !== "Issued" || markingPaidInvoiceId === invoice.id}
               style={buttonStyle}
