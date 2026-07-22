@@ -614,6 +614,7 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_unique ON payments(order_id) WHERE order_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS customers (
   id TEXT PRIMARY KEY,

@@ -7,6 +7,7 @@ import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
 import { encryptCredential } from "../src/services/credentialEncryption";
 import { createOrder } from "../src/services/orders";
+import { createPaymentSession } from "../src/payments/paymentRepository";
 import { createManualStockAdjustment } from "../src/services/stockMovements";
 import { manualStockAdjustmentSchema } from "../src/validation/stockMovement";
 import { cancelJob, enqueueJob, executeJob } from "../src/services/backgroundJobs";
@@ -124,7 +125,7 @@ describe("automatic stock triggers", () => {
   });
 
   it("internal order processing and duplicate marketplace-style order drafts enqueue no duplicate effective jobs", async () => {
-    const database = db(); const seeded = await seed(database, PublishChannel.Ebay, 2); await createOrder(database, { orderDraftId: "draft-1", guestEmail: "buyer@example.com", status: "processing" as any, paymentStatus: "paid" as any, paymentProvider: "stripe" as any, paymentReference: "pay-1", currency: "EUR" as any, billingAddress: { fullName: "A", line1: "B", city: "C", postalCode: "D", country: "E" }, shippingAddress: { fullName: "A", line1: "B", city: "C", postalCode: "D", country: "E" }, subtotalAmount: 10, totalAmount: 10, items: [{ productId: seeded.productId, quantity: 1 }] });
+    const database = db(); const seeded = await seed(database, PublishChannel.Ebay, 2); await createPaymentSession(database, { provider: "stripe", providerReference: "pay-1", status: "paid", amount: 10, currency: "EUR", idempotencyKey: "test:pay-1" }); await createOrder(database, { orderDraftId: "draft-1", guestEmail: "buyer@example.com", status: "processing" as any, paymentStatus: "paid" as any, paymentProvider: "stripe" as any, paymentReference: "pay-1", currency: "EUR" as any, billingAddress: { fullName: "A", line1: "B", city: "C", postalCode: "D", country: "E" }, shippingAddress: { fullName: "A", line1: "B", city: "C", postalCode: "D", country: "E" }, subtotalAmount: 10, totalAmount: 10, items: [{ productId: seeded.productId, quantity: 1 }] });
     await expect(createOrder(database, { orderDraftId: "draft-1", guestEmail: "buyer@example.com", status: "processing" as any, paymentStatus: "paid" as any, paymentProvider: "stripe" as any, paymentReference: "pay-1", currency: "EUR" as any, billingAddress: { fullName: "A", line1: "B", city: "C", postalCode: "D", country: "E" }, shippingAddress: { fullName: "A", line1: "B", city: "C", postalCode: "D", country: "E" }, subtotalAmount: 10, totalAmount: 10, items: [{ productId: seeded.productId, quantity: 1 }] })).resolves.toBeDefined();
     expect((await database.select().from(schema.backgroundJobs).where(eq(schema.backgroundJobs.productId, seeded.productId)))).toHaveLength(1);
   });

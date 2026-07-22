@@ -39,6 +39,7 @@ function ensurePaymentColumns(sqlite: Database.Database): void {
     sqlite.exec("ALTER TABLE payments ADD COLUMN provider_reference TEXT");
   }
   sqlite.exec("CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference)");
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_unique ON payments(order_id) WHERE order_id IS NOT NULL");
 }
 
 /**

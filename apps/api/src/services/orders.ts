@@ -2,6 +2,8 @@ import { OrderStatus, PaymentStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { SqliteUnitOfWork } from "./unitOfWork";
 import { enqueueProductStockSync } from "./stockSync";
+import { BadRequestError, ConflictError, NotFoundError } from "./errors";
+import { findPaymentByProviderReference, linkPaymentToOrder } from "../payments/paymentRepository";
 import type { CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
 import { createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, updateOrderStatusUseCase, updateOrderPaymentStatusUseCase, cancelInternalOrderUseCase, createSaleRollbackUseCase, formatOrderNumber } from "../use-cases/order/useCases";
 
@@ -11,7 +13,31 @@ const sync=(db:DbClient)=>({ enqueue:(productId:string,key:string)=>enqueueProdu
 export { formatOrderNumber };
 export async function getOrderById(db:DbClient,id:string):Promise<OrderWithItems>{ return await getOrderDetailUseCase(uow(db)).execute(id) as unknown as OrderWithItems; }
 export async function getOrderByOrderNumber(db:DbClient,orderNumber:string):Promise<OrderWithItems>{ const found=await listOrdersUseCase(uow(db)).execute({page:1,pageSize:1,search:orderNumber}); return getOrderById(db, found.items[0]?.id ?? orderNumber); }
-export async function createOrder(db:DbClient,input:CreateOrderInput):Promise<OrderWithItems>{ return await createInternalOrderUseCase(uow(db),sync(db)).execute({ ...input, idempotencyKey:input.orderDraftId, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:input.paymentStatus??PaymentStatus.Paid }) as unknown as OrderWithItems; }
+/**
+ * The persisted Payment Session (Sprint 37A) is the server-side source of
+ * truth for payment status — input.paymentStatus is accepted for request-
+ * shape compatibility but never trusted for the pay/no-pay decision.
+ * Linking payments.order_id happens post-commit (Sprint 38A): SqliteUnitOfWork.run()
+ * rejects any transaction callback that returns a Promise, so the async
+ * payment repository calls stay outside uow.run() entirely.
+ */
+export async function createOrder(db:DbClient,input:CreateOrderInput):Promise<OrderWithItems>{
+  const session = await findPaymentByProviderReference(db, input.paymentProvider, input.paymentReference);
+  if (!session) throw new NotFoundError("Payment session not found");
+  if (session.status !== PaymentStatus.Paid) throw new BadRequestError("Orders can only be created from paid payments");
+
+  const idempotencyKey = input.orderDraftId;
+  const existingOrder = await uow(db).run(({ repositories }) => repositories.order.orders.write.findByIdempotencyKey(idempotencyKey));
+  if (session.orderId && session.orderId !== existingOrder?.id) {
+    throw new ConflictError("Payment session is already linked to another order");
+  }
+
+  const result = await createInternalOrderUseCase(uow(db),sync(db)).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
+
+  await linkPaymentToOrder(db, session.id, result.id).catch(()=>undefined);
+
+  return result;
+}
 export async function updateOrderStatus(db:DbClient,id:string,input:UpdateOrderStatusInput):Promise<OrderWithItems>{ return await updateOrderStatusUseCase(uow(db)).execute({id,status:input.status}) as unknown as OrderWithItems; }
 export async function updateOrderPaymentStatus(db:DbClient,id:string,input:{paymentStatus:PaymentStatus}):Promise<OrderWithItems>{ return await updateOrderPaymentStatusUseCase(uow(db)).execute({id,paymentStatus:input.paymentStatus}) as unknown as OrderWithItems; }
 export async function cancelOrder(db:DbClient,id:string):Promise<OrderWithItems>{ return await cancelInternalOrderUseCase(uow(db)).execute(id) as unknown as OrderWithItems; }
