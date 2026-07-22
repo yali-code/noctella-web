@@ -3,12 +3,12 @@ import { eq } from "drizzle-orm";
 import { BackgroundJobStatus, CarrierCode, MarketplaceConnectionStatus, MarketplaceFulfillmentStatus, OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType, PublishChannel, ShipmentStatus } from "@noctella/shared";
 import { createCategory } from "../src/services/categories";
 import { createProduct, getProductById } from "../src/services/products";
-import { createOrder } from "../src/services/orders";
+import { createOrder, getOrderById, updateOrderStatus } from "../src/services/orders";
 import { createPaymentSession } from "../src/payments/paymentRepository";
 import { listStockMovements } from "../src/services/stockMovements";
 import { executeJob } from "../src/services/backgroundJobs";
 import { encryptCredential } from "../src/services/credentialEncryption";
-import { createShipment, markReady, markShipped, assignTracking, getShipmentEvents, markDelivered, markDeliveryFailed, markReturned, cancelShipment, listShipments, completeSale, getSaleCompletionReadiness, refreshTracking, getShipmentTracking, setShipmentMarketplaceAdapterResolver, submitMarketplaceShipment, reopenSale } from "../src/services/shipments";
+import { createShipment, markReady, markShipped, updateShipmentStatus, assignTracking, getShipmentEvents, markDelivered, markDeliveryFailed, markReturned, cancelShipment, listShipments, completeSale, getSaleCompletionReadiness, refreshTracking, getShipmentTracking, setShipmentMarketplaceAdapterResolver, submitMarketplaceShipment, reopenSale } from "../src/services/shipments";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 import * as schema from "../src/db/schema";
 import { createTestDb } from "./testDb";
@@ -28,4 +28,117 @@ describe("Sprint 14 shipment workflow", () => {
   it("executes marketplace fulfillment jobs for eBay and Etsy, persists IDs, dedupes, and classifies failures", async () => { const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.UPS, trackingNumber: "TRK" }); const connId = "conn-ebay"; await db.insert(schema.marketplaceConnections).values({ id: connId, channel: PublishChannel.Ebay, accountLabel: "Default", encryptedAccessToken: encryptCredential("token"), status: MarketplaceConnectionStatus.Connected, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); await db.insert(schema.marketplaceOrders).values({ id: "mo1", channel: PublishChannel.Ebay, externalOrderId: "ext", marketplaceConnectionId: connId, internalOrderId: order.id, status: "paid", currency: "EUR", subtotal: 100, shipping: 0, tax: 0, total: 100, rawPayloadSnapshot: "{}", orderedAt: new Date().toISOString(), importedAt: new Date().toISOString() }); await db.update(schema.shipments).set({ channel: PublishChannel.Ebay, marketplaceOrderId: "mo1", marketplaceFulfillmentStatus: MarketplaceFulfillmentStatus.Pending }).where(eq(schema.shipments.id, s.id)); const adapter = fakeAdapter(); setShipmentMarketplaceAdapterResolver(() => adapter); await markReady(db, s.id); await markShipped(db, s.id); const [job] = await db.select().from(schema.backgroundJobs); await executeJob(db, job); let row = await db.select().from(schema.shipments).where(eq(schema.shipments.id, s.id)); expect(row[0].externalFulfillmentId).toBe("ful-1"); expect(row[0].marketplaceFulfillmentStatus).toBe(MarketplaceFulfillmentStatus.Accepted); await submitMarketplaceShipment(db, s.id); expect(adapter.calls()).toBe(1); await db.update(schema.shipments).set({ externalFulfillmentId: null, marketplaceFulfillmentStatus: MarketplaceFulfillmentStatus.Pending }).where(eq(schema.shipments.id, s.id)); setShipmentMarketplaceAdapterResolver(() => fakeAdapter({ submitShipment: async () => { throw new Error("temporary"); } })); await expect(submitMarketplaceShipment(db, s.id)).rejects.toMatchObject({ retryable: true }); setShipmentMarketplaceAdapterResolver(() => fakeAdapter({ submitShipment: async () => { throw new Error("permanent"); } })); await expect(submitMarketplaceShipment(db, s.id)).rejects.toMatchObject({ retryable: false }); await db.insert(schema.marketplaceConnections).values({ id: "missing", channel: PublishChannel.Ebay, accountLabel: "Missing", status: MarketplaceConnectionStatus.Connected, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); await db.update(schema.marketplaceOrders).set({ marketplaceConnectionId: "missing" }).where(eq(schema.marketplaceOrders.id, "mo1")); await expect(submitMarketplaceShipment(db, s.id)).rejects.toMatchObject({ retryable: false }); });
   it("completeSale gates payment, shipment state, marketplace status, cost data, idempotency, financials and unsafe reopen", async () => { const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup, shippingCost: 9 }); expect((await getSaleCompletionReadiness(db, order.id)).issues.join(" ")).toMatch(/in transit/); await markReady(db, s.id); expect((await completeSale(db, order.id)).status).toBe("blocked"); await markShipped(db, s.id); const done = await completeSale(db, order.id); expect(done.status).toBe(OrderStatus.Completed); expect(done.financials).toMatchObject({ grossRevenue: 100, shippingCharged: 0, shippingCost: 9, itemCost: 40, taxVat: 0, netRevenue: 91, profit: 51, currency: "EUR" }); expect(done.financials.marketplaceFee).toBeNull(); expect((await completeSale(db, order.id)).alreadyCompleted).toBe(true); expect(await db.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.orderId, order.id))).toHaveLength(1); await expect(reopenSale()).rejects.toThrow(/deferred/); });
   it("blocks unpaid, missing shipment, marketplace pending, and missing cost data", async () => { await db.update(schema.orders).set({ paymentStatus: PaymentStatus.Pending }).where(eq(schema.orders.id, order.id)); expect((await completeSale(db, order.id)).issues).toContain("Order is unpaid"); await db.update(schema.orders).set({ paymentStatus: PaymentStatus.Paid }).where(eq(schema.orders.id, order.id)); expect((await completeSale(db, order.id)).issues.join(" ")).toMatch(/Shipment/); const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup }); await markReady(db, s.id); await markShipped(db, s.id); await db.update(schema.products).set({ purchaseCost: null }).where(eq(schema.products.id, productId)); expect((await getSaleCompletionReadiness(db, order.id)).issues.join(" ")).toMatch(/Missing cost/); });
+
+  describe("Sprint 40A: Shipment InTransit integrates with Order Shipped", () => {
+    it("Ready does not change Order status", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Processing);
+    });
+
+    it("LabelPending does not change Order status", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      await updateShipmentStatus(db, s.id, ShipmentStatus.LabelPending);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Processing);
+    });
+
+    it("LabelCreated does not change Order status", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      await updateShipmentStatus(db, s.id, ShipmentStatus.LabelCreated);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Processing);
+    });
+
+    it("moving a Shipment to InTransit moves its Processing Order to Shipped, without changing Product stock", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const before = await getProductById(db, productId);
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      const shipped = await markShipped(db, s.id);
+      expect(shipped.status).toBe(ShipmentStatus.InTransit);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Shipped);
+      expect((await getProductById(db, productId)).stockQuantity).toBe(before.stockQuantity);
+    });
+
+    it("Delivered does not further change Order status beyond what InTransit already set", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      await markShipped(db, s.id);
+      await markDelivered(db, s.id);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Shipped);
+    });
+
+    it("DeliveryFailed does not further change Order status beyond what InTransit already set", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      await markShipped(db, s.id);
+      await markDeliveryFailed(db, s.id);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Shipped);
+    });
+
+    it("Cancelled does not change Order status", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await cancelShipment(db, s.id);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Processing);
+    });
+
+    it("Returned does not further change Order status beyond what InTransit already set", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      await markShipped(db, s.id);
+      await markReturned(db, s.id);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Shipped);
+    });
+
+    it("repeating an InTransit request is idempotent: no error, Shipment remains InTransit, Order remains Shipped", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      await markShipped(db, s.id);
+      const second = await markShipped(db, s.id);
+      expect(second.status).toBe(ShipmentStatus.InTransit);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Shipped);
+    });
+
+    it("Shipment transition succeeds when the Order is already Shipped", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Shipped });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      const shipped = await markShipped(db, s.id);
+      expect(shipped.status).toBe(ShipmentStatus.InTransit);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Shipped);
+    });
+
+    it("Shipment transition succeeds even when the Order is in a state that can't reach Shipped (e.g. Cancelled)", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
+      await markReady(db, s.id);
+      const shipped = await markShipped(db, s.id);
+      expect(shipped.status).toBe(ShipmentStatus.InTransit);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Cancelled);
+    });
+
+    it("a failed Order transition does not prevent the marketplace fulfillment job from being enqueued", async () => {
+      await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      const s = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.UPS, trackingNumber: "TRK" });
+      const connId = "conn-ebay-40a";
+      await db.insert(schema.marketplaceConnections).values({ id: connId, channel: PublishChannel.Ebay, accountLabel: "Default", encryptedAccessToken: encryptCredential("token"), status: MarketplaceConnectionStatus.Connected, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      await db.insert(schema.marketplaceOrders).values({ id: "mo-40a", channel: PublishChannel.Ebay, externalOrderId: "ext-40a", marketplaceConnectionId: connId, internalOrderId: order.id, status: "paid", currency: "EUR", subtotal: 100, shipping: 0, tax: 0, total: 100, rawPayloadSnapshot: "{}", orderedAt: new Date().toISOString(), importedAt: new Date().toISOString() });
+      await db.update(schema.shipments).set({ channel: PublishChannel.Ebay, marketplaceOrderId: "mo-40a", marketplaceFulfillmentStatus: MarketplaceFulfillmentStatus.Pending }).where(eq(schema.shipments.id, s.id));
+      await markReady(db, s.id);
+      await markShipped(db, s.id);
+      const jobs = await db.select().from(schema.backgroundJobs);
+      expect(jobs.length).toBeGreaterThan(0);
+      expect((await getOrderById(db, order.id)).status).toBe(OrderStatus.Cancelled);
+    });
+  });
 });
