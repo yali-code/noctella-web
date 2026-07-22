@@ -10,8 +10,32 @@ import { createSalesServiceApplication } from "./salesServiceApplication";
 import type { SaleOutput } from "../application/sales";
 const now=()=>new Date().toISOString(); const money=(n:number)=>Number(n.toFixed(2)); const sum=(p:unknown)=>createHash("sha256").update(JSON.stringify(p??{})).digest("hex");
 function parse(v:any,d:any=null){try{return v?JSON.parse(v):d}catch{return d}} function mask(e:string|null|undefined){if(!e)return null; const [a,b]=e.split("@"); return `${a.slice(0,2)}***@${b??"masked"}`}
-async function command(db:DbClient,clientId:string,env:any,type:string,entityType:string,entityId?:string){ if(!env?.idempotencyKey) throw new BadRequestError("idempotencyKey is required"); const checksum=sum(env.payload??env); const [e]=await db.select().from(erpCommandExecutions).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,env.idempotencyKey))).limit(1); if(e){ if(e.requestChecksum!==checksum) throw new ConflictError("Idempotency key was already used with a different payload"); return {replay:true,result:{status:e.status,entityId:e.entityId,resultReference:e.resultReference,safeResultMetadata:parse(e.safeResultMetadata,{})}}} await db.insert(erpCommandExecutions).values({id:randomUUID(),clientId,commandId:env.commandId??env.idempotencyKey,requestId:env.requestId??null,idempotencyKey:env.idempotencyKey,commandType:type,entityType,entityId:entityId??null,status:"Accepted",requestChecksum:checksum,createdAt:now()}); return {replay:false}; }
+/** Sprint 46B: an Accepted row older than this is treated as abandoned (crashed/never-finished), not genuinely in-flight — commands here run synchronously within one request, so anything still Accepted after this long is not a real in-progress attempt. */
+export const ERP_COMMAND_ACCEPTED_STALE_MS = 60_000;
+function safeErrorCodeFor(error:unknown):string{ if(error instanceof BadRequestError) return "BadRequestError"; if(error instanceof ConflictError) return "ConflictError"; if(error instanceof NotFoundError) return "NotFoundError"; return "InternalError"; }
+async function command(db:DbClient,clientId:string,env:any,type:string,entityType:string,entityId?:string){
+  if(!env?.idempotencyKey) throw new BadRequestError("idempotencyKey is required");
+  const checksum=sum(env.payload??env);
+  const [e]=await db.select().from(erpCommandExecutions).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,env.idempotencyKey))).limit(1);
+  if(e){
+    if(e.requestChecksum!==checksum) throw new ConflictError("Idempotency key was already used with a different payload");
+    if(e.status==="Completed") return {replay:true,result:{status:e.status,entityId:e.entityId,resultReference:e.resultReference,safeResultMetadata:parse(e.safeResultMetadata,{})}};
+    if(e.status==="Accepted"){
+      const isStale=Date.now()-new Date(e.createdAt).getTime()>ERP_COMMAND_ACCEPTED_STALE_MS;
+      if(!isStale) throw new ConflictError("ERP command is already in progress");
+    }
+    // Stale Accepted or Failed: reuse the same row rather than inserting a duplicate.
+    // createdAt is refreshed too (not just status/safeErrorCode/completedAt) so a
+    // genuinely concurrent request arriving during this retry sees a *recent*
+    // Accepted row and is correctly rejected, not treated as stale itself.
+    await db.update(erpCommandExecutions).set({status:"Accepted",safeErrorCode:null,completedAt:null,createdAt:now()}).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,env.idempotencyKey)));
+    return {replay:false};
+  }
+  await db.insert(erpCommandExecutions).values({id:randomUUID(),clientId,commandId:env.commandId??env.idempotencyKey,requestId:env.requestId??null,idempotencyKey:env.idempotencyKey,commandType:type,entityType,entityId:entityId??null,status:"Accepted",requestChecksum:checksum,createdAt:now()});
+  return {replay:false};
+}
 async function finish(db:DbClient,clientId:string,key:string,status:string,entityId:string|null,meta:any){ await db.update(erpCommandExecutions).set({status,entityId,resultReference:entityId,safeResultMetadata:JSON.stringify(meta??{}),completedAt:now()}).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,key))); }
+async function failCommand(db:DbClient,clientId:string,key:string,error:unknown){ await db.update(erpCommandExecutions).set({status:"Failed",safeErrorCode:safeErrorCodeFor(error),completedAt:now()}).where(and(eq(erpCommandExecutions.clientId,clientId),eq(erpCommandExecutions.idempotencyKey,key))); }
 async function orderCore(db:DbClient,id:string){ const [o]=await db.select().from(orders).where(eq(orders.id,id)); if(!o) throw new NotFoundError("Order not found"); const items=await db.select().from(orderItems).where(eq(orderItems.orderId,id)); return {o,items}; }
 export async function customerProjection(db:DbClient, orderId:string, detail=false){ const {o}=await orderCore(db,orderId); const billing=parse(o.billingAddress,{}), shipping=parse(o.shippingAddress,{}); const name=billing.name??shipping.name??null; return {id:o.customerId,guest:!o.customerId,email:detail?o.guestEmail:null,maskedEmail:mask(o.guestEmail),name,billingAddress:detail?billing:undefined,shippingAddress:detail?shipping:undefined}; }
 export async function adjustedFinancials(db:DbClient, orderId:string){ const {o,items}=await orderCore(db,orderId); const [sf]=await db.select().from(saleFinancials).where(eq(saleFinancials.orderId,orderId)); const [{totalRefunded}]=await db.select({totalRefunded:sql<number>`coalesce(sum(${refunds.totalAmount}),0)`}).from(refunds).where(and(eq(refunds.orderId,orderId),eq(refunds.status,"succeeded"))); const requiredKnown=!!sf && sf.shippingCost!=null && sf.itemCost!=null; const gross=sf?.grossRevenue??o.totalAmount; const shippingCost=sf?.shippingCost??null; const itemCost=sf?.itemCost??items.reduce((a,i)=>a,0); const fees=[sf?.marketplaceFee,sf?.promotedFee,sf?.paymentFee]; const feesKnown=fees.every(v=>v!=null); const net=sf?sf.netRevenue:money(o.totalAmount-o.taxAmount-(shippingCost??0)-(feesKnown?fees.reduce((a,v)=>a+Number(v),0):0)); return {currency:"EUR",grossRevenue:gross,shippingCharged:o.shippingAmount,discounts:0,taxVat:o.taxAmount,marketplaceFee:sf?.marketplaceFee??null,promotedFee:sf?.promotedFee??null,paymentFee:sf?.paymentFee??null,shippingCost,itemCost,netRevenue:requiredKnown?net:null,profit:sf?.profit??null,completeness:requiredKnown?"Complete":"Incomplete",totalRefunded:totalRefunded??0,feeAdjustments:null,netRetainedRevenue:requiredKnown?money(net-(totalRefunded??0)):null,adjustedProfit:sf?.profit!=null?money(sf.profit-(totalRefunded??0)):null,adjustedCompleteness:requiredKnown?"Complete":"Incomplete"}; }
@@ -42,7 +66,27 @@ export const getInvoiceEvents=(db:DbClient,id:string)=>db.select().from(invoiceE
 export { createFinanceEntry };
 export async function listFinanceEntries(db:DbClient,q:any={}){ const f:any[]=[]; if(q.orderId)f.push(eq(financeEntries.orderId,String(q.orderId))); if(q.entryType)f.push(eq(financeEntries.entryType,String(q.entryType))); return {items:await db.select().from(financeEntries).where(f.length?and(...f):undefined).orderBy(desc(financeEntries.occurredAt)).limit(Number(q.pageSize??50)).offset((Number(q.page??1)-1)*Number(q.pageSize??50))}; }
 export async function financeSummary(db:DbClient,q:any={}){ const sales=await db.select().from(saleFinancials); const refs=await db.select().from(refunds).where(eq(refunds.status,"succeeded")); const gross=money(sales.reduce((a,s)=>a+s.grossRevenue,0)), totalRefunds=money(refs.reduce((a,r)=>a+r.totalAmount,0)); const itemCost=money(sales.reduce((a,s)=>a+s.itemCost,0)); const feesKnown=sales.every(s=>s.marketplaceFee!=null&&s.paymentFee!=null); const fees=feesKnown?money(sales.reduce((a,s)=>a+(s.marketplaceFee??0)+(s.promotedFee??0)+(s.paymentFee??0),0)):null; const shippingCost=sales.every(s=>s.shippingCost!=null)?money(sales.reduce((a,s)=>a+s.shippingCost,0)):null; const profit=sales.length?money(sales.reduce((a,s)=>a+s.profit,0)):null; return {currency:"EUR",grossRevenue:gross,totalRefunds,netRevenue:money(gross-totalRefunds),itemCost,fees,shippingCost,profit,adjustedProfit:profit==null?null:money(profit-totalRefunds),completeness:feesKnown?"Complete":"Incomplete"}; }
-export async function executeSalesCommand(db:DbClient,clientId:string,env:any,type:string,id?:string){ const c=await command(db,clientId,env,type,type.includes("Invoice")?"Invoice":"Order",id); if(c.replay)return c.result; let out:any; const p=env.payload??{}; if(type==="CreateInternalSale") out=await createInternalSale(db,p); else if(type==="CompleteSale") out=await completeSale(db,id!); else if(type==="CreateInvoice") out=await createInvoiceDraft(db,id!,p); else if(type==="UpdateInvoice") out=await updateInvoiceDraft(db,id!,p); else if(type==="IssueInvoice") out=await issueInvoice(db,id!,p); else if(type==="CancelInvoice") out=await setInvoiceStatus(db,id!,ErpInvoiceStatus.Cancelled); else if(type==="VoidInvoice") out=await setInvoiceStatus(db,id!,ErpInvoiceStatus.Voided); else if(type==="MarkInvoicePaid") out=await setInvoiceStatus(db,id!,ErpInvoiceStatus.Paid); await finish(db,clientId,env.idempotencyKey,"Completed",out.id??out.orderId??id,{type,entityId:out.id??out.orderId??id}); return out; }
+export async function executeSalesCommand(db:DbClient,clientId:string,env:any,type:string,id?:string){
+  const c=await command(db,clientId,env,type,type.includes("Invoice")?"Invoice":"Order",id);
+  if(c.replay) return c.result;
+  const p=env.payload??{};
+  let out:any;
+  try {
+    if(type==="CreateInternalSale") out=await createInternalSale(db,p);
+    else if(type==="CompleteSale") out=await completeSale(db,id!);
+    else if(type==="CreateInvoice") out=await createInvoiceDraft(db,id!,p);
+    else if(type==="UpdateInvoice") out=await updateInvoiceDraft(db,id!,p);
+    else if(type==="IssueInvoice") out=await issueInvoice(db,id!,p);
+    else if(type==="CancelInvoice") out=await setInvoiceStatus(db,id!,ErpInvoiceStatus.Cancelled);
+    else if(type==="VoidInvoice") out=await setInvoiceStatus(db,id!,ErpInvoiceStatus.Voided);
+    else if(type==="MarkInvoicePaid") out=await setInvoiceStatus(db,id!,ErpInvoiceStatus.Paid);
+  } catch (error) {
+    await failCommand(db,clientId,env.idempotencyKey,error);
+    throw error;
+  }
+  await finish(db,clientId,env.idempotencyKey,"Completed",out.id??out.orderId??id,{type,entityId:out.id??out.orderId??id});
+  return out;
+}
 export { getSaleCompletionReadiness };
 export async function refundSummary(db:DbClient,orderId:string){ return {orderId,totalRefunded:(await adjustedFinancials(db,orderId)).totalRefunded,refunds:await db.select().from(refunds).where(eq(refunds.orderId,orderId))}; }
 export async function reversalSummary(db:DbClient,orderId:string){ const reversals=await db.select().from(saleReversals).where(eq(saleReversals.orderId,orderId)); return {orderId,reversed:reversals.length>0,reversals}; }
