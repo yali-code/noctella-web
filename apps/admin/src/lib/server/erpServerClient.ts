@@ -48,6 +48,10 @@ export function createInvoiceDraftPath(orderId: string): string {
   return `/api/erp/commands/orders/${encodeURIComponent(orderId)}/invoices/create`;
 }
 
+export function issueInvoicePath(invoiceId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/issue`;
+}
+
 /**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key
