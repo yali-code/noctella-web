@@ -11,6 +11,7 @@ import {
 import {
   cancelPaymentSession,
   initializePaymentSession,
+  listPayments,
   verifyPaymentSession,
 } from "../src/payments/paymentRepository";
 import { createTestDb } from "./testDb";
@@ -278,5 +279,58 @@ describe("payment session persistence", () => {
     expect(unchanged.status).toBe(ProductStatus.Published);
     expect(unchanged.stockQuantity).toBe(1);
     expect(unchanged.priceEur).toBe(500);
+  });
+});
+
+describe("payment session listing", () => {
+  it("returns an empty list when no payment sessions exist", async () => {
+    const db = createTestDb();
+    const items = await listPayments(db);
+    expect(items).toEqual([]);
+  });
+
+  it("lists all persisted payment sessions", async () => {
+    const db = createTestDb();
+    await initializePaymentSession(db, { provider: PaymentProvider.Stripe, orderDraftId: "list-a", amount: 100, currency: "EUR" });
+    await initializePaymentSession(db, { provider: PaymentProvider.PayPal, orderDraftId: "list-b", amount: 200, currency: "EUR" });
+
+    const items = await listPayments(db);
+    expect(items).toHaveLength(2);
+  });
+
+  it("orders results newest first", async () => {
+    const db = createTestDb();
+    const first = await initializePaymentSession(db, { provider: PaymentProvider.Stripe, orderDraftId: "list-c", amount: 100, currency: "EUR" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await initializePaymentSession(db, { provider: PaymentProvider.PayPal, orderDraftId: "list-d", amount: 100, currency: "EUR" });
+
+    const items = await listPayments(db);
+    expect(items[0].providerReference).toBe(second.providerReference);
+    expect(items[1].providerReference).toBe(first.providerReference);
+  });
+
+  it("filters by provider", async () => {
+    const db = createTestDb();
+    await initializePaymentSession(db, { provider: PaymentProvider.Stripe, orderDraftId: "list-e", amount: 100, currency: "EUR" });
+    await initializePaymentSession(db, { provider: PaymentProvider.PayPal, orderDraftId: "list-f", amount: 100, currency: "EUR" });
+
+    const items = await listPayments(db, { provider: PaymentProvider.PayPal });
+    expect(items).toHaveLength(1);
+    expect(items[0].provider).toBe(PaymentProvider.PayPal);
+  });
+
+  it("filters by status", async () => {
+    const db = createTestDb();
+    const pending = await initializePaymentSession(db, { provider: PaymentProvider.Stripe, orderDraftId: "list-g", amount: 100, currency: "EUR" });
+    const paid = await initializePaymentSession(db, { provider: PaymentProvider.PayPal, orderDraftId: "list-h", amount: 100, currency: "EUR" });
+    await verifyPaymentSession(db, { provider: PaymentProvider.PayPal, providerReference: paid.providerReference });
+
+    const pendingItems = await listPayments(db, { status: PaymentStatus.Pending });
+    expect(pendingItems).toHaveLength(1);
+    expect(pendingItems[0].providerReference).toBe(pending.providerReference);
+
+    const paidItems = await listPayments(db, { status: PaymentStatus.Paid });
+    expect(paidItems).toHaveLength(1);
+    expect(paidItems[0].providerReference).toBe(paid.providerReference);
   });
 });

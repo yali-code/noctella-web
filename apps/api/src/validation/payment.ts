@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PAYMENT_PROVIDER_VALUES } from "@noctella/shared";
+import { PAYMENT_PROVIDER_VALUES, PAYMENT_STATUS_VALUES } from "@noctella/shared";
 
 export const initializePaymentSchema = z.object({
   provider: z.enum(PAYMENT_PROVIDER_VALUES as [string, ...string[]]),
@@ -16,4 +16,9 @@ export const verifyPaymentSchema = z.object({
 export const cancelPaymentSchema = z.object({
   provider: z.enum(PAYMENT_PROVIDER_VALUES as [string, ...string[]]),
   providerReference: z.string().min(1, "Provider reference is required"),
+});
+
+export const listPaymentsQuerySchema = z.object({
+  status: z.enum(PAYMENT_STATUS_VALUES as [string, ...string[]]).optional(),
+  provider: z.enum(PAYMENT_PROVIDER_VALUES as [string, ...string[]]).optional(),
 });

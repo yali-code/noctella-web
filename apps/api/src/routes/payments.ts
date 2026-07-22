@@ -1,15 +1,38 @@
 import { Router } from "express";
 import { db } from "../db/client";
-import { cancelPaymentSession, initializePaymentSession, verifyPaymentSession } from "../payments/paymentRepository";
-import { cancelPaymentSchema, initializePaymentSchema, verifyPaymentSchema } from "../validation/payment";
+import { cancelPaymentSession, initializePaymentSession, listPayments, verifyPaymentSession } from "../payments/paymentRepository";
+import { cancelPaymentSchema, initializePaymentSchema, listPaymentsQuerySchema, verifyPaymentSchema } from "../validation/payment";
 import { handleRouteError } from "./errorHandler";
 
 /**
- * Sprint 6A shipped mock-only initialize/verify/cancel. Sprint 37A adds
+ * Sprint 6A shipped mock-only initialize/verify/cancel. Sprint 37A added
  * server-side persistence of the payment session around those same mock
- * provider calls — still no real Stripe/PayPal/CashOnDelivery integration.
+ * provider calls. Sprint 37B adds a read-only admin listing over that same
+ * persisted data — still no real Stripe/PayPal/CashOnDelivery integration.
  */
 const router = Router();
+
+router.get("/", async (req, res) => {
+  try {
+    const query = listPaymentsQuerySchema.parse(req.query);
+    const items = await listPayments(db, query);
+    res.json(
+      items.map((p) => ({
+        id: p.id,
+        provider: p.provider,
+        providerReference: p.providerReference,
+        status: p.status,
+        amount: p.amount,
+        currency: p.currency,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        orderId: p.orderId,
+      })),
+    );
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.post("/initialize", async (req, res) => {
   try {

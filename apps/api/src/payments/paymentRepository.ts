@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { PaymentStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { payments } from "../db/schema";
@@ -90,6 +90,21 @@ export async function createPaymentSession(
   };
   await db.insert(payments).values(row);
   return toRecord(row as unknown as typeof payments.$inferSelect);
+}
+
+export interface ListPaymentsFilters {
+  status?: string;
+  provider?: string;
+}
+
+/** Read-only listing for the admin panel; reuses the same payments table and record shape as the rest of this file. */
+export async function listPayments(db: DbClient, filters: ListPaymentsFilters = {}): Promise<PaymentSessionRecord[]> {
+  const conditions = [];
+  if (filters.status) conditions.push(eq(payments.status, filters.status));
+  if (filters.provider) conditions.push(eq(payments.provider, filters.provider));
+  const where = conditions.length ? and(...conditions) : undefined;
+  const rows = await db.select().from(payments).where(where).orderBy(desc(payments.createdAt));
+  return rows.map(toRecord);
 }
 
 export async function updatePaymentStatus(db: DbClient, id: string, status: string): Promise<PaymentSessionRecord> {
