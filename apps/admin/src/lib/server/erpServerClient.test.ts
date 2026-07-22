@@ -7,6 +7,7 @@ import {
   financeOrderPath,
   invoicesPath,
   issueInvoicePath,
+  markInvoicePaidPath,
   postErpBackend,
   salesSummaryPath,
 } from "./erpServerClient";
@@ -161,6 +162,47 @@ describe("issueInvoicePath", () => {
     delete process.env.NEXT_PUBLIC_API_BASE_URL;
     const mockFetch = vi.spyOn(global, "fetch");
     await expect(postErpBackend(issueInvoicePath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("markInvoicePaidPath", () => {
+  it("builds the fixed command path for the given invoice id", () => {
+    expect(markInvoicePaidPath("invoice-1")).toBe("/api/erp/commands/invoices/invoice-1/mark-paid");
+  });
+
+  it("encodes the invoice id so it cannot break out of the fixed template", () => {
+    expect(markInvoicePaidPath("../../etc")).toBe("/api/erp/commands/invoices/..%2F..%2Fetc/mark-paid");
+  });
+
+  it("is forwarded correctly via the existing postErpBackend with only the injected ERP header plus Content-Type", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    await postErpBackend(markInvoicePaidPath("invoice-1"), { idempotencyKey: "key-1", payload: {} });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://backend.internal:4000/api/erp/commands/invoices/invoice-1/mark-paid",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "X-Noctella-ERP-Key": "test-erp-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),
+      }),
+    );
+  });
+
+  it("fails closed when the ERP key is missing", async () => {
+    delete process.env.ERP_INTEGRATION_KEY;
+    const mockFetch = vi.spyOn(global, "fetch");
+    await expect(postErpBackend(markInvoicePaidPath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the backend base URL is missing", async () => {
+    delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    const mockFetch = vi.spyOn(global, "fetch");
+    await expect(postErpBackend(markInvoicePaidPath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
