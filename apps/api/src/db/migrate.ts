@@ -23,6 +23,22 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureSalesFinanceBridgeTables(sqlite);
   ensureCustomerBridgeTables(sqlite);
   ensureSprint25OutboxTables(sqlite);
+  ensurePaymentColumns(sqlite);
+}
+
+/**
+ * Sprint 37A: additive migration for the `payments` table, which already
+ * existed (Sprint 24 compatibility placeholder) before this column was
+ * introduced — `CREATE TABLE IF NOT EXISTS` above is a no-op for it.
+ */
+function ensurePaymentColumns(sqlite: Database.Database): void {
+  const existing = new Set(
+    (sqlite.prepare("PRAGMA table_info(payments)").all() as Array<{ name: string }>).map((row) => row.name),
+  );
+  if (!existing.has("provider_reference")) {
+    sqlite.exec("ALTER TABLE payments ADD COLUMN provider_reference TEXT");
+  }
+  sqlite.exec("CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference)");
 }
 
 /**

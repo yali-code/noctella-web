@@ -603,6 +603,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
   order_id TEXT,
   provider TEXT NOT NULL,
+  provider_reference TEXT,
   status TEXT NOT NULL,
   amount REAL NOT NULL,
   currency TEXT NOT NULL DEFAULT 'EUR',
@@ -612,6 +613,7 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference);
 
 CREATE TABLE IF NOT EXISTS customers (
   id TEXT PRIMARY KEY,

@@ -263,6 +263,7 @@ export const payments = pgTable("payments", {
   id: text("id").primaryKey().notNull(),
   orderId: text("order_id"),
   provider: text("provider").notNull(),
+  providerReference: text("provider_reference"),
   status: text("status").notNull(),
   amount: numeric("amount", { precision: 18, scale: 6 }).notNull(),
   currency: text("currency").notNull().default("EUR"),
@@ -270,7 +271,7 @@ export const payments = pgTable("payments", {
   safeMetadata: jsonb("safe_metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (table) => [index("idx_payments_provider_reference").on(table.provider, table.providerReference)]);
 
 export const stockMovements = pgTable("stock_movements", {
   id: text("id").primaryKey().notNull(),
