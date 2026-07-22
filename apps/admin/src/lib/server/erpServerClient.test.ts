@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildErpRequestHeaders,
+  createInvoiceDraftPath,
   ErpServerConfigError,
   fetchErpBackend,
   financeOrderPath,
   invoicesPath,
+  postErpBackend,
   salesSummaryPath,
 } from "./erpServerClient";
 
@@ -69,6 +71,54 @@ describe("fetchErpBackend", () => {
     delete process.env.NEXT_PUBLIC_API_BASE_URL;
     const mockFetch = vi.spyOn(global, "fetch");
     await expect(fetchErpBackend(salesSummaryPath("order-1"))).rejects.toThrow(ErpServerConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("createInvoiceDraftPath", () => {
+  it("builds the fixed command path for the given order id", () => {
+    expect(createInvoiceDraftPath("order-1")).toBe("/api/erp/commands/orders/order-1/invoices/create");
+  });
+});
+
+describe("postErpBackend", () => {
+  it("forwards the JSON body to the configured backend with only the injected ERP header plus Content-Type", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
+    await postErpBackend(createInvoiceDraftPath("order-1"), { idempotencyKey: "key-1", payload: {} });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://backend.internal:4000/api/erp/commands/orders/order-1/invoices/create",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "X-Noctella-ERP-Key": "test-erp-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),
+      }),
+    );
+  });
+
+  it("preserves the backend response status and body", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "inv-1" }), { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+    const res = await postErpBackend(createInvoiceDraftPath("order-1"), { idempotencyKey: "key-1", payload: {} });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ id: "inv-1" });
+  });
+
+  it("fails closed when the ERP key is missing", async () => {
+    delete process.env.ERP_INTEGRATION_KEY;
+    const mockFetch = vi.spyOn(global, "fetch");
+    await expect(postErpBackend(createInvoiceDraftPath("order-1"), {})).rejects.toThrow(ErpServerConfigError);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the backend base URL is missing", async () => {
+    delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    const mockFetch = vi.spyOn(global, "fetch");
+    await expect(postErpBackend(createInvoiceDraftPath("order-1"), {})).rejects.toThrow(ErpServerConfigError);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
