@@ -65,8 +65,7 @@ export async function executeCreateProduct(db: DbClient, clientId: string, env: 
     if (!p.sku || !p.title || !p.categoryId || p.priceEur == null) throw new BadRequestError("sku, title, categoryId and priceEur are required");
     if (p.erpReferenceId && await createProductWriteServiceContextForDb(db).repositories.products.existsByErpReference(String(p.erpReferenceId))) throw new ConflictError("erpReferenceId is already in use");
     if (p.noctellaId && await createProductWriteServiceContextForDb(db).repositories.products.existsByNoctellaId(String(p.noctellaId))) throw new ConflictError("noctellaId is already in use");
-    const product = await createProduct(db, { sku:String(p.sku), title:String(p.title), slug:p.slug, type:p.type ?? ProductType.UniqueItem, status:p.status ?? ProductStatus.Draft, categoryId:String(p.categoryId), collectionId:p.collectionId, brand:p.brand, countryOfOrigin:p.countryOfOrigin, period:p.period, materials:p.materials, condition:p.condition, lengthValue:p.lengthValue, widthValue:p.widthValue, heightValue:p.heightValue, dimensionUnit:p.dimensionUnit, weightValue:p.weightValue, weightUnit:p.weightUnit, stockQuantity:0, purchaseCost:p.purchaseCost, purchaseCurrency:"EUR", internalNotes:p.internalNotes, priceEur:Number(p.priceEur), erpReferenceId:p.erpReferenceId } as any);
-    await upsertMeta(db, product.id, metaFrom(p));
+    const product = await createProduct(db, { sku:String(p.sku), title:String(p.title), slug:p.slug, type:p.type ?? ProductType.UniqueItem, status:p.status ?? ProductStatus.Draft, categoryId:String(p.categoryId), collectionId:p.collectionId, brand:p.brand, countryOfOrigin:p.countryOfOrigin, period:p.period, materials:p.materials, condition:p.condition, lengthValue:p.lengthValue, widthValue:p.widthValue, heightValue:p.heightValue, dimensionUnit:p.dimensionUnit, weightValue:p.weightValue, weightUnit:p.weightUnit, stockQuantity:0, purchaseCost:p.purchaseCost, purchaseCurrency:"EUR", internalNotes:p.internalNotes, priceEur:Number(p.priceEur), erpReferenceId:p.erpReferenceId } as any, metaFrom(p));
     result = { productId: product.id, sku: product.sku, erpReferenceId:p.erpReferenceId };
   } catch (error) {
     await fail(db, clientId, env, null, error);
@@ -81,9 +80,14 @@ export async function executeUpdateProduct(db: DbClient, clientId: string, produ
   try {
     const [existing]=await db.select().from(products).where(eq(products.id, productId)).limit(1); if(!existing) throw new NotFoundError("Product not found"); if(p.expectedUpdatedAt && p.expectedUpdatedAt !== existing.updatedAt) throw new ConflictError("Product has changed since expectedUpdatedAt"); const bad=Object.keys(p).filter(k=>forbiddenUpdate.includes(k)); if(bad.length) throw new BadRequestError(`ERP cannot update fields: ${bad.join(", ")}`);
     const productPatch:any={}; for (const [from,to] of Object.entries({ title:"title", categoryId:"categoryId", collectionId:"collectionId", brand:"brand", countryOfOrigin:"countryOfOrigin", period:"period", materials:"materials", condition:"condition", lengthValue:"lengthValue", widthValue:"widthValue", heightValue:"heightValue", dimensionUnit:"dimensionUnit", weightValue:"weightValue", weightUnit:"weightUnit", purchaseCost:"purchaseCost", priceEur:"priceEur", internalNotes:"internalNotes" })) if(p[from]!==undefined) productPatch[to]=p[from];
-    if(Object.keys(productPatch).length) await updateProduct(db, productId, productPatch);
-    await upsertMeta(db, productId, metaFrom(p));
-    result = { productId, updatedFields:[...Object.keys(productPatch), ...Object.keys(metaFrom(p))] };
+    const erpMetadata = metaFrom(p);
+    // When product fields are also changing, write them and the ERP metadata in the same
+    // product-write transaction (Sprint 50B). A metadata-only update has no product write
+    // to be atomic with, so it keeps using the standalone (non-transactional) path — routing
+    // it through updateProduct would incorrectly bump products.updatedAt for no field change.
+    if (Object.keys(productPatch).length) await updateProduct(db, productId, productPatch, erpMetadata);
+    else await upsertMeta(db, productId, erpMetadata);
+    result = { productId, updatedFields:[...Object.keys(productPatch), ...Object.keys(erpMetadata)] };
   } catch (error) {
     await fail(db, clientId, env, productId, error);
     throw error;

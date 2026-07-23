@@ -18,7 +18,40 @@ const nullable = (v: unknown): string | number | boolean | null => v === undefin
 function stock(type: ProductType, requested?: number) { if (type === ProductType.UniqueItem) { const q = requested ?? 1; if (q > 1) throw new BadRequestError("Unique Item stock quantity cannot exceed 1"); return q; } return requested ?? 1; }
 function productValues(input: CreateProductInput | UpdateProductInput, extra: Record<string, unknown> = {}) { const out: Record<string, unknown> = { ...extra }; for (const [k,v] of Object.entries(input as Record<string, unknown>)) { if (k === "images" || k === "expectedUpdatedAt" || v === undefined) continue; out[k] = Array.isArray(v) ? JSON.stringify(v) : nullable(v); } return out as Record<string, string|number|boolean|null>; }
 const chain = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>) => value instanceof Promise ? value.then(next) : next(value);
-export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteContext, input: CreateProductInput) {
+
+/**
+ * Sprint 50B: structural shape covering only the ERP-metadata-related
+ * methods of ProductWriteRepository/SynchronousProductWriteRepository, so
+ * the same upsert logic below can run against either the transaction-scoped
+ * synchronous (SQLite) repository or the asynchronous (Postgres) one without
+ * duplicating the business logic per driver.
+ */
+interface ErpMetadataCapableRepository {
+  existsByNoctellaId(noctellaId: string, excludeProductId?: string): Promise<boolean> | boolean;
+  getErpMetadataForUpdate(productId: string): Promise<unknown> | unknown;
+  createErpMetadata(record: any): Promise<void> | void;
+  updateErpMetadata(productId: string, values: any): Promise<void> | void;
+}
+/**
+ * Shared ERP-metadata upsert logic, extracted so it can run either inside an
+ * existing product-write transaction (createProductWithInventoryUseCase,
+ * updateProductWithInventoryUseCase) or standalone via the unchanged
+ * upsertProductErpMetadataUseCase. Same validation and create-or-update
+ * behavior in both cases — only which repository reference is passed in
+ * differs (transaction-scoped vs. not).
+ */
+function upsertErpMetadataInTransaction(repo: ErpMetadataCapableRepository, productId: string, metadata: Record<string, unknown>) {
+  const clean = Object.fromEntries(Object.entries(metadata).filter(([, v]) => v !== undefined).map(([k, v]) => [k, nullable(v)]));
+  if (!Object.keys(clean).length) return undefined;
+  const t = now();
+  return chain(clean.noctellaId ? repo.existsByNoctellaId(String(clean.noctellaId), productId) : false, (duplicate) => {
+    if (duplicate) throw new ConflictError("noctellaId is already in use");
+    return chain(repo.getErpMetadataForUpdate(productId), (existing) =>
+      existing ? repo.updateErpMetadata(productId, { ...clean, updatedAt: t } as any) : repo.createErpMetadata({ productId, ...clean, createdAt: t, updatedAt: t } as any),
+    );
+  });
+}
+export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteContext, input: CreateProductInput, erpMetadata?: Record<string, unknown>) {
   const quantity = stock(input.type, input.stockQuantity);
   const slug = input.slug ? slugify(input.slug) : slugify(input.title);
   const t = now(), id = randomUUID();
@@ -28,11 +61,14 @@ export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteCont
       repositories.productWriteRepositories.products.create({ values: productValues(input, {
         id, slug, createdAt: t, updatedAt: t,
       }) }),
-      () => input.stockQuantity === undefined ? { id } : chain(
-        initializeInventoryInTransactionUseCase(ctx, repositories.inventoryRepositories, {
-          productId: id, quantity, idempotencyKey: `product-create-stock:${id}`, note: "Product creation stock quantity",
-        }),
-        () => ({ id }),
+      () => chain(
+        input.stockQuantity === undefined ? { id } : chain(
+          initializeInventoryInTransactionUseCase(ctx, repositories.inventoryRepositories, {
+            productId: id, quantity, idempotencyKey: `product-create-stock:${id}`, note: "Product creation stock quantity",
+          }),
+          () => ({ id }),
+        ),
+        (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
       ),
     ));
   });
@@ -42,6 +78,7 @@ export function updateProductWithInventoryUseCase(
   ctx: ProductInventoryWriteContext,
   id: string,
   input: UpdateProductInput & { expectedUpdatedAt?: string },
+  erpMetadata?: Record<string, unknown>,
 ) {
   return chain(ctx.repositories.products.findById(id), (current) => {
     if (!current) throw new NotFoundError("Product not found");
@@ -51,14 +88,20 @@ export function updateProductWithInventoryUseCase(
       const values = productValues(metadata, { updatedAt: now(), ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}) });
       return ctx.unitOfWork.run(({ repositories }) => chain(
         repositories.productWriteRepositories.products.updateWithExpectedVersion({ id, values, expectedUpdatedAt: expectedUpdatedAt ?? current.updatedAt }),
-        (updated) => { if (!updated.updated) throw new ConflictError(updated.conflict?.message ?? "Product has changed"); return stockQuantity === undefined || stockQuantity === current.stockQuantity ? { id, updated: true } : chain(
-          setInventoryQuantityInTransactionUseCase(ctx, repositories.inventoryRepositories, {
-            productId: id, quantity: stockQuantity, expectedVersion: String(values.updatedAt),
-            idempotencyKey: `product-update-stock:${id}:${current.updatedAt}:${stockQuantity}`,
-            note: "Product update stock quantity",
-          }),
-          () => ({ id, updated: true }),
-        ); },
+        (updated) => {
+          if (!updated.updated) throw new ConflictError(updated.conflict?.message ?? "Product has changed");
+          return chain(
+            stockQuantity === undefined || stockQuantity === current.stockQuantity ? { id, updated: true } : chain(
+              setInventoryQuantityInTransactionUseCase(ctx, repositories.inventoryRepositories, {
+                productId: id, quantity: stockQuantity, expectedVersion: String(values.updatedAt),
+                idempotencyKey: `product-update-stock:${id}:${current.updatedAt}:${stockQuantity}`,
+                note: "Product update stock quantity",
+              }),
+              () => ({ id, updated: true }),
+            ),
+            (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
+          );
+        },
       ));
     });
   });
@@ -77,4 +120,4 @@ export async function archiveCategoryUseCase(ctx: ProductWriteUseCaseContext, id
 export async function restoreCategoryUseCase(ctx: ProductWriteUseCaseContext, id: string) { if (!await ctx.repositories.categories.getVersionForUpdate(id)) throw new NotFoundError("Category not found"); return ctx.unitOfWork.run(() => ctx.repositories.categories.update({ id, values: { isActive: true, updatedAt: now() } })); }
 export async function archiveCollectionUseCase(ctx: ProductWriteUseCaseContext, id: string) { if (!await ctx.repositories.collections.getVersionForUpdate(id)) throw new NotFoundError("Collection not found"); return ctx.unitOfWork.run(() => ctx.repositories.collections.update({ id, values: { isActive: false, updatedAt: now() } })); }
 export async function restoreCollectionUseCase(ctx: ProductWriteUseCaseContext, id: string) { if (!await ctx.repositories.collections.getVersionForUpdate(id)) throw new NotFoundError("Collection not found"); return ctx.unitOfWork.run(() => ctx.repositories.collections.update({ id, values: { isActive: true, updatedAt: now() } })); }
-export async function upsertProductErpMetadataUseCase(ctx: ProductWriteUseCaseContext, productId: string, metadata: Record<string, unknown>) { const clean = Object.fromEntries(Object.entries(metadata).filter(([,v]) => v !== undefined).map(([k,v]) => [k, nullable(v)])); if (!Object.keys(clean).length) return; if (clean.noctellaId && await ctx.repositories.products.existsByNoctellaId(String(clean.noctellaId), productId)) throw new ConflictError("noctellaId is already in use"); const t = now(); return ctx.unitOfWork.run(async () => { const existing = await ctx.repositories.products.getErpMetadataForUpdate(productId); if (existing) await ctx.repositories.products.updateErpMetadata(productId, { ...clean, updatedAt: t } as any); else await ctx.repositories.products.createErpMetadata({ productId, ...clean, createdAt: t, updatedAt: t } as any); }); }
+export function upsertProductErpMetadataUseCase(ctx: ProductWriteUseCaseContext, productId: string, metadata: Record<string, unknown>) { return ctx.unitOfWork.run(() => upsertErpMetadataInTransaction(ctx.repositories.products, productId, metadata)); }
