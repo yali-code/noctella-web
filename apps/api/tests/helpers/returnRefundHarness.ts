@@ -1,9 +1,6 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq, sql } from "drizzle-orm";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { CarrierCode, OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType } from "@noctella/shared";
 import { ensureSchema } from "../../src/db/migrate";
@@ -18,7 +15,14 @@ const address = { fullName:"Harness Buyer", line1:"PII REDACTED", city:"Paris", 
 export const deterministicClock = { now: () => new Date("2026-01-02T03:04:05.000Z") };
 export function deterministicIds(prefix="rr") { let n=0; return { id: () => `${prefix}-${String(++n).padStart(4,"0")}` }; }
 export type HarnessDb = ReturnType<typeof drizzle<typeof schema>>;
-export function createReturnRefundSqliteHarness() { const dir=mkdtempSync(join(tmpdir(),"noctella-rr-")); const file=join(dir,"test.sqlite"); const sqlite=new Database(file); sqlite.pragma("foreign_keys = ON"); ensureSchema(sqlite); const db=drizzle(sqlite,{schema}); return { db, sqlite, path:file, cleanup(){ sqlite.close(); rmSync(dir,{recursive:true,force:true}); } }; }
+/**
+ * Sprint 53B: uses an in-memory SQLite database instead of a real temp file.
+ * Nothing in this codebase reopens the database by filename (confirmed by
+ * inspecting every consumer), so the only observable differences are that
+ * cleanup no longer needs to remove a temp directory and `path` reports
+ * ":memory:" instead of a real file path - neither is read by any consumer.
+ */
+export function createReturnRefundSqliteHarness() { const sqlite=new Database(":memory:"); sqlite.pragma("foreign_keys = ON"); ensureSchema(sqlite); const db=drizzle(sqlite,{schema}); return { db, sqlite, path:":memory:", cleanup(){ sqlite.close(); } }; }
 export async function seedOrderGraph(db:any, suffix="ok", status:any=OrderStatus.Completed) { const cat=await createCategory(db,{name:`RR ${suffix}`,isActive:true,displayOrder:0}); const product=await createProduct(db,{sku:`RR-${suffix}`,title:"Harness Item",slug:`rr-${suffix}`,type:ProductType.UniqueItem,status:ProductStatus.Published,categoryId:cat.id,priceEur:120,purchaseCost:50,stockQuantity:1,customsWarning:false,isFeatured:false,allowMakeOffer:false,allowCashOnDelivery:false,showInArchiveAfterSale:false}); const payRef=`pay-${suffix}`; await createPaymentSession(db,{provider:PaymentProvider.Stripe,providerReference:payRef,status:PaymentStatus.Paid,amount:120,currency:"EUR",idempotencyKey:`test:${payRef}`}); const order=await createOrder(db,{orderDraftId:`rr-draft-${suffix}`,guestEmail:"redacted@example.invalid",status,paymentStatus:PaymentStatus.Paid,paymentProvider:PaymentProvider.Stripe,paymentReference:payRef,currency:"EUR",billingAddress:address,shippingAddress:address,subtotalAmount:120,totalAmount:120,items:[{productId:product.id,quantity:1}]}); const shipment=await createShipment(db,{orderId:order.id,carrierCode:CarrierCode.LocalPickup}); const [orderItem]=await db.select().from(schema.orderItems).where(eq(schema.orderItems.orderId,order.id)); return { cat, product, order, orderItem, shipment }; }
 export const returnInput = (g:any, overrides:any={}) => ({ id:g.id(), status:"requested", reason:"damaged", requestedResolution:"refund", requestedAt:deterministicClock.now().toISOString(), createdAt:deterministicClock.now().toISOString(), updatedAt:deterministicClock.now().toISOString(), ...overrides });
 export async function seedReturn(db:any, graph:any, overrides:any={}) { const g=deterministicIds(`ret-${overrides.status??"requested"}`); const row={...returnInput(g,{orderId:graph.order.id,shipmentId:graph.shipment.id,channel:"test",externalReturnId:`ext-${g.id()}`,...overrides})}; await db.insert(schema.returnRequests).values(row).run(); const item={id:g.id(),returnRequestId:row.id,orderItemId:graph.orderItem.id,productId:graph.product.id,quantityRequested:overrides.quantityRequested??1,quantityApproved:overrides.quantityApproved??null,quantityReceived:overrides.quantityReceived??null,condition:overrides.condition??null,stockDisposition:overrides.stockDisposition??null,inspectionNote:null,createdAt:row.createdAt,updatedAt:row.updatedAt}; await db.insert(schema.returnItems).values(item).run(); await db.insert(schema.returnEvents).values({id:g.id(),returnRequestId:row.id,eventType:"created",previousStatus:null,newStatus:row.status,payloadSnapshot:JSON.stringify({safe:true}),createdAt:row.createdAt}).run(); return { returnRequest: row, returnItem: item }; }

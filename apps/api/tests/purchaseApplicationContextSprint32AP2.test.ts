@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { join } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { ensureSchema } from "../src/db/migrate";
 import {
   auditPurchaseApplicationContextSource,
+  resolvePurchaseApplicationContextAuditBase,
   runPurchaseApplicationContextAudit,
 } from "../src/scripts/purchaseApplicationContextAudit";
 import {
@@ -533,6 +535,12 @@ const cases: Array<[string, () => void | Promise<void>]> = [
 ];
 
 describe("Sprint 32A-P2 Purchase application context", () => {
+  it("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)", () => {
+    expect(resolvePurchaseApplicationContextAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    expect(resolvePurchaseApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
+    expect(resolvePurchaseApplicationContextAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
+    expect(resolvePurchaseApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+  });
   it.each(cases)("%s", async (_name, run) => {
     await run();
   });

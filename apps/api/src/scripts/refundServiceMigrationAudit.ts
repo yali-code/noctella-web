@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+
+/** Sprint 53B: same cross-platform base-directory resolution approved in Sprint 52B (refundTransactionAudit.ts), kept local to this script. */
+export const resolveRefundServiceMigrationAuditBase = (cwd: string): string =>
+  basename(cwd) === "api" && basename(dirname(cwd)) === "apps" ? cwd : join(cwd, "apps", "api");
 
 const forbidden = [
   [/from\s+["'][^"']*db\/schema|schema\.sqlite|schema\.postgres/, "schema import"],
@@ -9,7 +13,7 @@ const forbidden = [
   [/getMarketplaceAdapter|MarketplaceAdapter|decryptCredential|fetch\(|encryptedAccessToken|credentials?/i, "provider SDK or credential loading"],
 ];
 
-export function auditRefundServiceMigration(root = join(process.cwd(), process.cwd().endsWith("apps/api") ? "src/services/refundsCompatibility.ts" : "apps/api/src/services/refundsCompatibility.ts")) {
+export function auditRefundServiceMigration(root = join(resolveRefundServiceMigrationAuditBase(process.cwd()), "src/services/refundsCompatibility.ts")) {
   const source = readFileSync(root, "utf8");
   const violations = forbidden.filter(([pattern]) => (pattern as RegExp).test(source)).map(([, label]) => label as string);
   const required = ["calculateMaximumRefundUseCase", "validateRefundAmountUseCase", "createRefundUseCase", "getRefundUseCase", "listRefundsUseCase", "submitRefundUseCase", "cancelRefundUseCase", "retryRefundUseCase", "executeRefundUseCase", "buildRefundServiceContext"];

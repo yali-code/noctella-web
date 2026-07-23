@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { auditRefundServiceMigration } from "../src/scripts/refundServiceMigrationAudit";
+import { auditRefundServiceMigration, resolveRefundServiceMigrationAuditBase } from "../src/scripts/refundServiceMigrationAudit";
 
 const servicePath = join(process.cwd(), "src/services/refundsCompatibility.ts");
 const source = () => readFileSync(servicePath, "utf8");
@@ -18,6 +18,12 @@ const methods = [
 ];
 
 describe("Sprint 30B-R4 refund service migration", () => {
+  test("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)", () => {
+    expect(resolveRefundServiceMigrationAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    expect(resolveRefundServiceMigrationAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
+    expect(resolveRefundServiceMigrationAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
+    expect(resolveRefundServiceMigrationAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+  });
   test.each(methods)("%s delegates to %s", (_method, useCase) => expect(source()).toContain(useCase));
   test.each(["from(orders)", "from(refunds)", "db.select", "db.insert", "db.update", "sql`", "drizzle-orm"])("service has no SQL token %s", (token) => expect(source()).not.toContain(token));
   test.each(["transaction(", "SqliteUnitOfWork", "PostgresUnitOfWork", "commit", "rollback"])("service has no transaction token %s", (token) => expect(source()).not.toContain(token));

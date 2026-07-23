@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { join } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { ensureSchema } from "../src/db/migrate";
@@ -14,6 +15,7 @@ import { SqliteUnitOfWork } from "../src/services/unitOfWork";
 import {
   auditSalesApplicationContextSource,
   auditSalesApplicationContextFactorySource,
+  resolveSalesApplicationContextAuditBase,
   runSalesApplicationContextAudit,
 } from "../src/scripts/salesApplicationContextAudit";
 
@@ -25,6 +27,12 @@ function db() { const raw = new Database(":memory:"); ensureSchema(raw); const d
 const clean = "Object.freeze({ salesRepositories, saleRepository, unitOfWork, logger, clock, idGenerator, configuration });";
 
 describe("Sales application context Sprint 33A-S2", () => {
+  it("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)", () => {
+    expect(resolveSalesApplicationContextAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    expect(resolveSalesApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
+    expect(resolveSalesApplicationContextAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
+    expect(resolveSalesApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+  });
   const cases: Array<[string, () => void | Promise<void>]> = [
     ["builds context", () => expect(buildSalesApplicationContext(deps())).toBeTruthy()],
     ["freezes context", () => expect(Object.isFrozen(buildSalesApplicationContext(deps()))).toBe(true)],
