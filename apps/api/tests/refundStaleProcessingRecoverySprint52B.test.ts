@@ -4,6 +4,16 @@ import { createRefundUseCase, executeRefundUseCase, retryRefundUseCase, submitRe
 // Same lightweight in-memory repo/context shape as tests/refundUseCasesSprint30BR3.test.ts,
 // duplicated locally (not shared/imported) per this codebase's existing per-file convention.
 const t = "2026-01-01T00:00:00.000Z";
+/** Sprint 56B: minimal fake for the finance-ledger write executeRefundUseCase now performs
+ * on success (repositories.db.select/insert). This suite doesn't assert on ledger entries -
+ * that's covered by tests/refundFinanceLedgerIntegritySprint56B.test.ts - so an always-empty
+ * lookup + no-op insert is enough to keep these pre-existing transitions from throwing. */
+function fakeFinanceDb() {
+  return {
+    select: () => ({ from: () => ({ where: () => ({ limit: () => ({ get: () => undefined }) }) }) }),
+    insert: () => ({ values: () => ({ run: () => undefined }) }),
+  };
+}
 function repo() {
   const refunds: any[] = []; const items: any[] = []; const attempts: any[] = []; const events: any[] = [];
   return {
@@ -27,7 +37,7 @@ function ctx(o: any = {}) {
   const enq: any[] = []; const calls: any[] = [];
   return {
     ctx: {
-      unitOfWork: { run: async (fn: any) => fn({ repositories: { refund: r } }) },
+      unitOfWork: { run: async (fn: any) => fn({ repositories: { refund: r, db: fakeFinanceDb() } }) },
       repositories: r,
       readPorts: {
         orders: { findRefundOrder: () => order, findRefundItems: () => [{ id: "oi1", orderId: "o1", quantity: 2, refundableAmount: 100, currency: "EUR" }] },

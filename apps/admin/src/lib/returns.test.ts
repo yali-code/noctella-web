@@ -1,7 +1,40 @@
 import { describe, expect, it, vi } from "vitest";
-import { api } from "./api";
-import { buildReturnQuery, canCancelRefund, canRetryRefund, canTransitionReturn, financialAdjustment, getRefund, getReturn, getReturnEvents, getReturnReadiness, getSaleReversalReadiness, listRefunds, listReturns, refundReturnLink, returnOrderLink, returnShipmentLink, safeReturnError, stockDispositionLabel, type RefundRow, type ReturnRow } from "./returns";
-vi.mock("./api", () => ({ api: { get: vi.fn() } }));
+import { ApiError, api } from "./api";
+import {
+  approveReturn,
+  authorizeReturn,
+  buildReturnQuery,
+  cancelRefund,
+  cancelReturn,
+  canCancelRefund,
+  canRetryRefund,
+  canSubmitRefund,
+  canTransitionReturn,
+  completeReturn,
+  financialAdjustment,
+  getRefund,
+  getReturn,
+  getReturnEvents,
+  getReturnReadiness,
+  getSaleReversalReadiness,
+  inspectReturnItem,
+  isConcurrencyConflict,
+  listRefunds,
+  listReturns,
+  markReturnInTransit,
+  receiveReturn,
+  refundReturnLink,
+  rejectReturn,
+  retryRefund,
+  returnOrderLink,
+  returnShipmentLink,
+  safeReturnError,
+  stockDispositionLabel,
+  submitRefund,
+  type RefundRow,
+  type ReturnRow,
+} from "./returns";
+vi.mock("./api", () => ({ api: { get: vi.fn(), post: vi.fn() }, ApiError: class ApiError extends Error { status: number; details?: unknown[]; constructor(message: string, status: number, details?: unknown[]) { super(message); this.status = status; this.details = details; } } }));
 const mockedApi = vi.mocked(api);
 
 describe("admin return/refund helpers", () => {
@@ -13,4 +46,52 @@ describe("admin return/refund helpers", () => {
   it("calculates transition, retry and cancel eligibility", () => { expect(canTransitionReturn("requested","authorize")).toBe(true); expect(canTransitionReturn("completed","cancel")).toBe(false); expect(canRetryRefund(refund)).toBe(true); expect(canCancelRefund({ ...refund, status:"succeeded" })).toBe(false); });
   it("redacts sensitive errors", () => { expect(safeReturnError("Bearer secret access_token=abc refresh_token=def authorization: token")).not.toContain("secret"); });
   it("maps financial adjustments and stock dispositions", () => { expect(financialAdjustment([refund, { ...refund, id:"ref2", totalAmount:5, shippingAmount:0, taxAmount:1 }])).toEqual({ totalRefunded:30, refundedShipping:3, refundedTax:3 }); expect(stockDispositionLabel("return_to_stock")).toBe("Return to stock"); expect(stockDispositionLabel("discard")).toBe("Discard"); expect(stockDispositionLabel()).toBe("Not inspected"); });
+  it("recognizes the in-transit transition, which the backend allows from authorized/awaiting_shipment", () => { expect(canTransitionReturn("authorized","in-transit")).toBe(true); expect(canTransitionReturn("awaiting_shipment","in-transit")).toBe(true); expect(canTransitionReturn("requested","in-transit")).toBe(false); });
+  it("calculates refund submit eligibility matching submitRefundUseCase's allowed statuses", () => { expect(canSubmitRefund({ ...refund, status:"draft" })).toBe(true); expect(canSubmitRefund({ ...refund, status:"pending" })).toBe(true); expect(canSubmitRefund({ ...refund, status:"failed" })).toBe(true); expect(canSubmitRefund({ ...refund, status:"succeeded" })).toBe(false); });
+});
+
+describe("admin return/refund lifecycle mutations (Sprint 56B)", () => {
+  it("posts the correct method/path/body for every return transition, with no fabricated fields", async () => {
+    mockedApi.post.mockResolvedValue({ id:"ret1", status:"authorized" });
+    await authorizeReturn("ret1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/authorize", {});
+    await rejectReturn("ret1", { internalNote:"damaged in transit" });
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/reject", { internalNote:"damaged in transit" });
+    await markReturnInTransit("ret1", { returnCarrierCode:"ups", returnTrackingNumber:"1Z" });
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/in-transit", { returnCarrierCode:"ups", returnTrackingNumber:"1Z" });
+    await receiveReturn("ret1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/receive", {});
+    await inspectReturnItem("ret1", { orderItemId:"oi1", quantityReceived:2, stockDisposition:"return_to_stock" });
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/inspect", { orderItemId:"oi1", quantityReceived:2, stockDisposition:"return_to_stock" });
+    await approveReturn("ret1", { partial:true });
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/approve", { partial:true });
+    await completeReturn("ret1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/complete", {});
+    await cancelReturn("ret1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/returns/ret1/cancel", {});
+  });
+
+  it("posts the correct method/path for every refund action with no body fields, since the backend routes take none", async () => {
+    mockedApi.post.mockResolvedValue({ id:"ref1", status:"pending" });
+    await submitRefund("ref1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/refunds/ref1/submit", {});
+    await retryRefund("ref1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/refunds/ref1/retry", {});
+    await cancelRefund("ref1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/refunds/ref1/cancel", {});
+  });
+
+  it("propagates structured backend validation errors unchanged", async () => {
+    mockedApi.post.mockRejectedValueOnce(new ApiError("Invalid return status transition", 400));
+    await expect(authorizeReturn("ret1")).rejects.toMatchObject({ message:"Invalid return status transition", status:400 });
+  });
+
+  it("propagates concurrency-conflict errors and isConcurrencyConflict recognizes both backend message shapes", async () => {
+    mockedApi.post.mockRejectedValueOnce(new ApiError("Return was updated by another transaction", 400));
+    await expect(approveReturn("ret1")).rejects.toMatchObject({ status:400 });
+    expect(isConcurrencyConflict("Return was updated by another transaction")).toBe(true);
+    expect(isConcurrencyConflict("Stale refund version")).toBe(true);
+    expect(isConcurrencyConflict("Invalid return status transition")).toBe(false);
+    expect(isConcurrencyConflict(undefined)).toBe(false);
+  });
 });
