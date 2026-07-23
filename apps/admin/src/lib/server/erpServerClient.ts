@@ -113,6 +113,59 @@ export function cancelPurchasePath(purchaseId: string): string {
   return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/cancel`;
 }
 
+/** Sprint 58B: warehouse/location/reservation path builders, same fixed-template convention. */
+export function warehousesListPath(): string {
+  return `/api/erp/warehouses`;
+}
+
+export function warehousePath(warehouseId: string): string {
+  return `/api/erp/warehouses/${encodeURIComponent(warehouseId)}`;
+}
+
+export function warehouseLocationsPath(query: string): string {
+  return `/api/erp/warehouse/locations${query ? `?${query}` : ""}`;
+}
+
+export function warehouseEventsPath(query: string): string {
+  return `/api/erp/warehouse/events${query ? `?${query}` : ""}`;
+}
+
+export function reservationsListPath(query: string): string {
+  return `/api/erp/reservations${query ? `?${query}` : ""}`;
+}
+
+export function createWarehousePath(): string {
+  return `/api/erp/commands/warehouses/create`;
+}
+
+export function activateWarehousePath(warehouseId: string): string {
+  return `/api/erp/commands/warehouses/${encodeURIComponent(warehouseId)}/reactivate`;
+}
+
+export function deactivateWarehousePath(warehouseId: string): string {
+  return `/api/erp/commands/warehouses/${encodeURIComponent(warehouseId)}/deactivate`;
+}
+
+export function createWarehouseLocationPath(): string {
+  return `/api/erp/commands/warehouse-locations/create`;
+}
+
+export function createReservationPath(): string {
+  return `/api/erp/commands/reservations/create`;
+}
+
+export function releaseReservationPath(reservationId: string): string {
+  return `/api/erp/commands/reservations/${encodeURIComponent(reservationId)}/release`;
+}
+
+export function cancelReservationPath(reservationId: string): string {
+  return `/api/erp/commands/reservations/${encodeURIComponent(reservationId)}/cancel`;
+}
+
+export function consumeReservationPath(reservationId: string): string {
+  return `/api/erp/commands/reservations/${encodeURIComponent(reservationId)}/consume`;
+}
+
 /**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key

@@ -149,9 +149,26 @@ export async function createReservation(db:DbClient, clientId:string, env:Env){
   try {
     const qty=Number(p.quantity); if(!Number.isInteger(qty)||qty<=0) throw new BadRequestError("Positive integer quantity is required");
     if(!p.reservationReference||!p.reason) throw new BadRequestError("reservationReference and reason are required");
-    const av=await availability(db,p.productId); if(qty>av.availableQuantity) throw new ConflictError("Reservation exceeds available quantity");
+    const product=await get(db, sql`SELECT id, stock_quantity FROM products WHERE id=${p.productId}`); if(!product) throw new NotFoundError("Product not found");
+    await expireReservations(db);
     const rid=id();
+    /**
+     * Sprint 58B: availability was previously verified via a separate read (availability())
+     * BEFORE this transaction, so two concurrent CreateReservation requests for the same
+     * product could both observe the same available quantity and both succeed, over-reserving
+     * stock (confirmed TOCTOU race). The check now runs inside this same synchronous
+     * db.transaction() callback as the insert - the callback executes to completion with no
+     * await point (enforced by runWarehouseTransaction's Promise guard), so no other request's
+     * code can interleave between the read and the write. Uses tx.all(...) directly (not the
+     * async db-level all()/get() helpers) to stay fully synchronous, matching this file's
+     * existing tx.run(...) convention inside transaction callbacks.
+     */
     runWarehouseTransaction(db, (tx) => {
+      const stockRows=tx.all(sql`SELECT stock_quantity FROM products WHERE id=${p.productId}`) as any[];
+      const reservedRows=tx.all(sql`SELECT COALESCE(SUM(quantity),0) reserved FROM stock_reservations WHERE product_id=${p.productId} AND status='Active'`) as any[];
+      const physical=Number(stockRows[0]?.stock_quantity??0), reserved=Number(reservedRows[0]?.reserved??0);
+      const available=Math.max(0, physical-reserved);
+      if(qty>available) throw new ConflictError("Reservation exceeds available quantity");
       tx.run(sql`INSERT INTO stock_reservations (id,order_id,product_id,reservation_reference,reason,quantity,status,expires_at,created_at,updated_at) VALUES (${rid},${p.orderId??null},${p.productId},${p.reservationReference},${p.reason},${qty},'Active',${p.expiresAt??null},${now()},${now()})`);
       eventInTransaction(tx,{productId:p.productId,orderId:p.orderId,reservationId:rid,eventType:"ReservationCreated",meta:{quantity:qty,reason:p.reason}});
     });
