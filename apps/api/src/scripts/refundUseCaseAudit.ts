@@ -1,12 +1,16 @@
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+
+/** Sprint 53B: same cross-platform base-directory resolution approved in Sprint 52B (refundTransactionAudit.ts), kept local to this script. */
+export const resolveRefundUseCaseAuditBase = (cwd: string): string =>
+  basename(cwd) === "api" && basename(dirname(cwd)) === "apps" ? cwd : join(cwd, "apps", "api");
 
 const forbidden = [
   /DbClient/, /db\/schema|schema\.sqlite|schema\.postgres/, /drizzle-orm/, /\bsql`/, /repositories\/refund\/(sqlite|postgres|factory)/,
   /\.transaction\s*\(/, /marketplaceAdapters|payment SDK|marketplace SDK/, /fetch\s*\(/, /process\.env/, /finance|invoice|stock|shipment/i, /returnRepositories\..*\.(create|update|delete)/
 ];
-export function auditRefundUseCaseSource(root = join(process.cwd(), process.cwd().endsWith("apps/api") ? "src/use-cases/refund" : "apps/api/src/use-cases/refund")) {
+export function auditRefundUseCaseSource(root = join(resolveRefundUseCaseAuditBase(process.cwd()), "src/use-cases/refund")) {
   const violations: string[] = [];
   for (const f of readdirSync(root).filter(f => f.endsWith(".ts"))) {
     const text = readFileSync(join(root, f), "utf8");
