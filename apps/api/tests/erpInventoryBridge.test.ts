@@ -6,6 +6,9 @@ import { createTestDb } from "./testDb";
 import { createCategory } from "../src/services/categories";
 import { BadRequestError, ConflictError } from "../src/services/errors";
 import { executeCreateProduct, executeStockAdjustment, executeUpdateProduct, workspace, labelData } from "../src/services/erpInventoryBridge";
+import { createProduct, updateProduct } from "../src/services/products";
+import { upsertProductErpMetadataUseCase } from "../src/use-cases/product-write/useCases";
+import { createProductWriteServiceContextForDb } from "../src/repositories/product-write/factory";
 import { erpCommandExecutions, productErpMetadata, products, stockMovements } from "../src/db/schema";
 
 function commandChecksum(commandType: string, entityId: string | undefined, payload: any) { return createHash("sha256").update(JSON.stringify({ commandType, entityId, payload })).digest("hex"); }
@@ -174,5 +177,122 @@ describe("inventory command idempotency lifecycle (Sprint 49B)", () => {
     expect(await db.select().from(products).where(eq(products.sku, "K1"))).toHaveLength(1);
     const rows: any = await db.select().from(erpCommandExecutions).where(eq(erpCommandExecutions.idempotencyKey, "k1"));
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe("product ERP metadata transaction atomicity (Sprint 50B)", () => {
+  let db: ReturnType<typeof createTestDb>; let categoryId = "";
+  const env = (commandType: string, payload: any, key = "idem-1") => ({ commandId: `cmd-${key}`, requestId: `req-${key}`, commandType, entityType: "Product", idempotencyKey: key, payload, createdAt: new Date().toISOString() });
+  const baseInput = (overrides: Record<string, unknown> = {}) => ({
+    sku: "50B-BASE", title: "Base Product", type: ProductType.LotItem,
+    status: ProductStatus.Draft, categoryId, priceEur: 10,
+    customsWarning: false, isFeatured: false, allowMakeOffer: false,
+    allowCashOnDelivery: false, showInArchiveAfterSale: false, ...overrides,
+  });
+  beforeEach(async () => { db = createTestDb(); categoryId = (await createCategory(db, { name: "50B", displayOrder: 0, isActive: true })).id; });
+
+  // A and B exercise the transaction-scoped metadata check itself, not the bridge's redundant
+  // pre-check. Test A goes through the createProduct service directly, because the bridge's own
+  // noctellaId pre-check (unchanged from before this sprint, and not authoritative) would
+  // otherwise short-circuit before the transaction — and the whole point here is to prove the
+  // authoritative, transaction-scoped check rolls back product + inventory together.
+  it("A: CreateProduct metadata conflict rolls back the product and its inventory initialization", async () => {
+    const owner = await createProduct(db, baseInput({ sku: "A-OWNER", title: "Owner Product" }), { noctellaId: "DUP-A" });
+    const productsBefore = (await db.select().from(products)).length;
+    const movementsBefore = (await db.select().from(stockMovements)).length;
+    await expect(createProduct(db, baseInput({ sku: "A-NEW", title: "New Product", stockQuantity: 3 }), { noctellaId: "DUP-A" })).rejects.toBeInstanceOf(ConflictError);
+    expect(await db.select().from(products)).toHaveLength(productsBefore);
+    expect(await db.select().from(stockMovements)).toHaveLength(movementsBefore);
+    expect(await db.select().from(products).where(eq(products.sku, "A-NEW"))).toHaveLength(0);
+    expect((await db.select().from(productErpMetadata)).map((m: any) => m.productId)).toEqual([owner.id]);
+  });
+
+  it("B: CreateProduct database-level metadata failure rolls back product, inventory and command reaches Failed", async () => {
+    (db as any).$client.exec("CREATE TRIGGER fail_metadata_insert BEFORE INSERT ON product_erp_metadata BEGIN SELECT RAISE(ABORT, 'metadata insert failed'); END");
+    try {
+      await expect(executeCreateProduct(db, "env", env("CreateProduct", { sku: "B-1", title: "B Product", categoryId, priceEur: 40, noctellaId: "B-OWN" }, "b-create"))).rejects.toThrow("metadata insert failed");
+    } finally {
+      (db as any).$client.exec("DROP TRIGGER fail_metadata_insert");
+    }
+    expect(await db.select().from(products).where(eq(products.sku, "B-1"))).toHaveLength(0);
+    expect(await db.select().from(productErpMetadata)).toHaveLength(0);
+    expect(await db.select().from(stockMovements)).toHaveLength(0);
+    const [row]: any = await db.select().from(erpCommandExecutions).where(eq(erpCommandExecutions.idempotencyKey, "b-create"));
+    expect(row.status).toBe("Failed");
+    expect(row.safeErrorCode).toBe("InternalError");
+  });
+
+  it("C: UpdateProduct metadata conflict rolls back the product field update and preserves prior metadata", async () => {
+    await executeCreateProduct(db, "env", env("CreateProduct", { sku: "C-B", title: "B", categoryId, priceEur: 10, noctellaId: "DUP-C" }, "c-b"));
+    const productA: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "C-A", title: "Before A", categoryId, priceEur: 20, noctellaId: "A-OWN", barcodeValue: "A-BC" }, "c-a"));
+    const rowA = (await db.select().from(products).where(eq(products.id, productA.productId)))[0];
+    const metaBefore = (await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productA.productId)))[0];
+    await expect(executeUpdateProduct(db, "env", productA.productId, env("UpdateProduct", { expectedUpdatedAt: rowA.updatedAt, title: "After A", noctellaId: "DUP-C" }, "c-upd"))).rejects.toBeInstanceOf(ConflictError);
+    const rowAfter = (await db.select().from(products).where(eq(products.id, productA.productId)))[0];
+    expect(rowAfter.title).toBe("Before A");
+    expect(rowAfter.updatedAt).toBe(rowA.updatedAt);
+    expect(await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productA.productId))).toEqual([metaBefore]);
+    expect(await db.select().from(stockMovements)).toHaveLength(2);
+    const [row]: any = await db.select().from(erpCommandExecutions).where(eq(erpCommandExecutions.idempotencyKey, "c-upd"));
+    expect(row.status).toBe("Failed");
+  });
+
+  it("D: UpdateProduct database-level metadata failure rolls back the product field update and preserves prior metadata", async () => {
+    const created: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "D-1", title: "Before D", categoryId, priceEur: 30, noctellaId: "D-OWN" }, "d-create"));
+    const rowBefore = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+    const metaBefore = (await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, created.productId)))[0];
+    (db as any).$client.exec("CREATE TRIGGER fail_metadata_update BEFORE UPDATE ON product_erp_metadata BEGIN SELECT RAISE(ABORT, 'metadata update failed'); END");
+    try {
+      await expect(executeUpdateProduct(db, "env", created.productId, env("UpdateProduct", { expectedUpdatedAt: rowBefore.updatedAt, title: "After D", barcodeValue: "NEW-BC" }, "d-upd"))).rejects.toThrow("metadata update failed");
+    } finally {
+      (db as any).$client.exec("DROP TRIGGER fail_metadata_update");
+    }
+    const rowAfter = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+    expect(rowAfter.title).toBe("Before D");
+    expect(rowAfter.updatedAt).toBe(rowBefore.updatedAt);
+    expect((await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, created.productId)))[0]).toEqual(metaBefore);
+    const [row]: any = await db.select().from(erpCommandExecutions).where(eq(erpCommandExecutions.idempotencyKey, "d-upd"));
+    expect(row.status).toBe("Failed");
+  });
+
+  it("E: successful CreateProduct commits product, inventory and metadata together", async () => {
+    const out: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "E-1", title: "E Product", categoryId, priceEur: 40, noctellaId: "E-OWN", barcodeValue: "E-BC" }, "e-create"));
+    expect(out).toMatchObject({ status: "Succeeded", sku: "E-1" });
+    expect((await db.select().from(products).where(eq(products.id, out.productId)))[0]).toMatchObject({ sku: "E-1", stockQuantity: 0 });
+    expect(await db.select().from(stockMovements).where(eq(stockMovements.productId, out.productId))).toHaveLength(1);
+    expect((await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, out.productId)))[0]).toMatchObject({ noctellaId: "E-OWN", barcodeValue: "E-BC" });
+    const [row]: any = await db.select().from(erpCommandExecutions).where(eq(erpCommandExecutions.idempotencyKey, "e-create"));
+    expect(row.status).toBe("Succeeded");
+  });
+
+  it("F: successful UpdateProduct commits product fields and metadata together", async () => {
+    const created: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "F-1", title: "Before F", categoryId, priceEur: 50 }, "f-create"));
+    const row = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+    const upd: any = await executeUpdateProduct(db, "env", created.productId, env("UpdateProduct", { expectedUpdatedAt: row.updatedAt, title: "After F", noctellaId: "F-OWN", barcodeValue: "F-BC" }, "f-upd"));
+    expect(upd.status).toBe("Succeeded");
+    expect((await db.select().from(products).where(eq(products.id, created.productId)))[0].title).toBe("After F");
+    expect((await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, created.productId)))[0]).toMatchObject({ noctellaId: "F-OWN", barcodeValue: "F-BC" });
+    const [cmdRow]: any = await db.select().from(erpCommandExecutions).where(eq(erpCommandExecutions.idempotencyKey, "f-upd"));
+    expect(cmdRow.status).toBe("Succeeded");
+  });
+
+  it("G: createProduct/updateProduct without metadata create no metadata row (non-ERP caller regression)", async () => {
+    const product = await createProduct(db, baseInput({ sku: "G-1" }));
+    expect(await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, product.id))).toHaveLength(0);
+    const updated = await updateProduct(db, product.id, { title: "G Renamed" });
+    expect(updated.title).toBe("G Renamed");
+    expect(await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, product.id))).toHaveLength(0);
+  });
+
+  it("H: standalone upsertProductErpMetadataUseCase still creates, updates and enforces uniqueness", async () => {
+    const product = await createProduct(db, baseInput({ sku: "H-1", title: "H Product 1" }));
+    const { repositories } = createProductWriteServiceContextForDb(db);
+    const write = { unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories };
+    await upsertProductErpMetadataUseCase(write, product.id, { noctellaId: "H-OWN", barcodeValue: "H-BC" });
+    expect((await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, product.id)))[0]).toMatchObject({ noctellaId: "H-OWN", barcodeValue: "H-BC" });
+    await upsertProductErpMetadataUseCase(write, product.id, { barcodeValue: "H-BC-2" });
+    expect((await db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, product.id)))[0]).toMatchObject({ noctellaId: "H-OWN", barcodeValue: "H-BC-2" });
+    const other = await createProduct(db, baseInput({ sku: "H-2", title: "H Product 2" }));
+    await expect(upsertProductErpMetadataUseCase(write, other.id, { noctellaId: "H-OWN" })).rejects.toBeInstanceOf(ConflictError);
   });
 });

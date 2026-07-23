@@ -334,11 +334,12 @@ export async function getProductById(db: DbClient, id: string, context?: Product
 export async function createProduct(
   db: DbClient,
   input: CreateProductInput,
+  erpMetadata?: Record<string, unknown>,
 ): Promise<ProductWithImages> {
   await assertCategoryExists(db, input.categoryId);
   if (input.collectionId) await assertCollectionExists(db, input.collectionId);
   const driver = (process.env.DATABASE_DRIVER as "sqlite" | "postgres" | "supabase-postgres" | "test-memory") || "sqlite";
-  const result = await createProductWithInventoryUseCase(createInventoryApplicationContextForDb(db, driver, createProductWriteTransactionCapabilityForDb(db, driver) as never) as never, input);
+  const result = await createProductWithInventoryUseCase(createInventoryApplicationContextForDb(db, driver, createProductWriteTransactionCapabilityForDb(db, driver) as never) as never, input, erpMetadata);
   if (input.images) await replaceImages(db, result.id, input.images);
   return getProductById(db, result.id);
 }
@@ -347,6 +348,7 @@ export async function updateProduct(
   db: DbClient,
   id: string,
   input: UpdateProductInput,
+  erpMetadata?: Record<string, unknown>,
 ): Promise<ProductWithImages> {
   const existing = await getProductById(db, id);
   if (input.categoryId !== undefined) await assertCategoryExists(db, input.categoryId);
@@ -357,7 +359,7 @@ export async function updateProduct(
     patch.stockQuantity = resolveStockQuantity(effectiveType, input.stockQuantity !== undefined ? input.stockQuantity : existing.stockQuantity);
   }
   const driver = (process.env.DATABASE_DRIVER as "sqlite" | "postgres" | "supabase-postgres" | "test-memory") || "sqlite";
-  await updateProductWithInventoryUseCase(createInventoryApplicationContextForDb(db, driver, createProductWriteTransactionCapabilityForDb(db, driver) as never) as never, id, patch);
+  await updateProductWithInventoryUseCase(createInventoryApplicationContextForDb(db, driver, createProductWriteTransactionCapabilityForDb(db, driver) as never) as never, id, patch, erpMetadata);
   if (input.images !== undefined) await replaceImages(db, id, input.images);
   return getProductById(db, id);
 }
