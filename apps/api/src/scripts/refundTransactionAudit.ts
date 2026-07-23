@@ -1,9 +1,17 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
-const base = process.cwd().endsWith("apps/api")
-  ? process.cwd()
-  : join(process.cwd(), "apps/api");
+/**
+ * Sprint 52B: resolves the apps/api base directory from an arbitrary cwd
+ * using path.basename/dirname (which normalize both "/" and "\" correctly
+ * on their host platform), instead of a hardcoded "apps/api" string suffix
+ * check that silently never matched on Windows (backslash-separated cwd).
+ */
+export const resolveRefundAuditBase = (cwd: string): string =>
+  basename(cwd) === "api" && basename(dirname(cwd)) === "apps"
+    ? cwd
+    : join(cwd, "apps", "api");
+const base = resolveRefundAuditBase(process.cwd());
 const read = (path: string) => readFileSync(join(base, path), "utf8");
 const between = (source: string, start: string, end?: string) => {
   const i = source.indexOf(start);
