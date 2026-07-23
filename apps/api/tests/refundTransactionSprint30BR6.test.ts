@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { auditRefundTransactionSafety } from "../src/scripts/refundTransactionAudit";
+import { auditRefundTransactionSafety, resolveRefundAuditBase } from "../src/scripts/refundTransactionAudit";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const source = readFileSync(new URL("../src/use-cases/refund/useCases.ts", import.meta.url), "utf8");
 const serviceContext = readFileSync(new URL("../src/services/refundServiceContext.ts", import.meta.url), "utf8");
@@ -41,6 +42,15 @@ const mustContain = [
 
 describe("refund transaction completion Sprint 30B-R6", () => {
   it("production transaction audit passes", () => expect(auditRefundTransactionSafety()).toBe(true));
+  it("I: resolves the apps/api base directory from both POSIX and Windows style cwd paths", () => {
+    // Already-inside-apps/api cwd must be returned verbatim (no separator mixing) on either style -
+    // this is the exact scenario the old endsWith("apps/api") check silently failed on Windows.
+    expect(resolveRefundAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    expect(resolveRefundAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
+    // A repo-root cwd falls back to joining "apps/api" using the host platform's own separator.
+    expect(resolveRefundAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
+    expect(resolveRefundAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+  });
   it.each(mustContain)("verifies %s", (_name, a, b) => { expect(source + serviceContext).toContain(a); expect(source + serviceContext).toContain(b); });
   it.each([
     ["provider inside transaction", { ...fixtures, useCases: source + "\nctx.unitOfWork.run(()=>port.executeRefund(req));" }, /provider inside transaction/],
@@ -54,7 +64,7 @@ describe("refund transaction completion Sprint 30B-R6", () => {
     ["provider db", { ...fixtures, providers: "DbClient" }, /provider can see/],
     ["service context missing UOW", { ...fixtures, serviceContext: serviceContext.replace("new SqliteUnitOfWork(db)", "noUnitOfWork") }, /runtime refund context/],
     ["success missing event", { ...fixtures, useCases: source.replace("RefundEvents.Succeeded", "RefundEvents.Noop") }, /success status/],
-    ["failure missing event", { ...fixtures, useCases: source.replace("RefundEvents.Failed", "RefundEvents.Noop") }, /failure status/],
+    ["failure missing event", { ...fixtures, useCases: source.replace(/(const providerFailure = normalizeRefundProviderError\(e\)[\s\S]*?)RefundEvents\.Failed/, "$1RefundEvents.Noop") }, /failure status/],
     ["enqueue in transaction", { ...fixtures, useCases: source.replace("if(enqueue) {", "ctx.unitOfWork.run(()=>ctx.enqueue.enqueueRefundExecution(input.refundId)); if(enqueue) {") }, /queue enqueue before commit/],
     ["cancel in transaction", { ...fixtures, useCases: source.replace("try{ await ctx.enqueue.cancelRefundExecution", "ctx.unitOfWork.run(()=>ctx.enqueue.cancelRefundExecution(input.refundId)); try{ await ctx.enqueue.cancelRefundExecution") }, /queue cancellation before commit/],
     ["provider execution missing", { ...fixtures, useCases: source.replace("port.executeRefund(req)", "port.noop(req)") }, /provider execution/],

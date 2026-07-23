@@ -28,6 +28,8 @@ import {
 } from "../../domain/refund";
 import { emitRefundSignal } from "../../observability/refund";
 
+/** Sprint 52B: same local-constant policy as the ERP command lifecycle sprints (46B-51B), kept local so this module's recovery behavior stays self-contained. */
+const REFUND_PROCESSING_STALE_MS = 60_000;
 const terminal: string[] = [RefundStatuses.Succeeded, "completed"];
 const active: string[] = [
   RefundStatuses.Draft,
@@ -536,6 +538,7 @@ export async function executeRefundUseCase(
 ) {
   let claimed!: RefundRecord;
   let attemptNo = 1;
+  let recoveredFromStaleProcessing = false;
   await ctx.unitOfWork.run(({ repositories }) => {
     const repos = repositories.refund;
     const r = repos.refunds.findById(input.refundId) as RefundRecord | null;
@@ -543,6 +546,63 @@ export async function executeRefundUseCase(
       throw new RefundUseCaseError("REFUND_NOT_FOUND", "Refund not found");
     if (r.status === RefundStatuses.Succeeded || r.externalRefundId) {
       claimed = r;
+      return;
+    }
+    if (r.status === RefundStatuses.Processing) {
+      const ageMs = ctx.clock.now().getTime() - new Date(r.updatedAt).getTime();
+      if (ageMs < REFUND_PROCESSING_STALE_MS)
+        throw new RefundUseCaseError(
+          "INVALID_STATUS_TRANSITION",
+          "Only pending refunds can execute",
+        );
+      // Sprint 52B: the process most likely crashed between claiming this
+      // refund (Pending -> Processing) and recording its outcome. We cannot
+      // tell whether the earlier attempt already succeeded remotely, so we
+      // only recover the local state to Failed here and never call the
+      // provider again in this same call - an explicit retry is required.
+      const recovery = repos.refunds.updateWithVersion(r.id, r.version, {
+        status: RefundStatuses.Failed,
+        failedAt: now(ctx),
+        lastError: safeMsg(
+          "Refund was stuck in Processing and was recovered to Failed; explicit retry required",
+        ),
+        updatedAt: now(ctx),
+      }) as any;
+      if (!recovery.ok)
+        throw new RefundUseCaseError(
+          "STALE_REFUND_VERSION",
+          "Stale refund version",
+        );
+      const staleAttempt = repos.refundAttempts.findLatestByRefundId(
+        r.id,
+      ) as any;
+      if (staleAttempt && staleAttempt.status === "processing")
+        repos.refundAttempts.update(staleAttempt.id, {
+          status: "failed",
+          errorCode: "STALE_PROCESSING_RECOVERED",
+          errorMessage:
+            "Refund was stuck in Processing and was recovered to Failed; explicit retry required",
+        });
+      appendOnce(
+        ctx,
+        repos,
+        recovery.value,
+        RefundEvents.Failed,
+        r.status,
+        RefundStatuses.Failed,
+        {
+          errorCode: "STALE_PROCESSING_RECOVERED",
+          message:
+            "Refund was stuck in Processing and was recovered to Failed; explicit retry required",
+          retryable: false,
+          recovered: true,
+        },
+        `stale-recovered:${r.id}:${r.version}`,
+        input.actor,
+        input.source,
+      );
+      claimed = recovery.value;
+      recoveredFromStaleProcessing = true;
       return;
     }
     if (r.status !== RefundStatuses.Pending)
@@ -603,6 +663,12 @@ export async function executeRefundUseCase(
     );
     claimed = u.value;
   });
+  if (recoveredFromStaleProcessing)
+    throw new RefundUseCaseError(
+      "STALE_PROCESSING_RECOVERED",
+      "Refund was stuck in Processing and has been recovered to Failed; an explicit retry is required",
+      { refundId: claimed.id },
+    );
   if (claimed.status === RefundStatuses.Succeeded || claimed.externalRefundId)
     return getRefundUseCase(ctx, claimed.id);
   // const req= compatibility audit marker: provider request after claim
