@@ -27,6 +27,7 @@ import {
   type RefundEventEnvelope,
 } from "../../domain/refund";
 import { emitRefundSignal } from "../../observability/refund";
+import { createFinanceEntrySync } from "../../services/financePostings";
 
 /** Sprint 52B: same local-constant policy as the ERP command lifecycle sprints (46B-51B), kept local so this module's recovery behavior stays self-contained. */
 const REFUND_PROCESSING_STALE_MS = 60_000;
@@ -757,6 +758,21 @@ export async function executeRefundUseCase(
             providerStatus: res.providerStatus,
           },
         });
+      // Sprint 56B: the finance-ledger entry must commit in the same transaction as the
+      // Succeeded status write, or a crash between them leaves a succeeded refund with no
+      // accounting record (mirrors the sale-reversal fix from Sprint 52B). The idempotency
+      // key matches refundsCompatibility.createRefund's synchronous-success posting exactly,
+      // so a refund can never accumulate two entries regardless of which path succeeded it.
+      createFinanceEntrySync(repositories.db, {
+        orderId: u.value.orderId,
+        refundId: u.value.id,
+        entryType: "SuccessfulRefund",
+        amount: u.value.totalAmount,
+        sourceReference: u.value.id,
+        idempotencyKey: `successful-refund:${u.value.id}`,
+        occurredAt: res.processedAt ?? now(ctx),
+        snapshot: u.value,
+      });
       appendOnce(
         ctx,
         repos,
