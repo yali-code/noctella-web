@@ -166,6 +166,75 @@ export function consumeReservationPath(reservationId: string): string {
   return `/api/erp/commands/reservations/${encodeURIComponent(reservationId)}/consume`;
 }
 
+/** Sprint 59B: picking/packing/shipment-ready path builders, same fixed-template convention. */
+export function pickingListPath(query: string): string {
+  return `/api/erp/picking${query ? `?${query}` : ""}`;
+}
+
+export function pickingTaskPath(taskId: string): string {
+  return `/api/erp/picking/${encodeURIComponent(taskId)}`;
+}
+
+export function packingListPath(query: string): string {
+  return `/api/erp/packing${query ? `?${query}` : ""}`;
+}
+
+export function packingTaskPath(taskId: string): string {
+  return `/api/erp/packing/${encodeURIComponent(taskId)}`;
+}
+
+export function shipmentReadyPath(): string {
+  return `/api/erp/warehouse/shipment-ready`;
+}
+
+export function createPickingTaskPath(orderId: string): string {
+  return `/api/erp/commands/orders/${encodeURIComponent(orderId)}/picking/create`;
+}
+
+export function startPickingTaskPath(taskId: string): string {
+  return `/api/erp/commands/picking/${encodeURIComponent(taskId)}/start`;
+}
+
+export function confirmPickedLinePath(taskId: string, lineId: string): string {
+  return `/api/erp/commands/picking/${encodeURIComponent(taskId)}/lines/${encodeURIComponent(lineId)}/confirm`;
+}
+
+export function markPickingShortPath(taskId: string, lineId: string): string {
+  return `/api/erp/commands/picking/${encodeURIComponent(taskId)}/lines/${encodeURIComponent(lineId)}/short`;
+}
+
+export function completePickingTaskPath(taskId: string): string {
+  return `/api/erp/commands/picking/${encodeURIComponent(taskId)}/complete`;
+}
+
+export function cancelPickingTaskPath(taskId: string): string {
+  return `/api/erp/commands/picking/${encodeURIComponent(taskId)}/cancel`;
+}
+
+export function createPackingTaskPath(orderId: string): string {
+  return `/api/erp/commands/orders/${encodeURIComponent(orderId)}/packing/create`;
+}
+
+export function startPackingTaskPath(taskId: string): string {
+  return `/api/erp/commands/packing/${encodeURIComponent(taskId)}/start`;
+}
+
+export function updatePackingTaskPath(taskId: string): string {
+  return `/api/erp/commands/packing/${encodeURIComponent(taskId)}/update`;
+}
+
+export function completePackingTaskPath(taskId: string): string {
+  return `/api/erp/commands/packing/${encodeURIComponent(taskId)}/complete`;
+}
+
+export function markPackingReadyPath(taskId: string): string {
+  return `/api/erp/commands/packing/${encodeURIComponent(taskId)}/ready-for-shipment`;
+}
+
+export function cancelPackingTaskPath(taskId: string): string {
+  return `/api/erp/commands/packing/${encodeURIComponent(taskId)}/cancel`;
+}
+
 /**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key
