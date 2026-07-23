@@ -2,9 +2,16 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   activateWarehouse,
+  cancelPackingTask,
+  cancelPickingTask,
   cancelReservation,
+  completePackingTask,
+  completePickingTask,
+  confirmPickedLine,
   consumeReservation,
   createLocation,
+  createPackingTask,
+  createPickingTask,
   createReservation,
   createWarehouse,
   deactivateWarehouse,
@@ -17,10 +24,15 @@ import {
   mapShipmentReady,
   mapWarehouse,
   mapWarehouseEvent,
+  markPackingReady,
+  markPickingShort,
   maskCustomer,
   query,
   redactSafeError,
   releaseReservation,
+  startPackingTask,
+  startPickingTask,
+  updatePackingTask,
 } from "./erpWarehouseBridge";
 
 describe("erpWarehouseBridge admin mappers", () => {
@@ -117,5 +129,68 @@ describe("erpWarehouseBridge network behavior (Sprint 58B)", () => {
   it("propagates structured backend errors (status, message) unchanged", async () => {
     vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ error: "Reservation exceeds available quantity" }), { status: 409, headers: { "content-type": "application/json" } }));
     await expect(createReservation({ idempotencyKey: "k1", productId: "p1", quantity: 99, reservationReference: "REF", reason: "hold" })).rejects.toMatchObject({ message: "Reservation exceeds available quantity", status: 409 });
+  });
+});
+
+describe("erpWarehouseBridge picking/packing/shipment-ready network behavior (Sprint 59B)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reads hit the correct same-origin proxy paths", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    await erpWarehouseApi.picking();
+    expect(fetchSpy).toHaveBeenCalledWith("/api/erp/picking?");
+    await erpWarehouseApi.pickingTask("t1");
+    expect(fetchSpy).toHaveBeenCalledWith("/api/erp/picking/t1");
+    await erpWarehouseApi.packing();
+    expect(fetchSpy).toHaveBeenCalledWith("/api/erp/packing?");
+    await erpWarehouseApi.packingTask("t1");
+    expect(fetchSpy).toHaveBeenCalledWith("/api/erp/packing/t1");
+    await erpWarehouseApi.shipmentReady();
+    expect(fetchSpy).toHaveBeenCalledWith("/api/erp/warehouse/shipment-ready");
+  });
+
+  it("every picking mutation forwards the caller-supplied idempotency key to the correct path, never generating its own", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ status: "Succeeded" }), { status: 200, headers: { "content-type": "application/json" } }));
+    await createPickingTask("o1", "k-create", { safeNotes: "note" });
+    expect(fetchSpy.mock.calls[0][0]).toBe("/api/erp/commands/orders/o1/picking/create");
+    expect(JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string).idempotencyKey).toBe("k-create");
+    await startPickingTask("t1", "k-start");
+    expect(fetchSpy.mock.calls[1][0]).toBe("/api/erp/commands/picking/t1/start");
+    expect(JSON.parse((fetchSpy.mock.calls[1][1] as RequestInit).body as string).idempotencyKey).toBe("k-start");
+    await confirmPickedLine("t1", "l1", "k-confirm", 2);
+    expect(fetchSpy.mock.calls[2][0]).toBe("/api/erp/commands/picking/t1/lines/l1/confirm");
+    const confirmSent = JSON.parse((fetchSpy.mock.calls[2][1] as RequestInit).body as string);
+    expect(confirmSent.idempotencyKey).toBe("k-confirm");
+    expect(confirmSent.payload).toEqual({ pickedQuantity: 2 });
+    await markPickingShort("t1", "l1", "k-short", 1);
+    expect(fetchSpy.mock.calls[3][0]).toBe("/api/erp/commands/picking/t1/lines/l1/short");
+    expect(JSON.parse((fetchSpy.mock.calls[3][1] as RequestInit).body as string).payload).toEqual({ shortQuantity: 1 });
+    await completePickingTask("t1", "k-complete");
+    expect(fetchSpy.mock.calls[4][0]).toBe("/api/erp/commands/picking/t1/complete");
+    await cancelPickingTask("t1", "k-cancel");
+    expect(fetchSpy.mock.calls[5][0]).toBe("/api/erp/commands/picking/t1/cancel");
+  });
+
+  it("every packing mutation forwards the caller-supplied idempotency key to the correct path, never generating its own", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ status: "Succeeded" }), { status: 200, headers: { "content-type": "application/json" } }));
+    await createPackingTask("o1", "k-create", { pickingTaskId: "t1" });
+    expect(fetchSpy.mock.calls[0][0]).toBe("/api/erp/commands/orders/o1/packing/create");
+    expect(JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string).idempotencyKey).toBe("k-create");
+    await startPackingTask("p1", "k-start");
+    expect(fetchSpy.mock.calls[1][0]).toBe("/api/erp/commands/packing/p1/start");
+    await updatePackingTask("p1", "k-update", { packageCount: 2, totalWeight: 3.5 });
+    expect(fetchSpy.mock.calls[2][0]).toBe("/api/erp/commands/packing/p1/update");
+    expect(JSON.parse((fetchSpy.mock.calls[2][1] as RequestInit).body as string).payload).toEqual({ packageCount: 2, totalWeight: 3.5 });
+    await completePackingTask("p1", "k-complete");
+    expect(fetchSpy.mock.calls[3][0]).toBe("/api/erp/commands/packing/p1/complete");
+    await markPackingReady("p1", "k-ready");
+    expect(fetchSpy.mock.calls[4][0]).toBe("/api/erp/commands/packing/p1/ready-for-shipment");
+    await cancelPackingTask("p1", "k-cancel");
+    expect(fetchSpy.mock.calls[5][0]).toBe("/api/erp/commands/packing/p1/cancel");
+  });
+
+  it("propagates a structured duplicate-task conflict unchanged", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ error: "An active picking task already exists for this order" }), { status: 409, headers: { "content-type": "application/json" } }));
+    await expect(createPickingTask("o1", "k1")).rejects.toMatchObject({ message: "An active picking task already exists for this order", status: 409 });
   });
 });

@@ -202,7 +202,17 @@ export async function createPickingTask(db:DbClient, clientId:string, env:Env, o
   try {
     const lines=await orderLines(db,orderId); if(!lines.length) throw new BadRequestError("Order has no items");
     const tid=id();
+    /**
+     * Sprint 59B: previously nothing prevented a second, independent picking task from being
+     * created for an order that already had one - the command-envelope idempotency only guards
+     * against retrying the SAME command (same idempotencyKey), not a genuinely new create call.
+     * The duplicate check now runs inside this same synchronous transaction as the insert (same
+     * technique as the Sprint 58B reservation-race fix) so it cannot be raced. A Cancelled prior
+     * task does not block a new one.
+     */
     runWarehouseTransaction(db, (tx) => {
+      const dup=tx.all(sql`SELECT id FROM picking_tasks WHERE order_id=${orderId} AND status!='Cancelled'`) as any[];
+      if(dup.length) throw new ConflictError("An active picking task already exists for this order");
       tx.run(sql`INSERT INTO picking_tasks (id,order_id,status,assigned_client_id,safe_notes,created_at,updated_at) VALUES (${tid},${orderId},'Pending',${clientId},${env.payload?.safeNotes??null},${now()},${now()})`);
       for(const l of lines) tx.run(sql`INSERT INTO picking_task_lines (id,picking_task_id,product_id,order_item_id,requested_quantity,picked_quantity,short_quantity,created_at,updated_at) VALUES (${id()},${tid},${l.product_id},${l.id},${l.quantity},0,0,${now()},${now()})`);
       eventInTransaction(tx,{orderId,pickingTaskId:tid,eventType:"PickingCreated",meta:{lineCount:lines.length}});
@@ -215,6 +225,12 @@ export async function createPickingTask(db:DbClient, clientId:string, env:Env, o
 }
 export const getPickingTask=(db:DbClient,tid:string)=>get(db,sql`SELECT * FROM picking_tasks WHERE id=${tid}`);
 export const listPickingTasks=(db:DbClient,q:any={})=>all(db,sql`SELECT * FROM picking_tasks WHERE (${q.orderId??null} IS NULL OR order_id=${q.orderId??null}) ORDER BY created_at DESC LIMIT ${Number(q.limit??100)}`);
+/** Sprint 59B: read-only composition (no route previously exposed line data at all, so the
+ * admin detail view could not display or act on lines) - same {...task, lines} shape already
+ * used by getPurchase() elsewhere in this codebase. getPickingTask itself is unchanged and
+ * still used internally (updatePicking's existence check, etc.); only the route-facing detail
+ * read is enriched. */
+export async function getPickingTaskDetail(db:DbClient,tid:string){ const t=await getPickingTask(db,tid); if(!t) throw new NotFoundError("Picking task not found"); const lines=await all(db,sql`SELECT * FROM picking_task_lines WHERE picking_task_id=${tid} ORDER BY created_at`); return {...t, lines}; }
 export async function updatePicking(db:DbClient,clientId:string,env:Env,tid:string, action:string, lineId?:string){
   const existing=await startCommand(db,clientId,env,action,"PickingTask",tid); if(existing) return prior(existing);
   try {
@@ -243,7 +259,11 @@ export async function createPackingTask(db:DbClient, clientId:string, env:Env, o
     const pick=env.payload?.pickingTaskId?await getPickingTask(db,env.payload.pickingTaskId):await get(db,sql`SELECT * FROM picking_tasks WHERE order_id=${orderId} AND status='Picked' ORDER BY completed_at DESC LIMIT 1`); if(!pick) throw new BadRequestError("Completed picking task is required");
     const lines=await all(db,sql`SELECT * FROM picking_task_lines WHERE picking_task_id=${pick.id}`);
     const tid=id();
+    /** Sprint 59B: same duplicate-task correction as createPickingTask, scoped to the picking
+     * task instead of the order - see that function's comment for the full rationale. */
     runWarehouseTransaction(db, (tx) => {
+      const dup=tx.all(sql`SELECT id FROM packing_tasks WHERE picking_task_id=${pick.id} AND status!='Cancelled'`) as any[];
+      if(dup.length) throw new ConflictError("An active packing task already exists for this picking task");
       tx.run(sql`INSERT INTO packing_tasks (id,order_id,picking_task_id,status,package_count,created_at,updated_at) VALUES (${tid},${orderId},${pick.id},'Pending',1,${now()},${now()})`);
       for(const l of lines) tx.run(sql`INSERT INTO packing_task_lines (id,packing_task_id,product_id,order_item_id,quantity,created_at) VALUES (${id()},${tid},${l.product_id},${l.order_item_id},${l.picked_quantity},${now()})`);
       eventInTransaction(tx,{orderId,pickingTaskId:pick.id,packingTaskId:tid,eventType:"PackingCreated",meta:{}});
@@ -256,6 +276,8 @@ export async function createPackingTask(db:DbClient, clientId:string, env:Env, o
 }
 export const getPackingTask=(db:DbClient,tid:string)=>get(db,sql`SELECT * FROM packing_tasks WHERE id=${tid}`);
 export const listPackingTasks=(db:DbClient,q:any={})=>all(db,sql`SELECT * FROM packing_tasks WHERE (${q.orderId??null} IS NULL OR order_id=${q.orderId??null}) ORDER BY created_at DESC LIMIT ${Number(q.limit??100)}`);
+/** Sprint 59B: same read-only line composition as getPickingTaskDetail, same rationale. */
+export async function getPackingTaskDetail(db:DbClient,tid:string){ const t=await getPackingTask(db,tid); if(!t) throw new NotFoundError("Packing task not found"); const lines=await all(db,sql`SELECT * FROM packing_task_lines WHERE packing_task_id=${tid} ORDER BY created_at`); return {...t, lines}; }
 export async function updatePacking(db:DbClient,clientId:string,env:Env,tid:string,action:string){
   const existing=await startCommand(db,clientId,env,action,"PackingTask",tid); if(existing) return prior(existing);
   try {

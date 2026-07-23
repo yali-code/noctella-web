@@ -45,6 +45,11 @@ export const erpWarehouseApi={
   locations:(f:Record<string,unknown>={})=>erpGet<any>(query("/api/erp/warehouse/locations",f)),
   reservations:(f:Record<string,unknown>={})=>erpGet<any>(query("/api/erp/reservations",f)),
   events:(f:Record<string,unknown>={})=>erpGet<any>(query("/api/erp/warehouse/events",f)),
+  picking:(f:Record<string,unknown>={})=>erpGet<any>(query("/api/erp/picking",f)),
+  pickingTask:(id:string)=>erpGet<any>(`/api/erp/picking/${id}`),
+  packing:(f:Record<string,unknown>={})=>erpGet<any>(query("/api/erp/packing",f)),
+  packingTask:(id:string)=>erpGet<any>(`/api/erp/packing/${id}`),
+  shipmentReady:()=>erpGet<any>("/api/erp/warehouse/shipment-ready"),
 };
 
 export async function createWarehouse(payload:any){ return erpPost<any>("/api/erp/commands/warehouses/create", crypto.randomUUID(), payload); }
@@ -60,3 +65,24 @@ export async function createReservation(input:{ idempotencyKey:string; productId
 export async function releaseReservation(id:string){ return erpPost<any>(`/api/erp/commands/reservations/${id}/release`, crypto.randomUUID(), {}); }
 export async function cancelReservation(id:string){ return erpPost<any>(`/api/erp/commands/reservations/${id}/cancel`, crypto.randomUUID(), {}); }
 export async function consumeReservation(id:string){ return erpPost<any>(`/api/erp/commands/reservations/${id}/consume`, crypto.randomUUID(), {}); }
+
+/**
+ * Sprint 59B: every picking/packing mutation below takes a caller-supplied idempotencyKey
+ * (never generated inside this file) so a page can keep the same key stable across retries of
+ * one submission attempt - required because these are multi-step workflows where a network
+ * failure mid-action is more likely to need a safe retry than the single-shot warehouse/
+ * reservation actions above.
+ */
+export async function createPickingTask(orderId:string, idempotencyKey:string, payload:{ safeNotes?:string }={}){ return erpPost<any>(`/api/erp/commands/orders/${orderId}/picking/create`, idempotencyKey, payload); }
+export async function startPickingTask(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/picking/${taskId}/start`, idempotencyKey, {}); }
+export async function confirmPickedLine(taskId:string, lineId:string, idempotencyKey:string, pickedQuantity:number){ return erpPost<any>(`/api/erp/commands/picking/${taskId}/lines/${lineId}/confirm`, idempotencyKey, { pickedQuantity }); }
+export async function markPickingShort(taskId:string, lineId:string, idempotencyKey:string, shortQuantity:number){ return erpPost<any>(`/api/erp/commands/picking/${taskId}/lines/${lineId}/short`, idempotencyKey, { shortQuantity }); }
+export async function completePickingTask(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/picking/${taskId}/complete`, idempotencyKey, {}); }
+export async function cancelPickingTask(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/picking/${taskId}/cancel`, idempotencyKey, {}); }
+
+export async function createPackingTask(orderId:string, idempotencyKey:string, payload:{ pickingTaskId?:string }={}){ return erpPost<any>(`/api/erp/commands/orders/${orderId}/packing/create`, idempotencyKey, payload); }
+export async function startPackingTask(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/packing/${taskId}/start`, idempotencyKey, {}); }
+export async function updatePackingTask(taskId:string, idempotencyKey:string, payload:{ packageCount?:number; totalWeight?:number; dimensions?:Record<string,unknown>; materials?:Record<string,unknown> }={}){ return erpPost<any>(`/api/erp/commands/packing/${taskId}/update`, idempotencyKey, payload); }
+export async function completePackingTask(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/packing/${taskId}/complete`, idempotencyKey, {}); }
+export async function markPackingReady(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/packing/${taskId}/ready-for-shipment`, idempotencyKey, {}); }
+export async function cancelPackingTask(taskId:string, idempotencyKey:string){ return erpPost<any>(`/api/erp/commands/packing/${taskId}/cancel`, idempotencyKey, {}); }
