@@ -5,8 +5,26 @@ import type { DbClient } from "../db/client";
 import { erpCommandExecutions, products, purchaseAllocations, purchaseEvents, purchaseLines, purchaseReceiptLines, purchaseReceipts, purchases, suppliers } from "../db/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { enqueueProductStockSync } from "./stockSync";
-import { receivePurchaseUseCase } from "../application/purchase";
+import { cancelPurchaseUseCase, markPurchaseOrderedUseCase, PurchaseUseCaseError, receivePurchaseUseCase } from "../application/purchase";
 import { createPurchaseApplicationContextForDb } from "./purchaseApplicationContextForDb";
+
+/**
+ * Sprint 57B: application/purchase's use-case errors (PurchaseUseCaseError and its
+ * subclasses) are not recognized by routes/errorHandler.ts, so an unmapped throw would
+ * surface as a generic 500 instead of the correct 400/404/409 - the same class of gap
+ * fixed for refunds in Sprint 56B (refundsCompatibility.ts's normalizeError). Applied
+ * only to the two paths this sprint routes through the use-case layer (cancel, mark
+ * ordered); receivePurchase's pre-existing, broader instance of this same gap is left
+ * unchanged (see Sprint 57B discovery/report - out of scope for this correction).
+ */
+function mapPurchaseUseCaseError(e: unknown): never {
+  if (e instanceof PurchaseUseCaseError) {
+    if (e.code === "purchase_not_found" || e.code === "supplier_not_found") throw new NotFoundError(e.message);
+    if (e.code === "purchase_concurrency_conflict" || e.code === "purchase_duplicate_reference" || e.code === "supplier_duplicate_reference" || e.code === "purchase_receipt_conflict") throw new ConflictError(e.message);
+    throw new BadRequestError(e.message);
+  }
+  throw e;
+}
 
 type Db = DbClient | any;
 const now = () => new Date().toISOString();
@@ -71,8 +89,31 @@ export async function createPurchase(db:Db,input:any){ assertEur(input.currency)
 export async function getPurchase(db:Db,id:string){ const [p]=await db.select().from(purchases).where(eq(purchases.id,id)).limit(1); if(!p) throw new NotFoundError("Purchase not found"); const lines=await db.select().from(purchaseLines).where(eq(purchaseLines.purchaseId,id)); const allocations=await db.select().from(purchaseAllocations).where(eq(purchaseAllocations.purchaseId,id)); const receipts=await db.select().from(purchaseReceipts).where(eq(purchaseReceipts.purchaseId,id)); return { ...p, lines, allocations, receipts }; }
 export async function listPurchases(db:Db,q:any={}){ const filters=[]; if(q.status) filters.push(eq(purchases.status,String(q.status))); if(q.supplierId) filters.push(eq(purchases.supplierId,String(q.supplierId))); if(q.sourceType) filters.push(eq(purchases.sourceType,String(q.sourceType))); const where=filters.length?and(...filters):undefined; const page=Number(q.page??1), pageSize=Number(q.pageSize??50); return { items: await db.select().from(purchases).where(where).orderBy(desc(purchases.createdAt)).limit(pageSize).offset((page-1)*pageSize), page, pageSize }; }
 export async function updatePurchase(db:Db,id:string,input:any){ const [p]=await db.select().from(purchases).where(eq(purchases.id,id)).limit(1); if(!p) throw new NotFoundError("Purchase not found"); if(input.expectedUpdatedAt && input.expectedUpdatedAt!==p.updatedAt) throw new ConflictError("Purchase has changed since expectedUpdatedAt"); assertEur(input.currency); const patch:any={updatedAt:now()}; for(const k of ["supplierId","sourceType","externalReference","invoiceReferenceNumber","auctionHouse","auctionDate","buyerPremium","shippingCost","customsCost","packagingCost","taxVat","miscellaneousCost","notes"]){ if(input[k]!==undefined) patch[k]=input[k]; } patch.totalCost=totalOf({...p,...patch}); await db.update(purchases).set(patch).where(eq(purchases.id,id)); await event(db,id,"Updated",{fields:Object.keys(patch)}); return getPurchase(db,id); }
-export async function cancelPurchase(db:Db,id:string){ await db.update(purchases).set({status:PurchaseStatus.Cancelled,updatedAt:now()}).where(eq(purchases.id,id)); await event(db,id,"Cancelled",{}); return getPurchase(db,id); }
-export async function markOrdered(db:Db,id:string){ await db.update(purchases).set({status:PurchaseStatus.Ordered,orderedAt:now(),updatedAt:now()}).where(eq(purchases.id,id)); return getPurchase(db,id); }
+function purchaseDriver() { return process.env.DATABASE_DRIVER === "postgres" || process.env.DATABASE_DRIVER === "supabase-postgres" ? process.env.DATABASE_DRIVER : "sqlite"; }
+/**
+ * Sprint 57B: previously set status directly with no guard, so a Received or
+ * PartiallyReceived purchase (with inventory already increased) could be cancelled
+ * with no check and no inventory reversal. Now routes through the existing, tested
+ * cancelPurchaseUseCase, which blocks that transition - see Sprint 57B discovery.
+ * The purchaseEvents write below is kept exactly as it was (matching receivePurchase's
+ * existing pattern) since getPurchaseEvents/the admin UI read from that table, not from
+ * the use case's own best-effort eventPublisher.
+ */
+export async function cancelPurchase(db:Db,id:string,cmd:any={}){
+  try {
+    await cancelPurchaseUseCase(createPurchaseApplicationContextForDb({ db, driver: purchaseDriver() })).execute({ id, expectedVersion: cmd.expectedVersion });
+  } catch (e) { mapPurchaseUseCaseError(e); }
+  await event(db,id,"Cancelled",{});
+  return getPurchase(db,id);
+}
+/** Sprint 57B: exposes the existing, tested markPurchaseOrderedUseCase (previously unreachable - no route called it). */
+export async function markOrdered(db:Db,id:string,cmd:any={}){
+  try {
+    await markPurchaseOrderedUseCase(createPurchaseApplicationContextForDb({ db, driver: purchaseDriver() })).execute({ id, expectedVersion: cmd.expectedVersion });
+  } catch (e) { mapPurchaseUseCaseError(e); }
+  await event(db,id,"Ordered",{});
+  return getPurchase(db,id);
+}
 function cents(v:number){ return Math.round(v*100); } function money(c:number){ return Number((c/100).toFixed(2)); }
 function split(total:number|null|undefined, weights:number[]){ if(total==null) return weights.map(()=>null); if(total<0) throw new BadRequestError("Negative costs are not allowed"); const c=cents(total), sum=weights.reduce((a,b)=>a+b,0); let used=0; return weights.map((w,i)=>{ const x=i===weights.length-1?c-used:Math.floor(c*(sum?w/sum:1/weights.length)); used+=x; return money(x); }); }
 /**
@@ -133,7 +174,7 @@ export async function executePurchaseCommand(db:DbClient, clientId:string, env:a
   const p=env.payload??{};
   let out:any;
   try {
-    out= action==="CreatePurchase"?await createPurchase(db,p):action==="UpdatePurchase"?await updatePurchase(db,id!,p):action==="AllocatePurchaseCosts"?await allocatePurchaseCosts(db,id!,p):action==="ReceivePurchase"?await receivePurchase(db,id!,{...p,idempotencyKey:p.idempotencyKey??env.idempotencyKey}):action==="CancelPurchase"?await cancelPurchase(db,id!):null;
+    out= action==="CreatePurchase"?await createPurchase(db,p):action==="UpdatePurchase"?await updatePurchase(db,id!,p):action==="AllocatePurchaseCosts"?await allocatePurchaseCosts(db,id!,p):action==="ReceivePurchase"?await receivePurchase(db,id!,{...p,idempotencyKey:p.idempotencyKey??env.idempotencyKey}):action==="CancelPurchase"?await cancelPurchase(db,id!,p):action==="MarkPurchaseOrdered"?await markOrdered(db,id!,p):null;
   } catch (error) {
     await failCommand(db,clientId,env.idempotencyKey,error);
     throw error;

@@ -61,6 +61,59 @@ export function cancelInvoicePath(invoiceId: string): string {
 }
 
 /**
+ * Sprint 57B: purchasing/supplier path builders, same fixed-template
+ * convention as above (a query string, when accepted, is caller-built from
+ * URLSearchParams by the Route Handler, never a raw caller-supplied path).
+ */
+export function suppliersListPath(query: string): string {
+  return `/api/erp/suppliers${query ? `?${query}` : ""}`;
+}
+
+export function supplierPath(supplierId: string): string {
+  return `/api/erp/suppliers/${encodeURIComponent(supplierId)}`;
+}
+
+export function createSupplierPath(): string {
+  return `/api/erp/commands/suppliers/create`;
+}
+
+export function updateSupplierPath(supplierId: string): string {
+  return `/api/erp/commands/suppliers/${encodeURIComponent(supplierId)}/update`;
+}
+
+export function purchasesListPath(query: string): string {
+  return `/api/erp/purchases${query ? `?${query}` : ""}`;
+}
+
+export function purchasePath(purchaseId: string): string {
+  return `/api/erp/purchases/${encodeURIComponent(purchaseId)}`;
+}
+
+export function purchaseLandedCostPath(purchaseId: string): string {
+  return `/api/erp/purchases/${encodeURIComponent(purchaseId)}/landed-cost`;
+}
+
+export function createPurchasePath(): string {
+  return `/api/erp/commands/purchases/create`;
+}
+
+export function receivePurchasePath(purchaseId: string): string {
+  return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/receive`;
+}
+
+export function allocatePurchaseCostsPath(purchaseId: string): string {
+  return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/allocate`;
+}
+
+export function markPurchaseOrderedPath(purchaseId: string): string {
+  return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/mark-ordered`;
+}
+
+export function cancelPurchasePath(purchaseId: string): string {
+  return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/cancel`;
+}
+
+/**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key
  * or backend base URL is missing.
