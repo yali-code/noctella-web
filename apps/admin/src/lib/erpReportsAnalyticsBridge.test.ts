@@ -1,7 +1,71 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { ApiError } from "./api";
 import { comparisonLabels, erpReportsApi, exportUrl, mapBreakdowns, mapCompletenessWarnings, mapCustomer, mapDashboard, mapFinance, mapInventory, mapMetric, mapPurchasing, mapReturnRefund, mapSalesChannel, mapSeries, mapShipping, mapSupplier, mapWarehouse, periodLabels, query, redactSafeError } from "./erpReportsAnalyticsBridge";
 
 const report={ issues:[{code:"UNKNOWN",message:"Missing fee"}], metrics:{grossRevenue:10}, series:[{period:"2026-01",value:1,comparisonValue:0,changePercent:null}], breakdowns:[{dimension:"channel",key:"Direct",label:"Direct",metrics:[]}], customers:[{id:"c",email:"secret@example.com",phone:"123",address:"raw"}], sections:{notice:"Operational"} };
+
+const ORIGINAL_ENV = { ...process.env };
+beforeEach(() => {
+  process.env.ERP_INTEGRATION_KEY = "test-erp-key";
+  process.env.NEXT_PUBLIC_API_BASE_URL = "http://backend.internal:4000";
+});
+afterEach(() => {
+  process.env = { ...ORIGINAL_ENV };
+  vi.restoreAllMocks();
+});
+
+describe("ERP reports analytics bridge network behavior (Sprint 55B)", () => {
+  it("does not contain or call the old fake stub", () => {
+    const source = readFileSync(new URL("./erpReportsAnalyticsBridge.ts", import.meta.url), "utf8");
+    expect(source).not.toContain('async (path:string) => ({ path })');
+    expect(source).not.toMatch(/const api = \{ get:/);
+  });
+
+  it("uses the real (server-only ERP) client for the dashboard request, with the ERP key header", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ inventory: { activeProductCount: 3 } }), { status: 200, headers: { "content-type": "application/json" } }));
+    const result = await erpReportsApi.dashboard();
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://backend.internal:4000/api/erp/reports/dashboard",
+      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key" } }),
+    );
+    expect(result).toEqual({ inventory: { activeProductCount: 3 } });
+  });
+
+  it("maps a representative dashboard response correctly end-to-end", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ inventory: { activeProductCount: 3 }, sales: { grossRevenue: 300 }, issues: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    const mapped = mapDashboard(await erpReportsApi.dashboard());
+    expect(mapped.inventory).toEqual({ activeProductCount: 3 });
+    expect(mapped.sales).toEqual({ grossRevenue: 300 });
+  });
+
+  it("maps a representative tabular (inventory) report response correctly end-to-end", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ metrics: { activeProductCount: 3 }, breakdowns: [{ dimension: "category", key: "Direct", label: "Direct", metrics: [] }], issues: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    const mapped = mapInventory(await erpReportsApi.report("inventory"));
+    expect(mapped.metrics).toEqual({ activeProductCount: 3 });
+    expect(mapped.breakdowns).toHaveLength(1);
+  });
+
+  it("preserves query parameters when calling a report", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }));
+    await erpReportsApi.report("sales", { period: "ThisMonth", channel: "Direct" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://backend.internal:4000/api/erp/reports/sales?channel=Direct&period=ThisMonth",
+      expect.anything(),
+    );
+  });
+
+  it("propagates backend errors as ApiError", async () => {
+    vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ error: "Report range is too large" }), { status: 413, headers: { "content-type": "application/json" } }));
+    await expect(erpReportsApi.dashboard()).rejects.toBeInstanceOf(ApiError);
+    await expect(erpReportsApi.dashboard()).rejects.toMatchObject({ status: 413, message: "Report range is too large" });
+  });
+
+  it("export URL points at the same-origin admin proxy, not the direct backend", () => {
+    expect(exportUrl("inventory", "json")).toBe("/api/erp/reports/inventory/export?format=json");
+    expect(exportUrl("inventory", "csv", { period: "ThisMonth" })).toBe("/api/erp/reports/inventory/export?format=csv&period=ThisMonth");
+  });
+});
 
 describe("ERP reports analytics bridge admin focused coverage", () => {
   it("builds deterministic filter/query strings",()=>{ expect(query("/erp/reports/sales",{period:"Last30Days",channel:"Direct",empty:""})).toBe("/erp/reports/sales?channel=Direct&period=Last30Days"); expect(erpReportsApi.exportUrl("sales","json",{period:"Today"})).toContain("format=json"); });

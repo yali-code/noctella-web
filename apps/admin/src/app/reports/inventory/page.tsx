@@ -1,2 +1,8 @@
-import { exportUrl, periodLabels, comparisonLabels } from "../../../lib/erpReportsAnalyticsBridge";
-export default function Page(){ return <main><h1>Reports — inventory</h1><section><h2>Filters</h2><p>Period: {periodLabels.Last30Days}; Comparison: {comparisonLabels.None}</p><a href={exportUrl("inventory","json")}>Export JSON</a> <a href={exportUrl("inventory","csv")}>Export CSV</a></section><section><h2>Summary cards</h2><p>Completeness warnings and deterministic breakdown tables render from ERP report projections.</p></section><section><h2>Time series</h2><p>No new chart framework; simple ordered values are rendered as tables.</p></section></main> }
+import { StandardReportBody, type ReportSearchParams } from "@/components/reports/ReportPage";
+import { mapInventory } from "@/lib/erpReportsAnalyticsBridge";
+
+export const dynamic = "force-dynamic";
+
+export default function Page({ searchParams }: { searchParams: ReportSearchParams }) {
+  return <StandardReportBody title="inventory" reportType="inventory" searchParams={searchParams} mapFn={mapInventory} />;
+}
