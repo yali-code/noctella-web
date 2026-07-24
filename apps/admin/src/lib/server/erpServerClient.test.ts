@@ -46,10 +46,20 @@ describe("path builders", () => {
 });
 
 describe("buildErpRequestHeaders", () => {
-  it("contains only Accept and the injected ERP key header", () => {
+  it("contains only Accept, the injected ERP key, and the ERP client version headers", () => {
     const headers = buildErpRequestHeaders();
-    expect(Object.keys(headers).sort()).toEqual(["Accept", "X-Noctella-ERP-Key"]);
+    expect(Object.keys(headers).sort()).toEqual(["Accept", "X-Noctella-ERP-Client-Version", "X-Noctella-ERP-Key"]);
     expect(headers["X-Noctella-ERP-Key"]).toBe("test-erp-key");
+  });
+
+  it("defaults the client version header to 0.1.0 when ERP_CLIENT_VERSION is not set", () => {
+    delete process.env.ERP_CLIENT_VERSION;
+    expect(buildErpRequestHeaders()["X-Noctella-ERP-Client-Version"]).toBe("0.1.0");
+  });
+
+  it("uses ERP_CLIENT_VERSION when set, overriding the default", () => {
+    process.env.ERP_CLIENT_VERSION = "2.0.0";
+    expect(buildErpRequestHeaders()["X-Noctella-ERP-Client-Version"]).toBe("2.0.0");
   });
 
   it("fails closed when the ERP key is missing", () => {
@@ -59,14 +69,18 @@ describe("buildErpRequestHeaders", () => {
 });
 
 describe("fetchErpBackend", () => {
-  it("calls the configured backend base URL with only the injected ERP header", async () => {
+  it("calls the configured backend base URL with only the injected ERP headers", async () => {
     const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
     await fetchErpBackend(salesSummaryPath("order-1"));
     expect(mockFetch).toHaveBeenCalledWith(
       "http://backend.internal:4000/api/erp/orders/order-1/sales-summary",
       expect.objectContaining({
         method: "GET",
-        headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key" },
+        headers: {
+          Accept: "application/json",
+          "X-Noctella-ERP-Key": "test-erp-key",
+          "X-Noctella-ERP-Client-Version": "0.1.0",
+        },
       }),
     );
   });
@@ -103,6 +117,7 @@ describe("postErpBackend", () => {
         headers: {
           Accept: "application/json",
           "X-Noctella-ERP-Key": "test-erp-key",
+          "X-Noctella-ERP-Client-Version": "0.1.0",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),
@@ -153,6 +168,7 @@ describe("issueInvoicePath", () => {
         headers: {
           Accept: "application/json",
           "X-Noctella-ERP-Key": "test-erp-key",
+          "X-Noctella-ERP-Client-Version": "0.1.0",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),
@@ -194,6 +210,7 @@ describe("markInvoicePaidPath", () => {
         headers: {
           Accept: "application/json",
           "X-Noctella-ERP-Key": "test-erp-key",
+          "X-Noctella-ERP-Client-Version": "0.1.0",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),
@@ -235,6 +252,7 @@ describe("cancelInvoicePath", () => {
         headers: {
           Accept: "application/json",
           "X-Noctella-ERP-Key": "test-erp-key",
+          "X-Noctella-ERP-Client-Version": "0.1.0",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ idempotencyKey: "key-1", payload: {} }),

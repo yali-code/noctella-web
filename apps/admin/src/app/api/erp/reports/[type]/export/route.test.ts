@@ -17,7 +17,7 @@ describe("reports export proxy route (Sprint 55B) - completes the export-link fl
     const res = await GET(new Request("http://admin.local/api/erp/reports/sales/export?format=csv&period=Last30Days"), { params: { type: "sales" } });
     expect(mockFetch).toHaveBeenCalledWith(
       "http://backend.internal:4000/api/erp/reports/sales/export?format=csv&period=Last30Days",
-      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key" } }),
+      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key", "X-Noctella-ERP-Client-Version": "0.1.0" } }),
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/csv");

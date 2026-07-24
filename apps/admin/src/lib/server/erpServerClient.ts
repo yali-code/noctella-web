@@ -1,4 +1,13 @@
 const ERP_KEY_HEADER = "X-Noctella-ERP-Key";
+const ERP_CLIENT_VERSION_HEADER = "X-Noctella-ERP-Client-Version";
+
+/**
+ * Sprint 68: the backend (apps/api/src/routes/erp.ts) requires this header on every ERP
+ * request; centralized here (with an optional ERP_CLIENT_VERSION override) so every call site
+ * stays in lockstep with whatever version this client actually implements, rather than each
+ * caller hardcoding its own string.
+ */
+const DEFAULT_ERP_CLIENT_VERSION = "0.1.0";
 
 /**
  * Thrown when server-side ERP configuration is missing. Never includes the
@@ -19,13 +28,21 @@ function erpKey(): string {
   return key;
 }
 
+function erpClientVersion(): string {
+  return process.env.ERP_CLIENT_VERSION || DEFAULT_ERP_CLIENT_VERSION;
+}
+
 /**
  * Fixed request headers only — never accepts a headers argument, so no
  * browser-supplied header (Cookie, Authorization, a spoofed
  * X-Noctella-ERP-Key, or anything else) can ever reach this object.
  */
 export function buildErpRequestHeaders(): Record<string, string> {
-  return { Accept: "application/json", [ERP_KEY_HEADER]: erpKey() };
+  return {
+    Accept: "application/json",
+    [ERP_KEY_HEADER]: erpKey(),
+    [ERP_CLIENT_VERSION_HEADER]: erpClientVersion(),
+  };
 }
 
 /**

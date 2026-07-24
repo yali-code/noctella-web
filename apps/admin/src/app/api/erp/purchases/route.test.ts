@@ -17,7 +17,7 @@ describe("purchases list proxy route (Sprint 57B)", () => {
     const res = await GET(new Request("http://admin.local/api/erp/purchases?status=Draft&supplierId=s1"));
     expect(mockFetch).toHaveBeenCalledWith(
       "http://backend.internal:4000/api/erp/purchases?status=Draft&supplierId=s1",
-      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key" } }),
+      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key", "X-Noctella-ERP-Client-Version": "0.1.0" } }),
     );
     expect(res.status).toBe(200);
   });
