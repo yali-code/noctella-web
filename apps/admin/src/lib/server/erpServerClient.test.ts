@@ -3,6 +3,14 @@ import {
   buildErpRequestHeaders,
   cancelInvoicePath,
   createInvoiceDraftPath,
+  customerHistoryPath,
+  customerMergeCandidatesPath,
+  customerMergePath,
+  customerNotesPath,
+  customerPath,
+  customerPreferencesPath,
+  customerStatisticsPath,
+  customersListPath,
   ErpServerConfigError,
   fetchErpBackend,
   financeOrderPath,
@@ -246,5 +254,23 @@ describe("cancelInvoicePath", () => {
     const mockFetch = vi.spyOn(global, "fetch");
     await expect(postErpBackend(cancelInvoicePath("invoice-1"), {})).rejects.toThrow(ErpServerConfigError);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("customer path builders (Sprint 61B)", () => {
+  it("build the known, fixed backend path for each customer endpoint", () => {
+    expect(customersListPath("search=ada")).toBe("/api/erp/customers?search=ada");
+    expect(customersListPath("")).toBe("/api/erp/customers");
+    expect(customerPath("c1")).toBe("/api/erp/customers/c1");
+    expect(customerHistoryPath("c1")).toBe("/api/erp/customers/c1/history");
+    expect(customerStatisticsPath("c1")).toBe("/api/erp/customers/c1/statistics");
+    expect(customerPreferencesPath("c1")).toBe("/api/erp/customers/c1/preferences");
+    expect(customerNotesPath("c1")).toBe("/api/erp/customers/c1/notes");
+    expect(customerMergeCandidatesPath()).toBe("/api/erp/commands/customers/merge-candidates");
+    expect(customerMergePath()).toBe("/api/erp/commands/customers/merge");
+  });
+
+  it("encodes the customer id so it cannot break out of the fixed template", () => {
+    expect(customerPath("../../etc")).toBe("/api/erp/customers/..%2F..%2Fetc");
   });
 });
