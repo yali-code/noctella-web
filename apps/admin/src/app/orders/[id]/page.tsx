@@ -11,7 +11,19 @@ import {
   type OrderStatusAction,
   type OrderWithItems,
 } from "@/lib/orders";
-import { canAct, financialSummary, readinessSummary, safeErrorSummary, type ShipmentRow } from "@/lib/shipments";
+import {
+  assignTracking,
+  canAct,
+  createShipment,
+  deliverShipment,
+  financialSummary,
+  listShipments,
+  markReady,
+  readinessSummary,
+  safeErrorSummary,
+  shipShipment,
+  type ShipmentRow,
+} from "@/lib/shipments";
 import { cancelInvoice, createInvoiceDraft, issueInvoice, markInvoicePaid } from "@/lib/erpSalesFinanceBridge";
 
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
@@ -41,6 +53,23 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
   const [cancelInvoiceError, setCancelInvoiceError] = useState<string | null>(null);
 
+  const [shipmentActionBusyId, setShipmentActionBusyId] = useState<string | null>(null);
+  const [shipmentActionError, setShipmentActionError] = useState<string | null>(null);
+  const [createShipmentArmed, setCreateShipmentArmed] = useState(false);
+  const [createCarrierCode, setCreateCarrierCode] = useState("");
+  const [createCustomCarrierName, setCreateCustomCarrierName] = useState("");
+  const [createShipmentBusy, setCreateShipmentBusy] = useState(false);
+  const [createShipmentError, setCreateShipmentError] = useState<string | null>(null);
+  const [assignTrackingArmed, setAssignTrackingArmed] = useState(false);
+  const [assignTrackingNumber, setAssignTrackingNumber] = useState("");
+  const [assignTrackingUrl, setAssignTrackingUrl] = useState("");
+  const [assignTrackingBusy, setAssignTrackingBusy] = useState(false);
+  const [assignTrackingError, setAssignTrackingError] = useState<string | null>(null);
+
+  function loadShipments(orderId: string) {
+    listShipments({ orderId }).then(setShipments).catch(() => setShipments([]));
+  }
+
   function loadInvoiceAndSalesBridge(orderId: string) {
     fetch(`/api/erp/orders/${orderId}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
     fetch(`/api/erp/orders/${orderId}/invoices`).then((r) => r.ok ? r.json() : Promise.reject(new Error("invoices"))).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => { setInvoiceBridge([]); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
@@ -52,7 +81,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     getOrder(params.id)
       .then((loaded) => {
         setOrder(loaded);
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/shipments`).then((r) => r.ok ? r.json() : []).then(setShipments).catch(() => setShipments([]));
+        loadShipments(loaded.id);
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
@@ -118,6 +147,54 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       setCancelInvoiceError(err instanceof Error ? err.message : "Failed to cancel invoice");
     } finally {
       setCancellingInvoiceId(null);
+    }
+  }
+
+  async function runShipmentStatusAction(shipmentId: string, action: (id: string) => Promise<unknown>) {
+    if (!order || shipmentActionBusyId) return;
+    setShipmentActionBusyId(shipmentId);
+    setShipmentActionError(null);
+    try {
+      await action(shipmentId);
+      loadShipments(order.id);
+    } catch (err) {
+      setShipmentActionError(err instanceof Error ? err.message : "Failed to update shipment");
+    } finally {
+      setShipmentActionBusyId(null);
+    }
+  }
+
+  async function handleCreateShipment() {
+    if (!order || createShipmentBusy) return;
+    setCreateShipmentBusy(true);
+    setCreateShipmentError(null);
+    try {
+      await createShipment(order.id, { carrierCode: createCarrierCode, customCarrierName: createCustomCarrierName || undefined });
+      setCreateShipmentArmed(false);
+      setCreateCarrierCode("");
+      setCreateCustomCarrierName("");
+      loadShipments(order.id);
+    } catch (err) {
+      setCreateShipmentError(err instanceof Error ? err.message : "Failed to create shipment");
+    } finally {
+      setCreateShipmentBusy(false);
+    }
+  }
+
+  async function handleAssignTracking() {
+    if (!order || assignTrackingBusy || shipments.length === 0) return;
+    setAssignTrackingBusy(true);
+    setAssignTrackingError(null);
+    try {
+      await assignTracking(shipments[0].id, { trackingNumber: assignTrackingNumber || undefined, trackingUrl: assignTrackingUrl || undefined });
+      setAssignTrackingArmed(false);
+      setAssignTrackingNumber("");
+      setAssignTrackingUrl("");
+      loadShipments(order.id);
+    } catch (err) {
+      setAssignTrackingError(err instanceof Error ? err.message : "Failed to assign tracking");
+    } finally {
+      setAssignTrackingBusy(false);
     }
   }
 
@@ -250,19 +327,62 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
 
       <section className="noctella-panel" style={{ padding: 20, marginTop: 20 }}>
         <h3>Shipment & Complete Sale</h3>
+        {shipmentActionError && (
+          <p role="alert" style={{ color: "#c86a6a" }}>
+            {shipmentActionError}
+          </p>
+        )}
         {shipments.length === 0 ? <p>No shipment yet. Use Create Shipment to start fulfillment.</p> : shipments.map((shipment) => (
           <div key={shipment.id} style={{ marginBottom: 12 }}>
             <Row label="Shipment" value={`${shipment.carrierCode} / ${shipment.status}`} />
             <Row label="Tracking" value={shipment.trackingNumber ?? "—"} />
             <Row label="Marketplace fulfillment" value={shipment.marketplaceFulfillmentStatus ?? "n/a"} />
             <Row label="Error" value={safeErrorSummary(shipment.lastError) || "—"} />
-            <button disabled={!canAct(shipment.status, "ready")} style={buttonStyle}>Mark Ready</button>
-            <button disabled={!canAct(shipment.status, "ship")} style={buttonStyle}>Ship</button>
-            <button disabled={!canAct(shipment.status, "deliver")} style={buttonStyle}>Deliver</button>
+            <button
+              disabled={!canAct(shipment.status, "ready") || shipmentActionBusyId !== null}
+              style={buttonStyle}
+              onClick={() => runShipmentStatusAction(shipment.id, markReady)}
+            >
+              {shipmentActionBusyId === shipment.id ? "Marking Ready..." : "Mark Ready"}
+            </button>
+            <button
+              disabled={!canAct(shipment.status, "ship") || shipmentActionBusyId !== null}
+              style={buttonStyle}
+              onClick={() => runShipmentStatusAction(shipment.id, shipShipment)}
+            >
+              {shipmentActionBusyId === shipment.id ? "Shipping..." : "Ship"}
+            </button>
+            <button
+              disabled={!canAct(shipment.status, "deliver") || shipmentActionBusyId !== null}
+              style={buttonStyle}
+              onClick={() => runShipmentStatusAction(shipment.id, deliverShipment)}
+            >
+              {shipmentActionBusyId === shipment.id ? "Delivering..." : "Deliver"}
+            </button>
           </div>
         ))}
-        <button style={buttonStyle}>Create Shipment</button>
-        <button style={buttonStyle}>Assign Tracking</button>
+        {!createShipmentArmed ? (
+          <button style={buttonStyle} onClick={() => { setCreateShipmentArmed(true); setCreateShipmentError(null); }}>Create Shipment</button>
+        ) : (
+          <div style={{ marginTop: 6 }}>
+            <input style={inputStyle} placeholder="Carrier code (e.g. UPS)" value={createCarrierCode} onChange={(e) => setCreateCarrierCode(e.target.value)} />
+            <input style={inputStyle} placeholder="Custom carrier name (if Other)" value={createCustomCarrierName} onChange={(e) => setCreateCustomCarrierName(e.target.value)} />
+            <button style={buttonStyle} disabled={createShipmentBusy || !createCarrierCode} onClick={handleCreateShipment}>{createShipmentBusy ? "Creating..." : "Confirm Create Shipment"}</button>
+            <button style={buttonStyle} disabled={createShipmentBusy} onClick={() => { setCreateShipmentArmed(false); setCreateShipmentError(null); }}>Cancel</button>
+            {createShipmentError && <p role="alert" style={{ color: "#c86a6a" }}>{createShipmentError}</p>}
+          </div>
+        )}
+        {!assignTrackingArmed ? (
+          <button style={buttonStyle} disabled={shipments.length === 0} onClick={() => { setAssignTrackingArmed(true); setAssignTrackingNumber(shipments[0]?.trackingNumber ?? ""); setAssignTrackingUrl(""); setAssignTrackingError(null); }}>Assign Tracking</button>
+        ) : (
+          <div style={{ marginTop: 6 }}>
+            <input style={inputStyle} placeholder="Tracking number" value={assignTrackingNumber} onChange={(e) => setAssignTrackingNumber(e.target.value)} />
+            <input style={inputStyle} placeholder="Tracking URL" value={assignTrackingUrl} onChange={(e) => setAssignTrackingUrl(e.target.value)} />
+            <button style={buttonStyle} disabled={assignTrackingBusy} onClick={handleAssignTracking}>{assignTrackingBusy ? "Submitting..." : "Confirm Tracking"}</button>
+            <button style={buttonStyle} disabled={assignTrackingBusy} onClick={() => { setAssignTrackingArmed(false); setAssignTrackingError(null); }}>Cancel</button>
+            {assignTrackingError && <p role="alert" style={{ color: "#c86a6a" }}>{assignTrackingError}</p>}
+          </div>
+        )}
         {order.status !== OrderStatus.Completed && (
           <button disabled={!readiness?.ready || completeSaleBusy} onClick={handleCompleteSale} style={buttonStyle}>
             {completeSaleBusy ? "Completing Sale..." : "Complete Sale"}

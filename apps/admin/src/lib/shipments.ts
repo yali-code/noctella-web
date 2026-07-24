@@ -1,14 +1,45 @@
-import { api } from "./api";
+import { api, ApiError } from "./api";
 export type ShipmentRow = { id:string; orderId:string; channel?:string; carrierCode:string; trackingNumber?:string; status:string; shippedAt?:string; deliveredAt?:string; lastError?:string; marketplaceFulfillmentStatus?: string; shippingCost?: number; currency?: string };
 export const safeErrorSummary = (e?: string) => e ? e.replace(/Bearer\s+\S+|access_token\S*|refresh_token\S*/gi,"[redacted]").slice(0,160) : "";
 export const canAct = (status:string, action:string) => ({ ready:["draft"], ship:["ready","label_created"], deliver:["in_transit"], fail:["in_transit"], cancel:["draft","ready","label_pending","label_created"], return:["delivered","in_transit"] } as Record<string,string[]>)[action]?.includes(status) ?? false;
 export const shipmentOrderLink = (s: ShipmentRow) => `/orders/${s.orderId}`;
 export const marketplaceOrderLink = (s: ShipmentRow) => s.channel ? `/marketplace-orders?orderId=${encodeURIComponent(s.orderId)}` : undefined;
 export const buildShipmentQuery = (filters: Record<string,string|undefined>) => new URLSearchParams(Object.entries(filters).filter(([,v])=>v) as [string,string][]).toString();
-export async function listShipments(filters: Record<string,string|undefined> = {}) { const q = buildShipmentQuery(filters); return api.get<ShipmentRow[]>(`/shipments${q ? `?${q}` : ""}`); }
-export async function getShipment(id: string) { return api.get<ShipmentRow & { items: unknown[] }>(`/shipments/${id}`); }
-export async function getShipmentEvents(id: string) { return api.get<unknown[]>(`/shipments/${id}/events`); }
-export async function getShipmentTracking(id: string) { return api.get<unknown[]>(`/shipments/${id}/tracking`); }
+/**
+ * Sprint 60B: these reads previously called `/shipments...` (missing the `/api` prefix the
+ * backend actually mounts routes/shipments.ts under - see apps/api/src/index.ts,
+ * `app.use("/api", shipmentsRouter)`), which 404'd on every real request. No page test caught it
+ * because none existed. Fixed alongside adding the mutation functions below.
+ */
+export async function listShipments(filters: Record<string,string|undefined> = {}) { const q = buildShipmentQuery(filters); return api.get<ShipmentRow[]>(`/api/shipments${q ? `?${q}` : ""}`); }
+export async function getShipment(id: string) { return api.get<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}`); }
+export async function getShipmentEvents(id: string) { return api.get<unknown[]>(`/api/shipments/${id}/events`); }
+export async function getShipmentTracking(id: string) { return api.get<unknown[]>(`/api/shipments/${id}/tracking`); }
+
+export async function createShipment(orderId: string, payload: { carrierCode: string; customCarrierName?: string; trackingNumber?: string; trackingUrl?: string; shippingCost?: number }) {
+  return api.post<ShipmentRow & { items: unknown[] }>(`/api/orders/${orderId}/shipments`, payload);
+}
+export async function assignTracking(id: string, payload: { trackingNumber?: string; trackingUrl?: string; carrierCode?: string; customCarrierName?: string }) {
+  return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/tracking`, payload);
+}
+export async function markReady(id: string) { return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/ready`, {}); }
+export async function shipShipment(id: string) { return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/ship`, {}); }
+export async function deliverShipment(id: string) { return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/deliver`, {}); }
+export async function failShipment(id: string) { return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/delivery-failed`, {}); }
+export async function cancelShipment(id: string) { return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/cancel`, {}); }
+export async function returnShipment(id: string) { return api.post<ShipmentRow & { items: unknown[] }>(`/api/shipments/${id}/return`, {}); }
+/**
+ * There is no shipment-scoped retry endpoint - marketplace fulfillment submission runs as a
+ * background job (type `submit_marketplace_shipment`, idempotencyKey `submit-shipment:{id}`,
+ * see shipment-core/runtime.ts). Retrying reuses the existing generic background-jobs list+retry
+ * endpoints rather than adding a new shipment-specific route.
+ */
+export async function retryMarketplaceFulfillment(id: string, channel?: string) {
+  const { items } = await api.get<{ items: Array<{ id: string; payloadSnapshot: string }> }>(`/api/background-jobs?type=submit_marketplace_shipment${channel ? `&channel=${encodeURIComponent(channel)}` : ""}`);
+  const job = items.find((j) => { try { return JSON.parse(j.payloadSnapshot).shipmentId === id; } catch { return false; } });
+  if (!job) throw new ApiError("No marketplace fulfillment job found for this shipment", 404);
+  return api.post<{ ok: boolean }>(`/api/background-jobs/${job.id}/retry`, {});
+}
 export interface FinancialSummary { revenue: number; itemCost: number; fees: number; shippingCost: number; profit: number | null }
 export const financialSummary = (sale: any): FinancialSummary => ({ revenue: sale?.grossRevenue ?? 0, itemCost: sale?.itemCost ?? 0, fees: (sale?.marketplaceFee ?? 0) + (sale?.paymentFee ?? 0) + (sale?.promotedFee ?? 0), shippingCost: sale?.shippingCost ?? 0, profit: sale?.profit ?? null });
 export const readinessSummary = (r: any) => ({ ready: Boolean(r?.ready), issues: Array.isArray(r?.issues) ? r.issues : [] });
