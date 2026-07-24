@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import {
   archiveCategory,
@@ -13,7 +14,7 @@ import { handleRouteError } from "./errorHandler";
 
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("products.view"), async (req, res) => {
   try {
     const query = categoryListQuerySchema.parse(req.query);
     const result = await listCategories(db, query);
@@ -23,7 +24,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("products.view"), async (req, res) => {
   try {
     const category = await getCategoryById(db, req.params.id);
     res.json(category);
@@ -32,7 +33,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("products.edit"), async (req, res) => {
   try {
     const input = createCategorySchema.parse(req.body);
     const category = await createCategory(db, input);
@@ -42,7 +43,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requirePermission("products.edit"), async (req, res) => {
   try {
     const input = updateCategorySchema.parse(req.body);
     const category = await updateCategory(db, req.params.id, input);
@@ -52,7 +53,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.post("/:id/archive", async (req, res) => {
+router.post("/:id/archive", requirePermission("products.edit"), async (req, res) => {
   try {
     const category = await archiveCategory(db, req.params.id);
     res.json(category);
@@ -61,7 +62,7 @@ router.post("/:id/archive", async (req, res) => {
   }
 });
 
-router.post("/:id/restore", async (req, res) => {
+router.post("/:id/restore", requirePermission("products.edit"), async (req, res) => {
   try {
     const category = await restoreCategory(db, req.params.id);
     res.json(category);

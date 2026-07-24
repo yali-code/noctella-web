@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
-import { cancelPaymentSession, initializePaymentSession, listPayments, verifyPaymentSession } from "../payments/paymentRepository";
-import { cancelPaymentSchema, initializePaymentSchema, listPaymentsQuerySchema, verifyPaymentSchema } from "../validation/payment";
+import { listPayments } from "../payments/paymentRepository";
+import { listPaymentsQuerySchema } from "../validation/payment";
 import { handleRouteError } from "./errorHandler";
 
 /**
@@ -9,10 +10,13 @@ import { handleRouteError } from "./errorHandler";
  * server-side persistence of the payment session around those same mock
  * provider calls. Sprint 37B adds a read-only admin listing over that same
  * persisted data — still no real Stripe/PayPal/CashOnDelivery integration.
+ * Sprint 64C: initialize/verify/cancel (guest checkout, no admin session) moved to
+ * routes/paymentsPublic.ts, mounted before the admin session boundary - this router now
+ * covers the administrative read-only listing only.
  */
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("orders.view"), async (req, res) => {
   try {
     const query = listPaymentsQuerySchema.parse(req.query);
     const items = await listPayments(db, query);
@@ -29,36 +33,6 @@ router.get("/", async (req, res) => {
         orderId: p.orderId,
       })),
     );
-  } catch (err) {
-    handleRouteError(err, res);
-  }
-});
-
-router.post("/initialize", async (req, res) => {
-  try {
-    const input = initializePaymentSchema.parse(req.body);
-    const result = await initializePaymentSession(db, input);
-    res.status(201).json(result);
-  } catch (err) {
-    handleRouteError(err, res);
-  }
-});
-
-router.post("/verify", async (req, res) => {
-  try {
-    const input = verifyPaymentSchema.parse(req.body);
-    const result = await verifyPaymentSession(db, input);
-    res.json(result);
-  } catch (err) {
-    handleRouteError(err, res);
-  }
-});
-
-router.post("/cancel", async (req, res) => {
-  try {
-    const input = cancelPaymentSchema.parse(req.body);
-    const result = await cancelPaymentSession(db, input);
-    res.json(result);
   } catch (err) {
     handleRouteError(err, res);
   }
