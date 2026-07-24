@@ -15,3 +15,5 @@ export async function listConflicts(query = "") { return api.get<{ items: StockS
 export async function getConflict(id: string) { return api.get<StockSyncConflictView>(`/api/stock-sync/conflicts/${id}`); }
 export async function resolveConflict(id: string, action: string) { return api.post(`/api/stock-sync/conflicts/${id}/resolve`, { action }); }
 export async function stockSyncAudit() { return api.get<{ items: any[] }>("/api/stock-sync/audit"); }
+export async function syncChannel(channel: string) { return api.post(`/api/stock-sync/marketplaces/${channel}`, {}); }
+export async function syncAllChannels() { return api.post("/api/stock-sync/marketplaces/all", {}); }

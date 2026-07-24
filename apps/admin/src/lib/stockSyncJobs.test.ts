@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { api } from "./api";
-import { cancelBackgroundJob, canCancelJob, canRetryJob, getBackgroundJob, getConflict, getStockSyncStatus, listBackgroundJobs, listConflicts, listingLink, productLink, resolveConflict, retryBackgroundJob, safeError, stockSyncAudit } from "./stockSyncJobs";
+import { cancelBackgroundJob, canCancelJob, canRetryJob, getBackgroundJob, getConflict, getStockSyncStatus, listBackgroundJobs, listConflicts, listingLink, productLink, resolveConflict, retryBackgroundJob, safeError, stockSyncAudit, syncAllChannels, syncChannel } from "./stockSyncJobs";
 
 vi.mock("./api", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 const mockedApi = vi.mocked(api);
@@ -38,5 +38,12 @@ describe("stock sync admin helpers", () => {
     expect(safeError("Bearer secret token=abc")).not.toContain("secret");
     expect(productLink("p1")).toBe("/products/p1");
     expect(listingLink("ext id")).toBe("/external-listings?listing=ext%20id");
+  });
+
+  it("triggers a fixed-channel and an all-channel manual stock sync (Sprint 63B)", async () => {
+    await syncChannel("ebay");
+    expect(mockedApi.post).toHaveBeenCalledWith("/api/stock-sync/marketplaces/ebay", {});
+    await syncAllChannels();
+    expect(mockedApi.post).toHaveBeenCalledWith("/api/stock-sync/marketplaces/all", {});
   });
 });
