@@ -6,6 +6,7 @@ import { MarketplaceConnectionStatus, PublishChannel, PublishJobStatus } from "@
 import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
 import { decryptCredential, encryptCredential } from "../src/services/credentialEncryption";
+import { ConflictError } from "../src/services/errors";
 import { createOAuthState } from "../src/services/oauthState";
 import { completeConnect, disconnect, endExternalListing, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
@@ -115,13 +116,72 @@ describe("marketplace publish workflow", () => {
     let fail = true; const transient = makeAdapter({ createListing: async () => { if (fail) { fail = false; throw new Error("temporary"); } return { externalListingId: "retry-ok", externalStatus: "active" }; } });
     const failed = await executePublish(database, "p1", PublishChannel.Ebay, "retry-key", transient); expect(failed.job.status).toBe(PublishJobStatus.RetryPending);
     const retried = await retryPublishJob(database, failed.job.id, transient); expect(retried.job.status).toBe(PublishJobStatus.Succeeded); expect((await getPublishJob(database, failed.job.id)).attempts).toHaveLength(2);
-    const permanent = makeAdapter({ createListing: async () => { throw new Error("permanent"); } }); const p = await executePublish(database, "p1", PublishChannel.Ebay, "perm", permanent); expect(p.job.status).toBe(PublishJobStatus.Failed); await expect(retryPublishJob(database, p.job.id, permanent)).rejects.toThrow(/not retryable/);
-    const auth = makeAdapter({ createListing: async () => { throw new Error("auth"); } }); expect((await executePublish(database, "p1", PublishChannel.Ebay, "auth", auth)).job.status).toBe(PublishJobStatus.Failed);
-    process.env.MARKETPLACE_PUBLISH_MAX_RETRIES = "1"; const retryLimit = await executePublish(database, "p1", PublishChannel.Ebay, "limit", makeAdapter({ createListing: async () => { throw new Error("temporary"); } })); await expect(retryPublishJob(database, retryLimit.job.id, makeAdapter())).rejects.toThrow(/not retryable/);
+    // Each remaining failure scenario is an independent, first-time publish attempt, so it uses its
+    // own product - p1/Ebay already has an active listing from the retry above (Sprint 62B guard).
+    await product(database, "p-permanent"); const permanent = makeAdapter({ createListing: async () => { throw new Error("permanent"); } }); const p = await executePublish(database, "p-permanent", PublishChannel.Ebay, "perm", permanent); expect(p.job.status).toBe(PublishJobStatus.Failed); await expect(retryPublishJob(database, p.job.id, permanent)).rejects.toThrow(/not retryable/);
+    await product(database, "p-auth"); const auth = makeAdapter({ createListing: async () => { throw new Error("auth"); } }); expect((await executePublish(database, "p-auth", PublishChannel.Ebay, "auth", auth)).job.status).toBe(PublishJobStatus.Failed);
+    await product(database, "p-limit"); process.env.MARKETPLACE_PUBLISH_MAX_RETRIES = "1"; const retryLimit = await executePublish(database, "p-limit", PublishChannel.Ebay, "limit", makeAdapter({ createListing: async () => { throw new Error("temporary"); } })); await expect(retryPublishJob(database, retryLimit.job.id, makeAdapter())).rejects.toThrow(/not retryable/);
   });
   it("ends listings safely and propagates end failures", async () => {
     const database = db(); const adapter = await connect(database); await product(database); await executePublish(database, "p1", PublishChannel.Ebay, "end", adapter);
     const [listing] = await listExternalListings(database, "p1"); await expect(endExternalListing(database, "p1", listing.id, adapter)).resolves.toMatchObject({ status: "ended" });
     adapter.failEnd(); await expect(endExternalListing(database, "p1", listing.id, adapter)).rejects.toThrow(/end failed/);
+  });
+});
+
+describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
+  // Same-payload idempotent replay (item 1) is already covered by "deduplicates idempotency..." above -
+  // it returns before the new guard runs, so it is unaffected by this feature.
+  it("blocks a genuinely new publish while an active listing exists, without touching the adapter or writing a new job/attempt/listing", async () => {
+    const database = db(); const adapter = await connect(database); await product(database);
+    await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
+    const jobsBefore = await database.select().from(schema.publishJobs);
+    const attemptsBefore = await database.select().from(schema.publishAttempts);
+    const listingsBefore = await listExternalListings(database, "p1");
+    await expect(executePublish(database, "p1", PublishChannel.Ebay, "second", adapter)).rejects.toBeInstanceOf(ConflictError);
+    expect(adapter.createCalls()).toBe(1);
+    expect(await database.select().from(schema.publishJobs)).toEqual(jobsBefore);
+    expect(await database.select().from(schema.publishAttempts)).toEqual(attemptsBefore);
+    expect(await listExternalListings(database, "p1")).toEqual(listingsBefore);
+  });
+
+  it("a changed publish payload (no explicit key, so a fresh idempotency key is derived) does not bypass the guard", async () => {
+    const database = db(); const adapter = await connect(database); await product(database);
+    await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
+    await database.update(schema.products).set({ ebayListingPriceEur: 999 }).where(eq(schema.products.id, "p1"));
+    await expect(executePublish(database, "p1", PublishChannel.Ebay, undefined, adapter)).rejects.toBeInstanceOf(ConflictError);
+    expect(adapter.createCalls()).toBe(1);
+  });
+
+  it("allows publishing again once the prior listing is confirmed terminal", async () => {
+    const database = db(); const adapter = await connect(database); await product(database);
+    await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
+    const [existingListing] = await listExternalListings(database, "p1");
+    await database.update(schema.externalListings).set({ externalStatus: "ended" }).where(eq(schema.externalListings.id, existingListing.id));
+    const republished = await executePublish(database, "p1", PublishChannel.Ebay, "second", adapter);
+    expect(republished.job.status).toBe(PublishJobStatus.Succeeded);
+    expect(adapter.createCalls()).toBe(2);
+    expect(await listExternalListings(database, "p1")).toHaveLength(2);
+  });
+
+  it("a listing on a different channel does not block publishing", async () => {
+    const database = db(); const adapter = await connect(database); await connect(database, PublishChannel.Etsy, adapter); await product(database);
+    await executePublish(database, "p1", PublishChannel.Ebay, "ebay-first", adapter);
+    const etsy = await executePublish(database, "p1", PublishChannel.Etsy, "etsy-first", adapter);
+    expect(etsy.job.status).toBe(PublishJobStatus.Succeeded);
+  });
+
+  it("a listing for a different product does not block publishing", async () => {
+    const database = db(); const adapter = await connect(database); await product(database, "p1"); await product(database, "p2");
+    await executePublish(database, "p1", PublishChannel.Ebay, "p1-first", adapter);
+    const other = await executePublish(database, "p2", PublishChannel.Ebay, "p2-first", adapter);
+    expect(other.job.status).toBe(PublishJobStatus.Succeeded);
+  });
+
+  it("treats an unknown/ambiguous external status as blocking, not safely terminal", async () => {
+    const database = db(); let calls = 0; const adapter = makeAdapter({ createListing: async (_t, payload) => { calls += 1; return { externalListingId: "weird-1", externalStatus: "under_review", raw: { title: payload.title } }; }, createCalls: () => calls }); await connect(database, PublishChannel.Ebay, adapter); await product(database);
+    await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
+    await expect(executePublish(database, "p1", PublishChannel.Ebay, "second", adapter)).rejects.toBeInstanceOf(ConflictError);
+    expect(adapter.createCalls()).toBe(1);
   });
 });
