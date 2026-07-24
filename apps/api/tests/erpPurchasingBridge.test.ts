@@ -5,7 +5,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./testDb";
 import { ensureSchema } from "../src/db/migrate";
-import { BadRequestError, ConflictError } from "../src/services/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../src/services/errors";
 import { createSupplier, createPurchase, allocatePurchaseCosts, receivePurchase, getPurchaseLandedCostSummary, executeSupplierCommand, executePurchaseCommand, findSupplierCandidates } from "../src/services/erpPurchasingBridge";
 import { LandedCostAllocationMethod, ProductStatus, ProductType, StockMovementType, SupplierType } from "@noctella/shared";
 import { createCategory } from "../src/services/categories";
@@ -209,5 +209,73 @@ describe("purchasing command idempotency and transaction hardening (Sprint 48B)"
     const summary: any = await allocatePurchaseCosts(d, purchase.id, { allocationMethod: LandedCostAllocationMethod.ByItemCost });
     expect(summary.reconciled).toBe(true);
     expect(summary.complete).toBe(true);
+  });
+});
+
+/**
+ * Sprint 65: receivePurchase previously called receivePurchaseUseCase with no try/catch, so a
+ * thrown PurchaseUseCaseError bubbled unmapped to routes/errorHandler.ts and became a generic
+ * 500 - the same class of gap already fixed for cancelPurchase/markOrdered (see
+ * mapPurchaseUseCaseError above) and for inventory (Sprint 64D). Fixed by wrapping the same
+ * call in the same local mapper. These tests exercise erpPurchasingBridge.ts directly, matching
+ * this file's existing convention, and assert on the mapped error *class* - the class-to-HTTP-
+ * status mapping itself (BadRequestError->400, NotFoundError->404, ConflictError->409) is
+ * routes/errorHandler.ts's job and is covered by its own tests.
+ */
+describe("receivePurchase error mapping (Sprint 65)", () => {
+  let db: ReturnType<typeof createTestDb>;
+  let categoryId = "";
+
+  beforeEach(async () => {
+    db = createTestDb();
+    categoryId = (await createCategory(db, { name: "Purchasing 65", displayOrder: 0, isActive: true })).id;
+  });
+
+  async function seedPurchase(quantity = 2) {
+    const product = await createProduct(db, { sku: `SKU-65-${Math.random()}`, title: "Item", slug: `item-65-${Math.random()}`, type: ProductType.UniqueItem, status: ProductStatus.Draft, categoryId, stockQuantity: 0, priceEur: 100, purchaseCurrency: "EUR" } as any);
+    const supplier: any = await createSupplier(db, { name: `Supplier ${Math.random()}`, supplierType: SupplierType.Dealer });
+    const purchase: any = await createPurchase(db, { supplierId: supplier.id, sourceType: "Other", lines: [{ productId: product.id, titleSnapshot: "Item", quantity, unitPurchaseCost: 10 }] });
+    return { product, supplier, purchase };
+  }
+
+  it("not-found -> NotFoundError (maps to 404)", async () => {
+    await expect(receivePurchase(db, "does-not-exist", { idempotencyKey: "nf-1", lines: [{ purchaseLineId: "irrelevant", quantityReceived: 1 }] })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("over-receipt (requested quantity exceeds remaining receivable quantity) -> ConflictError (maps to 409)", async () => {
+    const { purchase } = await seedPurchase(2);
+    await expect(receivePurchase(db, purchase.id, { idempotencyKey: "or-1", lines: [{ purchaseLineId: purchase.lines[0].id, quantityReceived: 3 } ] })).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("idempotency conflict (same key, different payload) -> ConflictError (maps to 409)", async () => {
+    const { purchase } = await seedPurchase(2);
+    await receivePurchase(db, purchase.id, { idempotencyKey: "idem-1", lines: [{ purchaseLineId: purchase.lines[0].id, quantityReceived: 1 }] });
+    await expect(receivePurchase(db, purchase.id, { idempotencyKey: "idem-1", lines: [{ purchaseLineId: purchase.lines[0].id, quantityReceived: 2 }] })).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("validation (invalid status transition on a Cancelled purchase) -> BadRequestError (maps to 400)", async () => {
+    const { purchase } = await seedPurchase(2);
+    await db.update(purchases).set({ status: "Cancelled" }).where(eq(purchases.id, purchase.id));
+    await expect(receivePurchase(db, purchase.id, { idempotencyKey: "val-1", lines: [{ purchaseLineId: purchase.lines[0].id, quantityReceived: 1 }] })).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("a genuinely unexpected exception is not silently coerced into a mapped client error (stays a 500)", async () => {
+    const { purchase } = await seedPurchase(2);
+    // Malformed command (no `lines` array) triggers a raw TypeError deep inside the use case,
+    // not a PurchaseUseCaseError - mapPurchaseUseCaseError must rethrow it unchanged rather than
+    // hide it behind BadRequestError/NotFoundError/ConflictError.
+    const call = receivePurchase(db, purchase.id, { idempotencyKey: "unexpected-1" } as any);
+    await expect(call).rejects.not.toBeInstanceOf(BadRequestError);
+    await expect(call).rejects.not.toBeInstanceOf(NotFoundError);
+    await expect(call).rejects.not.toBeInstanceOf(ConflictError);
+  });
+
+  it("the successful receive flow is unchanged", async () => {
+    const { purchase, product } = await seedPurchase(2);
+    const result: any = await receivePurchase(db, purchase.id, { idempotencyKey: "success-1", lines: [{ purchaseLineId: purchase.lines[0].id, quantityReceived: 2 }] });
+    expect(result.status).toBe("Received");
+    const movements = (await db.select().from(stockMovements)).filter((m: any) => m.type === StockMovementType.PurchaseReceipt);
+    expect(movements).toHaveLength(1);
+    expect(movements[0].productId).toBe(product.id);
   });
 });
