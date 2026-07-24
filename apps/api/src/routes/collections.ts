@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import {
   archiveCollection,
@@ -17,7 +18,7 @@ import { handleRouteError } from "./errorHandler";
 
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("products.view"), async (req, res) => {
   try {
     const query = collectionListQuerySchema.parse(req.query);
     const result = await listCollections(db, query);
@@ -27,7 +28,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("products.view"), async (req, res) => {
   try {
     const collection = await getCollectionById(db, req.params.id);
     res.json(collection);
@@ -36,7 +37,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("products.edit"), async (req, res) => {
   try {
     const input = createCollectionSchema.parse(req.body);
     const collection = await createCollection(db, input);
@@ -46,7 +47,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requirePermission("products.edit"), async (req, res) => {
   try {
     const input = updateCollectionSchema.parse(req.body);
     const collection = await updateCollection(db, req.params.id, input);
@@ -56,7 +57,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.post("/:id/archive", async (req, res) => {
+router.post("/:id/archive", requirePermission("products.edit"), async (req, res) => {
   try {
     const collection = await archiveCollection(db, req.params.id);
     res.json(collection);
@@ -65,7 +66,7 @@ router.post("/:id/archive", async (req, res) => {
   }
 });
 
-router.post("/:id/restore", async (req, res) => {
+router.post("/:id/restore", requirePermission("products.edit"), async (req, res) => {
   try {
     const collection = await restoreCollection(db, req.params.id);
     res.json(collection);

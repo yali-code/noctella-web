@@ -1,10 +1,12 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import { createManualStockAdjustment, listStockMovements } from "../services/stockMovements";
 import { manualStockAdjustmentSchema, stockMovementListQuerySchema } from "../validation/stockMovement";
 import { handleRouteError } from "./errorHandler";
 
 const router = Router();
+router.use(requirePermission("products.edit"));
 
 router.get("/", async (req, res) => {
   try {

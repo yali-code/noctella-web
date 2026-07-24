@@ -1,12 +1,15 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
-import { createOrder, getOrderById, listOrders, updateOrderStatus } from "../services/orders";
-import { createOrderSchema, orderListQuerySchema, updateOrderStatusSchema } from "../validation/order";
+import { getOrderById, listOrders, updateOrderStatus } from "../services/orders";
+import { orderListQuerySchema, updateOrderStatusSchema } from "../validation/order";
 import { handleRouteError } from "./errorHandler";
 
+/** Sprint 64C: guest order creation (POST /) moved to routes/ordersPublic.ts, mounted before
+ * the admin session boundary - this router now covers administrative order routes only. */
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("orders.view"), async (req, res) => {
   try {
     const query = orderListQuerySchema.parse(req.query);
     const result = await listOrders(db, query);
@@ -16,17 +19,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
-  try {
-    const input = createOrderSchema.parse(req.body);
-    const order = await createOrder(db, input);
-    res.status(201).json(order);
-  } catch (err) {
-    handleRouteError(err, res);
-  }
-});
-
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", requirePermission("orders.manage"), async (req, res) => {
   try {
     const input = updateOrderStatusSchema.parse(req.body);
     const order = await updateOrderStatus(db, req.params.id, input);
@@ -36,7 +29,7 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("orders.view"), async (req, res) => {
   try {
     const order = await getOrderById(db, req.params.id);
     res.json(order);

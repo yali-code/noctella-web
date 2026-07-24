@@ -20,11 +20,26 @@ export function hasPermission(role: AdminRole, permission: Permission): boolean 
 }
 
 /**
- * Placeholder guard factory. Currently a pass-through - Sprint 64C activates real per-route
- * permission enforcement on top of the authentication boundary requireAuth (below) now provides.
+ * Sprint 64C: real per-route authorization, layered on top of requireAuth's authentication
+ * boundary. Reads role only from req.adminUser.role (populated exclusively by requireAuth from
+ * the database-backed session - never from a client-supplied header) and evaluates it through
+ * the shared ROLE_PERMISSIONS model, so Owner's "every permission" access and every other role's
+ * grants are represented centrally in @noctella/shared, not hardcoded per route.
  */
-export function requirePermission(_permission: Permission) {
-  return (_req: AuthedRequest, _res: Response, next: NextFunction) => {
+export function requirePermission(permission: Permission) {
+  return (req: AuthedRequest, res: Response, next: NextFunction): void => {
+    const user = req.adminUser;
+    if (!user) {
+      // Authenticated identity is unexpectedly absent - requireAuth should always run first and
+      // would already have responded 401 in that case. Fails closed with the same status rather
+      // than allowing the request through.
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    if (!hasPermission(user.role as AdminRole, permission)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
     next();
   };
 }

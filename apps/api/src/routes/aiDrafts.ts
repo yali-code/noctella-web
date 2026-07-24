@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import {
   approveDraft,
@@ -20,7 +21,7 @@ import { handleRouteError } from "./errorHandler";
 
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("ai_drafts.view"), async (req, res) => {
   try {
     const query = aiDraftListQuerySchema.parse(req.query);
     const result = await listDrafts(db, query);
@@ -30,7 +31,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("ai_drafts.view"), async (req, res) => {
   try {
     const draft = await getDraftById(db, req.params.id);
     res.json(draft);
@@ -39,7 +40,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requirePermission("ai_drafts.review"), async (req, res) => {
   try {
     const input = updateDraftSchema.parse(req.body);
     const draft = await updateDraft(db, req.params.id, input);
@@ -49,7 +50,7 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.post("/:id/approve", async (req, res) => {
+router.post("/:id/approve", requirePermission("ai_drafts.review"), async (req, res) => {
   try {
     const input = approveDraftSchema.parse(req.body ?? {});
     const draft = await approveDraft(db, req.params.id, input.reviewedByAdminUserId);
@@ -59,7 +60,7 @@ router.post("/:id/approve", async (req, res) => {
   }
 });
 
-router.post("/:id/reject", async (req, res) => {
+router.post("/:id/reject", requirePermission("ai_drafts.review"), async (req, res) => {
   try {
     const input = rejectDraftSchema.parse(req.body ?? {});
     const draft = await rejectDraft(db, req.params.id, input);
@@ -69,7 +70,7 @@ router.post("/:id/reject", async (req, res) => {
   }
 });
 
-router.post("/:id/regenerate", async (req, res) => {
+router.post("/:id/regenerate", requirePermission("ai_drafts.review"), async (req, res) => {
   try {
     regenerateDraftSchema.parse(req.body ?? {});
     const draft = await regenerateDraft(db, req.params.id);

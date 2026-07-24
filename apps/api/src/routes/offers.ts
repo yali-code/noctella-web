@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import { acceptOffer, createDraftOrderFromOffer, createOffer, listOffers, rejectOffer } from "../services/offers";
 import { createOfferSchema } from "../validation/offer";
@@ -10,7 +11,7 @@ import { handleRouteError } from "./errorHandler";
  */
 const router = Router();
 
-router.get("/", async (_req, res) => {
+router.get("/", requirePermission("orders.view"), async (_req, res) => {
   try {
     const items = await listOffers(db);
     res.json(items);
@@ -19,7 +20,7 @@ router.get("/", async (_req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("orders.manage"), async (req, res) => {
   try {
     const input = createOfferSchema.parse(req.body);
     const offer = await createOffer(db, input);
@@ -29,7 +30,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/:id/accept", async (req, res) => {
+router.post("/:id/accept", requirePermission("orders.manage"), async (req, res) => {
   try {
     const offer = await acceptOffer(db, req.params.id);
     res.json(offer);
@@ -38,7 +39,7 @@ router.post("/:id/accept", async (req, res) => {
   }
 });
 
-router.post("/:id/reject", async (req, res) => {
+router.post("/:id/reject", requirePermission("orders.manage"), async (req, res) => {
   try {
     const offer = await rejectOffer(db, req.params.id);
     res.json(offer);
@@ -47,7 +48,7 @@ router.post("/:id/reject", async (req, res) => {
   }
 });
 
-router.post("/:id/draft-order", async (req, res) => {
+router.post("/:id/draft-order", requirePermission("orders.manage"), async (req, res) => {
   try {
     const order = await createDraftOrderFromOffer(db, req.params.id);
     res.status(201).json(order);

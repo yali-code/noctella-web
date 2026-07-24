@@ -26,6 +26,15 @@ describe("returns/refunds routes (Sprint 56B)", () => {
     const returnsRouter = (await import("../src/routes/returns")).default;
     const app = express();
     app.use(express.json());
+    // Sprint 64C: returns.ts routes now call requirePermission(...), which reads req.adminUser -
+    // normally populated by requireAuth in app.ts. This harness mounts the router in isolation
+    // (deliberately, to avoid the rest of app.ts), so it stands in for requireAuth here with a
+    // fixed Owner identity (Owner holds every permission, matching this suite's original intent
+    // of exercising route/business-logic behavior, not authorization itself).
+    app.use((req: any, _res, next) => {
+      req.adminUser = { id: "test-owner", email: "owner@example.com", role: "owner", status: "active" };
+      next();
+    });
     app.use("/api", returnsRouter);
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));

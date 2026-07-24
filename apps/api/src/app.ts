@@ -15,7 +15,9 @@ import marketplaceSyncWebhookRouter from "./routes/marketplaceSync";
 import liveVisitorsRouter from "./routes/liveVisitors";
 import offersRouter from "./routes/offers";
 import ordersRouter from "./routes/orders";
+import ordersPublicRouter from "./routes/ordersPublic";
 import paymentsRouter from "./routes/payments";
+import paymentsPublicRouter from "./routes/paymentsPublic";
 import publishJobsRouter from "./routes/publishJobs";
 import backgroundJobsRouter from "./routes/backgroundJobs";
 import stockSyncRouter from "./routes/stockSync";
@@ -34,7 +36,7 @@ import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { BackgroundJobType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
 import { externalListings } from "./db/schema";
-import { createRequireAuth } from "./auth/permissions";
+import { createRequireAuth, requirePermission } from "./auth/permissions";
 import { requireAdminOriginForMutations } from "./auth/csrf";
 import { requireSchedulerAuth } from "./auth/machineAuth";
 
@@ -48,16 +50,23 @@ const app = express();
 const requireAuth = createRequireAuth(db);
 
 /**
- * Explicit origin allowlist (ADMIN_APP_ORIGIN, comma-separated) with credentials:true, replacing
- * the previous wide-open cors(). A request with no Origin header (server-to-server calls,
- * webhooks, curl, most test clients) is allowed through unmodified - CORS only ever matters for
- * browser-issued requests; everything else never consults it.
+ * Explicit origin allowlist (ADMIN_APP_ORIGIN + STOREFRONT_APP_ORIGIN, each comma-separated) with
+ * credentials:true, replacing the previous wide-open cors(). A request with no Origin header
+ * (server-to-server calls, webhooks, curl, most test clients) is allowed through unmodified -
+ * CORS only ever matters for browser-issued requests; everything else never consults it.
+ * Sprint 64C: STOREFRONT_APP_ORIGIN added alongside ADMIN_APP_ORIGIN - the guest-facing
+ * storefront calls this API cross-origin (anonymous, no admin session) for checkout, so its
+ * origin must be allowlisted too or the browser blocks the response even once the route itself
+ * is correctly made public.
  */
-const adminAppOrigins = (process.env.ADMIN_APP_ORIGIN ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const allowedAppOrigins = [
+  ...(process.env.ADMIN_APP_ORIGIN ?? "").split(","),
+  ...(process.env.STOREFRONT_APP_ORIGIN ?? "").split(","),
+].map((s) => s.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
-    if (adminAppOrigins.includes(origin)) return callback(null, true);
+    if (allowedAppOrigins.includes(origin)) return callback(null, true);
     return callback(null, false);
   },
   credentials: true,
@@ -83,6 +92,13 @@ app.use("/api/public/collections", publicCollectionsRouter);
 // PUBLIC: login only. /logout and /me require requireAuth internally (see routes/auth.ts) -
 // this router can't be uniformly gated at the mount level since it mixes public and protected.
 app.use("/api/auth", authRouter);
+
+// PUBLIC: guest checkout, called directly by the anonymous storefront (no admin session).
+// Sprint 64C: split out of the administrative orders/payments routers (mounted below, behind
+// requireAuth) so only these exact mutation routes are reachable without an admin session -
+// the rest of the orders/payments surface stays admin-only.
+app.use("/api/orders", ordersPublicRouter);
+app.use("/api/payments", paymentsPublicRouter);
 
 // MACHINE AUTHENTICATED: ERP integration clients authenticate via requireErp inside erpRouter.
 app.use("/api/erp", erpRouter);
@@ -123,10 +139,10 @@ app.use("/api/offers", offersRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/live-visitors", liveVisitorsRouter);
-app.post("/api/products/:id/stock-sync", async (req, res, next) => { try { res.json({ jobs: await enqueueProductStockSync(db, req.params.id, "manual") }); } catch (e) { next(e); } });
-app.post("/api/external-listings/:id/stock-sync", async (req, res, next) => { try { const [listing] = await db.select().from(externalListings).where(eq(externalListings.id, req.params.id)); if (!listing) return res.status(404).json({ error: "External listing not found" }); res.json(await enqueueJob(db, { type: BackgroundJobType.StockSyncListing, channel: listing.channel, productId: listing.productId, externalListingId: listing.id, payload: { externalListingId: listing.id }, idempotencyKey: `stock:manual:${listing.id}:${new Date().toISOString()}` })); } catch (e) { next(e); } });
-app.post("/api/marketplaces/:channel/stock-sync", async (req, res, next) => { try { res.json(await enqueueChannelStockSync(db, req.params.channel)); } catch (e) { next(e); } });
-app.post("/api/marketplaces/stock-sync/all", async (req, res, next) => { try { res.json({ jobs: await Promise.all([enqueueChannelStockSync(db, "ebay"), enqueueChannelStockSync(db, "etsy")]) }); } catch (e) { next(e); } });
+app.post("/api/products/:id/stock-sync", requirePermission("marketplace.manage"), async (req, res, next) => { try { res.json({ jobs: await enqueueProductStockSync(db, req.params.id, "manual") }); } catch (e) { next(e); } });
+app.post("/api/external-listings/:id/stock-sync", requirePermission("marketplace.manage"), async (req, res, next) => { try { const [listing] = await db.select().from(externalListings).where(eq(externalListings.id, req.params.id)); if (!listing) return res.status(404).json({ error: "External listing not found" }); res.json(await enqueueJob(db, { type: BackgroundJobType.StockSyncListing, channel: listing.channel, productId: listing.productId, externalListingId: listing.id, payload: { externalListingId: listing.id }, idempotencyKey: `stock:manual:${listing.id}:${new Date().toISOString()}` })); } catch (e) { next(e); } });
+app.post("/api/marketplaces/:channel/stock-sync", requirePermission("marketplace.manage"), async (req, res, next) => { try { res.json(await enqueueChannelStockSync(db, req.params.channel)); } catch (e) { next(e); } });
+app.post("/api/marketplaces/stock-sync/all", requirePermission("marketplace.manage"), async (req, res, next) => { try { res.json({ jobs: await Promise.all([enqueueChannelStockSync(db, "ebay"), enqueueChannelStockSync(db, "etsy")]) }); } catch (e) { next(e); } });
 app.use("/api/marketplaces", marketplacesRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api", marketplaceAdminRouter);
