@@ -662,3 +662,36 @@ export const packingTaskLines = pgTable("packing_task_lines", {
 export const warehouseEvents = pgTable("warehouse_events", {
   id: text("id").primaryKey().notNull().default(sql`now()`),
 });
+
+/** Sprint 64B: admin authentication foundation. */
+export const adminUsers = pgTable("admin_users", {
+  id: text("id").primaryKey().notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull(),
+  status: text("status").notNull().default("active"),
+  sessionVersion: integer("session_version").notNull().default(1),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+export const adminSessions = pgTable("admin_sessions", {
+  id: text("id").primaryKey().notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  adminUserId: text("admin_user_id").notNull(),
+  sessionVersion: integer("session_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().default(sql`now()`),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => [index("idx_admin_sessions_admin_user").on(table.adminUserId)]);
+
+export const adminAuthEvents = pgTable("admin_auth_events", {
+  id: text("id").primaryKey().notNull(),
+  adminUserId: text("admin_user_id"),
+  email: text("email").notNull(),
+  eventType: text("event_type").notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_admin_auth_events_email_created").on(table.email, table.createdAt), index("idx_admin_auth_events_admin_user").on(table.adminUserId)]);

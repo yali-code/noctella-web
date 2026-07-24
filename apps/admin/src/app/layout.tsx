@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { adminMenuItems } from "@/config/menu";
+import { LogoutControl } from "@/components/auth/LogoutControl";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </li>
               ))}
             </ul>
+            <LogoutControl />
           </nav>
           <main style={{ flex: 1, padding: 32 }}>{children}</main>
         </div>
