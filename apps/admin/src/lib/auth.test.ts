@@ -36,14 +36,23 @@ describe("admin auth lib (Sprint 64B)", () => {
     expect(mockedApi.post).toHaveBeenCalledWith("/api/auth/logout", {});
   });
 
-  it("getCurrentAdmin returns the identity on success", async () => {
-    mockedApi.get.mockResolvedValueOnce({ id: "1", email: "a@b.com", role: "owner", status: "active" });
+  it("getCurrentAdmin requests /api/auth/me directly with credentials:include, bypassing the shared api client", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(jsonResponse({ id: "1", email: "a@b.com", role: "owner", status: "active" }));
     const result = await getCurrentAdmin();
     expect(result?.email).toBe("a@b.com");
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain("/api/auth/me");
+    expect(init!.credentials).toBe("include");
+    expect(mockedApi.get).not.toHaveBeenCalled();
   });
 
-  it("getCurrentAdmin returns null (not a throw) when unauthenticated", async () => {
-    mockedApi.get.mockRejectedValueOnce(new Error("401"));
+  it("getCurrentAdmin returns null (not a throw, no redirect) on a 401 - avoids the login-page redirect loop", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(jsonResponse({ error: "Authentication required" }, 401));
+    expect(await getCurrentAdmin()).toBeNull();
+  });
+
+  it("getCurrentAdmin returns null on a network/unexpected error", async () => {
+    vi.spyOn(global, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     expect(await getCurrentAdmin()).toBeNull();
   });
 

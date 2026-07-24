@@ -34,9 +34,20 @@ export async function logout(): Promise<void> {
   await api.post<{ ok: boolean }>("/api/auth/logout", {});
 }
 
+/**
+ * Deliberately bypasses the shared api.ts request() helper, for the same reason as login()
+ * above: an unauthenticated /me response is a normal, expected outcome wherever session state is
+ * being checked - including on the login page itself, where api.ts's centralized 401 handler
+ * hard-navigating back to /login would re-trigger this same check and loop forever.
+ */
 export async function getCurrentAdmin(): Promise<AdminIdentity | null> {
   try {
-    return await api.get<AdminIdentity>("/api/auth/me");
+    const res = await fetch(`${API_BASE_URL}/api/auth/me`, { credentials: "include" });
+    if (res.status === 401) return null;
+    const isJson = res.headers.get("content-type")?.includes("application/json");
+    const body = isJson ? await res.json() : undefined;
+    if (!res.ok) return null;
+    return body as AdminIdentity;
   } catch {
     return null;
   }
