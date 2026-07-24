@@ -14,6 +14,7 @@ import marketplaceAdminRouter from "./routes/marketplaceAdmin";
 import marketplaceSyncWebhookRouter from "./routes/marketplaceSync";
 import liveVisitorsRouter from "./routes/liveVisitors";
 import offersRouter from "./routes/offers";
+import offersPublicRouter from "./routes/offersPublic";
 import ordersRouter from "./routes/orders";
 import ordersPublicRouter from "./routes/ordersPublic";
 import paymentsRouter from "./routes/payments";
@@ -99,6 +100,10 @@ app.use("/api/auth", authRouter);
 // the rest of the orders/payments surface stays admin-only.
 app.use("/api/orders", ordersPublicRouter);
 app.use("/api/payments", paymentsPublicRouter);
+// PUBLIC: guest "Make an Offer" submission, called directly by the anonymous storefront (no
+// admin session). Sprint 65: same split as orders/payments above - offers.ts (mounted below,
+// behind requireAuth) retains every administrative offer route.
+app.use("/api/offers", offersPublicRouter);
 
 // MACHINE AUTHENTICATED: ERP integration clients authenticate via requireErp inside erpRouter.
 app.use("/api/erp", erpRouter);

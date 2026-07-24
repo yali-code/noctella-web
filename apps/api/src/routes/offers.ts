@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
-import { acceptOffer, createDraftOrderFromOffer, createOffer, listOffers, rejectOffer } from "../services/offers";
-import { createOfferSchema } from "../validation/offer";
+import { acceptOffer, createDraftOrderFromOffer, listOffers, rejectOffer } from "../services/offers";
 import { handleRouteError } from "./errorHandler";
 
 /**
  * Sprint 4 exposed offer creation. Sprint 36A adds admin management
  * (list/accept/reject); acceptance/rejection only change offer status.
+ * Sprint 65: guest offer creation (POST /) moved to routes/offersPublic.ts, mounted before
+ * the admin session boundary - this router now covers administrative offer routes only.
  */
 const router = Router();
 
@@ -15,16 +16,6 @@ router.get("/", requirePermission("orders.view"), async (_req, res) => {
   try {
     const items = await listOffers(db);
     res.json(items);
-  } catch (err) {
-    handleRouteError(err, res);
-  }
-});
-
-router.post("/", requirePermission("orders.manage"), async (req, res) => {
-  try {
-    const input = createOfferSchema.parse(req.body);
-    const offer = await createOffer(db, input);
-    res.status(201).json(offer);
   } catch (err) {
     handleRouteError(err, res);
   }

@@ -12,15 +12,21 @@ import { createPurchaseApplicationContextForDb } from "./purchaseApplicationCont
  * Sprint 57B: application/purchase's use-case errors (PurchaseUseCaseError and its
  * subclasses) are not recognized by routes/errorHandler.ts, so an unmapped throw would
  * surface as a generic 500 instead of the correct 400/404/409 - the same class of gap
- * fixed for refunds in Sprint 56B (refundsCompatibility.ts's normalizeError). Applied
- * only to the two paths this sprint routes through the use-case layer (cancel, mark
- * ordered); receivePurchase's pre-existing, broader instance of this same gap is left
- * unchanged (see Sprint 57B discovery/report - out of scope for this correction).
+ * fixed for refunds in Sprint 56B (refundsCompatibility.ts's normalizeError).
+ * Sprint 65: also applied to receivePurchase (see below), closing the last unmapped path
+ * through this bridge. purchase_quantity is classified as a conflict here rather than
+ * validation: within the three call sites that route through this mapper (cancel, mark
+ * ordered, receive), InvalidPurchaseQuantityError is only ever thrown by
+ * receivePurchaseUseCase's over-receipt guard (requested quantity would exceed the
+ * remaining receivable quantity on the line) - a state conflict, not a malformed request.
+ * The same error class's other use (rejecting a non-positive/non-integer quantity in
+ * assertLine) belongs to addPurchaseLineUseCase/updatePurchaseLineUseCase, which are not
+ * wired to any route and never reach this mapper.
  */
 function mapPurchaseUseCaseError(e: unknown): never {
   if (e instanceof PurchaseUseCaseError) {
     if (e.code === "purchase_not_found" || e.code === "supplier_not_found") throw new NotFoundError(e.message);
-    if (e.code === "purchase_concurrency_conflict" || e.code === "purchase_duplicate_reference" || e.code === "supplier_duplicate_reference" || e.code === "purchase_receipt_conflict") throw new ConflictError(e.message);
+    if (e.code === "purchase_concurrency_conflict" || e.code === "purchase_duplicate_reference" || e.code === "supplier_duplicate_reference" || e.code === "purchase_receipt_conflict" || e.code === "purchase_quantity") throw new ConflictError(e.message);
     throw new BadRequestError(e.message);
   }
   throw e;
@@ -139,9 +145,12 @@ export async function allocatePurchaseCosts(db:Db,id:string,cmd:any){ const p=aw
 export async function recalculatePurchaseTotals(db:Db,id:string){ const p=await getPurchase(db,id); const total=totalOf(p); await db.update(purchases).set({totalCost:total,updatedAt:now()}).where(eq(purchases.id,id)); return getPurchase(db,id); }
 export async function receivePurchase(db:Db,id:string,cmd:any){
   const driver = process.env.DATABASE_DRIVER === "postgres" || process.env.DATABASE_DRIVER === "supabase-postgres" ? process.env.DATABASE_DRIVER : "sqlite";
-  const result = await receivePurchaseUseCase(
-    createPurchaseApplicationContextForDb({ db, driver }),
-  ).execute({ ...cmd, purchaseId: id });
+  let result;
+  try {
+    result = await receivePurchaseUseCase(
+      createPurchaseApplicationContextForDb({ db, driver }),
+    ).execute({ ...cmd, purchaseId: id });
+  } catch (e) { mapPurchaseUseCaseError(e); }
   if (!result.replayed) {
     await event(db, id, "Received", { lineCount: cmd.lines.length });
     const receivedLineIds = new Set(cmd.lines.map((line: any) => line.purchaseLineId));
