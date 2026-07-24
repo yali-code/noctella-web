@@ -27,7 +27,7 @@ describe("ERP reports analytics bridge network behavior (Sprint 55B)", () => {
     const result = await erpReportsApi.dashboard();
     expect(mockFetch).toHaveBeenCalledWith(
       "http://backend.internal:4000/api/erp/reports/dashboard",
-      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key" } }),
+      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key", "X-Noctella-ERP-Client-Version": "0.1.0" } }),
     );
     expect(result).toEqual({ inventory: { activeProductCount: 3 } });
   });

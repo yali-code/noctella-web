@@ -17,7 +17,7 @@ describe("warehouses list proxy route (Sprint 58B)", () => {
     const res = await GET();
     expect(mockFetch).toHaveBeenCalledWith(
       "http://backend.internal:4000/api/erp/warehouses",
-      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key" } }),
+      expect.objectContaining({ headers: { Accept: "application/json", "X-Noctella-ERP-Key": "test-erp-key", "X-Noctella-ERP-Client-Version": "0.1.0" } }),
     );
     expect(res.status).toBe(200);
   });
