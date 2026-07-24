@@ -7,7 +7,6 @@ import { getDatabaseConfig, redactSecrets } from "../src/db/config";
 import { checkBackupReadiness, checkSqliteIntegrity, compareSchemaModels, createMigrationPlan, createMigrationPreview, executeMigrationBatch, requiredSprint24Tables, rollbackMigrationBatch, runSchemaParity, validateCutoverState, validateMigrationPlan, validatePostgresMigrationSql, verifyMigrationBatch } from "../src/services/databaseMigrationFoundation";
 import { migrationTransformations, postgresTypeMappings } from "../src/db/schema.postgres";
 import { createDatabaseRuntime } from "../src/db/runtime";
-import { requireDatabaseAdmin } from "../src/routes/databaseAdmin";
 
 describe("Sprint 24 database migration foundation", () => {
   it("keeps sqlite as default driver",()=>expect(getDatabaseConfig({}).driver).toBe("sqlite"));
@@ -52,7 +51,7 @@ describe("Sprint 24 database migration foundation", () => {
   it("closes the sqlite handle after a failed integrity check",()=>{ const f=path.join(os.tmpdir(),`s24-bad-${Date.now()}.sqlite`); fs.writeFileSync(f,"not a sqlite db"); expect(checkSqliteIntegrity(f).status).toBe("FAIL"); expect(()=>fs.unlinkSync(f)).not.toThrow(); });
   it("reports missing integrity file as warning",()=>expect(checkSqliteIntegrity(path.join(os.tmpdir(),"missing-s24.sqlite")).status).toBe("WARN"));
   it("reports backup readiness for valid backup",()=>{ const f=path.join(os.tmpdir(),`s24-bak-${Date.now()}.sqlite`); const db=new Database(f); db.exec("CREATE TABLE t(id TEXT PRIMARY KEY)"); db.close(); fs.copyFileSync(f,`${f}.bak`); expect(checkBackupReadiness(f).sqliteBackupPresent).toBe(true); fs.unlinkSync(f); fs.unlinkSync(`${f}.bak`); });
-  it("rejects unauthenticated admin database route",()=>{ let code=0; requireDatabaseAdmin({header:()=>undefined},{status:(c:number)=>{code=c; return {json:()=>undefined};}},()=>{code=200}); expect(code).toBe(403); });
-  it("rejects unauthorized admin role",()=>{ let code=0; requireDatabaseAdmin({header:(h:string)=>h==="x-admin-role"?"staff":undefined},{status:(c:number)=>{code=c; return {json:()=>undefined};}},()=>{code=200}); expect(code).toBe(403); });
-  it("accepts authorized admin role",()=>{ let code=0; requireDatabaseAdmin({header:(h:string)=>h==="x-admin-role"?"admin":undefined},{status:(c:number)=>{code=c; return {json:()=>undefined};}},()=>{code=200}); expect(code).toBe(200); });
+  // Sprint 64B: the spoofable header-based requireDatabaseAdmin guard was removed - database-admin
+  // routes are now covered by the global requireAuth session gate (see auth.middleware.test.ts /
+  // routeMounting.test.ts) instead of a per-router header check.
 });

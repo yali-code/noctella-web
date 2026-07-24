@@ -14,6 +14,8 @@
     "db:migration-preview": "tsx src/scripts/dbMigrationPreview.ts",
     "db:integrity": "tsx src/scripts/dbIntegrity.ts",
     "db:backup-check": "tsx src/scripts/dbBackupCheck.ts",
+    "bootstrap:admin": "tsx src/scripts/bootstrapAdmin.ts",
+    "reset:admin-password": "tsx src/scripts/resetAdminPassword.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",
     "repo:parity": "tsx src/scripts/productReadRepositoryAudit.ts && tsx src/scripts/productWriteRepositoryAudit.ts && tsx src/scripts/orderRepositoryAudit.ts && tsx src/scripts/returnRepositoryFoundationAudit.ts && tsx src/scripts/refundRepositoryFoundationAudit.ts && tsx src/scripts/inventoryRepositoryAudit.ts"
   },
@@ -36,7 +38,9 @@
     "@types/express": "^4.17.21",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.14.11",
+    "@types/supertest": "^6.0.3",
     "drizzle-kit": "^0.31.10",
+    "supertest": "^7.2.2",
     "tsx": "^4.16.2",
     "typescript": "^5.5.4",
     "vitest": "^4.1.10"

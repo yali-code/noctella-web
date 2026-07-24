@@ -2,9 +2,11 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { backgroundJobs } from "../db/schema";
-import { cancelJob, listJobs, retryJob, runDueJobs } from "../services/backgroundJobs";
+import { cancelJob, listJobs, retryJob } from "../services/backgroundJobs";
 const router = Router();
-router.post("/run", async (req, res, next) => { try { res.json({ processed: await runDueJobs(db, String(req.body?.workerId ?? "manual"), Number(req.body?.batchSize ?? 10)) }); } catch (e) { next(e); } });
+// Sprint 64B: POST /run moved to index.ts, gated by requireSchedulerAuth (a machine bearer
+// token independent of admin sessions) and mounted before the global requireAuth admin gate -
+// scheduler calls must never need an admin session cookie.
 router.get("/", async (req, res, next) => { try { res.json({ items: await listJobs(db, req.query as any) }); } catch (e) { next(e); } });
 router.get("/:id", async (req, res, next) => { try { const [job] = await db.select().from(backgroundJobs).where(eq(backgroundJobs.id, req.params.id)); res.json(job); } catch (e) { next(e); } });
 router.post("/:id/retry", async (req, res, next) => { try { await retryJob(db, req.params.id); res.json({ ok: true }); } catch (e) { next(e); } });
