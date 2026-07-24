@@ -235,6 +235,39 @@ export function cancelPackingTaskPath(taskId: string): string {
   return `/api/erp/commands/packing/${encodeURIComponent(taskId)}/cancel`;
 }
 
+/** Sprint 61B: customer path builders, same fixed-template convention. */
+export function customersListPath(query: string): string {
+  return `/api/erp/customers${query ? `?${query}` : ""}`;
+}
+
+export function customerPath(customerId: string): string {
+  return `/api/erp/customers/${encodeURIComponent(customerId)}`;
+}
+
+export function customerHistoryPath(customerId: string): string {
+  return `/api/erp/customers/${encodeURIComponent(customerId)}/history`;
+}
+
+export function customerStatisticsPath(customerId: string): string {
+  return `/api/erp/customers/${encodeURIComponent(customerId)}/statistics`;
+}
+
+export function customerPreferencesPath(customerId: string): string {
+  return `/api/erp/customers/${encodeURIComponent(customerId)}/preferences`;
+}
+
+export function customerNotesPath(customerId: string): string {
+  return `/api/erp/customers/${encodeURIComponent(customerId)}/notes`;
+}
+
+export function customerMergeCandidatesPath(): string {
+  return `/api/erp/commands/customers/merge-candidates`;
+}
+
+export function customerMergePath(): string {
+  return `/api/erp/commands/customers/merge`;
+}
+
 /**
  * Forwards a GET request to one of the fixed backend paths above, attaching
  * the server-only ERP key. Fails closed (throws before any fetch) if the key
