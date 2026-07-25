@@ -1,8 +1,10 @@
-import { describe,it,expect } from "vitest"; import { readFileSync } from "node:fs"; import { join } from "node:path"; import { auditPurchaseRepositorySources, resolvePurchaseRepositoryAuditRoot } from "../src/scripts/purchaseRepositoryAudit";
+import { describe,it,expect } from "vitest"; import { readFileSync } from "node:fs"; import { auditPurchaseRepositorySources, resolvePurchaseRepositoryAuditRoot } from "../src/scripts/purchaseRepositoryAudit";
 describe("purchase repository audit Sprint 32A-P1",()=>{
- it("D: resolves the repo root from both POSIX and Windows style cwd paths (Sprint 53B)",()=>{
-  expect(resolvePurchaseRepositoryAuditRoot("/home/runner/work/noctella-web/apps/api")).toBe(join("/home/runner/work/noctella-web/apps/api","..",".."));
-  expect(resolvePurchaseRepositoryAuditRoot("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe(join("C:\\Users\\Admin\\noctella-web\\apps\\api","..",".."));
+ it("D: resolves the repo root from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)",()=>{
+  // 1/2. An apps/api cwd walks up two levels using that same input's own separator style.
+  expect(resolvePurchaseRepositoryAuditRoot("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web");
+  expect(resolvePurchaseRepositoryAuditRoot("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web");
+  // 3/4. A repo-root cwd is already the answer - returned unchanged on either style.
   expect(resolvePurchaseRepositoryAuditRoot("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web");
   expect(resolvePurchaseRepositoryAuditRoot("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web");
  });

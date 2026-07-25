@@ -1,10 +1,10 @@
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { resolveAuditBase } from "./auditPathBase";
 
-/** Sprint 53B: same cross-platform base-directory resolution approved in Sprint 52B (refundTransactionAudit.ts), kept local to this script. */
-export const resolveRefundUseCaseAuditBase = (cwd: string): string =>
-  basename(cwd) === "api" && basename(dirname(cwd)) === "apps" ? cwd : join(cwd, "apps", "api");
+/** Sprint 69: cross-platform base-directory resolution, shared - see auditPathBase.ts. */
+export const resolveRefundUseCaseAuditBase = resolveAuditBase;
 
 const forbidden = [
   /DbClient/, /db\/schema|schema\.sqlite|schema\.postgres/, /drizzle-orm/, /\bsql`/, /repositories\/refund\/(sqlite|postgres|factory)/,

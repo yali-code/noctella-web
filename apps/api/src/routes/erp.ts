@@ -23,7 +23,7 @@ async function requireErp(req: any, res: any, next: any) { const auth = await au
 
 router.options("*", (req, res) => { const allow=(process.env.ERP_CORS_ORIGINS??"").split(",").map(s=>s.trim()).filter(Boolean); const origin=req.header("origin"); if(origin && allow.includes(origin)) res.header("Access-Control-Allow-Origin", origin); res.header("Access-Control-Allow-Headers", "Content-Type,X-Noctella-ERP-Key,X-Noctella-ERP-Client-Version,X-Noctella-ERP-Request-Id"); res.sendStatus(204); });
 router.get("/version", (req, res) => res.json(versionInfo(version(req))));
-router.get("/health", async (req, res) => { const publicOnly=!key(req); const h=await health(db); res.json(publicOnly ? { status: h.status, apiVersion: h.apiVersion, serverTime: h.serverTime } : h); });
+router.get("/health", async (req, res) => { try { const publicOnly=!key(req); const h=await health(db); res.json(publicOnly ? { status: h.status, apiVersion: h.apiVersion, serverTime: h.serverTime } : h); } catch (err) { handleRouteError(err, res); } });
 router.get("/capabilities", requireErp, (_req, res) => res.json(capabilities()));
 
 function parseMigrationPayload(req: any, res: any) { const len=Number(req.header("content-length") ?? 0); if (len > ERP_MIGRATION_MAX_BYTES) { res.status(413).json({ error:"ERP migration preview payload is too large" }); return null; } return req.body?.source ?? req.body ?? {}; }

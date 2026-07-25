@@ -118,8 +118,18 @@ describe("Sprint 26 actual route-used read services", () => {
   test("read services do not mutate business tables", async () => { const { db, repos } = await seedReadDb(); const before = await businessCounts(db); const ctx = countingContext(repos); await listProducts(db as any, { page:1, pageSize:10 } as any, ctx); await getProductById(db as any, "p1", ctx); await listPublicProducts(db as any, { page:1, pageSize:10, sort:"newest" } as any, ctx); await listProductProjections(db as any, { limit:10 }, ctx); expect(await businessCounts(db)).toEqual(before); });
 });
 
-import { auditProductReadSource, runProductReadRepositoryAudit } from "../src/scripts/productReadRepositoryAudit";
+import { auditProductReadSource, resolveProductReadRepositoryAuditBase, runProductReadRepositoryAudit } from "../src/scripts/productReadRepositoryAudit";
 describe("Sprint 26 direct-access read audit executable fixtures", () => {
+  test("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)", () => {
+    // 1. POSIX apps/api cwd - returned unchanged.
+    expect(resolveProductReadRepositoryAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    // 2. Windows apps/api cwd - returned unchanged, even when this test runs on Linux CI.
+    expect(resolveProductReadRepositoryAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
+    // 3. POSIX repository root - appends apps/api using POSIX separators only.
+    expect(resolveProductReadRepositoryAuditBase("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web/apps/api");
+    // 4. Windows repository root - appends apps\api using Windows separators only (never mixed).
+    expect(resolveProductReadRepositoryAuditBase("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
+  });
   test("repository-only read service passes", () => expect(auditProductReadSource({"ok.ts":"export async function listProducts(db:any,q:any,context:ProductReadServiceContext){ return context.repositories.products.list(q); } type ProductReadServiceContext = any;"}).status).toBe("PASS"));
   test("direct read DB import fails", () => expect(auditProductReadSource({"bad.ts":"import { db } from '../db/client'; export async function listProducts(db:any,q:any,context:ProductReadServiceContext){ return db.select().from(products); } type ProductReadServiceContext = any;"}).status).toBe("FAIL"));
   test("schema read import fails", () => expect(auditProductReadSource({"bad.ts":"import { products } from '../db/schema'; export async function getProductById(db:any,q:any,context:ProductReadServiceContext){ return db.select().from(products); } type ProductReadServiceContext = any;"}).violations.join("\n")).toContain("direct read persistence"));

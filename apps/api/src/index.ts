@@ -1,15 +1,20 @@
 import app from "./app";
-import { db } from "./db/client";
+import { db, dbRuntime } from "./db/client";
 import { seedInitialCategoriesIfEmpty } from "./services/categories";
+import { createGracefulShutdown, resolvePort } from "./serverLifecycle";
 
-const port = process.env.API_PORT ?? 4000;
+const port = resolvePort();
 
-seedInitialCategoriesIfEmpty(db).catch((err) => {
+seedInitialCategoriesIfEmpty(db).catch(() => {
   // eslint-disable-next-line no-console
-  console.error("Failed to seed initial categories", err);
+  console.error("Failed to seed initial categories");
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   // eslint-disable-next-line no-console
   console.log(`Noctella API listening on port ${port}`);
 });
+
+const shutdown = createGracefulShutdown({ server, dbRuntime });
+process.on("SIGTERM", () => { void shutdown("SIGTERM"); });
+process.on("SIGINT", () => { void shutdown("SIGINT"); });

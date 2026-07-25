@@ -1,0 +1,150 @@
+# Noctella ERP - Render Blueprint for the v2.0.0-rc.1 staging environment.
+#
+# Scope: RC staging infrastructure only, per Sprint 69 (see docs/deployment/render-staging.md
+# for the full ordered deployment runbook and explicit non-goals). Deliberately uses SQLite on a
+# single persistent disk and local product-photo storage - PostgreSQL/Supabase and object
+# storage remain out of scope for this staging pass and are not introduced here.
+#
+# No real secret values are set in this file. Every credential is either Render-generated
+# (generateValue: true, never appears in the repo or the Render dashboard's YAML view) or
+# operator-supplied (sync: false, entered manually in the Render dashboard after the Blueprint
+# is created - see the runbook, step 4).
+
+services:
+  # --- A. API web service --------------------------------------------------------------------
+  - type: web
+    name: noctella-staging-api
+    runtime: node
+    region: frankfurt
+    branch: main
+    plan: starter
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 30
+    disk:
+      name: noctella-staging-data
+      mountPath: /var/data
+      sizeGB: 1
+    domains:
+      - api.staging.noctella.com
+    envVars:
+      # Non-secret configuration
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_DRIVER
+        value: sqlite
+      - key: DATABASE_URL
+        value: /var/data/noctella.sqlite
+      - key: PRODUCT_PHOTO_DIR
+        value: /var/data/product-photos
+      - key: ADMIN_APP_ORIGIN
+        value: https://admin.staging.noctella.com
+      - key: STOREFRONT_APP_ORIGIN
+        value: https://shop.staging.noctella.com
+      - key: COOKIE_DOMAIN
+        value: .staging.noctella.com
+      - key: ERP_CLIENT_VERSION
+        value: 0.1.0
+      # Render-generated secrets - random values created by Render, never written to this file
+      # or committed to source control. Verify the generated MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY
+      # actually decodes to 32 bytes (see runbook risk note) before relying on marketplace
+      # credential encryption in staging.
+      - key: ERP_INTEGRATION_KEY
+        generateValue: true
+      - key: ERP_INTEGRATION_KEY_SALT
+        generateValue: true
+      - key: SCHEDULER_AUTH_TOKEN
+        generateValue: true
+      - key: MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      # Operator-supplied secrets - entered manually in the Render dashboard after Blueprint
+      # creation (sync: false). Never set real values here.
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_REDIRECT_URI
+        sync: false
+      - key: EBAY_WEBHOOK_SECRET
+        sync: false
+      - key: ETSY_CLIENT_ID
+        sync: false
+      - key: ETSY_REDIRECT_URI
+        sync: false
+      - key: ETSY_WEBHOOK_SECRET
+        sync: false
+
+  # --- B. Admin web service -------------------------------------------------------------------
+  - type: web
+    name: noctella-staging-admin
+    runtime: node
+    region: frankfurt
+    branch: main
+    plan: free
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/admin
+    # apps/admin's own "start" script hardcodes -p 3001 for local dev - bypassed here so the
+    # service binds to the port Render assigns via $PORT instead.
+    startCommand: cd apps/admin && npx next start -p $PORT
+    domains:
+      - admin.staging.noctella.com
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://api.staging.noctella.com
+      - key: ERP_CLIENT_VERSION
+        value: 0.1.0
+      - key: ERP_INTEGRATION_KEY
+        fromService:
+          name: noctella-staging-api
+          type: web
+          envVarKey: ERP_INTEGRATION_KEY
+
+  # --- C. Storefront web service --------------------------------------------------------------
+  - type: web
+    name: noctella-staging-storefront
+    runtime: node
+    region: frankfurt
+    branch: main
+    plan: free
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/storefront
+    # apps/storefront's own "start" script hardcodes -p 3000 for local dev - bypassed here so
+    # the service binds to the port Render assigns via $PORT instead.
+    startCommand: cd apps/storefront && npx next start -p $PORT
+    domains:
+      - shop.staging.noctella.com
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://api.staging.noctella.com
+
+  # --- D. Background-job cron service -----------------------------------------------------------
+  - type: cron
+    name: noctella-staging-background-jobs
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "0 * * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runBackgroundJobs.js
+    envVars:
+      # Render private networking: resolves to the API service's internal host:port, never a
+      # public onrender.com hostname - the cron job never leaves Render's private network.
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-staging-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-staging-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN

@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-/** Sprint 53B: same cross-platform base-directory resolution approved in Sprint 52B (refundTransactionAudit.ts), kept local to this script. */
-export const resolvePurchaseUseCaseAuditBase = (cwd: string): string =>
-  basename(cwd) === "api" && basename(dirname(cwd)) === "apps" ? cwd : join(cwd, "apps", "api");
+import { join } from "node:path";
+import { resolveAuditBase } from "./auditPathBase";
+/** Sprint 69: cross-platform base-directory resolution, shared - see auditPathBase.ts. */
+export const resolvePurchaseUseCaseAuditBase = resolveAuditBase;
 export interface PurchaseUseCaseAuditResult{readonly status:"PASS"|"FAIL";readonly issues:readonly string[]}
 const forbidden:[string,RegExp][]= [["SQL",/sql`|\bselect\s+\*|\binsert\s+into|\bdelete\s+from|\bupdate\s+\w+\s+set/i],["schema",/db\/schema|schema\./i],["DbClient",/DbClient/],["Drizzle",/drizzle/i],["repository implementation",/repositories\/purchase\/(sqlite|postgres|factory)|createPurchaseRepositories/i],["routes",/routes?\//i],["controllers",/controllers?\//i],["HTTP",/Request|Response|fetch\(|axios/i],["provider SDK",/stripe|paypal|provider sdk/i],["marketplace SDK",/ebay|etsy|woocommerce/i],["AI SDK",/openai|anthropic|ai sdk/i],["environment loading",/process\.env|dotenv/i],["direct Inventory repository",/repositories\/inventory/i],["direct stock update",/stock table|stockQuantity\s*=|from\(products\)/i],["manual transaction",/\.transaction\(|beginTransaction|commit\(|rollback\(/i],["Date.now",/Date\.now\(/],["randomUUID",/randomUUID\(/],["Math.random",/Math\.random\(/],["EventEmitter",/EventEmitter/],["queue",/queue|enqueue|worker/i],["webhook",/webhook/i],["event publication",/publish\(|emit\(/],["generic patch",/Record<string,\s*unknown>|PatchUseCase|ExecutePurchaseAction|GenericPurchaseCommand/i]];
 function files(dir:string):string[]{return readdirSync(dir).flatMap(f=>{const p=join(dir,f); return statSync(p).isDirectory()?files(p):p.endsWith(".ts")?[p]:[]})}
