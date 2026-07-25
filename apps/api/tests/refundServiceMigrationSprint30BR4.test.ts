@@ -18,11 +18,15 @@ const methods = [
 ];
 
 describe("Sprint 30B-R4 refund service migration", () => {
-  test("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)", () => {
+  test("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)", () => {
+    // 1. POSIX apps/api cwd - returned unchanged.
     expect(resolveRefundServiceMigrationAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    // 2. Windows apps/api cwd - returned unchanged, even when this test runs on Linux CI.
     expect(resolveRefundServiceMigrationAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
-    expect(resolveRefundServiceMigrationAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
-    expect(resolveRefundServiceMigrationAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+    // 3. POSIX repository root - appends apps/api using POSIX separators only.
+    expect(resolveRefundServiceMigrationAuditBase("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web/apps/api");
+    // 4. Windows repository root - appends apps\api using Windows separators only (never mixed).
+    expect(resolveRefundServiceMigrationAuditBase("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
   });
   test.each(methods)("%s delegates to %s", (_method, useCase) => expect(source()).toContain(useCase));
   test.each(["from(orders)", "from(refunds)", "db.select", "db.insert", "db.update", "sql`", "drizzle-orm"])("service has no SQL token %s", (token) => expect(source()).not.toContain(token));

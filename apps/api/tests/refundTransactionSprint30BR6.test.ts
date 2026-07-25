@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { auditRefundTransactionSafety, resolveRefundAuditBase } from "../src/scripts/refundTransactionAudit";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 const source = readFileSync(new URL("../src/use-cases/refund/useCases.ts", import.meta.url), "utf8");
 const serviceContext = readFileSync(new URL("../src/services/refundServiceContext.ts", import.meta.url), "utf8");
@@ -42,14 +41,16 @@ const mustContain = [
 
 describe("refund transaction completion Sprint 30B-R6", () => {
   it("production transaction audit passes", () => expect(auditRefundTransactionSafety()).toBe(true));
-  it("I: resolves the apps/api base directory from both POSIX and Windows style cwd paths", () => {
-    // Already-inside-apps/api cwd must be returned verbatim (no separator mixing) on either style -
-    // this is the exact scenario the old endsWith("apps/api") check silently failed on Windows.
+  it("I: resolves the apps/api base directory from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)", () => {
+    // 1/2. Already-inside-apps/api cwd must be returned verbatim (no separator mixing) on either
+    // style - this is the exact scenario the old endsWith("apps/api") check silently failed on
+    // Windows-style input checked on a Linux CI runner.
     expect(resolveRefundAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
     expect(resolveRefundAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
-    // A repo-root cwd falls back to joining "apps/api" using the host platform's own separator.
-    expect(resolveRefundAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
-    expect(resolveRefundAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+    // 3/4. A repo-root cwd appends "apps/api" using that same input's own separator style -
+    // never the host platform's default, and never mixed with the other style.
+    expect(resolveRefundAuditBase("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web/apps/api");
+    expect(resolveRefundAuditBase("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
   });
   it.each(mustContain)("verifies %s", (_name, a, b) => { expect(source + serviceContext).toContain(a); expect(source + serviceContext).toContain(b); });
   it.each([

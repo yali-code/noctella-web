@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { join } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { ensureSchema } from "../src/db/migrate";
@@ -27,11 +26,15 @@ function db() { const raw = new Database(":memory:"); ensureSchema(raw); const d
 const clean = "Object.freeze({ salesRepositories, saleRepository, unitOfWork, logger, clock, idGenerator, configuration });";
 
 describe("Sales application context Sprint 33A-S2", () => {
-  it("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)", () => {
+  it("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)", () => {
+    // 1. POSIX apps/api cwd - returned unchanged.
     expect(resolveSalesApplicationContextAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
+    // 2. Windows apps/api cwd - returned unchanged, even when this test runs on Linux CI.
     expect(resolveSalesApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
-    expect(resolveSalesApplicationContextAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
-    expect(resolveSalesApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+    // 3. POSIX repository root - appends apps/api using POSIX separators only.
+    expect(resolveSalesApplicationContextAuditBase("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web/apps/api");
+    // 4. Windows repository root - appends apps\api using Windows separators only (never mixed).
+    expect(resolveSalesApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
   });
   const cases: Array<[string, () => void | Promise<void>]> = [
     ["builds context", () => expect(buildSalesApplicationContext(deps())).toBeTruthy()],

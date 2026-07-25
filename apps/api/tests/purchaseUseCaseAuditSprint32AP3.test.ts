@@ -1,12 +1,11 @@
 import {describe,it,expect} from "vitest";
-import {join} from "node:path";
 import {auditPurchaseUseCaseSource,resolvePurchaseUseCaseAuditBase,runPurchaseUseCaseAudit} from "../src/scripts/purchaseUseCaseAudit";
 describe("Purchase use case audit Sprint 32A-P3",()=>{
-it("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)",()=>{
+it("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)",()=>{
   expect(resolvePurchaseUseCaseAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
   expect(resolvePurchaseUseCaseAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
-  expect(resolvePurchaseUseCaseAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web","apps","api"));
-  expect(resolvePurchaseUseCaseAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web","apps","api"));
+  expect(resolvePurchaseUseCaseAuditBase("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web/apps/api");
+  expect(resolvePurchaseUseCaseAuditBase("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
 });
 it("production audit passes",()=>expect(runPurchaseUseCaseAudit().status).toBe("PASS"));
 it("SQL fixture fails",()=>expect(auditPurchaseUseCaseSource("sql`select 1`").issues).toContain("SQL"));

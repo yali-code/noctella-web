@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
+import { resolveAuditBase } from "./auditPathBase";
 
-/** Sprint 53B: same cross-platform base-directory resolution approved in Sprint 52B (refundTransactionAudit.ts), kept local to this script. */
-export const resolveInventoryApplicationContextAuditBase = (cwd: string): string =>
-  basename(cwd) === "api" && basename(dirname(cwd)) === "apps" ? cwd : join(cwd, "apps", "api");
+/** Sprint 69: cross-platform base-directory resolution, shared - see auditPathBase.ts. */
+export const resolveInventoryApplicationContextAuditBase = resolveAuditBase;
 
 export interface InventoryApplicationContextAuditResult {
   status: "PASS" | "FAIL";

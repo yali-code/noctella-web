@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { resolveAuditBase } from "./auditPathBase";
 export type ProductReadAuditResult = { status: "PASS" | "FAIL"; violations: string[]; approvedWriteExceptions: string[] };
-const root = process.cwd().endsWith(path.join("apps", "api")) ? process.cwd() : path.join(process.cwd(), "apps", "api");
+/** Sprint 69: cross-platform base-directory resolution, shared - see auditPathBase.ts. Replaces
+ * a `process.cwd().endsWith(path.join("apps", "api"))` check that used the host-bound "node:path"
+ * join for both the suffix comparison and the fallback join, so it silently broke exactly like
+ * the basename/dirname-based resolvers elsewhere in this directory. */
+export const resolveProductReadRepositoryAuditBase = resolveAuditBase;
+const root = resolveProductReadRepositoryAuditBase(process.cwd());
 const readFunctions = ["listProducts","getProductById","listCategories","getCategoryById","listCollections","getCollectionById","listPublicProducts","getPublicProductBySlug","listPublicCategories","getPublicCategoryBySlug","listPublicCollections","getPublicCollectionBySlug","listProductProjections","project","getProductProjection","identityCheck"];
 const directPatterns = [/db\.select\(/, /\.from\((products|categories|collections|productPhotos|productImages)\)/, /new\s+Pool\(/, /from\s+["']pg["']/, /sql`/];
 const files = ["src/services/products.ts", "src/services/publicCatalog.ts", "src/services/categories.ts", "src/services/collections.ts", "src/services/erpIntegration.ts"];

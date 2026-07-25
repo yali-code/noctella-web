@@ -40,7 +40,11 @@ export function handleRouteError(err: unknown, res: Response): void {
     res.status(INVENTORY_ERROR_STATUS[err.category]).json({ error: err.message });
     return;
   }
+  // Sprint 69: an unmapped exception's raw message, a JSON.stringify of it, or even a redacted
+  // derivative could still echo user-controlled/upstream text (a token, connection string, etc).
+  // Logging a fixed operational message is the only way to guarantee that never happens - err is
+  // deliberately never touched here, not even indirectly.
   // eslint-disable-next-line no-console
-  console.error(err);
+  console.error("Unhandled route error");
   res.status(500).json({ error: "Internal server error" });
 }

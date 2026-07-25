@@ -1,5 +1,4 @@
 import { describe, expect, test, vi } from "vitest";
-import { join } from "node:path";
 import {
   auditInventoryApplicationContextSource,
   resolveInventoryApplicationContextAuditBase,
@@ -77,11 +76,11 @@ const forbiddenRuntimeKeys = [
 ];
 
 describe("Sprint 31A-I2 Inventory application context", () => {
-  test("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths (Sprint 53B)", () => {
+  test("D: resolves the apps/api base directory from both POSIX and Windows style cwd paths, using explicit expected strings (never host-dependent path.join) (Sprint 69)", () => {
     expect(resolveInventoryApplicationContextAuditBase("/home/runner/work/noctella-web/apps/api")).toBe("/home/runner/work/noctella-web/apps/api");
     expect(resolveInventoryApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web\\apps\\api")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
-    expect(resolveInventoryApplicationContextAuditBase("/home/runner/work/noctella-web")).toBe(join("/home/runner/work/noctella-web", "apps", "api"));
-    expect(resolveInventoryApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web")).toBe(join("C:\\Users\\Admin\\noctella-web", "apps", "api"));
+    expect(resolveInventoryApplicationContextAuditBase("/home/runner/work/noctella-web")).toBe("/home/runner/work/noctella-web/apps/api");
+    expect(resolveInventoryApplicationContextAuditBase("C:\\Users\\Admin\\noctella-web")).toBe("C:\\Users\\Admin\\noctella-web\\apps\\api");
   });
   test("builds context", () =>
     expect(buildInventoryApplicationContext(deps())).toBeTruthy());
