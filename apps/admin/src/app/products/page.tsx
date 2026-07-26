@@ -8,7 +8,7 @@ import {
 } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, resolveApiAssetUrl } from "@/lib/api";
 import type { PaginatedResult, ProductListItem } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -197,7 +197,7 @@ export default function ProductsPage() {
                   {item.primaryImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={item.primaryImageUrl}
+                      src={resolveApiAssetUrl(item.primaryImageUrl)}
                       alt=""
                       style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 4 }}
                     />

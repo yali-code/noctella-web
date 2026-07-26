@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { resolveApiAssetUrl } from "@/lib/api";
 import { productThumbnailUrl, sortedProductImages } from "@/lib/productImages";
 import type { PublicProductImage } from "@/lib/types";
 
@@ -43,7 +44,7 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={active.url}
+          src={resolveApiAssetUrl(active.url)}
           alt={active.altText || title}
           style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: 4 }}
         />
@@ -71,7 +72,7 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={productThumbnailUrl(img)}
+                src={resolveApiAssetUrl(productThumbnailUrl(img))}
                 alt={img.altText || `${title} thumbnail ${i + 1}`}
                 style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 3 }}
               />
@@ -118,7 +119,7 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={active.url}
+            src={resolveApiAssetUrl(active.url)}
             alt={active.altText || title}
             style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }}
           />

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { resolveApiAssetUrl } from "@/lib/api";
 import { getCart } from "@/lib/cart";
 import { getCheckoutDraft, isCheckoutDraftValid, type Address } from "@/lib/checkout";
 import { getOrRebuildOrderDraft, type OrderDraft } from "@/lib/orderDraft";
@@ -143,7 +144,7 @@ export default function CheckoutReviewPage() {
                 {item.primaryImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={item.primaryImageUrl}
+                    src={resolveApiAssetUrl(item.primaryImageUrl)}
                     alt={item.title}
                     style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 4 }}
                   />

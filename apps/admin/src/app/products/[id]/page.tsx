@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, resolveApiAssetUrl } from "@/lib/api";
 import type { ProductDetail } from "@/lib/types";
 
 export default function ProductViewPage({ params }: { params: { id: string } }) {
@@ -75,7 +75,7 @@ export default function ProductViewPage({ params }: { params: { id: string } }) 
         {primaryImage && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={primaryImage.url}
+            src={resolveApiAssetUrl(primaryImage.url)}
             alt={primaryImage.altText ?? ""}
             style={{ width: 220, height: 220, objectFit: "cover", borderRadius: 4, border: "1px solid var(--noctella-antique-gold)" }}
           />

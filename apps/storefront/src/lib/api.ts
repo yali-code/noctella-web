@@ -1,4 +1,19 @@
+import { resolveServiceUrl } from "@noctella/shared";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+
+/**
+ * Sprint 70: the API returns product-photo URLs as portable relative paths (e.g.
+ * "/images/product-photos/example.webp"), never baking in a specific origin. Every `<img>` in
+ * the Storefront must resolve that path against the configured API origin at render time - this
+ * is the single central resolver, so no component re-implements URL concatenation. Absolute URLs
+ * (external marketplace images, data:/blob: URIs) pass through unchanged. The cart/checkout
+ * draft data itself must keep storing the original relative value - only render call sites
+ * resolve it.
+ */
+export function resolveApiAssetUrl(value?: string | null): string {
+  return resolveServiceUrl(value, API_BASE_URL);
+}
 
 export interface ApiErrorDetail {
   path: string;

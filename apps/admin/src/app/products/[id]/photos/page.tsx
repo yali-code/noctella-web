@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, resolveApiAssetUrl } from "@/lib/api";
 import { productPhotoApi } from "@/lib/productPhotos";
 import type { ProductDetail } from "@/lib/types";
 
@@ -67,7 +67,7 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
         {product.photos.map((photo, index) => (
           <div key={photo.id} className="noctella-panel" style={{ padding: 16, display: "flex", gap: 16, alignItems: "center" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.thumbnailUrl} alt={photo.altText ?? product.title} style={{ width: 96, height: 96, objectFit: "cover" }} />
+            <img src={resolveApiAssetUrl(photo.thumbnailUrl)} alt={photo.altText ?? product.title} style={{ width: 96, height: 96, objectFit: "cover" }} />
             <div style={{ flex: 1 }}>
               <strong>{photo.isPrimary ? "Primary" : `Photo ${index + 1}`}</strong>
               <p>{photo.altText || "No alt text"}</p>

@@ -1,4 +1,17 @@
+import { resolveServiceUrl } from "@noctella/shared";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+
+/**
+ * Sprint 70: the API returns product-photo URLs as portable relative paths (e.g.
+ * "/images/product-photos/example.webp"), never baking in a specific origin. Every `<img>` in
+ * Admin must resolve that path against the configured API origin at render time - this is the
+ * single place that does so, so no component re-implements URL concatenation. Absolute URLs
+ * (external marketplace images, data:/blob: URIs) pass through unchanged.
+ */
+export function resolveApiAssetUrl(value?: string | null): string {
+  return resolveServiceUrl(value, API_BASE_URL);
+}
 
 /** Must match apps/api/src/auth/cookies.ts's SESSION_COOKIE_NAME - no shared package exists
  * between apps/admin and apps/api, so this is duplicated as a literal, matching the existing
