@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ProductGrid } from "@/components/ProductGrid";
+import { normalizeShopSearchParam } from "@/lib/shopSearchParams";
 import type { PaginatedResult, PublicCategory, PublicCollection, PublicProduct } from "@/lib/types";
 
 const PAGE_SIZE = 12;
@@ -33,12 +34,12 @@ export default function ShopPage() {
 
 function ShopPageContent() {
   const searchParams = useSearchParams();
-  const initialSearch = searchParams.get("search") ?? "";
+  const urlSearch = normalizeShopSearchParam(searchParams.get("search"));
 
   const [products, setProducts] = useState<PublicProduct[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState(initialSearch);
+  const [search, setSearch] = useState(urlSearch);
   const [categorySlug, setCategorySlug] = useState("");
   const [collectionSlug, setCollectionSlug] = useState("");
   const [sort, setSort] = useState("newest");
@@ -46,6 +47,16 @@ function ShopPageContent() {
   const [collections, setCollections] = useState<PublicCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Syncs the search input/state whenever the URL's `search` query param changes - e.g. the
+  // Header's global search box calling router.push("/shop?search=...") while this page is
+  // already mounted, which re-renders this same component instance rather than remounting it.
+  // One-directional (URL -> state): typing in the input below only updates local state and never
+  // writes back to the URL, so this cannot create an update loop.
+  useEffect(() => {
+    setSearch(urlSearch);
+    setPage(1);
+  }, [urlSearch]);
 
   useEffect(() => {
     api

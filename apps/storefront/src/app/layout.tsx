@@ -13,8 +13,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <a href="#main-content" className="noctella-skip-link">
+          Skip to main content
+        </a>
         <Header />
-        <main style={{ minHeight: "70vh" }}>{children}</main>
+        <main id="main-content" tabIndex={-1} style={{ minHeight: "70vh" }}>
+          {children}
+        </main>
         <footer
           style={{
             padding: "32px 40px",

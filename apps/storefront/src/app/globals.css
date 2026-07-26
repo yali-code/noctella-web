@@ -55,6 +55,26 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
+.noctella-skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: var(--noctella-antique-gold);
+  color: var(--noctella-night-navy);
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 1000;
+  transition: top 0.15s ease-in-out;
+}
+
+.noctella-skip-link:focus {
+  top: 8px;
+  outline: 2px solid var(--noctella-bright-star-gold);
+  outline-offset: 2px;
+}
+
 @media (max-width: 860px) {
   .noctella-mobile-menu-toggle {
     display: inline-block !important;

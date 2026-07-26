@@ -4,11 +4,21 @@ export interface StorefrontNavItem {
 }
 
 /**
- * Footer-only links. Primary header navigation lives in
- * components/Header.tsx (it needs client-side state for the mobile menu
- * and search box, so its nav list is defined there instead of duplicated
- * here).
+ * Sprint 72: moved here (a plain, non-JSX module) rather than staying inline in
+ * components/Header.tsx so it can be imported by tests without needing JSX/component-test
+ * tooling - the storefront's Vitest setup only parses plain .ts files, not .tsx.
  */
+export const storefrontHeaderNavItems: StorefrontNavItem[] = [
+  { label: "Home", href: "/" },
+  { label: "Shop", href: "/shop" },
+  { label: "Categories", href: "/categories" },
+  { label: "Collections", href: "/collections" },
+  { label: "Gentleman Series", href: "/category/gentleman-series" },
+  { label: "Archive", href: "/archive" },
+  { label: "About", href: "/about" },
+];
+
+/** Footer-only links. */
 export const storefrontFooterItems: StorefrontNavItem[] = [
   { label: "Shipping & Delivery", href: "/shipping-delivery" },
   { label: "Returns Policy", href: "/returns-policy" },
