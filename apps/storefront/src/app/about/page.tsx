@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { ConstellationBackground } from "@/components/ConstellationBackground";
+import { buildCanonicalUrl } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: "About",
+  description: "Noctella — Nova Vita ex Praeterito. A new life from what came before.",
+  alternates: { canonical: buildCanonicalUrl("/about") },
+};
 
 export default function AboutPage() {
   return (

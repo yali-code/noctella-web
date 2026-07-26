@@ -124,6 +124,10 @@ services:
         value: production
       - key: NEXT_PUBLIC_API_BASE_URL
         value: https://api.staging.noctella.com
+      # Sprint 73: server-only canonical origin for generateMetadata/sitemap.ts/robots.ts - the
+      # established real domain for this service, matching the `domains` entry above.
+      - key: STOREFRONT_SITE_URL
+        value: https://shop.staging.noctella.com
 
   # --- D. Background-job cron service -----------------------------------------------------------
   - type: cron

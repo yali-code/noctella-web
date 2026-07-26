@@ -9,6 +9,12 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      # Sprint 73: the Storefront's next build evaluates root layout metadata (which reads
+      # STOREFRONT_SITE_URL) under Next's internally-forced NODE_ENV=production during the
+      # build step, regardless of real deploy target - without this, the Build step fails here
+      # even though this is just a CI validation build, not a real production deploy.
+      STOREFRONT_SITE_URL: http://localhost:3000
     steps:
       - name: Checkout
         uses: actions/checkout@v4
