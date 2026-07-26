@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { resolveApiAssetUrl } from "@/lib/api";
 import { type CartItem, cartEurSubtotal, cartUsdSubtotal, getCart } from "@/lib/cart";
 import {
   type Address,
@@ -177,7 +178,7 @@ export default function CheckoutPage() {
                 {item.primaryImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={item.primaryImageUrl}
+                    src={resolveApiAssetUrl(item.primaryImageUrl)}
                     alt={item.title}
                     style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 4 }}
                   />

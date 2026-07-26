@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { resolveApiAssetUrl } from "@/lib/api";
 import { primaryProductImage, productThumbnailUrl } from "@/lib/productImages";
 import type { PublicProduct } from "@/lib/types";
 
@@ -20,7 +21,7 @@ export function ProductCard({ product }: { product: PublicProduct }) {
         {primaryImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={productThumbnailUrl(primaryImage)}
+            src={resolveApiAssetUrl(productThumbnailUrl(primaryImage))}
             alt={primaryImage.altText || product.title}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
