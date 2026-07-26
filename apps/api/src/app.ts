@@ -34,6 +34,7 @@ import { db } from "./db/client";
 import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photoStorage";
 import { enqueueChannelStockSync, enqueueProductStockSync } from "./services/stockSync";
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
+import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
 import { BackgroundJobType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
 import { externalListings } from "./db/schema";
@@ -113,7 +114,13 @@ app.use("/api/erp", erpRouter);
 // need an admin session cookie.
 app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next) => {
   try {
-    res.json({ processed: await runDueJobs(db, String(req.body?.workerId ?? "scheduler"), Number(req.body?.batchSize ?? 10)) });
+    const workerId = String(req.body?.workerId ?? "scheduler");
+    const batchSize = Number(req.body?.batchSize ?? 10);
+    const processed = await runDueJobs(db, workerId, batchSize);
+    // Sprint 71: reuses this same scheduler trigger for the product-photo outbox (promotion,
+    // delete, temp-cleanup) instead of adding a second cron/endpoint for it.
+    const photoOutboxResults = await dispatchDueProductPhotoOutboxEvents(db, workerId, batchSize);
+    res.json({ processed, photoOutboxProcessed: photoOutboxResults.length });
   } catch (e) {
     next(e);
   }

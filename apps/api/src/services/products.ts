@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import {
   type Product,
@@ -398,8 +399,11 @@ export async function uploadProductPhoto(
       width: stored.width,
       height: stored.height,
       processingStatus: "Processing",
-      storageKey: stored.filename,
-      thumbnailStorageKey: `${stored.filename}-thumb`,
+      // Sprint 71: derived from the actual URLs (not `${stored.filename}-thumb`, which produced a
+      // key like "x.webp-thumb" that never matches the real "x-thumb.webp" file LocalPhotoStorage
+      // writes) so the outbox promotion handler can find the real files on disk.
+      storageKey: path.basename(stored.url),
+      thumbnailStorageKey: path.basename(stored.thumbnailUrl),
       processingUpdatedAt: now,
       createdAt: now,
       updatedAt: now,
