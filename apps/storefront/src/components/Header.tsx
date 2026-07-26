@@ -5,16 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getWishlistIds } from "@/lib/wishlist";
 import { cartItemCount, getCart } from "@/lib/cart";
-
-const NAV_ITEMS = [
-  { label: "Home", href: "/" },
-  { label: "Shop", href: "/shop" },
-  { label: "Categories", href: "/categories" },
-  { label: "Collections", href: "/collections" },
-  { label: "Gentleman Series", href: "/category/gentleman-series" },
-  { label: "Archive", href: "/archive" },
-  { label: "About", href: "/about" },
-];
+import { storefrontHeaderNavItems as NAV_ITEMS } from "@/config/nav";
 
 export function Header() {
   const router = useRouter();

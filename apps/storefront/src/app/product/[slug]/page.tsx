@@ -61,11 +61,19 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
 
   if (notFound) {
     return (
-      <section style={{ padding: "60px 40px" }}>
-        <h1>Product not found</h1>
+      <section style={{ padding: "60px 40px", textAlign: "center" }}>
+        <h1>This item may have been sold or is no longer available</h1>
         <p style={{ color: "var(--noctella-aged-bronze)" }}>
-          This item may no longer be available. <Link href="/shop">Return to Shop</Link>
+          It may have found its next home, or the link may be out of date.
         </p>
+        <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 16 }}>
+          <Link href="/archive" style={{ fontSize: 14 }}>
+            Browse the Archive
+          </Link>
+          <Link href="/shop" style={{ fontSize: 14 }}>
+            Return to Shop
+          </Link>
+        </div>
       </section>
     );
   }
