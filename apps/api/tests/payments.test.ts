@@ -1,10 +1,11 @@
 import { PaymentProvider, PaymentStatus, ProductStatus, ProductType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BadRequestError, NotFoundError } from "../src/services/errors";
 import {
   cancelMockPayment,
   initializeMockPayment,
+  mockPaymentsEnabled,
   selectPaymentProvider,
   verifyMockPayment,
 } from "../src/payments/paymentService";
@@ -34,6 +35,132 @@ describe("payment provider selection", () => {
 
   it("throws BadRequestError for an invalid provider", () => {
     expect(() => selectPaymentProvider("bitcoin")).toThrow(BadRequestError);
+  });
+});
+
+describe("Sprint 76 mock-payment production safety gate", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  describe("mockPaymentsEnabled()", () => {
+    it("is enabled when NODE_ENV=production and MOCK_PAYMENTS_ENABLED=true (explicit opt-in)", () => {
+      expect(mockPaymentsEnabled({ NODE_ENV: "production", MOCK_PAYMENTS_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(true);
+    });
+
+    it("is disabled when NODE_ENV=production and MOCK_PAYMENTS_ENABLED is unset (safe default)", () => {
+      expect(mockPaymentsEnabled({ NODE_ENV: "production" } as NodeJS.ProcessEnv)).toBe(false);
+    });
+
+    it("is enabled when NODE_ENV=development and MOCK_PAYMENTS_ENABLED is unset", () => {
+      expect(mockPaymentsEnabled({ NODE_ENV: "development" } as NodeJS.ProcessEnv)).toBe(true);
+    });
+
+    it("is enabled when NODE_ENV=test and MOCK_PAYMENTS_ENABLED is unset", () => {
+      expect(mockPaymentsEnabled({ NODE_ENV: "test" } as NodeJS.ProcessEnv)).toBe(true);
+    });
+
+    it("is disabled when MOCK_PAYMENTS_ENABLED=false even outside production", () => {
+      expect(mockPaymentsEnabled({ NODE_ENV: "development", MOCK_PAYMENTS_ENABLED: "false" } as NodeJS.ProcessEnv)).toBe(false);
+      expect(mockPaymentsEnabled({ MOCK_PAYMENTS_ENABLED: "false" } as NodeJS.ProcessEnv)).toBe(false);
+    });
+  });
+
+  describe("real service behavior under the gate (initializePaymentSession / verifyPaymentSession)", () => {
+    it("NODE_ENV=production with MOCK_PAYMENTS_ENABLED unset: rejects initialize, rejects verify, produces no paid session", async () => {
+      const db = createTestDb();
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("MOCK_PAYMENTS_ENABLED", "");
+
+      await expect(
+        initializePaymentSession(db, { provider: PaymentProvider.Stripe, orderDraftId: "gate-prod-unset", amount: 100, currency: "EUR" }),
+      ).rejects.toBeInstanceOf(BadRequestError);
+
+      const rowsAfterFailedInitialize = await db.select().from(payments);
+      expect(rowsAfterFailedInitialize).toHaveLength(0);
+
+      // A verify attempt against a reference that could only exist if initialize had somehow
+      // succeeded also fails - there is no path to a Paid session in this environment.
+      await expect(
+        verifyMockPayment(PaymentProvider.Stripe, { providerReference: "mock_stripe_gate-prod-unset" }),
+      ).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    it("NODE_ENV=production with MOCK_PAYMENTS_ENABLED=true: the existing mock flow remains fully usable", async () => {
+      const db = createTestDb();
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("MOCK_PAYMENTS_ENABLED", "true");
+
+      const session = await initializePaymentSession(db, {
+        provider: PaymentProvider.Stripe,
+        orderDraftId: "gate-prod-true",
+        amount: 100,
+        currency: "EUR",
+      });
+      expect(session.status).toBe(PaymentStatus.Pending);
+
+      const verified = await verifyPaymentSession(db, { provider: PaymentProvider.Stripe, providerReference: session.providerReference });
+      expect(verified.status).toBe(PaymentStatus.Paid);
+    });
+
+    it("NODE_ENV=development with the variable unset: the existing mock flow remains fully usable", async () => {
+      const db = createTestDb();
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("MOCK_PAYMENTS_ENABLED", "");
+
+      const session = await initializePaymentSession(db, {
+        provider: PaymentProvider.PayPal,
+        orderDraftId: "gate-dev-unset",
+        amount: 100,
+        currency: "EUR",
+      });
+      const verified = await verifyPaymentSession(db, { provider: PaymentProvider.PayPal, providerReference: session.providerReference });
+      expect(verified.status).toBe(PaymentStatus.Paid);
+    });
+
+    it("NODE_ENV=test with the variable unset: the existing mock flow remains fully usable (this suite's own default environment)", async () => {
+      const db = createTestDb();
+      vi.stubEnv("NODE_ENV", "test");
+      vi.stubEnv("MOCK_PAYMENTS_ENABLED", "");
+
+      const session = await initializePaymentSession(db, {
+        provider: PaymentProvider.CashOnDelivery,
+        orderDraftId: "gate-test-unset",
+        amount: 100,
+        currency: "EUR",
+      });
+      const verified = await verifyPaymentSession(db, { provider: PaymentProvider.CashOnDelivery, providerReference: session.providerReference });
+      expect(verified.status).toBe(PaymentStatus.Paid);
+    });
+
+    it("MOCK_PAYMENTS_ENABLED=false rejects the mock flow even in a non-production environment", async () => {
+      const db = createTestDb();
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("MOCK_PAYMENTS_ENABLED", "false");
+
+      await expect(
+        initializePaymentSession(db, { provider: PaymentProvider.Stripe, orderDraftId: "gate-explicit-false", amount: 100, currency: "EUR" }),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      expect(await db.select().from(payments)).toHaveLength(0);
+    });
+
+    it("a session that already exists (created while enabled) cannot be verified once the gate later becomes disabled, and its status is left unchanged", async () => {
+      const db = createTestDb();
+      vi.stubEnv("NODE_ENV", "development");
+      const session = await initializePaymentSession(db, {
+        provider: PaymentProvider.Stripe,
+        orderDraftId: "gate-toggle",
+        amount: 100,
+        currency: "EUR",
+      });
+
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv("MOCK_PAYMENTS_ENABLED", "");
+      await expect(
+        verifyPaymentSession(db, { provider: PaymentProvider.Stripe, providerReference: session.providerReference }),
+      ).rejects.toBeInstanceOf(BadRequestError);
+
+      const [row] = await db.select().from(payments).where(eq(payments.providerReference, session.providerReference));
+      expect(row.status).toBe(PaymentStatus.Pending);
+    });
   });
 });
 

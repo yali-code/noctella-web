@@ -113,3 +113,34 @@ describe("Order detail shipment activation (Sprint 60B)", () => {
     });
   });
 });
+
+describe("Order detail payment provider mock labeling (Sprint 76)", () => {
+  async function renderWithOrder(orderOverrides: any = {}) {
+    stubFetch();
+    vi.spyOn(ordersLib, "getOrder").mockResolvedValue({ ...baseOrder, ...orderOverrides });
+    vi.spyOn(shipmentsLib, "listShipments").mockResolvedValue([]);
+    render(<OrderDetailPage params={{ id: "order-1" }} />);
+    await screen.findByText(orderOverrides.orderNumber ?? "ORD-1");
+  }
+
+  it("labels the payment provider as mock and keeps order status and payment status distinct", async () => {
+    await renderWithOrder({ paymentProvider: "stripe", paymentStatus: "paid", status: "processing" });
+    expect(screen.getByText("stripe (mock)")).toBeInTheDocument();
+    expect(screen.queryByText("stripe", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText("paid")).toBeInTheDocument();
+    expect(screen.getByText("processing")).toBeInTheDocument();
+  });
+
+  it("shows a safe dash fallback when there is no payment provider recorded", async () => {
+    await renderWithOrder({ paymentProvider: null });
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/mock/)).not.toBeInTheDocument();
+  });
+
+  it("honestly displays a Cancelled order that remains paymentStatus paid, without implying a refund", async () => {
+    await renderWithOrder({ status: "cancelled", paymentStatus: "paid", paymentProvider: "paypal" });
+    expect(screen.getByText("cancelled")).toBeInTheDocument();
+    expect(screen.getByText("paid")).toBeInTheDocument();
+    expect(screen.getByText("paypal (mock)")).toBeInTheDocument();
+  });
+});

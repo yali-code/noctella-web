@@ -3,7 +3,7 @@
 import { ORDER_STATUS_VALUES, PAYMENT_STATUS_VALUES } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { customerName, listOrders, type OrderWithItems } from "@/lib/orders";
+import { customerName, formatPaymentProvider, listOrders, type OrderWithItems } from "@/lib/orders";
 
 const PAGE_SIZE = 20;
 
@@ -116,7 +116,7 @@ export default function OrdersPage() {
                   <td style={tdStyle}>{order.guestEmail}</td>
                   <td style={tdStyle}>{order.status}</td>
                   <td style={tdStyle}>{order.paymentStatus}</td>
-                  <td style={tdStyle}>{order.paymentProvider ?? "—"}</td>
+                  <td style={tdStyle}>{formatPaymentProvider(order.paymentProvider)}</td>
                   <td style={tdStyle}>{order.totalAmount.toFixed(2)}</td>
                   <td style={tdStyle}>{order.currency}</td>
                   <td style={tdStyle}>{new Date(order.createdAt).toLocaleDateString()}</td>
