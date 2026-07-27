@@ -518,8 +518,20 @@ function mutateInventoryInTransactionUseCase(
               note: input.note ?? null, idempotencyKey: key ?? null, createdAt: t, updatedAt: t,
             }),
             (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false }));
+            // Live Sale-to-Sold transitions currently originate only from Published products
+            // (createInternalOrderUseCase requires Published before a sale). SaleRollback
+            // restores Sold back to Published but only when status is still exactly Sold,
+            // so a later unrelated Admin status change (e.g. Archived) is preserved, not overwritten.
+            const restoreStatusIfSold = () =>
+              chain(repositories.products.findById(input.productId), (currentProduct) =>
+                currentProduct && currentProduct.status === ProductStatus.Sold
+                  ? repositories.products.update(input.productId, { status: ProductStatus.Published, updatedAt: t })
+                  : currentProduct,
+              );
             return type === StockMovementType.Sale && stockAfter === 0
               ? chain(repositories.products.update(input.productId, { status: ProductStatus.Sold, updatedAt: t }), append)
+              : type === StockMovementType.SaleRollback
+              ? chain(restoreStatusIfSold(), append)
               : append();
           },
         );

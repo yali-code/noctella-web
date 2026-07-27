@@ -68,6 +68,46 @@ describe("Sprint 35G order Inventory runtime", () => {
     expect((await db.select().from(schema.orders).where(eq(schema.orders.id, order.id)))[0].status).toBe(OrderStatus.Cancelled);
   });
 
+  test("two competing submissions for the same stockQuantity:1 product cannot both succeed", async () => {
+    const { db, product, input } = await harness();
+    await createPaymentSession(db, {
+      provider: PaymentProvider.Stripe,
+      providerReference: "payment-runtime-competing",
+      status: PaymentStatus.Paid,
+      amount: 10,
+      currency: "EUR",
+      idempotencyKey: "test:payment-runtime-competing",
+    });
+    const inputA = { ...input, orderDraftId: "draft-runtime-a" };
+    const inputB = { ...input, orderDraftId: "draft-runtime-b", paymentReference: "payment-runtime-competing" };
+
+    // Submitted together via Promise.allSettled to model two simultaneous requests
+    // arriving in the same Node process (as a real server handling two in-flight
+    // HTTP requests would). This does NOT exercise true OS-thread or multi-process
+    // concurrency, or a real Postgres row lock - see the note below.
+    const [resultA, resultB] = await Promise.allSettled([createOrder(db, inputA), createOrder(db, inputB)]);
+
+    const succeeded = [resultA, resultB].filter((r) => r.status === "fulfilled");
+    const failed = [resultA, resultB].filter((r) => r.status === "rejected");
+    expect(succeeded).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+
+    const finalProduct = (await db.select().from(schema.products).where(eq(schema.products.id, product.id)))[0];
+    expect(finalProduct.stockQuantity).toBe(0);
+    expect(await db.select().from(schema.orders)).toHaveLength(1);
+    expect(
+      await db.select().from(schema.stockMovements).where(eq(schema.stockMovements.productId, product.id)),
+    ).toHaveLength(1);
+
+    // Honest limitation: SqliteUnitOfWork.run() executes each order's full
+    // check-then-mutate transaction synchronously via better-sqlite3, so the two
+    // requests above are serialized by that synchronous transaction boundary
+    // rather than genuinely interleaved at the OS/thread level. This proves the
+    // single-process SQLite runtime cannot oversell a stockQuantity:1 product
+    // under two logically-concurrent requests - it is not proof of real
+    // multi-process or PostgreSQL row-lock concurrency, which remains untested.
+  });
+
   test("SQLite callbacks remain synchronous", async () => {
     const { db, input } = await harness();
     const order = await createOrder(db, input);
@@ -82,7 +122,7 @@ describe("Sprint 35G order Inventory runtime", () => {
 
   test("PostgreSQL-style Inventory execution remains asynchronous", async () => {
     const repositories: any = {
-      products: { update: vi.fn().mockResolvedValue({}) },
+      products: { update: vi.fn().mockResolvedValue({}), findById: vi.fn().mockResolvedValue({ id: "p", status: "sold" }) },
       inventory: { findByProduct: vi.fn().mockResolvedValue({ productId: "p", locationId: null, quantity: 2, updatedAt: time }), updateWithVersion: vi.fn().mockResolvedValue({ productId: "p", locationId: null, quantity: 1, updatedAt: time }) },
       stockMovements: { findByIdempotencyKey: vi.fn().mockResolvedValue(null), append: vi.fn().mockResolvedValue({ id: "m", productId: "p", type: "sale", quantityDelta: -1, stockBefore: 2, stockAfter: 1, orderId: "o", orderItemId: "i", note: null, idempotencyKey: "k", createdAt: time, updatedAt: time }) },
     };
