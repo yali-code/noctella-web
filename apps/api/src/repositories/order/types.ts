@@ -2,7 +2,7 @@ import type { Address, Order, OrderItem, OrderStatus, PaymentStatus, PriceCurren
 
 export interface OrderRepositoryRecord extends Order { version?: number; idempotencyKey?: string; externalOrderId?: string; channel?: "Internal"|"Direct"|"LocalPickup"|string }
 export interface OrderItemRepositoryRecord extends OrderItem {}
-export interface OrderListProjection { id:string; orderNumber:string; guestEmail:string; status:OrderStatus; paymentStatus:PaymentStatus; subtotalAmount?: number; totalAmount:number; currency:PriceCurrency|string; createdAt:string; updatedAt:string }
+export interface OrderListProjection { id:string; orderNumber:string; guestEmail:string; status:OrderStatus; paymentStatus:PaymentStatus; paymentProvider?:string; subtotalAmount?: number; totalAmount:number; currency:PriceCurrency|string; createdAt:string; updatedAt:string }
 export interface OrderDetailProjection extends OrderListProjection { paymentReference?: string; shippingAmount?: number; taxAmount?: number; billingAddress:Address; shippingAddress:Address; notes?:string; items:OrderItemRepositoryRecord[] }
 export interface OrderSummaryProjection { total:number; byStatus:Record<string,number>; byPaymentStatus:Record<string,number> }
 export interface OrderFinancialReadinessProjection { orderId:string; ready:boolean; issues:string[] }

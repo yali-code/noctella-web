@@ -109,6 +109,58 @@ describe("order service", () => {
     await expect(getOrderByOrderNumber(db, order.orderNumber)).resolves.toMatchObject({ id: order.id });
   });
 
+  it("includes paymentProvider identically in both the list projection and the detail projection", async () => {
+    const created = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
+
+    const list = await listOrders(db, orderListQuerySchema.parse({}));
+    const listed = list.data.find((o) => o.id === created.id);
+    expect(listed?.paymentProvider).toBe(PaymentProvider.Stripe);
+
+    const detail = await getOrderById(db, created.id);
+    expect(detail.paymentProvider).toBe(PaymentProvider.Stripe);
+    expect(detail.paymentProvider).toBe(listed?.paymentProvider);
+
+    // Everything else this projection carries remains exactly as before this fix.
+    expect(listed?.status).toBe(detail.status);
+    expect(listed?.paymentStatus).toBe(detail.paymentStatus);
+    expect(listed?.totalAmount).toBe(detail.totalAmount);
+    expect(listed?.currency).toBe(detail.currency);
+    expect(detail.items[0].productTitle).toBe("Vintage Chronograph");
+  });
+
+  it("represents a missing paymentProvider safely (offer-derived Draft order, never paid) in both list and detail", async () => {
+    const offerProduct = await createProduct(db, {
+      sku: `SKU-NO-PROVIDER-${Math.random()}`,
+      title: "No Provider Product",
+      type: ProductType.UniqueItem,
+      status: ProductStatus.Published,
+      categoryId,
+      customsWarning: false,
+      isFeatured: false,
+      allowMakeOffer: true,
+      allowCashOnDelivery: false,
+      showInArchiveAfterSale: false,
+      priceEur: 300,
+      stockQuantity: 1,
+    });
+    const offer = await createOffer(db, {
+      productId: offerProduct.id,
+      customerName: "Jane Collector",
+      customerEmail: "jane@example.com",
+      offeredAmount: 300,
+      currency: "EUR",
+    });
+    await acceptOffer(db, offer.id);
+    const draftOrder = await createDraftOrderFromOffer(db, offer.id);
+
+    const list = await listOrders(db, orderListQuerySchema.parse({}));
+    const listed = list.data.find((o) => o.id === draftOrder.id);
+    expect(listed?.paymentProvider ?? null).toBeNull();
+
+    const detail = await getOrderById(db, draftOrder.id);
+    expect(detail.paymentProvider ?? null).toBeNull();
+  });
+
   it("rejects unpaid orders and missing payment references", async () => {
     await seedPayment(db, PaymentProvider.Stripe, "not-yet-paid", PaymentStatus.Pending);
     await expect(

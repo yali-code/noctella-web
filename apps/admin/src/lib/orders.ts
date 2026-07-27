@@ -19,6 +19,17 @@ export function customerName(order: OrderWithItems): string {
   return order.shippingAddress.fullName || order.billingAddress.fullName || "—";
 }
 
+/**
+ * Sprint 76: every implemented payment provider is currently a mock (no real gateway is
+ * integrated yet - see apps/api/src/payments/mockProviders.ts). Labeling it explicitly wherever
+ * a provider is shown ensures an operator never mistakes a mock-paid order for a real one. This
+ * is a display label only - it must never be used to infer whether a payment actually succeeded.
+ */
+export function formatPaymentProvider(provider: string | null | undefined): string {
+  if (!provider) return "—";
+  return `${provider} (mock)`;
+}
+
 export function orderListQuery(params: {
   page: number;
   pageSize: number;

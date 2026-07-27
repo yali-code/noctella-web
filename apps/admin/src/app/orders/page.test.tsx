@@ -47,6 +47,29 @@ describe("Admin orders list page", () => {
     expect(within(row).getByText("100.00")).toBeInTheDocument();
   });
 
+  it("labels the payment provider as mock instead of showing the bare provider name or a dash", async () => {
+    vi.spyOn(ordersLib, "listOrders").mockResolvedValue(response([baseOrder({ paymentProvider: "stripe" })]));
+    render(<OrdersPage />);
+
+    const orderLink = await screen.findByText("NOC-20260101-000001");
+    const row = orderLink.closest("tr") as HTMLElement;
+    expect(within(row).getByText("stripe (mock)")).toBeInTheDocument();
+    expect(within(row).queryByText("stripe", { exact: true })).not.toBeInTheDocument();
+    // Order status and payment status remain two distinct, separately rendered values.
+    expect(within(row).getByText("pending")).toBeInTheDocument();
+    expect(within(row).getByText("paid")).toBeInTheDocument();
+  });
+
+  it("shows a safe dash fallback when an order has no payment provider recorded", async () => {
+    vi.spyOn(ordersLib, "listOrders").mockResolvedValue(response([baseOrder({ paymentProvider: null })]));
+    render(<OrdersPage />);
+
+    const orderLink = await screen.findByText("NOC-20260101-000001");
+    const row = orderLink.closest("tr") as HTMLElement;
+    expect(within(row).getByText("—")).toBeInTheDocument();
+    expect(within(row).queryByText(/mock/)).not.toBeInTheDocument();
+  });
+
   it("shows a loading state before orders resolve", async () => {
     let resolve: (v: any) => void = () => {};
     vi.spyOn(ordersLib, "listOrders").mockReturnValue(new Promise((r) => (resolve = r)));

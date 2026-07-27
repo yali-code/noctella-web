@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   completeSale,
+  formatPaymentProvider,
   getAvailableOrderStatusActions,
   getOrder,
   updateOrderStatus,
@@ -282,7 +283,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
 
         <section className="noctella-panel" style={{ padding: 20 }}>
           <h3>Payment</h3>
-          <Row label="Provider" value={order.paymentProvider ?? "—"} />
+          <Row label="Provider" value={formatPaymentProvider(order.paymentProvider)} />
           <Row label="Status" value={order.paymentStatus} />
           <Row label="Reference" value={order.paymentReference ?? "—"} />
         </section>
