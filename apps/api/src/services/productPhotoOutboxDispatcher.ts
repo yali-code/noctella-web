@@ -59,6 +59,19 @@ export function createProductPhotoOutboxDispatcher(
   return dispatcher;
 }
 
+/**
+ * An outbox event left in Processing by an abrupt crash (kill -9, power loss - not the graceful
+ * SIGTERM/SIGINT path in serverLifecycle.ts, which drains in-flight requests before shutting
+ * down) would otherwise never be reclaimed: claimNextBatch only selects Pending/RetryPending.
+ * Five minutes is far longer than any real promotion/delete/cleanup handler run (simple fs
+ * stat/copy/unlink calls, completing well within one HTTP request) and far shorter than the
+ * hourly scheduler cadence (render.yaml), so a stuck event recovers on the very next run without
+ * ever mistaking a lock still legitimately in use for stale.
+ */
+export const PRODUCT_PHOTO_OUTBOX_STALE_LOCK_MS = 5 * 60 * 1000;
+
 export async function dispatchDueProductPhotoOutboxEvents(db: DbClient, workerId = "scheduler", limit = 10) {
-  return createProductPhotoOutboxDispatcher(db).dispatchDueEvents(workerId, limit);
+  const dispatcher = createProductPhotoOutboxDispatcher(db);
+  await dispatcher.releaseStaleLocks(PRODUCT_PHOTO_OUTBOX_STALE_LOCK_MS);
+  return dispatcher.dispatchDueEvents(workerId, limit);
 }
