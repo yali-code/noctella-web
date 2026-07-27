@@ -23,6 +23,14 @@ below before using this environment for anything beyond staging validation.
    `EBAY_WEBHOOK_SECRET`, `ETSY_CLIENT_ID`, `ETSY_REDIRECT_URI`, `ETSY_WEBHOOK_SECRET`). Leave
    any marketplace values you don't need for this staging pass blank — those features simply
    won't work, nothing else breaks.
+   - **Webhook secrets (Sprint 77):** either set `EBAY_WEBHOOK_SECRET`/`ETSY_WEBHOOK_SECRET` to
+     real staging-only values if you intend to exercise webhook delivery, or leave them unset.
+     There is no known/default fallback secret — an unset, empty, or whitespace-only secret now
+     makes signature verification for that channel fail closed (every webhook request for that
+     channel is rejected) rather than silently accepting a known test value.
+   - **`MOCK_PAYMENTS_ENABLED` (Sprint 76):** confirm this is `"true"` only on
+     `noctella-staging-api` (already set in `render.yaml`). This flag must never be copied to a
+     real production deployment before a real payment gateway is integrated.
 5. **Configure DNS** for the three custom domains to point at their respective Render services,
    per Render's provided DNS instructions:
    - `api.staging.noctella.com` → `noctella-staging-api`
@@ -95,6 +103,32 @@ configuration this environment is meant to validate.
       intentionally configured staging-safe credentials in step 4)
 - [ ] Background-job run: confirm the Cron service's most recent run succeeded (see step 14)
 - [ ] Logout: log out of Admin and confirm a subsequent authenticated request returns 401
+- [ ] Mock payment labeling (Sprint 76): the Admin Orders list and order detail page show the
+      payment provider suffixed with `(mock)` for the order created in the guest-checkout step
+- [ ] Restart persistence: create a temporary staging order and upload a temporary product photo,
+      redeploy or restart `noctella-staging-api`, and confirm both the order and the photo are
+      still present afterward
+- [ ] Order cancellation restores inventory: cancel a temporary staging order through normal Admin
+      behavior (no direct database edits) and confirm the product's stock quantity is restored
+- [ ] Audit history intact: confirm no existing audit history was deleted by the steps above
+- [ ] Do not use the HERMLE fixture for any of the above — use a temporary product/order created
+      for this staging pass instead
+- [ ] Stale-lock crash recovery is exercised only via the existing automated tests
+      (`productPhotoOutboxStaleLockRecovery.test.ts`) — do not attempt to simulate a stale lock by
+      manually killing or corrupting the live staging process/disk
+
+## Webhook verification acceptance (Sprint 77, optional)
+
+Only run this if you configured real staging-only webhook secrets in step 4. This confirms
+signature verification fail-closed behavior without exercising real eBay/Etsy integrations.
+
+- [ ] An invalid or unsigned request to `POST https://api.staging.noctella.com/api/webhooks/ebay`
+      (or `/etsy`) is rejected
+- [ ] With the corresponding `*_WEBHOOK_SECRET` left unset, any request to that channel's webhook
+      endpoint is rejected the same way — verification fails closed
+- [ ] Neither case creates a webhook-event row or a marketplace order
+- [ ] Do not print or store real secret values, signatures, or request bodies in screenshots,
+      logs, or committed files while running this check
 
 ## Explicit non-goals and risks
 
