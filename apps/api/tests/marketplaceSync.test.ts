@@ -10,7 +10,9 @@ import { encryptCredential } from "../src/services/credentialEncryption";
 import { getProductById } from "../src/services/products";
 import { listStockMovements } from "../src/services/stockMovements";
 import { getMarketplaceOrder, importMarketplaceOrder, listSyncRuns, listWebhookEvents, persistOrder, processWebhook, retryMarketplaceOrder, syncExternalListing } from "../src/services/marketplaceSync";
+import { EbayAdapter, EtsyAdapter } from "../src/services/marketplaceAdapters";
 import type { MarketplaceAdapter, NormalizedMarketplaceOrder } from "../src/services/marketplaceAdapters";
+import { BadRequestError } from "../src/services/errors";
 
 const key = Buffer.alloc(32, 9).toString("base64");
 type TestDb = ReturnType<typeof db>;
@@ -36,6 +38,126 @@ describe("marketplace sync database consistency", () => {
 describe("webhook security", () => {
   it("accepts valid eBay and Etsy signatures and rejects invalid signatures without orders or stock movements", async () => { for (const ch of [PublishChannel.Ebay, PublishChannel.Etsy]) { const database=db(); await connect(database,ch); await product(database); await listing(database,"p1",ch); const adapter=fakeAdapter(); const body=Buffer.from(JSON.stringify({ eventId:`evt-${ch}`, eventType:MarketplaceWebhookEventType.OrderPaid, externalOrderId:"ext-order-1" })); await expect(processWebhook(database,ch,body,{ "x-marketplace-signature":sign(ch,body), "x-channel":ch },adapter)).resolves.toBeDefined(); expect((await database.select().from(schema.marketplaceOrders))).toHaveLength(1); const invalidDb=db(); await expect(processWebhook(invalidDb,ch,body,{ "x-marketplace-signature":"bad", "x-channel":ch },adapter)).rejects.toThrow(/signature/i); expect(await invalidDb.select().from(schema.marketplaceOrders)).toHaveLength(0); expect(await invalidDb.select().from(schema.stockMovements)).toHaveLength(0); } });
   it("replays are idempotent and unsupported events are Ignored", async () => { const database=db(); await connect(database,PublishChannel.Ebay); await product(database); await listing(database); const adapter=fakeAdapter(); const body=Buffer.from(JSON.stringify({ eventId:"evt-replay", eventType:MarketplaceWebhookEventType.OrderPaid, externalOrderId:"ext-order-1" })); await processWebhook(database,PublishChannel.Ebay,body,{ "x-marketplace-signature":sign(PublishChannel.Ebay,body), "x-channel":PublishChannel.Ebay },adapter); await processWebhook(database,PublishChannel.Ebay,body,{ "x-marketplace-signature":sign(PublishChannel.Ebay,body), "x-channel":PublishChannel.Ebay },adapter); expect(adapter.calls()).toBe(1); expect(await database.select().from(schema.marketplaceWebhookEvents)).toHaveLength(1); const unsupported=Buffer.from(JSON.stringify({ eventId:"evt-ignore", eventType:"unknown" })); await processWebhook(database,PublishChannel.Ebay,unsupported,{ "x-marketplace-signature":sign(PublishChannel.Ebay,unsupported), "x-channel":PublishChannel.Ebay },adapter); const events=await listWebhookEvents(database,{ status:MarketplaceWebhookEventStatus.Ignored }); expect(events.items).toHaveLength(1); });
+});
+
+describe("Sprint 77 webhook signature fail-closed behavior (real EbayAdapter/EtsyAdapter, no fallback secret)", () => {
+  // Deliberately never touches process.env - EbayAdapter/EtsyAdapter both accept an env object
+  // at construction time, so each test passes its own isolated env and needs no
+  // stub/restore of global state, no risk of leaking into other tests run in parallel, and no
+  // dependency on module-load-time cached environment values.
+  function realAdapter(channel: PublishChannel, env: Record<string, string | undefined>) {
+    return channel === PublishChannel.Ebay ? new EbayAdapter(env) : new EtsyAdapter(env);
+  }
+  function realSign(secret: string, body: Buffer) {
+    return crypto.createHmac("sha256", secret).update(body).digest("hex");
+  }
+  function realBody(overrides: Record<string, unknown> = {}) {
+    // HttpAdapter.parseWebhookEvent (the real, un-mocked implementation) reads orderId/listingId,
+    // not externalOrderId/externalListingId - matching that shape here, unlike the fakeAdapter
+    // tests above which use a different hand-rolled parser.
+    return Buffer.from(JSON.stringify({ eventId: "evt-real-1", eventType: MarketplaceWebhookEventType.OrderPaid, orderId: "ext-order-1", ...overrides }));
+  }
+
+  async function expectNoPersistence(database: TestDb) {
+    expect(await database.select().from(schema.marketplaceWebhookEvents)).toHaveLength(0);
+    expect(await database.select().from(schema.marketplaceOrders)).toHaveLength(0);
+    expect(await database.select().from(schema.orders)).toHaveLength(0);
+    expect(await database.select().from(schema.stockMovements)).toHaveLength(0);
+  }
+
+  for (const channel of [PublishChannel.Ebay, PublishChannel.Etsy]) {
+    const secretKey = channel === PublishChannel.Ebay ? "EBAY_WEBHOOK_SECRET" : "ETSY_WEBHOOK_SECRET";
+
+    it(`${channel}: unset ${secretKey} rejects the request and persists nothing`, async () => {
+      const database = db();
+      await connect(database, channel);
+      await product(database);
+      await listing(database, "p1", channel);
+      const body = realBody();
+      const adapter = realAdapter(channel, {}); // secretKey entirely absent
+      const sig = realSign("anything", body);
+      await expect(
+        processWebhook(database, channel, body, { "x-marketplace-signature": sig }, adapter),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      await expectNoPersistence(database);
+    });
+
+    it(`${channel}: empty ${secretKey} rejects the request and persists nothing`, async () => {
+      const database = db();
+      await connect(database, channel);
+      await product(database);
+      await listing(database, "p1", channel);
+      const body = realBody();
+      const adapter = realAdapter(channel, { [secretKey]: "" });
+      const sig = realSign("anything", body);
+      await expect(
+        processWebhook(database, channel, body, { "x-marketplace-signature": sig }, adapter),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      await expectNoPersistence(database);
+    });
+
+    it(`${channel}: whitespace-only ${secretKey} rejects the request and persists nothing`, async () => {
+      const database = db();
+      await connect(database, channel);
+      await product(database);
+      await listing(database, "p1", channel);
+      const body = realBody();
+      const adapter = realAdapter(channel, { [secretKey]: "   " });
+      const sig = realSign("anything", body);
+      await expect(
+        processWebhook(database, channel, body, { "x-marketplace-signature": sig }, adapter),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      await expectNoPersistence(database);
+    });
+
+    it(`${channel}: a signature computed with the literal string "test-secret" is rejected once the real secret is unset (closes the removed fallback)`, async () => {
+      const database = db();
+      await connect(database, channel);
+      await product(database);
+      await listing(database, "p1", channel);
+      const body = realBody();
+      const adapter = realAdapter(channel, {}); // no real secret configured
+      const forgedSig = realSign("test-secret", body); // exactly the removed fallback value
+      await expect(
+        processWebhook(database, channel, body, { "x-marketplace-signature": forgedSig }, adapter),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      await expectNoPersistence(database);
+    });
+
+    it(`${channel}: configured secret + invalid signature is rejected and persists nothing`, async () => {
+      const database = db();
+      await connect(database, channel);
+      await product(database);
+      await listing(database, "p1", channel);
+      const body = realBody();
+      const adapter = realAdapter(channel, { [secretKey]: "a-real-staging-secret" });
+      await expect(
+        processWebhook(database, channel, body, { "x-marketplace-signature": "not-the-right-signature" }, adapter),
+      ).rejects.toBeInstanceOf(BadRequestError);
+      await expectNoPersistence(database);
+    });
+
+    it(`${channel}: configured secret + a correctly generated signature is accepted and persists the webhook event`, async () => {
+      const database = db();
+      await connect(database, channel);
+      await product(database);
+      await listing(database, "p1", channel);
+      const secret = "a-real-staging-secret";
+      // eventType Unsupported keeps this test focused on signature verification (the thing this
+      // fix touches) rather than order import, which needs a live fetchOrderById call - that
+      // downstream behavior is unchanged by this fix and is already covered via fakeAdapter above.
+      const body = realBody({ eventType: MarketplaceWebhookEventType.Unsupported });
+      const adapter = realAdapter(channel, { [secretKey]: secret });
+      const sig = realSign(secret, body);
+      await expect(
+        processWebhook(database, channel, body, { "x-marketplace-signature": sig }, adapter),
+      ).resolves.toBeDefined();
+      const events = await database.select().from(schema.marketplaceWebhookEvents);
+      expect(events).toHaveLength(1);
+      expect(events[0].signatureValid).toBe(true);
+      expect(events[0].status).toBe(MarketplaceWebhookEventStatus.Ignored);
+    });
+  }
 });
 
 describe("marketplace order import, stock, idempotency, and retry", () => {
