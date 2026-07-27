@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType } from "@noctella/shared";
+import { OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType, StockMovementType } from "@noctella/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { createCategory } from "../src/services/categories";
@@ -146,12 +146,14 @@ describe("order service", () => {
     );
 
     expect(order.items[0]).toMatchObject({
+      productSku: "SKU-ORDER-001",
       productTitle: "Vintage Chronograph",
       productSlug: "cart-title-ignored",
       productType: ProductType.UniqueItem,
       productImageUrl: "https://example.com/watch.jpg",
       unitPrice: 1200,
       totalPrice: 1200,
+      currency: "EUR",
     });
   });
 
@@ -159,6 +161,59 @@ describe("order service", () => {
     await expect(
       createOrder(db, createOrderSchema.parse(baseOrderInput({ subtotalAmount: 1, totalAmount: 1 }))),
     ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it("rejects orders when stock is insufficient and mutates nothing", async () => {
+    const category = await createCategory(db, { name: "Out of Stock", displayOrder: 0, isActive: true });
+    const outOfStock = await createProduct(db, {
+      sku: "SKU-OUT-OF-STOCK",
+      title: "Sold Out Item",
+      type: ProductType.UniqueItem,
+      status: ProductStatus.Published,
+      categoryId: category.id,
+      customsWarning: false,
+      isFeatured: false,
+      allowMakeOffer: false,
+      allowCashOnDelivery: false,
+      showInArchiveAfterSale: false,
+      priceEur: 500,
+      stockQuantity: 0,
+    });
+    await seedPayment(db, PaymentProvider.Stripe, "ref-out-of-stock", PaymentStatus.Paid);
+
+    const ordersBefore = await listOrders(db, orderListQuerySchema.parse({}));
+    const movementsBefore = await listStockMovements(db, { productId: outOfStock.id, page: 1, pageSize: 20 });
+
+    await expect(
+      createOrder(
+        db,
+        createOrderSchema.parse(
+          baseOrderInput({
+            orderDraftId: "draft-out-of-stock",
+            paymentReference: "ref-out-of-stock",
+            items: [{ productId: outOfStock.id, quantity: 1 }],
+            subtotalAmount: 500,
+            totalAmount: 500,
+          }),
+        ),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestError);
+
+    const ordersAfter = await listOrders(db, orderListQuerySchema.parse({}));
+    const movementsAfter = await listStockMovements(db, { productId: outOfStock.id, page: 1, pageSize: 20 });
+    const afterProduct = await getProductById(db, outOfStock.id);
+    expect(ordersAfter.pagination.total).toBe(ordersBefore.pagination.total);
+    expect(movementsAfter.items).toHaveLength(movementsBefore.items.length);
+    expect(afterProduct.stockQuantity).toBe(0);
+  });
+
+  it("rejects a non-EUR order currency even when the schema accepts the enum value", async () => {
+    await expect(
+      createOrder(db, createOrderSchema.parse(baseOrderInput({ currency: "USD" }))),
+    ).rejects.toBeInstanceOf(BadRequestError);
+
+    const after = await getProductById(db, productId);
+    expect(after.stockQuantity).toBe(1);
   });
 
   it("returns the existing order for a duplicate orderDraftId", async () => {
@@ -435,16 +490,63 @@ describe("order service", () => {
       expect(updated.status).toBe(OrderStatus.Cancelled);
     });
 
-    it("Processing -> Cancelled restores Inventory and updates status atomically", async () => {
-      const { order, product } = await createOrderAtStatus(OrderStatus.Processing);
-      const before = await getProductById(db, product.id);
-      expect(before.stockQuantity).toBe(0);
+    it("Processing -> Cancelled restores Inventory and Product status atomically", async () => {
+      const category = await createCategory(db, { name: `Lifecycle-${Math.random()}`, displayOrder: 0, isActive: true });
+      const product = await createProduct(db, {
+        sku: `SKU-LIFECYCLE-${Math.random()}`,
+        title: "Lifecycle Test Product",
+        type: ProductType.UniqueItem,
+        status: ProductStatus.Published,
+        categoryId: category.id,
+        customsWarning: false,
+        isFeatured: false,
+        allowMakeOffer: false,
+        allowCashOnDelivery: false,
+        showInArchiveAfterSale: false,
+        priceEur: 100,
+        stockQuantity: 1,
+      });
+      expect(product.status).toBe(ProductStatus.Published);
+      expect(product.stockQuantity).toBe(1);
+
+      const reference = `ref-lifecycle-${product.id}`;
+      await seedPayment(db, PaymentProvider.Stripe, reference, PaymentStatus.Paid);
+      const order = await createOrder(
+        db,
+        createOrderSchema.parse({
+          orderDraftId: `draft-lifecycle-${product.id}`,
+          guestEmail: "jane@example.com",
+          status: OrderStatus.Processing,
+          paymentStatus: PaymentStatus.Paid,
+          paymentProvider: PaymentProvider.Stripe,
+          paymentReference: reference,
+          currency: "EUR",
+          billingAddress: address,
+          shippingAddress: address,
+          subtotalAmount: 100,
+          totalAmount: 100,
+          items: [{ productId: product.id, quantity: 1 }],
+        }),
+      );
+
+      const afterSale = await getProductById(db, product.id);
+      expect(afterSale.status).toBe(ProductStatus.Sold);
+      expect(afterSale.stockQuantity).toBe(0);
 
       const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
       expect(updated.status).toBe(OrderStatus.Cancelled);
 
-      const after = await getProductById(db, product.id);
-      expect(after.stockQuantity).toBe(1);
+      const afterCancel = await getProductById(db, product.id);
+      expect(afterCancel.status).toBe(ProductStatus.Published);
+      expect(afterCancel.stockQuantity).toBe(1);
+
+      const rollbackMovements = await listStockMovements(db, {
+        productId: product.id,
+        page: 1,
+        pageSize: 20,
+        type: StockMovementType.SaleRollback,
+      });
+      expect(rollbackMovements.items).toHaveLength(1);
     });
 
     it("Confirmed -> Cancelled restores Inventory", async () => {
@@ -454,7 +556,7 @@ describe("order service", () => {
       expect(after.stockQuantity).toBe(1);
     });
 
-    it("Draft -> Cancelled does not restore Inventory, since Draft Orders never decrement it at creation", async () => {
+    it("Draft -> Cancelled does not restore Inventory or change Product status, since Draft Orders never decrement it at creation", async () => {
       const category = await createCategory(db, { name: `Draft-${Math.random()}`, displayOrder: 0, isActive: true });
       const product = await createProduct(db, {
         sku: `SKU-DRAFT-${Math.random()}`,
@@ -483,22 +585,69 @@ describe("order service", () => {
 
       const before = await getProductById(db, product.id);
       expect(before.stockQuantity).toBe(1);
+      expect(before.status).toBe(ProductStatus.Published);
 
       const updated = await updateOrderStatus(db, draftOrder.id, { status: OrderStatus.Cancelled });
       expect(updated.status).toBe(OrderStatus.Cancelled);
 
       const after = await getProductById(db, product.id);
       expect(after.stockQuantity).toBe(1);
+      expect(after.status).toBe(ProductStatus.Published);
+
+      const rollbackMovements = await listStockMovements(db, {
+        productId: product.id,
+        page: 1,
+        pageSize: 20,
+        type: StockMovementType.SaleRollback,
+      });
+      expect(rollbackMovements.items).toHaveLength(0);
     });
 
-    it("double cancellation does not double-restore Inventory and remains idempotent", async () => {
+    it("double cancellation does not double-restore Inventory or Product status and remains idempotent", async () => {
       const { order, product } = await createOrderAtStatus(OrderStatus.Processing);
       const first = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
-      const second = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      const afterFirst = await getProductById(db, product.id);
       expect(first.status).toBe(OrderStatus.Cancelled);
+      expect(afterFirst.stockQuantity).toBe(1);
+      expect(afterFirst.status).toBe(ProductStatus.Published);
+
+      const second = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
       expect(second.status).toBe(OrderStatus.Cancelled);
       const after = await getProductById(db, product.id);
       expect(after.stockQuantity).toBe(1);
+      expect(after.status).toBe(ProductStatus.Published);
+
+      const rollbackMovements = await listStockMovements(db, {
+        productId: product.id,
+        page: 1,
+        pageSize: 20,
+        type: StockMovementType.SaleRollback,
+      });
+      expect(rollbackMovements.items).toHaveLength(1);
+    });
+
+    it("cancellation restores stock but preserves a later unrelated Admin status change away from Sold", async () => {
+      const { order, product } = await createOrderAtStatus(OrderStatus.Processing);
+      const afterSale = await getProductById(db, product.id);
+      expect(afterSale.status).toBe(ProductStatus.Sold);
+      expect(afterSale.stockQuantity).toBe(0);
+
+      await updateProduct(db, product.id, { status: ProductStatus.Archived });
+
+      const updated = await updateOrderStatus(db, order.id, { status: OrderStatus.Cancelled });
+      expect(updated.status).toBe(OrderStatus.Cancelled);
+
+      const after = await getProductById(db, product.id);
+      expect(after.stockQuantity).toBe(1);
+      expect(after.status).toBe(ProductStatus.Archived);
+
+      const rollbackMovements = await listStockMovements(db, {
+        productId: product.id,
+        page: 1,
+        pageSize: 20,
+        type: StockMovementType.SaleRollback,
+      });
+      expect(rollbackMovements.items).toHaveLength(1);
     });
 
     it("an invalid Shipped -> Cancelled attempt does not restore Inventory", async () => {
@@ -535,6 +684,17 @@ describe("order service", () => {
 
       const unchanged = await getOrderById(db, order.id);
       expect(unchanged.status).toBe(OrderStatus.Processing);
+
+      // The product row itself was deleted to force this failure, so its status
+      // can no longer be read - but the stock-movement ledger is independently
+      // queryable and proves no partial SaleRollback movement was left behind.
+      const rollbackMovements = await listStockMovements(db, {
+        productId: product.id,
+        page: 1,
+        pageSize: 20,
+        type: StockMovementType.SaleRollback,
+      });
+      expect(rollbackMovements.items).toHaveLength(0);
     });
   });
 });

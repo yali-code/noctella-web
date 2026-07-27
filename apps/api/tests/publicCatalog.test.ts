@@ -98,6 +98,24 @@ describe("public catalog service", () => {
     expect(publicProduct).not.toHaveProperty("internalNotes");
   });
 
+  it("does not expose minOfferPrice on the public product", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        allowMakeOffer: true,
+        minOfferPrice: 800,
+      }),
+    );
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct).not.toHaveProperty("minOfferPrice");
+
+    const listed = await listPublicProducts(db, { page: 1, pageSize: 20, sort: "newest" });
+    for (const item of listed.items) {
+      expect(item).not.toHaveProperty("minOfferPrice");
+    }
+  });
+
   it("filters by category slug", async () => {
     const otherCategory = await createCategory(db, { name: "Pens", displayOrder: 1, isActive: true });
     await createProduct(
