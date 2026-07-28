@@ -23,5 +23,8 @@ export * from "./types/purchasing";
 export * from "./types/salesFinanceBridge";
 export * from "./types/warehouseBridge";
 export * from "./types/reportsAnalyticsBridge";
+export * from "./types/companyProfile";
+export * from "./invoiceCalculation";
+export * from "./numericValidation";
 
 export * from "./urls";

@@ -52,3 +52,52 @@ describe("Sprint 15 sale reversal and financial adjustment", () => {
   it("requires full completed return and full successful refund, preserves original financials and is idempotent", async () => { const database=db(); await seed(database,{ quantity:2, stock:0 }); const ret:any = await makeReturn(database, ReturnStockDisposition.ReturnToStock, 1); await completeReturn(database,ret.id); await database.insert(schema.refunds).values({ id:"partial", orderId:"o1", type:RefundType.Partial, status:RefundStatus.Succeeded, currency:"EUR", subtotalAmount:50, shippingAmount:0, taxAmount:0, totalAmount:50, idempotencyKey:"partial", createdAt:now(), updatedAt:now() }); expect((await getSaleReversalReadiness(database,"o1")).ready).toBe(false); const ret2:any = await createReturnRequest(database,{ orderId:"o1", channel:PublishChannel.Ebay, externalReturnId:"ret2", reason:ReturnReason.Damaged, requestedResolution:ReturnResolution.Refund, items:[{ orderItemId:"oi1", quantityRequested:1 }] }); await authorizeReturn(database,ret2.id,{}); await receiveReturn(database,ret2.id,{}); await inspectReturnItem(database,ret2.id,{ orderItemId:"oi1", quantityReceived:1, stockDisposition:ReturnStockDisposition.NoStockChange }); await approveReturn(database,ret2.id,{}); await completeReturn(database,ret2.id); await database.insert(schema.refunds).values({ id:"rest", orderId:"o1", type:RefundType.Full, status:RefundStatus.Succeeded, currency:"EUR", subtotalAmount:150, shippingAmount:10, taxAmount:5, totalAmount:165, idempotencyKey:"rest", createdAt:now(), updatedAt:now() }); const before=(await database.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.id,"sf1")))[0]; expect((await getSaleReversalReadiness(database,"o1")).ready).toBe(true); const rev:any = await reverseCompletedSale(database,{ orderId:"o1", returnRequestId:ret.id, refundId:"rest" }); const again:any = await reverseCompletedSale(database,{ orderId:"o1", returnRequestId:ret.id, refundId:"rest" }); expect(again.id).toBe(rev.id); expect((await database.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.id,"sf1")))[0]).toEqual(before); expect((await database.select().from(schema.orders).where(eq(schema.orders.id,"o1")))[0].status).toBe(OrderStatus.Completed); expect((await database.select().from(schema.stockMovements).where(eq(schema.stockMovements.productId,"p1"))).filter((m)=>m.type===StockMovementType.SaleRollback || m.type === "sale_rollback")).toHaveLength(0); expect(JSON.parse(rev.sourceSnapshot).saleFinancial.id).toBe("sf1"); expect(rev.stockReversed).toBe(true); expect(rev.financialsReversed).toBe(true); });
   it("summarizes adjustments and does not claim exact adjusted profit when fee values are unknown", async () => { const database=db(); await seed(database,{ costKnown:false }); await database.insert(schema.refunds).values({ id:"r", orderId:"o1", type:RefundType.Partial, status:RefundStatus.Succeeded, currency:"EUR", subtotalAmount:20, shippingAmount:3, taxAmount:2, totalAmount:25, marketplaceFeeAdjustment:null, paymentFeeAdjustment:null, idempotencyKey:"r", createdAt:now(), updatedAt:now() }); const summary:any = await getReturnFinancialSummary(database,"o1"); expect(summary).toMatchObject({ originalGrossRevenue:115, refundedSubtotal:20, refundedShipping:3, refundedTax:2, totalRefunded:25, netRetainedRevenue:90, marketplaceFeeAdjustment:null, paymentFeeAdjustment:null, stockDispositionWriteOffValue:null, adjustedProfitComplete:false }); expect(summary.adjustedProfit).toBeUndefined(); });
 });
+
+/**
+ * Sprint 79: closes the confirmed gap where restoreStatusIfSold previously only fired for
+ * SaleRollback movements, so a unique-item product returned to sellable stock via the Return
+ * flow had its quantity restored but stayed stuck at Sold. seed() always creates "p1" as Sold, so
+ * these tests exercise the real product-status transition, not just stockQuantity.
+ */
+describe("Sprint 79 ReturnIn restores Sold -> Published", () => {
+  it("a sellable (ReturnToStock) completed return republishes a Sold product", async () => {
+    const database = db();
+    await seed(database, { stock: 0 });
+    const ret: any = await makeReturn(database, ReturnStockDisposition.ReturnToStock);
+    await completeReturn(database, ret.id);
+    const [product] = await database.select().from(schema.products).where(eq(schema.products.id, "p1"));
+    expect(product.status).toBe(ProductStatus.Published);
+    expect(product.stockQuantity).toBe(1);
+  });
+
+  it("preserves a later unrelated Admin status change instead of clobbering it back to Published", async () => {
+    const database = db();
+    await seed(database, { stock: 0 });
+    const ret: any = await makeReturn(database, ReturnStockDisposition.ReturnToStock);
+    // Admin archives the product after inspection/approval but before completion runs.
+    await database.update(schema.products).set({ status: ProductStatus.Archived }).where(eq(schema.products.id, "p1"));
+    await completeReturn(database, ret.id);
+    const [product] = await database.select().from(schema.products).where(eq(schema.products.id, "p1"));
+    expect(product.status).toBe(ProductStatus.Archived);
+    expect(product.stockQuantity).toBe(1);
+  });
+
+  it.each([ReturnStockDisposition.Quarantine, ReturnStockDisposition.Damaged, ReturnStockDisposition.Parts, ReturnStockDisposition.Discard, ReturnStockDisposition.NoStockChange])("a non-sellable disposition (%s) never republishes the product", async (disposition) => {
+    const database = db();
+    await seed(database, { stock: 0 });
+    const ret: any = await makeReturn(database, disposition);
+    await completeReturn(database, ret.id);
+    const [product] = await database.select().from(schema.products).where(eq(schema.products.id, "p1"));
+    expect(product.status).toBe(ProductStatus.Sold);
+    expect(product.stockQuantity).toBe(0);
+  });
+
+  it("cancellation-only / refund-only flows (no completed ReturnToStock return) never publish the product", async () => {
+    const database = db();
+    await seed(database, { stock: 0 });
+    await createRefund(database, { orderId: "o1", type: RefundType.Full, status: RefundStatus.Succeeded, currency: "EUR", subtotalAmount: 100, shippingAmount: 0, taxAmount: 0, reason: "test", idempotencyKey: "refund-only" });
+    const [product] = await database.select().from(schema.products).where(eq(schema.products.id, "p1"));
+    expect(product.status).toBe(ProductStatus.Sold);
+    expect(product.stockQuantity).toBe(0);
+  });
+});

@@ -519,9 +519,12 @@ function mutateInventoryInTransactionUseCase(
             }),
             (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false }));
             // Live Sale-to-Sold transitions currently originate only from Published products
-            // (createInternalOrderUseCase requires Published before a sale). SaleRollback
-            // restores Sold back to Published but only when status is still exactly Sold,
-            // so a later unrelated Admin status change (e.g. Archived) is preserved, not overwritten.
+            // (createInternalOrderUseCase requires Published before a sale). SaleRollback and
+            // sellable ReturnIn (Sprint 79 — completeReturnUseCase only reaches this movement
+            // type when the inspector set stockDisposition to ReturnToStock) both restore Sold
+            // back to Published, but only when status is still exactly Sold, so a later
+            // unrelated Admin status change (e.g. Archived) is preserved, not overwritten, and a
+            // non-sellable return (which never produces a ReturnIn movement) never publishes.
             const restoreStatusIfSold = () =>
               chain(repositories.products.findById(input.productId), (currentProduct) =>
                 currentProduct && currentProduct.status === ProductStatus.Sold
@@ -530,7 +533,7 @@ function mutateInventoryInTransactionUseCase(
               );
             return type === StockMovementType.Sale && stockAfter === 0
               ? chain(repositories.products.update(input.productId, { status: ProductStatus.Sold, updatedAt: t }), append)
-              : type === StockMovementType.SaleRollback
+              : type === StockMovementType.SaleRollback || type === StockMovementType.ReturnIn
               ? chain(restoreStatusIfSold(), append)
               : append();
           },

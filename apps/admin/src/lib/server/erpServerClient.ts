@@ -77,6 +77,51 @@ export function cancelInvoicePath(invoiceId: string): string {
   return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/cancel`;
 }
 
+/** Sprint 79: invoice list/detail, Draft-editing, and company-profile path builders, same fixed-template convention. */
+export function invoicesListPath(query: string): string {
+  return `/api/erp/invoices${query ? `?${query}` : ""}`;
+}
+
+export function invoicePath(invoiceId: string): string {
+  return `/api/erp/invoices/${encodeURIComponent(invoiceId)}`;
+}
+
+export function invoiceEventsPath(invoiceId: string): string {
+  return `/api/erp/invoices/${encodeURIComponent(invoiceId)}/events`;
+}
+
+export function invoiceIssueReadinessPath(invoiceId: string): string {
+  return `/api/erp/invoices/${encodeURIComponent(invoiceId)}/issue-readiness`;
+}
+
+export function updateInvoicePath(invoiceId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/update`;
+}
+
+export function updateInvoiceLinePath(invoiceId: string, lineId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/lines/${encodeURIComponent(lineId)}/update`;
+}
+
+export function switchInvoiceCalculationModePath(invoiceId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/calculation-mode`;
+}
+
+export function recalculateInvoicePath(invoiceId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/recalculate`;
+}
+
+export function refreshInvoiceSellerSnapshotPath(invoiceId: string): string {
+  return `/api/erp/commands/invoices/${encodeURIComponent(invoiceId)}/refresh-seller-snapshot`;
+}
+
+export function companyProfilePath(): string {
+  return `/api/erp/company-profile`;
+}
+
+export function updateCompanyProfilePath(): string {
+  return `/api/erp/commands/company-profile/update`;
+}
+
 /**
  * Sprint 57B: purchasing/supplier path builders, same fixed-template
  * convention as above (a query string, when accepted, is caller-built from

@@ -102,3 +102,32 @@ export function canActOnOrderStatus(status: string, action: OrderStatusAction): 
 export function getAvailableOrderStatusActions(status: string): OrderStatusActionConfig[] {
   return ORDER_STATUS_ACTIONS.filter((a) => a.from.includes(status));
 }
+
+/**
+ * Sprint 79 requirement #4: mirrors apps/api's OrderInvoiceOutboxState — the automatic
+ * SalesInvoice-draft outbox event's state for this order, never the raw outbox internals.
+ */
+export type OrderInvoiceOutboxState = "Created" | "Pending" | "Retrying" | "FailedDeadLettered" | "NotApplicableMarketplace" | "NoInvoiceUnpaid";
+
+export interface OrderInvoiceOutboxStatus {
+  state: OrderInvoiceOutboxState;
+  invoiceId?: string;
+  attemptCount?: number;
+  lastErrorMessage?: string | null;
+}
+
+export function getOrderInvoiceOutboxStatus(orderId: string): Promise<OrderInvoiceOutboxStatus> {
+  return api.get<OrderInvoiceOutboxStatus>(`/api/orders/${orderId}/invoice-status`);
+}
+
+export interface RetryInvoiceDraftResult {
+  retried: boolean;
+  reason: "Enqueued" | "Reactivated" | "AlreadyCreated" | "AlreadyInProgress";
+  invoiceId?: string;
+  status?: string;
+}
+
+/** Always re-enqueues/reactivates the durable outbox event - never calls the direct invoice-creation ERP command, so an automatic draft can never bypass the outbox even from this manual Admin trigger. */
+export function retryOrderInvoiceDraft(orderId: string): Promise<RetryInvoiceDraftResult> {
+  return api.post<RetryInvoiceDraftResult>(`/api/orders/${orderId}/invoice-status/retry`, {});
+}

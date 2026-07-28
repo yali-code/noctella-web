@@ -25,6 +25,98 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureSprint25OutboxTables(sqlite);
   ensurePaymentColumns(sqlite);
   ensureAuthTables(sqlite);
+  ensureCompanyProfileTable(sqlite);
+  ensureInvoiceAccountingColumns(sqlite);
+}
+
+/** Sprint 79: singleton company-profile settings table used as the invoice seller-snapshot source. */
+function ensureCompanyProfileTable(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS company_profile (id TEXT PRIMARY KEY, legal_name TEXT NOT NULL, trade_name TEXT, registration_number TEXT NOT NULL, vat_number TEXT, address_line1 TEXT NOT NULL, address_line2 TEXT, city TEXT NOT NULL, postal_code TEXT NOT NULL, country TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL, website TEXT, bank_name TEXT, iban TEXT, bic TEXT, invoice_footer TEXT, default_payment_terms_days INTEGER NOT NULL DEFAULT 14, default_vat_rate REAL NOT NULL DEFAULT 20, default_tax_treatment TEXT NOT NULL DEFAULT 'StandardVAT', default_prices_include_vat INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+`);
+}
+
+/**
+ * Sprint 79 correction: `sales_invoice_order_key` replaces an earlier, unsafe design that created
+ * `CREATE UNIQUE INDEX ... ON invoices(order_id) WHERE invoice_type='SalesInvoice'` directly.
+ * SQLite validates existing data when a unique index is created — before this sprint, creating
+ * more than one SalesInvoice per order (with distinct erpReferenceId values) was legal, so any
+ * database already containing such a historical duplicate would have made that CREATE UNIQUE
+ * INDEX throw on every single API startup (crash-looping the whole service). Historical duplicates
+ * must never be deleted, cancelled, renumbered, or silently modified, and startup must always
+ * succeed regardless of what pre-existing data looks like.
+ *
+ * Strategy: a nullable column, backfilled only for orders with exactly one SalesInvoice (the
+ * unambiguous case), left NULL for any order with more than one (the historical duplicate case —
+ * simply excluded from the unique index, not touched otherwise). The unique index is on this
+ * nullable column, not on order_id directly, so it can never see two equal non-NULL values for a
+ * pre-existing duplicate group. New SalesInvoice rows always set this column to their own order_id
+ * (see erpSalesFinanceBridge.ts's createInvoiceDraft), so new duplicates are still prevented at
+ * the database level going forward. Applic­ation-level duplicate detection (createInvoiceDraft's
+ * own lookup-before-insert) is unaffected by this column and still finds ANY existing SalesInvoice
+ * for an order, historical duplicates included, since it queries by (order_id, invoice_type)
+ * directly, never by this new column.
+ */
+function ensureInvoiceAccountingColumns(sqlite: Database.Database): void {
+  const invoiceColumns = new Set((sqlite.prepare("PRAGMA table_info(invoices)").all() as Array<{ name: string }>).map((row) => row.name));
+  const additions: Array<{ name: string; ddl: string }> = [
+    { name: "calculation_mode", ddl: "TEXT NOT NULL DEFAULT 'Automatic'" },
+    { name: "tax_treatment", ddl: "TEXT NOT NULL DEFAULT 'StandardVAT'" },
+    { name: "prices_include_vat", ddl: "INTEGER NOT NULL DEFAULT 0" },
+    { name: "shipping_vat_rate", ddl: "REAL NOT NULL DEFAULT 0" },
+    { name: "shipping_vat_amount", ddl: "REAL NOT NULL DEFAULT 0" },
+    { name: "invoice_footer", ddl: "TEXT" },
+    { name: "sales_invoice_order_key", ddl: "TEXT" },
+  ];
+  for (const column of additions) if (!invoiceColumns.has(column.name)) sqlite.exec(`ALTER TABLE invoices ADD COLUMN ${column.name} ${column.ddl}`);
+
+  // Backfill: unambiguous orders (exactly one SalesInvoice) get the key set to their order_id;
+  // ambiguous (duplicate) groups are left NULL and reported, never modified further. Re-running
+  // this on every startup is safe and idempotent — it only ever sets a NULL key to a value, never
+  // clears or changes an already-set one, and an order that already has its key set is skipped
+  // entirely by the WHERE clause below.
+  sqlite.exec(`
+    UPDATE invoices SET sales_invoice_order_key = order_id
+    WHERE invoice_type = 'SalesInvoice' AND sales_invoice_order_key IS NULL
+      AND (SELECT COUNT(*) FROM invoices AS dup WHERE dup.order_id = invoices.order_id AND dup.invoice_type = 'SalesInvoice') = 1
+  `);
+  const duplicateGroups = sqlite.prepare(`
+    SELECT order_id, COUNT(*) AS count FROM invoices
+    WHERE invoice_type = 'SalesInvoice' AND sales_invoice_order_key IS NULL
+    GROUP BY order_id
+  `).all() as Array<{ order_id: string; count: number }>;
+  if (duplicateGroups.length) {
+    // eslint-disable-next-line no-console
+    console.warn(`[migrate] ${duplicateGroups.length} order(s) have more than one historical SalesInvoice row (pre-Sprint-79 state) and were left unmodified: ${duplicateGroups.map((g) => g.order_id).join(", ")}`);
+  }
+
+  // Sprint 79 second-review correction: a database that already ran an earlier (unsafe) draft of
+  // this migration may still carry the old direct index this one replaces. That old index enforces
+  // uniqueness on order_id directly, with no historical-duplicate exclusion, so it can still throw
+  // "UNIQUE constraint failed: invoices.order_id" on a legitimate historical duplicate or a
+  // concurrent-creation race — a raw error createInvoiceDraft's catch block does not recognize
+  // (it only matches the new sales_invoice_order_key violation). Dropping it is safe: the new
+  // partial unique index below already provides the intended, historical-duplicate-tolerant
+  // constraint, and DROP INDEX IF EXISTS is a no-op on a database that never had it.
+  sqlite.exec("DROP INDEX IF EXISTS idx_invoices_order_sales_invoice_unique");
+
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_sales_invoice_order_key_unique ON invoices(sales_invoice_order_key) WHERE sales_invoice_order_key IS NOT NULL");
+
+  const lineColumns = new Set((sqlite.prepare("PRAGMA table_info(invoice_lines)").all() as Array<{ name: string }>).map((row) => row.name));
+  if (!lineColumns.has("vat_rate")) sqlite.exec("ALTER TABLE invoice_lines ADD COLUMN vat_rate REAL NOT NULL DEFAULT 0");
+}
+
+/**
+ * Sprint 79 correction: read-only operational report — historical SalesInvoice duplicate groups
+ * that migration deliberately left unmodified (see ensureInvoiceAccountingColumns). Exposed via
+ * the ERP bridge so an admin can see and manually resolve them without any automatic mutation.
+ */
+export function listHistoricalDuplicateSalesInvoiceOrderIds(sqlite: Database.Database): string[] {
+  const rows = sqlite.prepare(`
+    SELECT DISTINCT order_id FROM invoices
+    WHERE invoice_type = 'SalesInvoice' AND sales_invoice_order_key IS NULL
+  `).all() as Array<{ order_id: string }>;
+  return rows.map((r) => r.order_id);
 }
 
 /** Sprint 64B: admin authentication foundation. */

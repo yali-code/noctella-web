@@ -8,7 +8,7 @@ const time = "2026-01-01T00:00:00.000Z";
 describe("Sprint 35H return Inventory runtime", () => {
   test("PostgreSQL-style Inventory execution remains asynchronous", async () => {
     const repositories: any = {
-      products: { update: vi.fn() },
+      products: { update: vi.fn(), findById: vi.fn().mockResolvedValue({ id: "p", status: "Published" }) },
       inventory: { findByProduct: vi.fn().mockResolvedValue({ productId: "p", locationId: null, quantity: 1, updatedAt: time }), updateWithVersion: vi.fn().mockResolvedValue({ productId: "p", locationId: null, quantity: 2, updatedAt: time }) },
       stockMovements: { findByIdempotencyKey: vi.fn().mockResolvedValue(null), append: vi.fn().mockResolvedValue({ id: "m", productId: "p", type: "return_in", quantityDelta: 1, stockBefore: 1, stockAfter: 2, orderId: "o", orderItemId: "i", note: "Return r", idempotencyKey: "return-in:r:i", createdAt: time, updatedAt: time }) },
     };

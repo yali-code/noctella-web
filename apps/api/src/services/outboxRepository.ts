@@ -19,7 +19,15 @@ export class SqliteOutboxRepository implements OutboxRepository {
   async findByIdempotencyKey(key: string) { const row = this.sqlite.prepare("SELECT * FROM outbox_events WHERE idempotency_key=?").get(key); return row ? parse(row) : undefined; }
   async listPending(now: string, limit: number) { return (this.sqlite.prepare("SELECT * FROM outbox_events WHERE status IN ('Pending','RetryPending') AND available_at <= ? AND locked_by IS NULL ORDER BY available_at ASC, created_at ASC, id ASC LIMIT ?").all(now, limit) as any[]).map(parse); }
   async claimNextBatch(workerId: string, now: string, limit: number) { const tx = this.sqlite.transaction(() => { const rows = this.sqlite.prepare("SELECT id FROM outbox_events WHERE status IN ('Pending','RetryPending') AND available_at <= ? AND locked_by IS NULL ORDER BY available_at ASC, created_at ASC, id ASC LIMIT ?").all(now, limit) as Array<{id:string}>; for (const row of rows) this.sqlite.prepare("UPDATE outbox_events SET status='Processing', locked_by=?, locked_at=?, updated_at=? WHERE id=? AND locked_by IS NULL AND status IN ('Pending','RetryPending')").run(workerId, now, now, row.id); return rows.map((r)=>this.sqlite.prepare("SELECT * FROM outbox_events WHERE id=? AND locked_by=?").get(r.id, workerId)).filter(Boolean).map(parse); }); return tx(); }
-  async markProcessing(id:string, workerId:string, now:string){ this.sqlite.prepare("UPDATE outbox_events SET status='Processing', locked_by=?, locked_at=?, updated_at=? WHERE id=?").run(workerId,now,now,id); }
+  // Sprint 79 correction: attempt_count was never persisted anywhere in this repository (every
+  // markProcessing/markRetryPending/markDeadLetter call updated status/locks/errors but left the
+  // column untouched), so OutboxDispatcher's in-memory `attempts>=event.maxAttempts` check always
+  // compared against the ORIGINAL row read at the start of dispatchEvent - attempt_count could
+  // never advance across separate dispatch calls, so an event could retry forever and never
+  // actually reach DeadLetter. markProcessing runs exactly once per dispatch attempt (right before
+  // the handler is invoked, regardless of outcome), so incrementing it here keeps the persisted
+  // count in exact lockstep with the dispatcher's own attemptCount+1 computation.
+  async markProcessing(id:string, workerId:string, now:string){ this.sqlite.prepare("UPDATE outbox_events SET status='Processing', locked_by=?, locked_at=?, attempt_count = attempt_count + 1, updated_at=? WHERE id=?").run(workerId,now,now,id); }
   async markSucceeded(id:string, now:string){ this.sqlite.prepare("UPDATE outbox_events SET status='Succeeded', locked_by=NULL, locked_at=NULL, completed_at=?, updated_at=? WHERE id=?").run(now,now,id); }
   async markRetryPending(id:string, now:string, availableAt:string, code:string, message:string){ this.sqlite.prepare("UPDATE outbox_events SET status='RetryPending', locked_by=NULL, locked_at=NULL, available_at=?, last_error_code=?, last_error_message=?, updated_at=? WHERE id=?").run(availableAt,code,message,now,id); }
   async markFailed(id:string, now:string, code:string, message:string){ this.sqlite.prepare("UPDATE outbox_events SET status='Failed', last_error_code=?, last_error_message=?, updated_at=? WHERE id=?").run(code,message,now,id); }
@@ -37,7 +45,9 @@ export class PostgresOutboxRepository implements OutboxRepository {
   async findByIdempotencyKey(k:string){ const r=await this.db.query("SELECT * FROM outbox_events WHERE idempotency_key=$1",[k]); return r.rows[0]?parse(r.rows[0]):undefined; }
   async listPending(now:string,limit:number){ const r=await this.db.query("SELECT * FROM outbox_events WHERE status IN ('Pending','RetryPending') AND available_at <= $1 AND locked_by IS NULL ORDER BY available_at ASC, created_at ASC, id ASC LIMIT $2",[now,limit]); return r.rows.map(parse); }
   async claimNextBatch(w:string,n:string,l:number){ const r=await this.db.query("UPDATE outbox_events SET status='Processing', locked_by=$1, locked_at=$2, updated_at=$2 WHERE id IN (SELECT id FROM outbox_events WHERE status IN ('Pending','RetryPending') AND available_at <= $2 AND locked_by IS NULL ORDER BY available_at ASC, created_at ASC, id ASC LIMIT $3 FOR UPDATE SKIP LOCKED) RETURNING *",[w,n,l]); return r.rows.map(parse); }
-  async markProcessing(id:string,w:string,n:string){await this.db.query("UPDATE outbox_events SET status='Processing', locked_by=$1, locked_at=$2, updated_at=$2 WHERE id=$3",[w,n,id]);}
+  // Sprint 79 correction: see SqliteOutboxRepository.markProcessing's comment - attempt_count must
+  // be persisted here or an event can never reach DeadLetter across separate dispatch calls.
+  async markProcessing(id:string,w:string,n:string){await this.db.query("UPDATE outbox_events SET status='Processing', locked_by=$1, locked_at=$2, attempt_count = attempt_count + 1, updated_at=$2 WHERE id=$3",[w,n,id]);}
   async markSucceeded(id:string,n:string){await this.db.query("UPDATE outbox_events SET status='Succeeded', locked_by=NULL, locked_at=NULL, completed_at=$1, updated_at=$1 WHERE id=$2",[n,id]);}
   async markRetryPending(id:string,n:string,a:string,c:string,m:string){await this.db.query("UPDATE outbox_events SET status='RetryPending', locked_by=NULL, locked_at=NULL, available_at=$1, last_error_code=$2, last_error_message=$3, updated_at=$4 WHERE id=$5",[a,c,m,n,id]);}
   async markFailed(id:string,n:string,c:string,m:string){await this.db.query("UPDATE outbox_events SET status='Failed', last_error_code=$1, last_error_message=$2, updated_at=$3 WHERE id=$4",[c,m,n,id]);}

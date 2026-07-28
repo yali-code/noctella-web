@@ -218,7 +218,7 @@ export default function PurchaseDetailPage({ params }: { params: { id: string } 
             ))}
           </select>
           <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>
-            Allocates shipping/customs/packaging/buyer-premium/tax/misc costs across lines. This does not update product purchase cost fields and does not post any finance-ledger entry.
+            Allocates shipping/customs/packaging/buyer-premium/tax/misc costs across lines. This does not post any finance-ledger entry. For a quantity-1 line linked to a product whose purchase cost is not yet set, this also syncs that product&apos;s purchase cost from the resulting landed unit cost (quantity-greater-than-1 lines are left untouched — a weighted-average/FIFO decision is deferred).
           </p>
         </ConfirmButton>
 

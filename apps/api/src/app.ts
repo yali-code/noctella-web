@@ -35,6 +35,7 @@ import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photo
 import { enqueueChannelStockSync, enqueueProductStockSync } from "./services/stockSync";
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
+import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
 import { BackgroundJobType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
 import { externalListings } from "./db/schema";
@@ -120,7 +121,11 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     // Sprint 71: reuses this same scheduler trigger for the product-photo outbox (promotion,
     // delete, temp-cleanup) instead of adding a second cron/endpoint for it.
     const photoOutboxResults = await dispatchDueProductPhotoOutboxEvents(db, workerId, batchSize);
-    res.json({ processed, photoOutboxProcessed: photoOutboxResults.length });
+    // Sprint 79 correction: same reuse for the durable Sales Invoice Draft outbox — the post-commit
+    // dispatch attempt in services/orders.ts is only a best-effort responsiveness optimization;
+    // this scheduled sweep is what actually guarantees eventual delivery (retries, dead-lettering).
+    const salesInvoiceOutboxResults = await dispatchDueSalesInvoiceOutboxEvents(db, workerId, batchSize);
+    res.json({ processed, photoOutboxProcessed: photoOutboxResults.length, salesInvoiceOutboxProcessed: salesInvoiceOutboxResults.length });
   } catch (e) {
     next(e);
   }
