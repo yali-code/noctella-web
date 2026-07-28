@@ -6,8 +6,10 @@ import {
   completeSale,
   customerName,
   getAvailableOrderStatusActions,
+  getOrderInvoiceOutboxStatus,
   orderListQuery,
   ORDER_STATUS_ACTIONS,
+  retryOrderInvoiceDraft,
   type OrderWithItems,
 } from "./orders";
 vi.mock("./api", () => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
@@ -34,6 +36,20 @@ describe("admin order list helpers", () => {
     const result = await completeSale("order-1");
     expect(mockedApi.post).toHaveBeenCalledWith("/api/orders/order-1/complete-sale", {});
     expect(result).toEqual({ status: "blocked", issues: ["Order is unpaid"] });
+  });
+
+  it("Sprint 79: reads the automatic-invoice outbox status via the shared API client", async () => {
+    mockedApi.get.mockResolvedValueOnce({ state: "FailedDeadLettered", attemptCount: 5, lastErrorMessage: "OUTBOX_HANDLER_ERROR" });
+    const result = await getOrderInvoiceOutboxStatus("order-1");
+    expect(mockedApi.get).toHaveBeenCalledWith("/api/orders/order-1/invoice-status");
+    expect(result.state).toBe("FailedDeadLettered");
+  });
+
+  it("Sprint 79: retry always posts to the durable re-enqueue endpoint, never a direct invoice-creation command", async () => {
+    mockedApi.post.mockResolvedValueOnce({ retried: true, reason: "Reactivated" });
+    const result = await retryOrderInvoiceDraft("order-1");
+    expect(mockedApi.post).toHaveBeenCalledWith("/api/orders/order-1/invoice-status/retry", {});
+    expect(result).toEqual({ retried: true, reason: "Reactivated" });
   });
 });
 

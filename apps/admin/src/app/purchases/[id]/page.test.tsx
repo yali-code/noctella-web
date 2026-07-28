@@ -121,12 +121,13 @@ describe("Purchase detail lifecycle actions (Sprint 57B)", () => {
     expect(alert).toHaveTextContent("Purchase cannot be cancelled in current status");
   });
 
-  it("activates Allocate Costs and labels its effect accurately (no product cost / finance-ledger claim)", async () => {
+  it("activates Allocate Costs and labels its effect accurately (no finance-ledger claim; documents the quantity-1 purchase-cost sync)", async () => {
     const user = userEvent.setup();
     await renderPage(basePurchase({ status: "Draft" }));
     const allocateSpy = vi.spyOn(bridge, "allocatePurchaseCosts").mockResolvedValue({});
     await user.click(screen.getByText("Allocate Costs"));
-    expect(screen.getByText(/does not update product purchase cost fields/)).toBeInTheDocument();
+    expect(screen.getByText(/does not post any finance-ledger entry/)).toBeInTheDocument();
+    expect(screen.getByText(/syncs that product's purchase cost/)).toBeInTheDocument();
     await user.click(screen.getByText("Confirm Allocate Costs"));
     await waitFor(() => expect(allocateSpy).toHaveBeenCalledWith("p1", { allocationMethod: "Equal" }));
   });

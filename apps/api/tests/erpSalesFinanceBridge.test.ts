@@ -13,7 +13,15 @@ import { createPaymentSession } from "../src/payments/paymentRepository";
 import { createRefund, reverseCompletedSale } from "../src/services/returns";
 import { completeSale, getSaleCompletionReadiness } from "../src/services/shipments";
 import { adjustedFinancials, createFinanceEntry, createInternalSale, createInvoiceDraft, executeSalesCommand, financeSummary, getInvoice, getInvoiceEvents, issueInvoice, listFinanceEntries, listInvoices, listSales, refundSummary, reversalSummary, saleProjection, setInvoiceStatus, updateInvoiceDraft } from "../src/services/erpSalesFinanceBridge";
+import { upsertCompanyProfile } from "../src/services/companyProfile";
 import { BadRequestError, ConflictError } from "../src/services/errors";
+/**
+ * defaultVatRate:0 is deliberate — this file's existing arithmetic assertions (e.g.
+ * lineTotal===subtotal for a plain single-line invoice) predate real VAT calculation and
+ * assume a zero rate; dedicated nonzero-rate VAT math is covered separately in
+ * invoiceVatCalculation.test.ts, not here.
+ */
+const fictionalCompanyProfile = { legalName: "Noctella Test Trading Ltd.", registrationNumber: "TEST-UIC-000111", vatNumber: "TESTVAT000111", addressLine1: "1 Test Warehouse Row", city: "Testville", postalCode: "00000", country: "FR", email: "billing@example-noctella-test.invalid", phone: "+00 000 000 000", defaultVatRate: 0 };
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 const address = { fullName: "Jane Collector", line1: "1 Rue Noctella", city: "Paris", postalCode: "75001", country: "FR" };
@@ -24,7 +32,7 @@ async function shipment(db:any, orderId:string, status=ShipmentStatus.InTransit,
 
 describe("ERP sales finance bridge", () => {
   let sqlite: Database.Database; let db: any;
-  beforeEach(()=>{ const m=memoryDb(); sqlite=m.sqlite; db=m.db; });
+  beforeEach(async ()=>{ const m=memoryDb(); sqlite=m.sqlite; db=m.db; await upsertCompanyProfile(db, fictionalCompanyProfile); });
 
   it("keeps schema.ts, schema.sql and migrations consistent/idempotent", () => { ensureSchema(sqlite); const tables=sqlite.prepare("select name from sqlite_master where type='table'").all().map((r:any)=>r.name); for(const t of ["invoices","invoice_lines","invoice_events","finance_entries"]) expect(tables).toContain(t); const indexes=sqlite.prepare("select name from sqlite_master where type='index'").all().map((r:any)=>r.name); for(const idx of ["idx_invoices_erp_reference_unique","idx_invoices_number_unique","idx_finance_entries_idempotency_unique","idx_invoices_order","idx_invoices_customer","idx_invoices_status","idx_invoices_type","idx_invoices_dates"]) expect(indexes).toContain(idx); const upgraded=new Database(":memory:"); ensureSchema(upgraded); ensureSchema(upgraded); expect(upgraded.prepare("select name from sqlite_master where name='finance_entries'").get()).toBeTruthy(); });
 
@@ -38,12 +46,27 @@ describe("ERP sales finance bridge", () => {
 
   it("completes sale once, posts one financial record/entry, does not move stock again, and preserves sale movements", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); await shipment(db,order.id); const beforeStock=(await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity; const beforeMoves=(await db.select().from(schema.stockMovements)).length; const first=await completeSale(db,order.id); const second=await completeSale(db,order.id); expect(first.status).toBe(OrderStatus.Completed); expect(second.alreadyCompleted).toBe(true); expect((await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity).toBe(beforeStock); expect((await db.select().from(schema.stockMovements))).toHaveLength(beforeMoves); expect((await db.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.orderId,order.id)))).toHaveLength(1); expect((await listFinanceEntries(db,{entryType:"CompleteSale"})).items).toHaveLength(1); });
 
-  it("creates, updates, issues, cancels, voids and marks paid invoices without stock/payment/PDF/email side effects", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const stock=(await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity; const moves=(await db.select().from(schema.stockMovements)).length; const draft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv",notes:"draft"}); expect(draft.status).toBe(ErpInvoiceStatus.Draft); expect(draft.lines[0].lineTotal).toBe(draft.subtotal); const updated:any=await updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:draft.updatedAt,notes:"updated"}); expect(updated.notes).toBe("updated"); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:"stale"})).rejects.toBeInstanceOf(ConflictError); await expect(createInvoiceDraft(db,order.id,{discountAmount:-1})).rejects.toBeInstanceOf(BadRequestError); const issued:any=await issueInvoice(db,draft.id,{}); expect(issued.invoiceNumber).toMatch(/^NOCT-\d{4}-000001$/); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:issued.updatedAt,notes:"bad"})).rejects.toBeInstanceOf(ConflictError); expect((await issueInvoice(db,draft.id,{})).invoiceNumber).toBe(issued.invoiceNumber); expect((await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Cancelled)).invoiceNumber).toBe(issued.invoiceNumber);
-    const voidDraft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv-void"}); const voided:any=await issueInvoice(db,voidDraft.id,{}); expect((await setInvoiceStatus(db,voided.id,ErpInvoiceStatus.Voided)).status).toBe(ErpInvoiceStatus.Voided);
-    const paidDraft:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"erp-inv-paid"}); const paidSource:any=await issueInvoice(db,paidDraft.id,{}); expect((await setInvoiceStatus(db,paidSource.id,ErpInvoiceStatus.Paid)).paidAt).toBeTruthy();
-    expect(await getInvoiceEvents(db,draft.id)).not.toHaveLength(0); expect((await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity).toBe(stock); expect((await db.select().from(schema.stockMovements))).toHaveLength(moves); expect(JSON.stringify(await getInvoiceEvents(db,draft.id))).not.toMatch(/pdfReady|emailReady|payment_intent/i); });
+  it("creates, updates, issues, cancels, voids and marks paid invoices without stock/payment/PDF/email side effects", async () => {
+    // Sprint 79: one SalesInvoice per order permanently (cancellation never allows a silent
+    // replacement) — Cancel/Void/Paid are exercised on three separate orders' auto-created
+    // drafts rather than three drafts on one order, which the new duplicate-prevention rule
+    // no longer permits.
+    const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const stock=(await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity; const moves=(await db.select().from(schema.stockMovements).where(eq(schema.stockMovements.productId,p.id))).length;
+    const draft:any=await createInvoiceDraft(db,order.id,{}); expect(draft.status).toBe(ErpInvoiceStatus.Draft); expect(draft.orderId).toBe(order.id); expect(draft.lines[0].lineTotal).toBe(draft.subtotal);
+    const updated:any=await updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:draft.updatedAt,notes:"updated"}); expect(updated.notes).toBe("updated"); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:"stale"})).rejects.toBeInstanceOf(ConflictError); await expect(createInvoiceDraft(db,order.id,{discountAmount:-1})).rejects.toBeInstanceOf(BadRequestError);
+    // Sprint 79 correction: NaN/Infinity/non-numeric-string invoice-creation input is rejected, never silently coerced to 0/NaN.
+    await expect(createInvoiceDraft(db,order.id,{discountAmount:NaN})).rejects.toBeInstanceOf(BadRequestError);
+    await expect(createInvoiceDraft(db,order.id,{shippingAmount:Infinity})).rejects.toBeInstanceOf(BadRequestError);
+    await expect(createInvoiceDraft(db,order.id,{discountAmount:"garbage"})).rejects.toBeInstanceOf(BadRequestError);
+    const issued:any=await issueInvoice(db,draft.id,{}); expect(issued.invoiceNumber).toMatch(/^NOCT-\d{4}-000001$/); await expect(updateInvoiceDraft(db,draft.id,{expectedUpdatedAt:issued.updatedAt,notes:"bad"})).rejects.toBeInstanceOf(ConflictError); expect((await issueInvoice(db,draft.id,{})).invoiceNumber).toBe(issued.invoiceNumber); expect((await setInvoiceStatus(db,draft.id,ErpInvoiceStatus.Cancelled)).invoiceNumber).toBe(issued.invoiceNumber);
+    const [pVoid]=await seed(db,1); const voidOrder=await paidOrder(db,[pVoid]); const voidDraft:any=await createInvoiceDraft(db,voidOrder.id,{}); const voided:any=await issueInvoice(db,voidDraft.id,{}); expect((await setInvoiceStatus(db,voided.id,ErpInvoiceStatus.Voided)).status).toBe(ErpInvoiceStatus.Voided);
+    const [pPaid]=await seed(db,1); const paidOrderRow=await paidOrder(db,[pPaid]); const paidDraft:any=await createInvoiceDraft(db,paidOrderRow.id,{}); const paidSource:any=await issueInvoice(db,paidDraft.id,{}); expect((await setInvoiceStatus(db,paidSource.id,ErpInvoiceStatus.Paid)).paidAt).toBeTruthy();
+    expect(await getInvoiceEvents(db,draft.id)).not.toHaveLength(0); expect((await db.select().from(schema.products).where(eq(schema.products.id,p.id)))[0].stockQuantity).toBe(stock); expect((await db.select().from(schema.stockMovements).where(eq(schema.stockMovements.productId,p.id))).length).toBe(moves); expect(JSON.stringify(await getInvoiceEvents(db,draft.id))).not.toMatch(/pdfReady|emailReady|payment_intent/i);
+  });
 
-  it("allocates unique sequential invoice numbers under concurrent issue attempts and prevents duplicate invoice finance entries", async () => { const ps=await seed(db,2); const order=await paidOrder(db,ps); const d1:any=await createInvoiceDraft(db,order.id,{}); const d2:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"second"}); const [i1,i2]:any[]=await Promise.all([issueInvoice(db,d1.id,{}), issueInvoice(db,d2.id,{})]); expect(new Set([i1.invoiceNumber,i2.invoiceNumber]).size).toBe(2); await createFinanceEntry(db,{invoiceId:i1.id,orderId:order.id,entryType:"IssuedInvoice",amount:i1.totalAmount,sourceReference:i1.invoiceNumber,idempotencyKey:`invoice-issued:${i1.id}`}); expect((await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items).toHaveLength(2); });
+  it("prevents more than one SalesInvoice per order even across a second createInvoiceDraft call with a different erpReferenceId", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); const first:any=await createInvoiceDraft(db,order.id,{}); const second:any=await createInvoiceDraft(db,order.id,{erpReferenceId:"second-attempt"}); expect(second.id).toBe(first.id); expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(1); });
+
+  it("allocates unique sequential invoice numbers under concurrent issue attempts and prevents duplicate invoice finance entries", async () => { const [p1]=await seed(db,1); const order1=await paidOrder(db,[p1]); const [p2]=await seed(db,1); const order2=await paidOrder(db,[p2]); const d1:any=await createInvoiceDraft(db,order1.id,{}); const d2:any=await createInvoiceDraft(db,order2.id,{}); const [i1,i2]:any[]=await Promise.all([issueInvoice(db,d1.id,{}), issueInvoice(db,d2.id,{})]); expect(new Set([i1.invoiceNumber,i2.invoiceNumber]).size).toBe(2); await createFinanceEntry(db,{invoiceId:i1.id,orderId:order1.id,entryType:"IssuedInvoice",amount:i1.totalAmount,sourceReference:i1.invoiceNumber,idempotencyKey:`invoice-issued:${i1.id}`}); expect((await listFinanceEntries(db,{entryType:"IssuedInvoice"})).items).toHaveLength(2); });
 
   it("wires refund and reversal finance events idempotently and preserves original sale financials", async () => { const [p]=await seed(db,1); const order=await paidOrder(db,[p]); await shipment(db,order.id); await completeSale(db,order.id); const original=(await db.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.orderId,order.id)))[0]; await createRefund(db,{orderId:order.id,channel:"Internal",type:RefundType.Full,status:RefundStatus.Succeeded,currency:PriceCurrency.Eur,subtotalAmount:order.totalAmount,shippingAmount:0,taxAmount:0,reason:"full",idempotencyKey:"refund-full"}); await db.insert(schema.returnRequests).values({id:"ret1",orderId:order.id,status:"completed",reason:"Return",requestedResolution:"Refund",requestedAt:new Date().toISOString(),completedAt:new Date().toISOString(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}); await db.insert(schema.returnItems).values({id:"ri1",returnRequestId:"ret1",orderItemId:order.items[0].id,productId:p.id,quantityRequested:1,quantityApproved:1,quantityReceived:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}); const reversal:any=await reverseCompletedSale(db,{orderId:order.id,returnRequestId:"ret1",refundId:(await db.select().from(schema.refunds))[0].id}); expect((await listFinanceEntries(db,{entryType:"SuccessfulRefund"})).items).toHaveLength(1); expect((await listFinanceEntries(db,{entryType:"SaleReversal"})).items).toHaveLength(1); await createFinanceEntry(db,{orderId:order.id,saleReversalId:reversal.id,entryType:"SaleReversal",amount:0,sourceReference:reversal.id,idempotencyKey:`sale-reversal:${reversal.id}`}); expect((await listFinanceEntries(db,{entryType:"SaleReversal"})).items).toHaveLength(1); expect((await db.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.orderId,order.id)))[0]).toMatchObject({id:original.id,profit:original.profit}); });
 
@@ -305,7 +328,10 @@ describe("ERP sales finance bridge", () => {
       await db.update(schema.orders).set({currency:"EUR"}).where(eq(schema.orders.id,order.id));
       const differentEnv={idempotencyKey:"cmd-d",payload:{notes:"different"}};
       await expect(executeSalesCommand(db,"erp-client",differentEnv,"CreateInvoice",order.id)).rejects.toBeInstanceOf(ConflictError);
-      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(0);
+      // Sprint 79: paidOrder() already auto-creates one SalesInvoice Draft for this order; neither
+      // rejected attempt above ever reached createInvoiceDraft, so that auto-created draft is the
+      // only invoice — same reasoning applies to test E below.
+      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(1);
     });
 
     it("E: a recent Accepted row with a matching checksum throws ConflictError and does not execute business logic", async () => {
@@ -314,7 +340,7 @@ describe("ERP sales finance bridge", () => {
       await db.insert(schema.erpCommandExecutions).values({id:"cmd-e-row",clientId:"erp-client",commandId:"cmd-e",requestId:null,idempotencyKey:"cmd-e",commandType:"CreateInvoice",entityType:"Invoice",entityId:order.id,status:"Accepted",requestChecksum:checksumFor(payload),createdAt:new Date().toISOString()});
       const env={idempotencyKey:"cmd-e",payload};
       await expect(executeSalesCommand(db,"erp-client",env,"CreateInvoice",order.id)).rejects.toThrow("ERP command is already in progress");
-      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(0);
+      expect((await listInvoices(db,{orderId:order.id})).items).toHaveLength(1);
     });
 
     it("F/G: a stale Accepted row (older than the 60s threshold) with a matching checksum is reset and reused (no duplicate), and executes to Completed", async () => {

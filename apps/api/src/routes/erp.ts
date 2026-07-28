@@ -1,6 +1,7 @@
 import { Router } from "express";
 
-import { adjustedFinancials, customerProjection, executeSalesCommand, financeSummary, getInvoice, getInvoiceEvents, getSaleCompletionReadiness, listFinanceEntries, listInvoices, listSales, refundSummary, reversalSummary, saleProjection } from "../services/erpSalesFinanceBridge";
+import { adjustedFinancials, customerProjection, executeSalesCommand, financeSummary, getInvoice, getInvoiceEvents, getInvoiceIssueReadiness, getSaleCompletionReadiness, listFinanceEntries, listInvoices, listSales, refundSummary, reversalSummary, saleProjection } from "../services/erpSalesFinanceBridge";
+import { getCompanyProfile, upsertCompanyProfile } from "../services/companyProfile";
 import multer from "multer";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
@@ -134,6 +135,14 @@ router.post("/commands/invoices/:invoiceId/issue", requireErp, async (req:any, r
 router.post("/commands/invoices/:invoiceId/cancel", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, req.body, "CancelInvoice", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
 router.post("/commands/invoices/:invoiceId/void", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, req.body, "VoidInvoice", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
 router.post("/commands/invoices/:invoiceId/mark-paid", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, req.body, "MarkInvoicePaid", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/invoices/:invoiceId/lines/:lineId/update", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, { ...req.body, payload:{ ...(req.body?.payload??{}), lineId:req.params.lineId } }, "UpdateInvoiceLine", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/invoices/:invoiceId/calculation-mode", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, req.body, "SwitchInvoiceCalculationMode", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/invoices/:invoiceId/recalculate", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, req.body, "RecalculateInvoice", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/invoices/:invoiceId/refresh-seller-snapshot", requireErp, async (req:any, res) => { try { res.json(await executeSalesCommand(db, req.erp.clientId, req.body, "RefreshInvoiceSellerSnapshot", req.params.invoiceId)); } catch (err) { handleRouteError(err, res); } });
+router.get("/invoices/:id/issue-readiness", requireErp, async (req, res) => { try { res.json(await getInvoiceIssueReadiness(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+
+router.get("/company-profile", requireErp, async (_req, res) => { try { const profile = await getCompanyProfile(db); res.json(profile ?? { configured:false }); } catch (err) { handleRouteError(err, res); } });
+router.post("/commands/company-profile/update", requireErp, async (req:any, res) => { try { res.json(await upsertCompanyProfile(db, req.body?.payload ?? {})); } catch (err) { handleRouteError(err, res); } });
 
 router.get("/suppliers", requireErp, async (req, res) => { try { res.json(await listSuppliers(db, req.query)); } catch (err) { handleRouteError(err, res); } });
 router.get("/suppliers/:id", requireErp, async (req, res) => { try { res.json(await (await import("../services/erpPurchasingBridge")).getSupplier(db, req.params.id, true)); } catch (err) { handleRouteError(err, res); } });

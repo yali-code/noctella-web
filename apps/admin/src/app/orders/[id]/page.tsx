@@ -8,7 +8,10 @@ import {
   formatPaymentProvider,
   getAvailableOrderStatusActions,
   getOrder,
+  getOrderInvoiceOutboxStatus,
+  retryOrderInvoiceDraft,
   updateOrderStatus,
+  type OrderInvoiceOutboxStatus,
   type OrderStatusAction,
   type OrderWithItems,
 } from "@/lib/orders";
@@ -25,8 +28,6 @@ import {
   shipShipment,
   type ShipmentRow,
 } from "@/lib/shipments";
-import { cancelInvoice, createInvoiceDraft, issueInvoice, markInvoicePaid } from "@/lib/erpSalesFinanceBridge";
-
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,14 +46,9 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [invoiceBridge, setInvoiceBridge] = useState<any[]>([]);
   const [financeBridge, setFinanceBridge] = useState<any>(null);
   const [erpBridgeError, setErpBridgeError] = useState<string | null>(null);
-  const [invoiceDraftBusy, setInvoiceDraftBusy] = useState(false);
-  const [invoiceDraftError, setInvoiceDraftError] = useState<string | null>(null);
-  const [issuingInvoiceId, setIssuingInvoiceId] = useState<string | null>(null);
-  const [issueInvoiceError, setIssueInvoiceError] = useState<string | null>(null);
-  const [markingPaidInvoiceId, setMarkingPaidInvoiceId] = useState<string | null>(null);
-  const [markInvoicePaidError, setMarkInvoicePaidError] = useState<string | null>(null);
-  const [cancellingInvoiceId, setCancellingInvoiceId] = useState<string | null>(null);
-  const [cancelInvoiceError, setCancelInvoiceError] = useState<string | null>(null);
+  const [invoiceOutboxStatus, setInvoiceOutboxStatus] = useState<OrderInvoiceOutboxStatus | null>(null);
+  const [invoiceRetryBusy, setInvoiceRetryBusy] = useState(false);
+  const [invoiceRetryError, setInvoiceRetryError] = useState<string | null>(null);
 
   const [shipmentActionBusyId, setShipmentActionBusyId] = useState<string | null>(null);
   const [shipmentActionError, setShipmentActionError] = useState<string | null>(null);
@@ -74,6 +70,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   function loadInvoiceAndSalesBridge(orderId: string) {
     fetch(`/api/erp/orders/${orderId}/sales-summary`).then((r) => r.ok ? r.json() : Promise.reject(new Error("sales-summary"))).then(setSalesBridge).catch(() => { setSalesBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
     fetch(`/api/erp/orders/${orderId}/invoices`).then((r) => r.ok ? r.json() : Promise.reject(new Error("invoices"))).then((r) => setInvoiceBridge(r.items ?? [])).catch(() => { setInvoiceBridge([]); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
+    getOrderInvoiceOutboxStatus(orderId).then(setInvoiceOutboxStatus).catch(() => setInvoiceOutboxStatus(null));
   }
 
   useEffect(() => {
@@ -95,59 +92,20 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       .finally(() => setLoading(false));
   }, [params.id]);
 
-  async function handleCreateInvoiceDraft() {
+  /** Sprint 79 requirement #4: always re-enqueues/reactivates the durable outbox event - never
+   * calls the direct invoice-creation ERP command, so a retry from here can never bypass the
+   * outbox (see services/salesInvoiceOutbox.ts's retrySalesInvoiceDraftForOrder). */
+  async function handleRetryInvoiceDraft() {
     if (!order) return;
-    setInvoiceDraftBusy(true);
-    setInvoiceDraftError(null);
+    setInvoiceRetryBusy(true);
+    setInvoiceRetryError(null);
     try {
-      await createInvoiceDraft(order.id);
+      await retryOrderInvoiceDraft(order.id);
       loadInvoiceAndSalesBridge(order.id);
     } catch (err) {
-      setInvoiceDraftError(err instanceof Error ? err.message : "Failed to create invoice draft");
+      setInvoiceRetryError(err instanceof Error ? err.message : "Failed to retry invoice draft creation");
     } finally {
-      setInvoiceDraftBusy(false);
-    }
-  }
-
-  async function handleIssueInvoice(invoiceId: string) {
-    if (!order || issuingInvoiceId) return;
-    setIssuingInvoiceId(invoiceId);
-    setIssueInvoiceError(null);
-    try {
-      await issueInvoice(invoiceId);
-      loadInvoiceAndSalesBridge(order.id);
-    } catch (err) {
-      setIssueInvoiceError(err instanceof Error ? err.message : "Failed to issue invoice");
-    } finally {
-      setIssuingInvoiceId(null);
-    }
-  }
-
-  async function handleMarkInvoicePaid(invoiceId: string) {
-    if (!order || markingPaidInvoiceId) return;
-    setMarkingPaidInvoiceId(invoiceId);
-    setMarkInvoicePaidError(null);
-    try {
-      await markInvoicePaid(invoiceId);
-      loadInvoiceAndSalesBridge(order.id);
-    } catch (err) {
-      setMarkInvoicePaidError(err instanceof Error ? err.message : "Failed to mark invoice paid");
-    } finally {
-      setMarkingPaidInvoiceId(null);
-    }
-  }
-
-  async function handleCancelInvoice(invoiceId: string) {
-    if (!order || cancellingInvoiceId) return;
-    setCancellingInvoiceId(invoiceId);
-    setCancelInvoiceError(null);
-    try {
-      await cancelInvoice(invoiceId);
-      loadInvoiceAndSalesBridge(order.id);
-    } catch (err) {
-      setCancelInvoiceError(err instanceof Error ? err.message : "Failed to cancel invoice");
-    } finally {
-      setCancellingInvoiceId(null);
+      setInvoiceRetryBusy(false);
     }
   }
 
@@ -421,37 +379,25 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         {erpBridgeError && <p role="alert">{erpBridgeError}</p>}
         <Row label="Sales summary" value={salesBridge ? `${salesBridge.channel} / ${salesBridge.completionStatus} / ${salesBridge.paymentStatus}` : "Unavailable"} />
         <Row label="Invoice status" value={salesBridge?.invoiceNumber ?? salesBridge?.invoiceStatus ?? "No invoice"} />
-        <button style={buttonStyle} onClick={handleCreateInvoiceDraft} disabled={invoiceDraftBusy}>
-          {invoiceDraftBusy ? "Creating Invoice..." : "Create Invoice Draft"}
-        </button>
-        {invoiceDraftError && <p role="alert">{invoiceDraftError}</p>}
-        {issueInvoiceError && <p role="alert">{issueInvoiceError}</p>}
-        {markInvoicePaidError && <p role="alert">{markInvoicePaidError}</p>}
-        {cancelInvoiceError && <p role="alert">{cancelInvoiceError}</p>}
+        {/* Sprint 79 correction: an automatic Sales Invoice Draft is created through a durable
+            outbox event (never a silent best-effort call) when a storefront/internal order is
+            paid, or when an accepted-offer order transitions to Paid. Marketplace-imported
+            orders are explicitly excluded. This section shows that event's state and, when it
+            has dead-lettered, an authorized retry that re-enqueues/reactivates the same durable
+            event — it never calls the direct invoice-creation ERP command, so it can never
+            bypass the outbox. Full Draft editing, Issue, Cancel, Void, Mark Paid, and Print all
+            live on the dedicated invoice detail page linked below. */}
+        <Row label="Automatic invoice draft" value={invoiceOutboxStatusLabel(invoiceOutboxStatus)} />
+        {invoiceOutboxStatus?.state === "FailedDeadLettered" && (
+          <button style={buttonStyle} onClick={handleRetryInvoiceDraft} disabled={invoiceRetryBusy}>
+            {invoiceRetryBusy ? "Retrying..." : "Retry Invoice Draft"}
+          </button>
+        )}
+        {invoiceRetryError && <p role="alert">{invoiceRetryError}</p>}
         {invoiceBridge.length === 0 ? <p>No ERP invoices yet.</p> : invoiceBridge.map((invoice) => (
           <div key={invoice.id}>
             <Row label={`Invoice ${invoice.invoiceNumber ?? invoice.id}`} value={`${invoice.status} / ${invoice.invoiceType} / ${Number(invoice.totalAmount ?? 0).toFixed(2)}`} />
-            <button
-              disabled={invoice.status !== "Draft" || issuingInvoiceId === invoice.id}
-              style={buttonStyle}
-              onClick={() => handleIssueInvoice(invoice.id)}
-            >
-              {issuingInvoiceId === invoice.id ? "Issuing..." : "Issue"}
-            </button>
-            <button
-              disabled={! ["Draft", "Issued"].includes(invoice.status) || cancellingInvoiceId === invoice.id}
-              style={buttonStyle}
-              onClick={() => handleCancelInvoice(invoice.id)}
-            >
-              {cancellingInvoiceId === invoice.id ? "Cancelling..." : "Cancel"}
-            </button>
-            <button
-              disabled={invoice.status !== "Issued" || markingPaidInvoiceId === invoice.id}
-              style={buttonStyle}
-              onClick={() => handleMarkInvoicePaid(invoice.id)}
-            >
-              {markingPaidInvoiceId === invoice.id ? "Marking Paid..." : "Mark Paid"}
-            </button>
+            <Link href={`/invoices/${invoice.id}`}>View / Edit Invoice</Link>
           </div>
         ))}
         <Row label="Complete-sale readiness" value={readiness?.ready ? "Ready" : (readiness?.issues?.join(", ") ?? "Unknown")} />
@@ -513,6 +459,19 @@ function AddressRows({ address }: { address: OrderWithItems["shippingAddress"] }
       <Row label="Country" value={address.country} />
     </>
   );
+}
+
+function invoiceOutboxStatusLabel(status: OrderInvoiceOutboxStatus | null): string {
+  if (!status) return "Unavailable";
+  switch (status.state) {
+    case "Created": return "Created";
+    case "Pending": return "Pending";
+    case "Retrying": return `Retrying${status.attemptCount != null ? ` (attempt ${status.attemptCount})` : ""}`;
+    case "FailedDeadLettered": return `Failed — needs retry${status.lastErrorMessage ? ` (${status.lastErrorMessage})` : ""}`;
+    case "NotApplicableMarketplace": return "Not applicable (marketplace order)";
+    case "NoInvoiceUnpaid": return "No invoice (order unpaid)";
+    default: return status.state;
+  }
 }
 
 function Row({ label, value }: { label: string; value?: string }) {

@@ -78,3 +78,69 @@ export async function cancelInvoice(invoiceId: string): Promise<any> {
   if (!res.ok) throw new ApiError(body?.error ?? res.statusText, res.status, body?.details);
   return body;
 }
+
+/** Sprint 79: same erpGet/erpPost same-origin-proxy convention as erpPurchasingBridge.ts. */
+async function erpGet<T>(path: string): Promise<T> {
+  const res = await fetch(path);
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const body = isJson ? await res.json() : undefined;
+  if (!res.ok) throw new ApiError((body as any)?.error ?? res.statusText, res.status, (body as any)?.details);
+  return body as T;
+}
+async function erpPost<T>(path: string, payload: unknown = {}): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), payload }),
+  });
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const body = isJson ? await res.json() : undefined;
+  if (!res.ok) throw new ApiError((body as any)?.error ?? res.statusText, res.status, (body as any)?.details);
+  return body as T;
+}
+
+export const invoicesApi = {
+  list: (q = "") => erpGet<any>(`/api/erp/invoices${q ? `?${q}` : ""}`),
+  invoice: (id: string) => erpGet<any>(`/api/erp/invoices/${id}`),
+  events: (id: string) => erpGet<any>(`/api/erp/invoices/${id}/events`),
+  issueReadiness: (id: string) => erpGet<any>(`/api/erp/invoices/${id}/issue-readiness`),
+};
+
+export function updateInvoiceDraft(invoiceId: string, payload: any) {
+  return erpPost<any>(`/api/erp/commands/invoices/${invoiceId}/update`, payload);
+}
+export function updateInvoiceLine(invoiceId: string, lineId: string, payload: any) {
+  return erpPost<any>(`/api/erp/commands/invoices/${invoiceId}/lines/${lineId}/update`, payload);
+}
+export function switchInvoiceCalculationMode(invoiceId: string, calculationMode: "Automatic" | "ManualOverride") {
+  return erpPost<any>(`/api/erp/commands/invoices/${invoiceId}/calculation-mode`, { calculationMode });
+}
+export function recalculateInvoiceDraft(invoiceId: string) {
+  return erpPost<any>(`/api/erp/commands/invoices/${invoiceId}/recalculate`, {});
+}
+export function refreshInvoiceSellerSnapshot(invoiceId: string) {
+  return erpPost<any>(`/api/erp/commands/invoices/${invoiceId}/refresh-seller-snapshot`, {});
+}
+
+export function mapInvoiceListRow(row: any) {
+  return {
+    id: row.id,
+    label: row.invoiceNumber ?? "Draft",
+    orderId: row.orderId,
+    type: row.invoiceType,
+    status: row.status,
+    subtotal: row.subtotal ?? 0,
+    taxVatAmount: row.taxVatAmount ?? 0,
+    totalAmount: row.totalAmount ?? 0,
+    currency: row.currency ?? "EUR",
+    createdAt: row.createdAt,
+    issuedAt: row.issuedAt,
+    href: `/invoices/${row.id}`,
+  };
+}
+export function euro(n: number | null | undefined) {
+  return `€${Number(n ?? 0).toFixed(2)}`;
+}
+export function draftFieldsEditable(invoice: any) {
+  return invoice?.status === "Draft";
+}

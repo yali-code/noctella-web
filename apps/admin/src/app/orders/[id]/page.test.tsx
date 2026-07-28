@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as ordersLib from "@/lib/orders";
 import * as shipmentsLib from "@/lib/shipments";
@@ -142,5 +142,50 @@ describe("Order detail payment provider mock labeling (Sprint 76)", () => {
     expect(screen.getByText("cancelled")).toBeInTheDocument();
     expect(screen.getByText("paid")).toBeInTheDocument();
     expect(screen.getByText("paypal (mock)")).toBeInTheDocument();
+  });
+});
+
+describe("Order detail automatic-invoice outbox status and retry (Sprint 79 correction)", () => {
+  async function renderWithInvoiceStatus(status: any) {
+    cleanup();
+    stubFetch();
+    vi.spyOn(ordersLib, "getOrder").mockResolvedValue(baseOrder);
+    vi.spyOn(shipmentsLib, "listShipments").mockResolvedValue([]);
+    vi.spyOn(ordersLib, "getOrderInvoiceOutboxStatus").mockResolvedValue(status);
+    render(<OrderDetailPage params={{ id: "order-1" }} />);
+    await screen.findByText("ORD-1");
+  }
+
+  it("shows a Failed/dead-lettered status with the safe error message and a Retry control", async () => {
+    await renderWithInvoiceStatus({ state: "FailedDeadLettered", attemptCount: 5, lastErrorMessage: "OUTBOX_HANDLER_ERROR" });
+    expect(await screen.findByText(/Failed — needs retry/)).toBeInTheDocument();
+    expect(screen.getByText("Retry Invoice Draft")).toBeInTheDocument();
+  });
+
+  it("does not show a Retry control for Created, Pending, Retrying, or not-applicable states", async () => {
+    for (const state of ["Created", "Pending", "Retrying", "NotApplicableMarketplace", "NoInvoiceUnpaid"]) {
+      await renderWithInvoiceStatus({ state });
+      expect(screen.queryByText("Retry Invoice Draft")).not.toBeInTheDocument();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("Retry calls the durable re-enqueue endpoint (never a direct invoice-creation call) and reloads status", async () => {
+    const user = userEvent.setup();
+    await renderWithInvoiceStatus({ state: "FailedDeadLettered", attemptCount: 5, lastErrorMessage: "OUTBOX_HANDLER_ERROR" });
+    const retrySpy = vi.spyOn(ordersLib, "retryOrderInvoiceDraft").mockResolvedValue({ retried: true, reason: "Reactivated" });
+    await user.click(screen.getByText("Retry Invoice Draft"));
+    await waitFor(() => expect(retrySpy).toHaveBeenCalledWith("order-1"));
+  });
+
+  it("shows a backend retry error rather than silently failing", async () => {
+    const user = userEvent.setup();
+    await renderWithInvoiceStatus({ state: "FailedDeadLettered", attemptCount: 5, lastErrorMessage: "OUTBOX_HANDLER_ERROR" });
+    vi.spyOn(ordersLib, "retryOrderInvoiceDraft").mockRejectedValue(new Error("Marketplace-imported orders are excluded from automatic invoicing in this sprint"));
+    await user.click(screen.getByText("Retry Invoice Draft"));
+    await waitFor(async () => {
+      const alerts = await screen.findAllByRole("alert");
+      expect(alerts.some((a) => a.textContent?.includes("Marketplace-imported orders are excluded"))).toBe(true);
+    });
   });
 });

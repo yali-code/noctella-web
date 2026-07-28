@@ -146,8 +146,14 @@ describe("Sprint 75 real SQLite restart persistence", () => {
     expect(saleMovementBeforeRestart).toBeDefined();
     expect(saleMovementBeforeRestart?.orderId).toBe(order.id);
 
+    // Sprint 79 correction: the paid order created above now also durably enqueues its own
+    // automatic-sales-invoice-draft outbox event (see services/salesInvoiceOutbox.ts), alongside
+    // the pre-existing product-photo-promotion event from uploadProductPhoto() below - two rows,
+    // not one. The photo-specific event is identified by aggregateId rather than array order.
     const outboxRowsBeforeRestart = await dbFirst.select().from(schema.outboxEvents);
-    expect(outboxRowsBeforeRestart).toHaveLength(1);
+    expect(outboxRowsBeforeRestart).toHaveLength(2);
+    const photoOutboxRowBeforeRestart = outboxRowsBeforeRestart.find((r) => r.aggregateId === photo.id);
+    expect(photoOutboxRowBeforeRestart).toBeDefined();
 
     const categoriesBeforeRestart = await dbFirst.select().from(schema.categories);
 
@@ -193,9 +199,11 @@ describe("Sprint 75 real SQLite restart persistence", () => {
     expect(saleMovementAfterRestart?.id).toBe(saleMovementBeforeRestart?.id);
 
     const outboxRowsAfterRestart = await dbSecond.select().from(schema.outboxEvents);
-    expect(outboxRowsAfterRestart).toHaveLength(1);
-    expect(outboxRowsAfterRestart[0].id).toBe(outboxRowsBeforeRestart[0].id);
-    expect(outboxRowsAfterRestart[0].aggregateId).toBe(photo.id);
+    expect(outboxRowsAfterRestart).toHaveLength(2);
+    const photoOutboxRowAfterRestart = outboxRowsAfterRestart.find((r) => r.aggregateId === photo.id);
+    expect(photoOutboxRowAfterRestart?.id).toBe(photoOutboxRowBeforeRestart?.id);
+    const orderOutboxRowAfterRestart = outboxRowsAfterRestart.find((r) => r.aggregateId === order.id);
+    expect(orderOutboxRowAfterRestart).toBeDefined();
 
     await second.shutdown();
   });
