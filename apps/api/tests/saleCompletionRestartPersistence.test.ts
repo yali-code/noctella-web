@@ -46,7 +46,7 @@ describe("Sprint 80: issued-invoice VAT, completed-sale financials, and reversal
     const t = new Date().toISOString();
     await dbFirst.insert(schema.returnRequests).values({ id: "restart-return", orderId: order.id, status: "completed", reason: "Return", requestedResolution: "Refund", requestedAt: t, completedAt: t, createdAt: t, updatedAt: t });
     await dbFirst.insert(schema.returnItems).values({ id: "restart-return-item", returnRequestId: "restart-return", orderItemId: order.items[0].id, productId: product.id, quantityRequested: 1, quantityApproved: 1, quantityReceived: 1, createdAt: t, updatedAt: t });
-    await dbFirst.insert(schema.refunds).values({ id: "restart-refund", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "restart-refund-key", createdAt: t, updatedAt: t });
+    await dbFirst.insert(schema.refunds).values({ id: "restart-refund", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "restart-refund-key", submittedAt: t, succeededAt: t, createdAt: t, updatedAt: t });
     const reversal: any = await reverseCompletedSale(dbFirst, { orderId: order.id, returnRequestId: "restart-return", refundId: "restart-refund" });
 
     await first.shutdown();

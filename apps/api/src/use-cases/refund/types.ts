@@ -45,6 +45,7 @@ export type RefundErrorCode =
   | "AMOUNT_EXCEEDS_MAXIMUM"
   | "QUANTITY_EXCEEDS_MAXIMUM"
   | "IDEMPOTENCY_CONFLICT"
+  | "INVALID_REFUND_CREATION_STATUS"
   | "INVALID_STATUS_TRANSITION"
   | "STALE_REFUND_VERSION"
   | "STALE_PROCESSING_RECOVERED"
@@ -72,7 +73,8 @@ export interface CreateRefundUseCaseInput {
   returnRequestId?: string | null;
   channel?: string | null;
   type?: string;
-  status?: string;
+  /** Runtime-validated in createRefundUseCase - HTTP input is untrusted, so this type alone is not a guarantee. Direct creation supports only Draft (default) or Succeeded; every other value is rejected. */
+  status?: RefundStatusValue;
   currency?: string;
   subtotalAmount?: number;
   shippingAmount?: number;

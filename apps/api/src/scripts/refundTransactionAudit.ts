@@ -36,6 +36,15 @@ export function auditRefundTransactionSafety(
     useCases,
     "export async function executeRefundUseCase",
   );
+  // Sprint: refund succeeded-lifecycle correction. createRefundUseCase's direct-Succeeded path
+  // must post its SuccessfulRefund finance entry inside the same unitOfWork transaction as the
+  // refund row, exactly like executeRefundUseCase's own success path above - never as a separate,
+  // non-atomic follow-up call (that was the original defect this audit now guards against).
+  const create = between(
+    useCases,
+    "function resolveCreationStatus",
+    "export async function getRefundUseCase",
+  );
   const providerWindow = between(execute, "const req=", "try");
   const providerExecution = between(
     execute,
@@ -99,6 +108,32 @@ export function auditRefundTransactionSafety(
     !failureTx.includes("RefundEvents.Failed")
   )
     failures.push("failure status/attempt/event not atomic");
+  if (!create) failures.push("createRefundUseCase not found");
+  if (!create.includes("createFinanceEntrySync"))
+    failures.push(
+      "createRefundUseCase does not post its SuccessfulRefund entry via createFinanceEntrySync",
+    );
+  if (!create.includes("SuccessfulRefund"))
+    failures.push("createRefundUseCase missing SuccessfulRefund entryType");
+  {
+    const runIdx = create.indexOf("ctx.unitOfWork.run");
+    const financeIdx = create.indexOf("createFinanceEntrySync");
+    if (runIdx < 0 || financeIdx < 0 || financeIdx < runIdx)
+      failures.push(
+        "createRefundUseCase's finance posting is not nested inside its unitOfWork transaction",
+      );
+  }
+  if (
+    !create.includes("submittedAt: succeededOnCreate ? t : null") ||
+    !create.includes("succeededAt: succeededOnCreate ? t : null")
+  )
+    failures.push(
+      "createRefundUseCase does not atomically populate submittedAt/succeededAt for a directly-created Succeeded refund",
+    );
+  if (!create.includes("INVALID_REFUND_CREATION_STATUS"))
+    failures.push(
+      "createRefundUseCase no longer rejects unsupported direct-creation statuses",
+    );
   if (inTx("enqueueRefundExecution"))
     failures.push("queue enqueue before commit");
   if (inTx("cancelRefundExecution"))
