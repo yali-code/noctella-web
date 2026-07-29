@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DbClient } from "../db/client";
 import { BadRequestError, NotFoundError } from "./errors";
-import { createFinanceEntry } from "./financePostings";
 import { buildRefundServiceContext } from "./refundServiceContext";
 import {
   calculateMaximumRefundUseCase,
@@ -66,27 +65,20 @@ export async function validateRefundAmount(
     }),
   );
 }
+// Sprint: createRefundUseCase now atomically populates submittedAt/succeededAt and posts the
+// SuccessfulRefund finance entry itself, in the same unitOfWork transaction as the refund row,
+// whenever it is asked to create a refund already Succeeded - this compatibility wrapper no
+// longer needs (and must not duplicate) that posting as a separate, non-atomic follow-up step.
 export async function createRefund(db: DbClient, input: any) {
-  return unwrap(async () => {
-    const refund = legacy(
+  return unwrap(async () =>
+    legacy(
       await createRefundUseCase(context(db), {
         ...input,
         allocations: input.allocations ?? [],
         idempotencyKey: input.idempotencyKey ?? randomUUID(),
       }),
-    );
-    if (refund.status === "succeeded")
-      await createFinanceEntry(db, {
-        orderId: refund.orderId,
-        refundId: refund.id,
-        entryType: "SuccessfulRefund",
-        amount: refund.totalAmount,
-        sourceReference: refund.id,
-        idempotencyKey: `successful-refund:${refund.id}`,
-        snapshot: refund,
-      });
-    return refund;
-  });
+    ),
+  );
 }
 export async function getRefund(db: DbClient, id: string) {
   return unwrap(async () => legacy(await getRefundUseCase(context(db), id)));

@@ -119,7 +119,7 @@ describe("Sprint 80 acceptance lifecycle: supplier -> purchase -> landed cost ->
     // Full refund/reversal, using the now-Completed return above - the reversal must use the
     // original persisted completed-sale snapshot's EUR 20 VAT, not anything from the return.
     const t = new Date().toISOString();
-    await db.insert(schema.refunds).values({ id: "acceptance-refund", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "acceptance-refund-key", createdAt: t, updatedAt: t });
+    await db.insert(schema.refunds).values({ id: "acceptance-refund", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "acceptance-refund-key", submittedAt: t, succeededAt: t, createdAt: t, updatedAt: t });
     const reversal: any = await reverseCompletedSale(db, { orderId: order.id, returnRequestId: returnRequest.id, refundId: "acceptance-refund" });
     const embeddedOriginal = JSON.parse(reversal.sourceSnapshot).saleFinancial;
     expect(embeddedOriginal.taxVat).toBe(20);

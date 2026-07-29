@@ -363,7 +363,7 @@ describe("Sprint 80: completed-sale financials are sourced from the issued Sales
       const t = new Date().toISOString();
       await db.insert(schema.returnRequests).values({ id: "ret-full", orderId: order.id, status: "completed", reason: "Return", requestedResolution: "Refund", requestedAt: t, completedAt: t, createdAt: t, updatedAt: t });
       await db.insert(schema.returnItems).values({ id: "ri-full", returnRequestId: "ret-full", orderItemId: order.items[0].id, productId: product.id, quantityRequested: 1, quantityApproved: 1, quantityReceived: 1, createdAt: t, updatedAt: t });
-      await db.insert(schema.refunds).values({ id: "refund-full", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "refund-full-vat", createdAt: t, updatedAt: t });
+      await db.insert(schema.refunds).values({ id: "refund-full", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "refund-full-vat", submittedAt: t, succeededAt: t, createdAt: t, updatedAt: t });
       expect((await getSaleReversalReadiness(db, order.id)).ready).toBe(true);
       const reversal: any = await reverseCompletedSale(db, { orderId: order.id, returnRequestId: "ret-full", refundId: "refund-full" });
       const [entry] = await db.select().from(schema.financeEntries).where(eq(schema.financeEntries.saleReversalId, reversal.id));
@@ -384,7 +384,7 @@ describe("Sprint 80: completed-sale financials are sourced from the issued Sales
       const t = new Date().toISOString();
       await db.insert(schema.returnRequests).values({ id: "ret-idem", orderId: order.id, status: "completed", reason: "Return", requestedResolution: "Refund", requestedAt: t, completedAt: t, createdAt: t, updatedAt: t });
       await db.insert(schema.returnItems).values({ id: "ri-idem", returnRequestId: "ret-idem", orderItemId: order.items[0].id, productId: product.id, quantityRequested: 1, quantityApproved: 1, quantityReceived: 1, createdAt: t, updatedAt: t });
-      await db.insert(schema.refunds).values({ id: "refund-idem", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "refund-idem-vat", createdAt: t, updatedAt: t });
+      await db.insert(schema.refunds).values({ id: "refund-idem", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "refund-idem-vat", submittedAt: t, succeededAt: t, createdAt: t, updatedAt: t });
       const first: any = await reverseCompletedSale(db, { orderId: order.id, returnRequestId: "ret-idem", refundId: "refund-idem" });
       await db.update(schema.products).set({ purchaseCost: 1 }).where(eq(schema.products.id, product.id));
       await upsertCompanyProfile(db, { defaultVatRate: 0 });
@@ -403,7 +403,7 @@ describe("Sprint 80: completed-sale financials are sourced from the issued Sales
       const t = new Date().toISOString();
       await db.insert(schema.returnRequests).values({ id: "ret-fx", orderId: order.id, status: "completed", reason: "Return", requestedResolution: "Refund", requestedAt: t, completedAt: t, createdAt: t, updatedAt: t });
       await db.insert(schema.returnItems).values({ id: "ri-fx", returnRequestId: "ret-fx", orderItemId: order.items[0].id, productId: product.id, quantityRequested: 1, quantityApproved: 1, quantityReceived: 1, createdAt: t, updatedAt: t });
-      await db.insert(schema.refunds).values({ id: "refund-fx", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "refund-fx-vat", createdAt: t, updatedAt: t });
+      await db.insert(schema.refunds).values({ id: "refund-fx", orderId: order.id, type: "full", status: "succeeded", currency: "EUR", subtotalAmount: 120, shippingAmount: 0, taxAmount: 0, totalAmount: 120, idempotencyKey: "refund-fx-vat", submittedAt: t, succeededAt: t, createdAt: t, updatedAt: t });
       const reversal: any = await reverseCompletedSale(db, { orderId: order.id, returnRequestId: "ret-fx", refundId: "refund-fx" });
 
       const after = await adjustedFinancials(db, order.id);
@@ -430,7 +430,8 @@ describe("Sprint 80: completed-sale financials are sourced from the issued Sales
 
     it("Sprint 80 correction: a partial refund without a full reversal keeps existing net-of-refund behavior unchanged", async () => {
       const { order } = await completedOrder();
-      await db.insert(schema.refunds).values({ id: "refund-partial-vat", orderId: order.id, type: "partial", status: "succeeded", currency: "EUR", subtotalAmount: 30, shippingAmount: 0, taxAmount: 0, totalAmount: 30, idempotencyKey: "refund-partial-vat-key", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      const tPartial = new Date().toISOString();
+      await db.insert(schema.refunds).values({ id: "refund-partial-vat", orderId: order.id, type: "partial", status: "succeeded", currency: "EUR", subtotalAmount: 30, shippingAmount: 0, taxAmount: 0, totalAmount: 30, idempotencyKey: "refund-partial-vat-key", submittedAt: tPartial, succeededAt: tPartial, createdAt: tPartial, updatedAt: tPartial });
       const result = await adjustedFinancials(db, order.id);
       // No reversal exists, so figures remain the original ones, net only of the partial refund - unchanged pre-existing behavior.
       expect(result.grossRevenue).toBe(120);

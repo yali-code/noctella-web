@@ -231,10 +231,56 @@ export async function validateRefundAmountUseCase(
   return { ok: true as const, maximum: max, amount };
 }
 
+/**
+ * Sprint: refund succeeded-lifecycle correction. Direct refund creation may only ever request
+ * Draft (the default) or Succeeded - every other explicit status (Pending/Submitted/Processing/
+ * Failed/Cancelled/unknown) implies an in-flight or already-resolved execution this use case never
+ * performed, so it is rejected before any read or write happens. Succeeded is the one supported
+ * synchronous/manual-recording shortcut (the compatibility HTTP path this serves has no payment
+ * provider to execute against); resolving it here, before validateRefundAmountUseCase's reads,
+ * means an invalid status is rejected with zero database interaction.
+ */
+function resolveCreationStatus(input: CreateRefundUseCaseInput): {
+  status: typeof RefundStatuses.Draft | typeof RefundStatuses.Succeeded;
+  succeededOnCreate: boolean;
+} {
+  const status = input.status ?? RefundStatuses.Draft;
+  if (status !== RefundStatuses.Draft && status !== RefundStatuses.Succeeded)
+    throw new RefundUseCaseError(
+      "INVALID_REFUND_CREATION_STATUS",
+      `Refunds cannot be created directly with status "${status}"; only Draft or Succeeded are supported`,
+    );
+  return { status, succeededOnCreate: status === RefundStatuses.Succeeded };
+}
 export async function createRefundUseCase(
   ctx: RefundApplicationContext,
   input: CreateRefundUseCaseInput,
 ): Promise<RefundDetailDto> {
+  const { status: creationStatus, succeededOnCreate } =
+    resolveCreationStatus(input);
+  // Sprint: a true idempotent replay must be resolved before amount/balance validation runs.
+  // validateRefundAmountUseCase computes the maximum refundable amount from refunds that already
+  // exist for this order - by the time a refund has succeeded, it may have consumed exactly the
+  // remaining refundable balance, so re-validating a replay of that SAME request against the
+  // now-reduced balance would incorrectly reject a request that should simply return the
+  // already-created result. This early, read-only lookup (via ctx.repositories - the same
+  // non-transactional handle getRefundUseCase already uses, not ctx.unitOfWork.run) resolves the
+  // replay/conflict outcome first, entirely outside any transaction. A genuinely new request
+  // (no match here) still falls through to full validation below; the identical lookup is then
+  // repeated inside unitOfWork.run, unchanged, as the authoritative concurrency/race check
+  // immediately before insertion - a concurrent request could create the matching record between
+  // this early read and that one, and only the in-transaction check can safely catch that.
+  const early = (await ctx.repositories.refunds.findByIdempotencyKey(
+    input.idempotencyKey,
+  )) as RefundRecord | null;
+  if (early) {
+    if (!eqPayload(input, early))
+      throw new RefundUseCaseError(
+        "IDEMPOTENCY_CONFLICT",
+        "Idempotency key reused with a different payload",
+      );
+    return detail(ctx.repositories, early);
+  }
   const valid = await validateRefundAmountUseCase(ctx, input);
   return ctx.unitOfWork.run(({ repositories }) => {
     const repos = repositories.refund;
@@ -272,7 +318,7 @@ export async function createRefundUseCase(
       channel: input.channel ?? null,
       externalRefundId: null,
       type: input.type ?? "partial",
-      status: input.status ?? RefundStatuses.Draft,
+      status: creationStatus,
       currency: input.currency ?? valid.maximum.currency,
       subtotalAmount: input.subtotalAmount ?? valid.amount,
       shippingAmount: input.shippingAmount ?? 0,
@@ -282,8 +328,8 @@ export async function createRefundUseCase(
       totalAmount: valid.amount,
       reason: input.reason ?? null,
       idempotencyKey: input.idempotencyKey,
-      submittedAt: null,
-      succeededAt: null,
+      submittedAt: succeededOnCreate ? t : null,
+      succeededAt: succeededOnCreate ? t : null,
       failedAt: null,
       lastError: null,
       version: 0,
@@ -301,6 +347,23 @@ export async function createRefundUseCase(
         createdAt: t,
       })),
     );
+    if (succeededOnCreate) {
+      // Sprint: a refund created directly as Succeeded must never exist without its
+      // SuccessfulRefund finance entry - posted here, in the same unitOfWork transaction as the
+      // refund row, via the same sync helper and idempotency key format executeRefundUseCase uses
+      // (`successful-refund:${refundId}`), so a refund can never accumulate two entries and can
+      // never end up Succeeded with no accounting record, regardless of which path succeeded it.
+      createFinanceEntrySync(repositories.db, {
+        orderId: refund.orderId,
+        refundId: refund.id,
+        entryType: "SuccessfulRefund",
+        amount: refund.totalAmount,
+        sourceReference: refund.id,
+        idempotencyKey: `successful-refund:${refund.id}`,
+        occurredAt: t,
+        snapshot: refund,
+      });
+    }
     const event = createRefundEvent({
       eventName: RefundEvents.Created,
       refundId: refund.id,
