@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
-import { CarrierCode, MarketplaceFulfillmentStatus, PaymentStatus, PriceCurrency, ShipmentStatus, ShippingError, type Shipment } from "@noctella/shared";
+import { CarrierCode, ErpInvoiceStatus, ErpInvoiceType, MarketplaceFulfillmentStatus, PaymentStatus, PriceCurrency, roundMoney, ShipmentStatus, ShippingError, type Shipment } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { marketplaceConnections, marketplaceOrders, orderItems, orders, products, saleFinancials, shipmentEvents, shipmentItems, shipments, shipmentTrackingUpdates } from "../db/schema";
+import { invoiceLines, invoices, marketplaceConnections, marketplaceOrders, orderItems, orders, products, saleFinancials, shipmentEvents, shipmentItems, shipments, shipmentTrackingUpdates } from "../db/schema";
 import { BadRequestError, NotFoundError } from "./errors";
 import { enqueueJob } from "./backgroundJobs";
 import { decryptCredential } from "./credentialEncryption";
@@ -35,7 +35,74 @@ export async function updateShipment(db: DbClient, id: string, input: any) { awa
 export const getShipmentEvents = (db: DbClient, id: string) => db.select().from(shipmentEvents).where(eq(shipmentEvents.shipmentId,id)).orderBy(desc(shipmentEvents.createdAt));
 export const getShipmentTracking = (db: DbClient, id: string) => db.select().from(shipmentTrackingUpdates).where(eq(shipmentTrackingUpdates.shipmentId,id)).orderBy(desc(shipmentTrackingUpdates.createdAt));
 export async function refreshTracking(db: DbClient, id: string, input: any = {}) { const s = await getShipment(db,id); const normalized = input.normalizedStatus ?? (String(input.externalStatus ?? "").toLowerCase().includes("deliver") ? ShipmentStatus.Delivered : undefined); await db.insert(shipmentTrackingUpdates).values({ id: randomUUID(), shipmentId: id, source: input.source ?? s.channel ?? s.carrierCode, externalStatus: input.externalStatus, normalizedStatus: normalized, location: input.location, description: input.description, occurredAt: input.occurredAt, payloadSnapshot: JSON.stringify(input.payload ?? {}), createdAt: new Date().toISOString() }).onConflictDoNothing().run(); if (normalized === ShipmentStatus.Delivered && s.status === ShipmentStatus.InTransit) await markDelivered(db,id); if (normalized === ShipmentStatus.DeliveryFailed && s.status === ShipmentStatus.InTransit) await markDeliveryFailed(db,id); return getShipmentTracking(db,id); }
-export async function getSaleCompletionReadiness(db: DbClient, orderId: string) { const o = await getOrderRow(db, orderId); const issues: string[] = []; if (o.paymentStatus !== PaymentStatus.Paid) issues.push("Order is unpaid"); const rows = await listShipments(db,{orderId}); const ship = rows.find((s)=>!terminal.includes(s.status as ShipmentStatus)); if (!ship || ![ShipmentStatus.InTransit,ShipmentStatus.Delivered].includes(ship.status as ShipmentStatus)) issues.push("Shipment must be at least in transit"); if (ship?.channel && ship.marketplaceFulfillmentStatus !== MarketplaceFulfillmentStatus.Accepted) issues.push("Marketplace fulfillment must be accepted"); const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId)); for (const item of itemRows) { const [p] = await db.select().from(products).where(eq(products.id,item.productId)); if (p?.purchaseCost == null) issues.push(`Missing cost data for ${item.productSku}`); } return { orderId, ready: issues.length === 0, issues, shipment: ship }; }
+/**
+ * Sprint 80 correction: the merchandise amount comparable to order.totalAmount is derived from
+ * the invoice's persisted LINE values, never the invoice's grand total directly - the grand total
+ * also includes the invoice's own shipping charge/VAT, and (when pricesIncludeVat is false) VAT
+ * itself, neither of which order.totalAmount ever carries (order.totalAmount is always the raw
+ * merchandise price sum - see use-cases/order/useCases.ts, taxAmount is hardcoded 0). For each
+ * line, lineTotal === taxableBase + vatAmount always holds (Automatic and ManualOverride alike -
+ * see calculateInvoiceTotals), so lineTotal - taxVatAmount recovers that line's net taxable base
+ * without recomputing VAT. In VAT-inclusive mode the order was priced as the gross amount, so
+ * lineTotal (gross) is the comparable figure instead. Both already reflect line-level and
+ * invoice-level-allocated discounts, since they are the final persisted, post-allocation values.
+ */
+function invoiceLineMerchandiseAmount(pricesIncludeVat: boolean, lineTotal: number, taxVatAmount: number): number {
+  return pricesIncludeVat ? lineTotal : lineTotal - taxVatAmount;
+}
+
+/**
+ * Sprint 80 correction: defensive validation of persisted invoice/line values before they are
+ * trusted for sale completion - never repairs or mutates the invoice, only rejects impossible
+ * data with a clear issue. Normal application paths (calculateInvoiceTotals, Sprint 79's
+ * numeric-validation module) already guarantee these invariants at write time; this guards only
+ * against an already-corrupted persisted row (e.g. direct SQL) reaching financial completion.
+ */
+function validateInvoiceFinancialSanity(inv: any, lines: any[]): string[] {
+  const issues: string[] = [];
+  if (!Number.isFinite(inv.totalAmount)) issues.push("SalesInvoice total is not a valid number");
+  else if (inv.totalAmount < 0) issues.push("SalesInvoice total cannot be negative");
+  if (!Number.isFinite(inv.taxVatAmount)) issues.push("SalesInvoice VAT is not a valid number");
+  else if (inv.taxVatAmount < 0) issues.push("SalesInvoice VAT cannot be negative");
+  if (Number.isFinite(inv.totalAmount) && Number.isFinite(inv.taxVatAmount) && inv.taxVatAmount > inv.totalAmount) issues.push("SalesInvoice VAT cannot exceed the invoice total");
+  for (const l of lines) {
+    if (!Number.isFinite(l.lineTotal)) { issues.push(`Invoice line "${l.titleSnapshot}" total is not a valid number`); continue; }
+    if (!Number.isFinite(l.taxVatAmount)) { issues.push(`Invoice line "${l.titleSnapshot}" VAT is not a valid number`); continue; }
+    if (l.taxVatAmount < 0) issues.push(`Invoice line "${l.titleSnapshot}" VAT cannot be negative`);
+    if (l.taxVatAmount > l.lineTotal) issues.push(`Invoice line "${l.titleSnapshot}" VAT cannot exceed the line total`);
+  }
+  return issues;
+}
+
+/**
+ * Sprint 80: the completed-sale financial snapshot's tax/revenue values must come from an
+ * immutable, already-issued SalesInvoice - never recomputed from order.taxAmount (always 0 for
+ * internal orders), VAT rates, tax treatment, or company-profile defaults. Eligible only when
+ * exactly one SalesInvoice exists for the order, its status is Issued or Paid, its currency is
+ * EUR, its persisted values pass sanity validation, and its persisted merchandise-line basis
+ * (excluding invoice shipping) matches what the order actually charged - this is a read of
+ * already-persisted invoice totals, not a recalculation of them (see erpSalesFinanceBridge.ts's
+ * calculateInvoiceTotals for where that calculation actually lives).
+ */
+async function getEligibleSalesInvoiceForSaleCompletion(db: DbClient, orderId: string, orderTotalAmount: number): Promise<{ issues: string[]; invoice: { id: string; totalAmount: number; taxVat: number } | null }> {
+  const rows = await db.select().from(invoices).where(and(eq(invoices.orderId, orderId), eq(invoices.invoiceType, ErpInvoiceType.SalesInvoice)));
+  if (rows.length === 0) return { issues: ["No SalesInvoice exists for this order"], invoice: null };
+  if (rows.length > 1) return { issues: ["Multiple historical SalesInvoice records exist for this order and are ambiguous"], invoice: null };
+  const inv: any = rows[0];
+  const issues: string[] = [];
+  if (![ErpInvoiceStatus.Issued, ErpInvoiceStatus.Paid].includes(inv.status)) issues.push(`SalesInvoice status "${inv.status}" is not eligible for sale completion (must be Issued or Paid)`);
+  if (inv.currency !== "EUR") issues.push("SalesInvoice currency must be EUR");
+  if (issues.length) return { issues, invoice: null };
+  const lines = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, inv.id));
+  issues.push(...validateInvoiceFinancialSanity(inv, lines));
+  if (issues.length) return { issues, invoice: null };
+  const merchandiseBasis = lines.reduce((sum: number, l: any) => sum + invoiceLineMerchandiseAmount(!!inv.pricesIncludeVat, l.lineTotal, l.taxVatAmount), 0);
+  if (!Number.isFinite(merchandiseBasis) || merchandiseBasis < 0) issues.push("SalesInvoice merchandise basis is not a valid number");
+  else if (roundMoney(merchandiseBasis) !== roundMoney(orderTotalAmount)) issues.push("SalesInvoice merchandise total does not match the order total");
+  if (issues.length) return { issues, invoice: null };
+  return { issues: [], invoice: { id: inv.id, totalAmount: inv.totalAmount, taxVat: inv.taxVatAmount } };
+}
+export async function getSaleCompletionReadiness(db: DbClient, orderId: string) { const o = await getOrderRow(db, orderId); const issues: string[] = []; if (o.paymentStatus !== PaymentStatus.Paid) issues.push("Order is unpaid"); const rows = await listShipments(db,{orderId}); const ship = rows.find((s)=>!terminal.includes(s.status as ShipmentStatus)); if (!ship || ![ShipmentStatus.InTransit,ShipmentStatus.Delivered].includes(ship.status as ShipmentStatus)) issues.push("Shipment must be at least in transit"); if (ship?.channel && ship.marketplaceFulfillmentStatus !== MarketplaceFulfillmentStatus.Accepted) issues.push("Marketplace fulfillment must be accepted"); const itemRows = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId)); for (const item of itemRows) { const [p] = await db.select().from(products).where(eq(products.id,item.productId)); if (p?.purchaseCost == null) issues.push(`Missing cost data for ${item.productSku}`); } issues.push(...(await getEligibleSalesInvoiceForSaleCompletion(db, orderId, o.totalAmount)).issues); return { orderId, ready: issues.length === 0, issues, shipment: ship }; }
 export async function completeSale(db: DbClient, orderId: string) {
   const driver = process.env.DATABASE_DRIVER === "postgres" || process.env.DATABASE_DRIVER === "supabase-postgres" ? process.env.DATABASE_DRIVER : "sqlite";
   const context = createSalesApplicationContextForDb({ db, driver, logger: {}, clock: { now: () => new Date() }, idGenerator: { newId: () => randomUUID() } });
@@ -44,6 +111,7 @@ export async function completeSale(db: DbClient, orderId: string) {
     getReadiness: async (id) => { const value = await getSaleCompletionReadiness(db, id); return { orderId: value.orderId, ready: value.ready, issues: value.issues, shipment: value.shipment ? { id: value.shipment.id, shippingCost: value.shipment.shippingCost } : null }; },
     getProductCosts: async (lines) => new Map(await Promise.all(lines.map(async (line) => { const [product] = await db.select().from(products).where(eq(products.id, line.productId ?? "")); return [line.productId ?? "", product?.purchaseCost ?? null] as const; }))),
     prepareSourceSnapshot: async (sale) => JSON.stringify({ order: await getOrderRow(db, sale.id), items: await db.select().from(orderItems).where(eq(orderItems.orderId, sale.id)) }),
+    getEligibleInvoice: async (id) => (await getEligibleSalesInvoiceForSaleCompletion(db, id, (await getOrderRow(db, id)).totalAmount)).invoice,
   }).execute(orderId);
 }
 export async function reopenSale() { throw new BadRequestError("Completed sale reversal is deferred to a safe Sprint 15 path"); }

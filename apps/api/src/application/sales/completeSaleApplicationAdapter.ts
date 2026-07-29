@@ -4,7 +4,11 @@ import type { SalesApplicationContext } from "../../services/salesApplicationCon
 import { CompleteSaleUseCase } from "./completeSaleUseCase";
 import type { CompleteSaleInput, CompleteSaleResult } from "./completeSaleTypes";
 import type { SalesCompletionFinancialSnapshot } from "./completionCoordination";
-import { SaleNotFoundError } from "./errors";
+import { SaleInvoiceNotEligibleError, SaleNotFoundError } from "./errors";
+
+/** Sprint 80: the immutable, already-issued SalesInvoice values the completed-sale financial
+ * snapshot is sourced from - see CompleteSaleAdapterPorts.getEligibleInvoice. */
+export interface EligibleSaleInvoice { readonly id: string; readonly totalAmount: number; readonly taxVat: number }
 
 export interface LegacySaleFinancials extends SalesCompletionFinancialSnapshot {
   readonly id: string;
@@ -21,6 +25,10 @@ export interface CompleteSaleAdapterPorts {
   getReadiness(orderId: string): Promise<LegacyCompletionReadiness>;
   getProductCosts(lines: readonly SaleLine[]): Promise<ReadonlyMap<string, number | null>>;
   prepareSourceSnapshot(sale: Sale): Promise<string>;
+  /** Sprint 80: the eligible (Issued/Paid, EUR, order-total-matching, unambiguous) SalesInvoice
+   * for this order - readiness already confirmed one exists by the time this is called; null here
+   * is an invariant violation, not a normal "not ready" case (that's handled by getReadiness). */
+  getEligibleInvoice(orderId: string): Promise<EligibleSaleInvoice | null>;
 }
 
 const fingerprint = (sale: Sale, snapshot: Omit<SalesCompletionFinancialSnapshot, "completedAt">) =>
@@ -36,11 +44,18 @@ export class CompleteSaleApplicationAdapter {
     if (!readiness.ready) return Object.freeze({ orderId, status: "blocked", alreadyCompleted: false, issues: Object.freeze([...readiness.issues]) });
     const sale = await this.context.saleRepository.findById(orderId);
     if (!sale) throw new SaleNotFoundError();
+    // Sprint 80: the immutable, already-issued SalesInvoice is the tax source of truth for
+    // completed-sale financials - order.taxAmount is not (internal orders always persist it as
+    // 0; invoice VAT is computed and persisted separately). getReadiness already confirmed an
+    // eligible invoice exists, so a null here means that invariant was violated between the two
+    // calls - a real, if practically unreachable, error rather than silently falling back to 0.
+    const invoice = await this.ports.getEligibleInvoice(orderId);
+    if (!invoice) throw new SaleInvoiceNotEligibleError();
     const costs = await this.ports.getProductCosts(sale.lines);
     const itemCost = sale.lines.reduce((total, line) => total + (costs.get(line.productId ?? "") ?? 0) * line.quantity, 0);
     const shippingCost = readiness.shipment?.shippingCost ?? 0;
     const completedAt = this.context.clock.now().toISOString();
-    const values = Object.freeze({ saleId: sale.id, grossRevenue: sale.financials.totalAmount, shippingCharged: sale.financials.shippingAmount, shippingCost, marketplaceFee: null, promotedFee: null, paymentFee: null, taxVat: sale.financials.taxAmount, itemCost, netRevenue: sale.financials.totalAmount - sale.financials.taxAmount - shippingCost, profit: sale.financials.totalAmount - sale.financials.taxAmount - shippingCost - itemCost, currency: "EUR" as const });
+    const values = Object.freeze({ saleId: sale.id, grossRevenue: invoice.totalAmount, shippingCharged: sale.financials.shippingAmount, shippingCost, marketplaceFee: null, promotedFee: null, paymentFee: null, taxVat: invoice.taxVat, itemCost, netRevenue: invoice.totalAmount - invoice.taxVat - shippingCost, profit: invoice.totalAmount - invoice.taxVat - shippingCost - itemCost, currency: "EUR" as const });
     const snapshot = Object.freeze({ ...values, completedAt });
     const idempotencyKey = `complete-sale:${sale.id}`;
     const financialSnapshotId = this.context.idGenerator.newId();

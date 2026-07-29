@@ -27,6 +27,21 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureAuthTables(sqlite);
   ensureCompanyProfileTable(sqlite);
   ensureInvoiceAccountingColumns(sqlite);
+  ensureOrderStatusCasingNormalized(sqlite);
+}
+
+/**
+ * Sprint 80 correction: the sales-completion repository previously wrote the raw string
+ * "Completed" (capital C) instead of the canonical OrderStatus enum value "completed" -
+ * every comparison against OrderStatus.Completed elsewhere in the codebase (return eligibility,
+ * ERP sale-projection completionStatus, the order status-transition table) silently never
+ * matched a historically-completed order. The write path is now fixed (see
+ * repositories/sales-completion/sqlite.ts and postgres.ts); this is the one-time, idempotent
+ * backfill for rows a database may already have written with the old value before that fix
+ * shipped - a plain UPDATE, never a schema change, safe to run on every startup.
+ */
+function ensureOrderStatusCasingNormalized(sqlite: Database.Database): void {
+  sqlite.exec("UPDATE orders SET status = 'completed' WHERE status = 'Completed'");
 }
 
 /** Sprint 79: singleton company-profile settings table used as the invoice seller-snapshot source. */

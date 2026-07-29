@@ -11,6 +11,8 @@ import { allocatePurchaseCosts, createPurchase, getPurchase, receivePurchase } f
 import { createOrder } from "../src/services/orders";
 import { createPaymentSession } from "../src/payments/paymentRepository";
 import { completeSale } from "../src/services/shipments";
+import { issueInvoice, listInvoices } from "../src/services/erpSalesFinanceBridge";
+import { upsertCompanyProfile } from "../src/services/companyProfile";
 
 function memoryDb() { const sqlite = new Database(":memory:"); ensureSchema(sqlite); return drizzle(sqlite, { schema }) as any; }
 
@@ -85,6 +87,7 @@ describe("Sprint 79 landed-cost -> product.purchaseCost synchronization", () => 
   });
 
   it("sale financials consume the synchronized product cost end to end via completeSale (item_cost/profit reflect the landed-cost sync, not a separately entered value)", async () => {
+    await upsertCompanyProfile(db, { legalName: "Noctella Test Ltd.", registrationNumber: "T-LC", vatNumber: "TESTVATLC", addressLine1: "1 Row", city: "Town", postalCode: "0", country: "FR", email: "a@b.invalid", phone: "0", defaultVatRate: 0 });
     const address = { fullName: "Jane Collector", line1: "1 Rue Noctella", city: "Paris", postalCode: "75001", country: "FR" };
     const cat = await createCategory(db, { name: "Cat-sale", displayOrder: 0, isActive: true });
     const product = await createProduct(db, { sku: "SKU-LC-SALE", title: "Sale item", slug: "sku-lc-sale", type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId: cat.id, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false, priceEur: 200, stockQuantity: 1, images: [] });
@@ -97,6 +100,8 @@ describe("Sprint 79 landed-cost -> product.purchaseCost synchronization", () => 
     const order = await createOrder(db, { orderDraftId: "lc-sale-draft", guestEmail: "jane@example.com", status: OrderStatus.Processing, paymentStatus: PaymentStatus.Paid, paymentProvider: PaymentProvider.Stripe, paymentReference: "lc-sale-ref", currency: PriceCurrency.Eur, billingAddress: address, shippingAddress: address, subtotalAmount: 200, totalAmount: 200, items: [{ productId: product.id, quantity: 1 as const }] });
     const now = new Date().toISOString();
     await db.insert(schema.shipments).values({ id: "ship-lc-sale", orderId: order.id, carrierCode: CarrierCode.LocalPickup, status: ShipmentStatus.InTransit, shippingCost: 0, currency: "EUR", createdAt: now, updatedAt: now });
+    const [draftInvoice] = (await listInvoices(db, { orderId: order.id })).items;
+    await issueInvoice(db, (draftInvoice as any).id, {});
     await completeSale(db, order.id);
     const [financials] = await db.select().from(schema.saleFinancials).where(eq(schema.saleFinancials.orderId, order.id));
     expect(financials.itemCost).toBe(33);
