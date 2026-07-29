@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { OrderStatus } from "@noctella/shared";
 import * as schema from "../../db/schema.postgres";
 import { SaleAlreadyCompletedConflictError, SaleConcurrencyConflictError, SalesCompletionIdempotencyConflictError } from "../../application/sales/errors";
 import type { SalesCompletionCommitInput } from "../../application/sales/completionCoordination";
@@ -14,7 +15,9 @@ export function createPostgresSalesCompletionTransactionRepository(db: any): Sal
     if (existingSale) throw new SaleAlreadyCompletedConflictError(input.snapshot.saleId, existingSale.idempotencyKey);
     throw new SaleConcurrencyConflictError();
   }
-  const finalized = await db.update(schema.orders).set({ status: "Completed", updatedAt: new Date(input.finalUpdatedAt) }).where(and(eq(schema.orders.id, input.snapshot.saleId), eq(schema.orders.updatedAt, new Date(input.expectedVersion)))).returning({ id: schema.orders.id });
+  // Sprint 80: see sqlite.ts's sibling commit() for why this must be the enum value, not the
+  // raw string "Completed".
+  const finalized = await db.update(schema.orders).set({ status: OrderStatus.Completed, updatedAt: new Date(input.finalUpdatedAt) }).where(and(eq(schema.orders.id, input.snapshot.saleId), eq(schema.orders.updatedAt, new Date(input.expectedVersion)))).returning({ id: schema.orders.id });
   if (finalized.length !== 1) throw new SaleConcurrencyConflictError();
   await db.insert(schema.saleFinancials).values({ id: input.financialSnapshotId, orderId: input.snapshot.saleId, grossRevenue: input.snapshot.grossRevenue, shippingCharged: input.snapshot.shippingCharged, shippingCost: input.snapshot.shippingCost, marketplaceFee: input.snapshot.marketplaceFee, promotedFee: input.snapshot.promotedFee, paymentFee: input.snapshot.paymentFee, taxVat: input.snapshot.taxVat, itemCost: input.snapshot.itemCost, netRevenue: input.snapshot.netRevenue, profit: input.snapshot.profit, currency: input.snapshot.currency, sourceSnapshot: input.snapshot, completedAt: new Date(input.snapshot.completedAt), createdAt: new Date(input.snapshot.completedAt) });
   await db.insert(schema.financeEntries).values({ id: input.financeEntryId, orderId: input.snapshot.saleId, entryType: input.financeEntry.entryType, currency: input.financeEntry.currency, amount: input.financeEntry.amount, sourceReference: input.financeEntry.sourceReference, sourceSnapshot: input.financeEntry.snapshot, idempotencyKey: input.financeEntry.idempotencyKey, occurredAt: new Date(input.financeEntry.occurredAt), createdAt: new Date(input.financeEntry.occurredAt) });

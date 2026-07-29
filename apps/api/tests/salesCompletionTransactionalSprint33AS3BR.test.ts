@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { describe, expect, it } from "vitest";
+import { OrderStatus } from "@noctella/shared";
 import { ensureSchema } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
 import { createTransactionalSalesCompletionCoordinator, type SalesCompletionCommitInput } from "../src/application/sales/completionCoordination";
@@ -20,7 +21,7 @@ function fixture(id: string) { const raw = new Database(":memory:"); ensureSchem
 const count = (raw: Database.Database, table: string) => Number((raw.prepare(`SELECT count(*) AS value FROM ${table}`).get() as any).value);
 
 describe("Sprint 33A-S3BR transactional completion coordinator", () => {
-  it.each(Array.from({ length: 30 }, (_, i) => `atomic commit ${i + 1}`))("%s", async (_name, index) => { const id = `atomic-${index}`; const f = fixture(id); try { const result = await f.coordinator.commit(input(id)); expect(result.replay).toBe(false); expect(result.snapshot.profit).toBe(65); expect(count(f.raw, "sale_financials")).toBe(1); expect(count(f.raw, "finance_entries")).toBe(1); expect(count(f.raw, "shipment_events")).toBe(1); expect(count(f.raw, "sale_completion_executions")).toBe(1); expect((f.raw.prepare("SELECT status FROM orders WHERE id = ?").get(id) as any).status).toBe("Completed"); } finally { f.raw.close(); } });
+  it.each(Array.from({ length: 30 }, (_, i) => `atomic commit ${i + 1}`))("%s", async (_name, index) => { const id = `atomic-${index}`; const f = fixture(id); try { const result = await f.coordinator.commit(input(id)); expect(result.replay).toBe(false); expect(result.snapshot.profit).toBe(65); expect(count(f.raw, "sale_financials")).toBe(1); expect(count(f.raw, "finance_entries")).toBe(1); expect(count(f.raw, "shipment_events")).toBe(1); expect(count(f.raw, "sale_completion_executions")).toBe(1); expect((f.raw.prepare("SELECT status FROM orders WHERE id = ?").get(id) as any).status).toBe(OrderStatus.Completed); } finally { f.raw.close(); } });
 
   it.each(Array.from({ length: 10 }, (_, i) => `same-key replay ${i + 1}`))("%s", async (_name, index) => { const id = `replay-${index}`; const f = fixture(id); try { const first = await f.coordinator.commit(input(id)); const replay = await f.coordinator.commit({ ...input(id), financialSnapshotId: `other-sf:${id}`, financeEntryId: `other-fe:${id}`, completionHistoryId: `other-he:${id}` }); expect(first.replay).toBe(false); expect(replay.replay).toBe(true); expect(replay.snapshot).toEqual(first.snapshot); expect(count(f.raw, "sale_financials")).toBe(1); expect(count(f.raw, "finance_entries")).toBe(1); expect(count(f.raw, "shipment_events")).toBe(1); expect(count(f.raw, "sale_completion_executions")).toBe(1); } finally { f.raw.close(); } });
 

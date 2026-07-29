@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { OrderStatus } from "@noctella/shared";
 import * as schema from "../../db/schema.sqlite";
 import { SaleAlreadyCompletedConflictError, SaleConcurrencyConflictError, SalesCompletionIdempotencyConflictError } from "../../application/sales/errors";
 import type { SalesCompletionCommitInput } from "../../application/sales/completionCoordination";
@@ -15,7 +16,12 @@ export function createSqliteSalesCompletionTransactionRepository(db: any): Sales
     if (existingSale) throw new SaleAlreadyCompletedConflictError(input.snapshot.saleId, existingSale.idempotencyKey);
     throw new SaleConcurrencyConflictError();
   }
-  const finalized = db.update(schema.orders).set({ status: "Completed", updatedAt: input.finalUpdatedAt }).where(and(eq(schema.orders.id, input.snapshot.saleId), eq(schema.orders.updatedAt, input.expectedVersion))).run();
+  // Sprint 80: was the raw string "Completed" (capital C) - OrderStatus's actual values are
+  // lowercase ("completed"), so every downstream check comparing order.status against the
+  // OrderStatus enum (e.g. createReturnUseCase's "Only fulfilled or completed orders can be
+  // returned" gate) silently never matched a sale-completed order. Discovered while wiring the
+  // Sprint 80 acceptance lifecycle test's return-after-complete-sale step.
+  const finalized = db.update(schema.orders).set({ status: OrderStatus.Completed, updatedAt: input.finalUpdatedAt }).where(and(eq(schema.orders.id, input.snapshot.saleId), eq(schema.orders.updatedAt, input.expectedVersion))).run();
   if (finalized.changes !== 1) throw new SaleConcurrencyConflictError();
   db.insert(schema.saleFinancials).values({ id: input.financialSnapshotId, orderId: input.snapshot.saleId, grossRevenue: input.snapshot.grossRevenue, shippingCharged: input.snapshot.shippingCharged, shippingCost: input.snapshot.shippingCost, marketplaceFee: input.snapshot.marketplaceFee, promotedFee: input.snapshot.promotedFee, paymentFee: input.snapshot.paymentFee, taxVat: input.snapshot.taxVat, itemCost: input.snapshot.itemCost, netRevenue: input.snapshot.netRevenue, profit: input.snapshot.profit, currency: input.snapshot.currency, sourceSnapshot: JSON.stringify(input.snapshot), completedAt: input.snapshot.completedAt, createdAt: input.snapshot.completedAt }).run();
   db.insert(schema.financeEntries).values({ id: input.financeEntryId, orderId: input.snapshot.saleId, entryType: input.financeEntry.entryType, currency: input.financeEntry.currency, amount: input.financeEntry.amount, sourceReference: input.financeEntry.sourceReference, sourceSnapshot: JSON.stringify(input.financeEntry.snapshot), idempotencyKey: input.financeEntry.idempotencyKey, occurredAt: input.financeEntry.occurredAt, createdAt: input.financeEntry.occurredAt }).run();

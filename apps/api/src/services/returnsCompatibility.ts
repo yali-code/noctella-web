@@ -25,12 +25,21 @@ export async function reverseCompletedSale(db: DbClient, input: any) {
   if (!readiness.ready) throw new BadRequestError(readiness.reasons.join("; "));
   const [sf] = await db.select().from(saleFinancials).where(eq(saleFinancials.orderId, input.orderId));
   const row = { id: randomUUID(), orderId: input.orderId, returnRequestId: input.returnRequestId, refundId: input.refundId, reversalType: "full", stockReversed: true, financialsReversed: true, originalSaleFinancialId: sf?.id, sourceSnapshot: JSON.stringify({ saleFinancial: sf ?? null, requested: input }), idempotencyKey: key, createdAt: now() };
+  // Sprint 80: the reversal's finance-entry amount negates the ORIGINAL persisted completed-sale
+  // snapshot's grossRevenue (sf, already read above) - never recomputed from current product
+  // price, current invoice, current VAT defaults, or current company profile. This mirrors the
+  // CompleteSale entry's own convention (amount = snapshot.grossRevenue, see
+  // completeSaleApplicationAdapter.ts), so summing the two entries nets exactly zero. The full
+  // taxVat/itemCost/netRevenue/profit breakdown remains available via sf inside sourceSnapshot
+  // above - no new finance-entry columns or chart of accounts is introduced. Falls back to the
+  // pre-existing 0 only when there is no completed-sale snapshot to reverse (nothing to negate).
+  const reversalAmount = sf ? -sf.grossRevenue : 0;
   // Sprint 52B: the sale_reversals insert and its finance entry must commit or roll back
   // together - previously these were two separate non-transactional writes, so a crash
   // between them could leave an orphaned reversal with no corresponding finance entry.
   const transaction = (db as any).transaction((tx: any) => {
     tx.insert(saleReversals).values(row).run();
-    createFinanceEntrySync(tx, { orderId: row.orderId, refundId: row.refundId, saleReversalId: row.id, entryType: "SaleReversal", amount: 0, sourceReference: row.id, idempotencyKey: `sale-reversal:${row.id}`, snapshot: row });
+    createFinanceEntrySync(tx, { orderId: row.orderId, refundId: row.refundId, saleReversalId: row.id, entryType: "SaleReversal", amount: reversalAmount, sourceReference: row.id, idempotencyKey: `sale-reversal:${row.id}`, snapshot: row });
   });
   if (typeof transaction === "function") (transaction as () => void)();
   return row;

@@ -36,3 +36,9 @@ export class SaleAlreadyCompletedConflictError extends SalesUseCaseError {
 export class SalesCompletionReadinessError extends SalesUseCaseError {
   constructor() { super("Sale is not ready for completion", "sales_completion_readiness"); }
 }
+/** Sprint 80: thrown only if completion reaches the financial-snapshot step without an eligible
+ * SalesInvoice already confirmed by readiness - readiness (getSaleCompletionReadiness) is the
+ * normal, expected gate; this is a defensive guard against that invariant being violated. */
+export class SaleInvoiceNotEligibleError extends SalesUseCaseError {
+  constructor() { super("No eligible SalesInvoice is available for this sale's financial completion", "sale_invoice_not_eligible"); }
+}
