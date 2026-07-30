@@ -23,7 +23,6 @@ services:
     buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
     startCommand: node apps/api/dist/index.js
     healthCheckPath: /health
-    maxShutdownDelaySeconds: 30
     disk:
       name: noctella-staging-data
       mountPath: /var/data
