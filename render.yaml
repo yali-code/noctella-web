@@ -1,4 +1,5 @@
-# Noctella ERP - Render Blueprint for the v2.0.0-rc.1 staging environment.
+# Noctella ERP - Render Blueprint for the RC staging environment (deploys `main`; not pinned to a
+# specific release candidate - see docs/releases/ for the capabilities of a given tag).
 #
 # Scope: RC staging infrastructure only, per Sprint 69 (see docs/deployment/render-staging.md
 # for the full ordered deployment runbook and explicit non-goals). Deliberately uses SQLite on a
