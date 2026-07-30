@@ -1,9 +1,11 @@
 # Render Staging Deployment Runbook
 
-Scope: the approved `v2.0.0-rc.1` Render staging environment defined in `render.yaml`, Frankfurt
-region, four services (API, Admin, Storefront, background-job Cron). This is **RC staging
-infrastructure, not the final production architecture** — see "Explicit non-goals and risks"
-below before using this environment for anything beyond staging validation.
+Scope: the approved Render staging environment defined in `render.yaml`, Frankfurt region, four
+services (API, Admin, Storefront, background-job Cron). This is **RC staging infrastructure, not
+the final production architecture** — see "Explicit non-goals and risks" below before using this
+environment for anything beyond staging validation. `render.yaml` deploys whatever is on `main`
+(it is not pinned to a specific release tag), so this runbook applies across release candidates;
+see `docs/releases/` for the capabilities and known limitations of a specific candidate.
 
 ## Ordered deployment process
 
@@ -129,6 +131,311 @@ signature verification fail-closed behavior without exercising real eBay/Etsy in
 - [ ] Neither case creates a webhook-event row or a marketplace order
 - [ ] Do not print or store real secret values, signatures, or request bodies in screenshots,
       logs, or committed files while running this check
+
+## v2.1.0-rc.2 Isolated Accounting Acceptance
+
+This section exercises the accounting/invoice/refund/reversal behavior added since `v2.1.0-rc.1`
+(Sprint 79 through PR #155 — see `docs/releases/v2.1.0-rc.2.md`). It is deliberately **separate**
+from the general smoke-test checklist above and must run in an **isolated** environment.
+
+### Isolation requirement (mandatory)
+
+Use one of the following — never the environment described in the rest of this runbook as-is:
+
+- **A. A disposable, dedicated staging service** with its own Render service and its own disk
+  (e.g. `noctella-rc2-acceptance-api`), created and destroyed specifically for this acceptance
+  pass; or
+- **B. A separate `DATABASE_URL` SQLite path and a separate `PRODUCT_PHOTO_DIR`** on the existing
+  staging disk (e.g. `/var/data/rc2-acceptance.sqlite` and `/var/data/rc2-acceptance-photos/`),
+  never the paths declared in `render.yaml` (`/var/data/noctella.sqlite`,
+  `/var/data/product-photos`).
+
+### Explicitly forbidden during this acceptance pass
+
+- Using the HERMLE product or any existing real/historical inventory record
+- Altering any real or historical production-like record in any way
+- Direct SQL edits of any kind, at any point, for any reason
+- Manually deleting audit records (finance entries, refund events, invoice events, stock
+  movements) to "clean up" a mistake — see the cleanup policy below instead
+- Overwriting the normal company profile in a shared (non-isolated) environment
+- Reusing the normal staging database (`/var/data/noctella.sqlite`) or the normal product-photo
+  root (`/var/data/product-photos`) without the explicit isolation described above
+
+### Synthetic data naming
+
+Every synthetic record created for this acceptance (supplier name, product SKU/title, customer
+name/email, company profile legal name) must use the obvious prefix `RC2-ACC-` so it can never be
+mistaken for real data in any list, report, or export.
+
+### Acceptance checklist
+
+Each phase lists its precondition, the action to take, the expected result, the evidence to
+capture, and the safety constraint that applies.
+
+1. **Startup and migrations**
+   - Precondition: isolated environment (A or B above) provisioned
+   - Action: start/deploy the API against the isolated database path
+   - Expected: startup completes, `ensureSchema` runs with no error
+   - Evidence: startup log excerpt
+   - Safety: never point this startup at the normal staging or production database path
+
+2. **Health endpoint**
+   - Precondition: API started
+   - Action: `GET /health` on the isolated API
+   - Expected: `200 {"status":"ok"}`
+   - Evidence: response body
+   - Safety: none beyond using the isolated API's own URL
+
+3. **Admin login**
+   - Precondition: isolated API healthy; an isolated Admin instance or Admin pointed at the
+     isolated API via its own `NEXT_PUBLIC_API_BASE_URL`
+   - Action: log in as the bootstrap/isolated admin account
+   - Expected: session established
+   - Evidence: screenshot
+   - Safety: never use real staging or production admin credentials for this pass
+
+4. **Synthetic company profile**
+   - Precondition: logged in
+   - Action: create a company profile named `RC2-ACC- Test Company`, `StandardVAT` tax treatment,
+     synthetic VAT number, EUR, `defaultPricesIncludeVat: true`
+   - Expected: profile saved, issue-readiness fields populated
+   - Evidence: profile detail screenshot
+   - Safety: never edit the normal/shared company profile for this
+
+5. **Synthetic supplier**
+   - Precondition: isolated environment
+   - Action: create supplier `RC2-ACC- Acceptance Supplier`
+   - Expected: supplier created
+   - Evidence: supplier detail screenshot
+   - Safety: `RC2-ACC-` prefix mandatory
+
+6. **Purchase, allocation, receipt, and landed cost**
+   - Precondition: synthetic supplier and a synthetic product (create as part of this step, SKU
+     `RC2-ACC-000001`) exist
+   - Action: create purchase (item 25 + buyer premium 5 + shipping 10 + packaging 2 = 42 EUR
+     landed cost), allocate, receive
+   - Expected: allocation and receipt succeed
+   - Evidence: purchase/landed-cost summary screenshot
+   - Safety: `purchaseCost` must be left unset (null) at product creation, not `0`, so the landed
+     cost allocation actually writes it (see the known Sprint 80 pitfall)
+
+7. **Unique product with stock 1, cost 42 EUR, price 120 EUR**
+   - Precondition: purchase received
+   - Action: verify product state
+   - Expected: `stockQuantity: 1`, `purchaseCost: 42`, `priceEur: 120`
+   - Evidence: product detail screenshot
+   - Safety: none beyond the naming prefix
+
+8. **Photo upload**
+   - Precondition: product exists
+   - Action: upload a product photo
+   - Expected: photo created, `processingStatus: Processing`
+   - Evidence: photo list screenshot
+   - Safety: use only synthetic/placeholder image content
+
+9. **Scheduler / outbox promotion**
+   - Precondition: photo Processing
+   - Action: wait for or trigger the isolated environment's scheduler
+   - Expected: photo promotes to `Ready`
+   - Evidence: photo status screenshot
+   - Safety: trigger only the isolated API's own background-jobs endpoint, never the shared
+     staging scheduler
+
+10. **Storefront publication and visibility**
+    - Precondition: photo Ready
+    - Action: publish the product; load it on an isolated or pointed-at-isolated-API Storefront
+    - Expected: product visible in the catalog
+    - Evidence: Storefront screenshot
+    - Safety: none beyond isolation
+
+11. **Approved mock-payment staging flow**
+    - Precondition: `MOCK_PAYMENTS_ENABLED=true` on the isolated API only
+    - Action: confirm the mock-payment gate is active for this isolated instance
+    - Expected: mock payment usable, clearly labeled `(mock)`
+    - Evidence: settings/order screenshot showing the `(mock)` label
+    - Safety: this flag must never be set on any real production deployment
+
+12. **Paid internal order**
+    - Precondition: product published, mock-payment gate confirmed
+    - Action: create a paid internal order for the synthetic product (120 EUR)
+    - Expected: order Paid, stock decremented to 0
+    - Evidence: order detail screenshot
+    - Safety: `RC2-ACC-` prefix on any free-text order reference
+
+13. **Automatic SalesInvoice Draft creation**
+    - Precondition: order Paid
+    - Action: wait for/trigger the scheduler
+    - Expected: exactly one Draft SalesInvoice for the order
+    - Evidence: invoice list screenshot
+    - Safety: none beyond isolation
+
+14. **Invoice readiness**
+    - Precondition: Draft invoice exists
+    - Action: check issue-readiness
+    - Expected: ready (company profile, VAT number, customer/billing fields all satisfied)
+    - Evidence: readiness screenshot
+    - Safety: none
+
+15. **Invoice issue**
+    - Precondition: readiness confirmed
+    - Action: issue the invoice
+    - Expected: status Issued
+    - Evidence: invoice detail screenshot
+    - Safety: issued invoices are immutable by design — do not attempt to edit after this step
+
+16. **100 EUR base / 20 EUR VAT / 120 EUR total**
+    - Precondition: invoice issued
+    - Action: read the invoice figures
+    - Expected: taxable base 100, VAT 20, total 120
+    - Evidence: invoice figures screenshot
+    - Safety: none
+
+17. **Sale completion**
+    - Precondition: invoice issued
+    - Action: complete the sale
+    - Expected: completion succeeds
+    - Evidence: completion confirmation screenshot
+    - Safety: none
+
+18. **120 gross / 20 VAT / 100 net / 42 cost / 58 profit**
+    - Precondition: sale completed
+    - Action: read persisted sale financials
+    - Expected: gross revenue 120, VAT 20, net revenue 100, item cost 42, profit 58
+    - Evidence: financials screenshot
+    - Safety: none
+
+19. **Return lifecycle**
+    - Precondition: sale completed
+    - Action: request → authorize → receive → inspect → approve → complete a full-quantity return
+    - Expected: return Completed
+    - Evidence: return detail screenshot
+    - Safety: none
+
+20. **Stock disposition return_to_stock**
+    - Precondition: return inspection step
+    - Action: set disposition to `ReturnToStock` on inspection
+    - Expected: disposition recorded
+    - Evidence: inspection screenshot
+    - Safety: this is the only disposition that restores sellable stock — confirm it was actually
+      selected, not left at a default
+
+21. **Successful full refund**
+    - Precondition: return completed
+    - Action: create a full refund (120 EUR)
+    - Expected: refund Succeeded
+    - Evidence: refund detail screenshot
+    - Safety: none beyond isolation
+
+22. **submittedAt and succeededAt populated**
+    - Precondition: refund Succeeded
+    - Action: inspect refund timestamps
+    - Expected: both `submittedAt` and `succeededAt` populated and equal
+    - Evidence: refund detail screenshot showing both fields
+    - Safety: none
+
+23. **Exactly one SuccessfulRefund finance entry**
+    - Precondition: refund Succeeded
+    - Action: inspect finance entries for the refund
+    - Expected: exactly one `SuccessfulRefund` entry, referencing the correct refund and order
+    - Evidence: finance-entry list screenshot
+    - Safety: none
+
+24. **Full sale reversal**
+    - Precondition: return completed and refund succeeded (full amount)
+    - Action: run the sale reversal
+    - Expected: reversal created exactly once
+    - Evidence: reversal detail screenshot
+    - Safety: reversal is a terminal, correct action here — do not attempt to undo it
+
+25. **Stock restored to 1**
+    - Precondition: reversal complete
+    - Action: re-check product stock
+    - Expected: `stockQuantity: 1`, status Published
+    - Evidence: product detail screenshot
+    - Safety: none
+
+26. **Effective financials reduced to zero**
+    - Precondition: reversal complete
+    - Action: read adjusted financials and the global finance summary
+    - Expected: effective gross revenue/VAT/net revenue/item cost/profit all 0
+    - Evidence: finance summary screenshot
+    - Safety: none
+
+27. **Immutable original sale snapshot**
+    - Precondition: reversal complete
+    - Action: re-read the original `sale_financials` record
+    - Expected: unchanged from step 18 (120/20/100/42/58), preserved for audit
+    - Evidence: comparison screenshot
+    - Safety: never attempt to edit or delete this record
+
+28. **Immutable issued invoice**
+    - Precondition: reversal complete
+    - Action: re-read the issued invoice
+    - Expected: unchanged from step 16
+    - Evidence: comparison screenshot
+    - Safety: never attempt to edit or delete this record
+
+29. **Exactly one of each expected record**
+    - Precondition: all prior steps complete
+    - Action: count sale, invoice, refund, reversal, and stock-movement rows for this order
+    - Expected: exactly one of each expected type — one SalesInvoice, one completed-sale
+      financial record, one refund, one reversal, one `sale_out` (-1) and one `return_in` (+1)
+      stock movement
+    - Evidence: counts screenshot or report export
+    - Safety: none
+
+30. **API restart persistence**
+    - Precondition: all prior steps complete
+    - Action: restart the isolated API
+    - Expected: all of the above remains identical after restart
+    - Evidence: before/after comparison
+    - Safety: restart only the isolated instance, never the shared staging API
+
+31. **Scheduler rerun idempotency**
+    - Precondition: restart complete
+    - Action: trigger the isolated scheduler again
+    - Expected: no duplicate invoice, no duplicate finance entry, no state change
+    - Evidence: before/after row counts
+    - Safety: none
+
+32. **Explicit evidence capture**
+    - Precondition: all steps complete
+    - Action: compile all screenshots/exports from steps 1–31 into a single acceptance record
+    - Expected: a complete, reviewable acceptance trail exists
+    - Evidence: the compiled record itself
+    - Safety: never include real secret values in captured evidence
+
+33. **Environment disposal or explicit retention decision**
+    - Precondition: acceptance evidence compiled
+    - Action: decide and record whether to destroy or retain the isolated environment (see
+      cleanup policy below)
+    - Expected: an explicit, documented decision — never left ambiguous
+    - Evidence: the decision itself, recorded alongside the acceptance evidence
+    - Safety: see cleanup policy below
+
+### Cleanup policy
+
+Issued invoices, completed sales, refunds, reversals, and finance entries **cannot be safely
+deleted through Admin** — do not attempt it and do not assume it is possible.
+
+- **Prefer destroying the entire isolated service/database/photo root** (option A or B above) once
+  acceptance evidence has been captured and compiled.
+- **Alternatively, retain the whole isolated environment** as historical acceptance evidence,
+  clearly labeled as an acceptance artifact, not as staging or production data.
+- **Never** perform direct SQL cleanup, at any point, for any reason.
+- **Never** partially delete audit records (finance entries, refund events, invoice events, stock
+  movements) — either the whole isolated environment is destroyed, or the whole record set is
+  retained.
+- **Never** copy any synthetic acceptance record into the normal staging or production database.
+
+### Background-job stale-lock recovery
+
+Do not intentionally crash a live staging or acceptance API to test stale-lock recovery. Destructive
+crash-recovery behavior is already covered by existing automated tests
+(`productPhotoOutboxStaleLockRecovery.test.ts` and related). For this acceptance pass, manually
+verify only the **normal** case: a scheduler dispatch
+that finds pending work processes it correctly (steps 9 and 31 above), and a repeat dispatch is
+idempotent (step 31).
 
 ## Explicit non-goals and risks
 
