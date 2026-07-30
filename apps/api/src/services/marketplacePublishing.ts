@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import { and, desc, eq, SQL } from "drizzle-orm";
-import { MarketplaceConnectionStatus, PublishChannel, PublishJobStatus, type ExternalListing, type MarketplaceConnection, type PublishAttempt, type PublishExecutionResult, type PublishJob } from "@noctella/shared";
+import { MarketplaceConnectionStatus, ProductStatus, PublishChannel, PublishJobStatus, PUBLISH_CHANNEL_VALUES, type ExternalListing, type MarketplaceConnection, type PublishAttempt, type PublishExecutionResult, type PublishJob } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { externalListings, marketplaceConnections, publishAttempts, publishJobs } from "../db/schema";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
-import { getProductById } from "./products";
+import { getProductById, updateProduct } from "./products";
 import { buildPublishPayload, validatePublish } from "./publishing";
 import { decryptCredential, encryptCredential } from "./credentialEncryption";
 import { getMarketplaceAdapter, type MarketplaceAdapter } from "./marketplaceAdapters";
@@ -14,6 +14,15 @@ const supported = [PublishChannel.Ebay, PublishChannel.Etsy];
 function now() { return new Date().toISOString(); }
 function id(prefix: string) { return `${prefix}_${crypto.randomUUID()}`; }
 function assertChannel(channel: PublishChannel) { if (!supported.includes(channel)) throw new BadRequestError("Unsupported marketplace channel"); }
+/**
+ * Sprint 84: executePublish-only channel check. Noctella Web is our own direct storefront, not an
+ * external marketplace - it must never enter the OAuth/MarketplaceConnection/adapter machinery
+ * gated by assertChannel/`supported` above, which getConnection/startConnect/completeConnect/
+ * disconnect continue to use unchanged (they correctly keep rejecting NoctellaWeb). This check
+ * only widens what executePublish itself accepts, to the full set of real PublishChannel values,
+ * while still rejecting a genuinely bogus value the same way assertChannel does.
+ */
+function assertKnownPublishChannel(channel: PublishChannel) { if (!PUBLISH_CHANNEL_VALUES.includes(channel)) throw new BadRequestError("Unsupported marketplace channel"); }
 function parse<T>(v: string | null | undefined, fallback: T): T { return v ? JSON.parse(v) as T : fallback; }
 export function sanitizeMarketplaceError(e: unknown) { return e instanceof Error ? e.message.replace(/[A-Za-z0-9+/=_-]{8,}/g, "[redacted]") : "Marketplace request failed"; }
 /**
@@ -37,7 +46,90 @@ async function active(db: DbClient, channel: PublishChannel) { const [r] = await
 export async function refreshConnection(db: DbClient, channel: PublishChannel, adapter?: MarketplaceAdapter) { const r = await active(db, channel); if (!r.encryptedRefreshToken) throw new BadRequestError("Refresh token is unavailable"); const tokens = await getAdapter(channel, adapter).refreshAccessToken(decryptCredential(r.encryptedRefreshToken)); await db.update(marketplaceConnections).set({ encryptedAccessToken: encryptCredential(tokens.accessToken), encryptedRefreshToken: tokens.refreshToken ? encryptCredential(tokens.refreshToken) : r.encryptedRefreshToken, tokenExpiresAt: tokens.expiresAt, scopes: JSON.stringify(tokens.scopes ?? parse(r.scopes, [])), status: MarketplaceConnectionStatus.Connected, updatedAt: now() }).where(eq(marketplaceConnections.id, r.id)); return (await getConnection(db, channel))!; }
 export async function verifyConnection(db: DbClient, channel: PublishChannel, adapter?: MarketplaceAdapter) { const r = await active(db, channel); try { await getAdapter(channel, adapter).verifyConnection(decryptCredential(r.encryptedAccessToken!)); await db.update(marketplaceConnections).set({ lastError: null, updatedAt: now() }).where(eq(marketplaceConnections.id, r.id)); return { ok: true, connection: (await getConnection(db, channel))! }; } catch (e) { const msg = sanitizeMarketplaceError(e); await db.update(marketplaceConnections).set({ status: MarketplaceConnectionStatus.Error, lastError: msg, updatedAt: now() }).where(eq(marketplaceConnections.id, r.id)); return { ok: false, error: msg, connection: (await getConnection(db, channel))! }; } }
 export async function disconnect(db: DbClient, channel: PublishChannel) { assertChannel(channel); const [r] = await db.select().from(marketplaceConnections).where(eq(marketplaceConnections.channel, channel)); if (!r) return undefined; await db.update(marketplaceConnections).set({ encryptedAccessToken: null, encryptedRefreshToken: null, status: MarketplaceConnectionStatus.Revoked, updatedAt: now() }).where(eq(marketplaceConnections.id, r.id)); return (await getConnection(db, channel))!; }
-export async function executePublish(db: DbClient, productId: string, channel: PublishChannel, key?: string, adapter?: MarketplaceAdapter): Promise<PublishExecutionResult> { assertChannel(channel); const product = await getProductById(db, productId); const validation = validatePublish(product, channel); if (!validation.valid) throw new BadRequestError("Publish validation failed"); const connection = await active(db, channel); const payload = buildPublishPayload(product, product.images, channel); const idem = key ?? `${productId}:${channel}:${crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`; const [existing] = await db.select().from(publishJobs).where(eq(publishJobs.idempotencyKey, idem)); if (existing) return { job: job(existing), externalListing: existing.externalListingId ? (await listExternalListings(db, productId)).find((l) => l.externalListingId === existing.externalListingId) : undefined };
+/**
+ * Sprint 84 correction: atomically inserts one PublishJob + one PublishAttempt for a successful
+ * Noctella Web direct publication. Branches on the active DATABASE_DRIVER because SQLite
+ * (drizzle-orm/better-sqlite3) and Postgres (drizzle-orm/node-postgres) have genuinely
+ * incompatible transaction APIs - confirmed by inspecting db/runtime.ts (Postgres uses
+ * drizzlePostgres(pool,...)) and every real Postgres repository in this codebase (e.g.
+ * repositories/sales-completion/postgres.ts), none of which ever call `.run()`: SQLite requires a
+ * synchronous transaction callback and exposes `.run()` for in-callback execution; Postgres
+ * requires an async callback, and its insert builders are plain awaited promises with no `.run()`
+ * method at all. A single untyped callback body cannot correctly serve both, so this helper
+ * branches and uses the driver-correct API in each case, rather than a blanket `(db as any)` cast
+ * that would silently hide the mismatch from the type checker. The SQLite branch uses DbClient
+ * natively (no cast needed - it already is the SQLite drizzle type). The Postgres branch narrows
+ * only `db` itself to `any`, matching this codebase's own established convention for Postgres-path
+ * code with no dedicated client type (e.g. createPostgresSalesCompletionTransactionRepository's
+ * `db: any` parameter in repositories/sales-completion/postgres.ts).
+ *
+ * Known residual limitation (pre-existing, whole-file, not introduced or fixed by this
+ * correction): every table this file references - including `publishJobs`/`publishAttempts` used
+ * here - is imported from ../db/schema, which re-exports exclusively from schema.sqlite.ts. A real
+ * Postgres client (drizzle-orm/node-postgres, constructed against schema.postgres.ts's separately
+ * defined pgTable objects) cannot correctly execute a query built against a sqliteTable reference.
+ * This branch's driver check fixes the specific transaction-callback/`.run()` API mismatch the
+ * Exact Review identified, but full Postgres correctness for this file - for this new code and for
+ * every pre-existing eBay/Etsy write in it - additionally requires schema-aware table selection
+ * matching the pattern already used by the postgres.ts files under apps/api/src/repositories,
+ * which is out of this correction's approved scope (no new abstraction, eBay/Etsy path unchanged).
+ */
+async function insertDirectPublishAudit(db: DbClient, jobRow: typeof publishJobs.$inferInsert, attemptRow: typeof publishAttempts.$inferInsert): Promise<void> {
+  const isPostgres = process.env.DATABASE_DRIVER === "postgres" || process.env.DATABASE_DRIVER === "supabase-postgres";
+  if (isPostgres) {
+    const pgDb = db as any;
+    await pgDb.transaction(async (tx: any) => {
+      await tx.insert(publishJobs).values(jobRow);
+      await tx.insert(publishAttempts).values(attemptRow);
+    });
+    return;
+  }
+  db.transaction((tx) => {
+    tx.insert(publishJobs).values(jobRow).run();
+    tx.insert(publishAttempts).values(attemptRow).run();
+  });
+}
+/**
+ * Sprint 84: Noctella Web direct-channel execution. Reached only after product lookup and
+ * successful validation have already passed in executePublish, and strictly before active()/any
+ * adapter logic - this branch must never touch MarketplaceConnection or a marketplace adapter.
+ * product.status is the sole Storefront-visibility source of truth (see publicCatalog.ts), so the
+ * only durable side effect that matters is the canonical updateProduct/product-write use-case
+ * call; the PublishJob+PublishAttempt pair exists purely for audit/history parity with the
+ * eBay/Etsy flow (same idempotency-key format/lookup, same payload/attempt-count conventions) and
+ * intentionally creates no ExternalListing.
+ */
+async function executeNoctellaWebPublish(db: DbClient, productId: string, product: Awaited<ReturnType<typeof getProductById>>, channel: PublishChannel, key?: string): Promise<PublishExecutionResult> {
+  const payload = buildPublishPayload(product, product.images, channel);
+  const idem = key ?? `${productId}:${channel}:${crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+  const [existing] = await db.select().from(publishJobs).where(eq(publishJobs.idempotencyKey, idem));
+  if (existing) return { job: job(existing) };
+  // Sprint 84: updateProduct opens its own self-contained transaction internally (via
+  // updateProductWithInventoryUseCase's UnitOfWork) and is async - it cannot be composed inside a
+  // single synchronous db.transaction() callback alongside the two inserts below without either
+  // breaking that callback's synchronous contract or nesting an unrelated transaction inside it.
+  // Running it first, on its own, is the safest available order with existing infrastructure: if a
+  // crash happens between this call and the inserts below, the product is already correctly
+  // Published (the durable outcome that matters) and a retry with the same idempotency key simply
+  // re-runs this same idempotent status write before completing the job/attempt pair.
+  await updateProduct(db, productId, { status: ProductStatus.Published });
+  const t = now();
+  const jid = id("job");
+  const requestSnapshot = JSON.stringify(payload);
+  const responseSnapshot = JSON.stringify({ direct: true, channel: PublishChannel.NoctellaWeb, productStatus: ProductStatus.Published, publishedAt: t });
+  // Sprint 84 correction: the job row and its one attempt are constructed completely, with a known
+  // ID, before entering the transaction - so both drivers commit the exact same known row and
+  // neither depends on driver-specific `.returning()` behavior. See insertDirectPublishAudit for
+  // why SQLite and Postgres need genuinely different transaction code, not one shared `any` body.
+  await insertDirectPublishAudit(
+    db,
+    { id: jid, productId, channel, status: PublishJobStatus.Succeeded, idempotencyKey: idem, payloadSnapshot: JSON.stringify(payload), attemptCount: 1, createdAt: t, updatedAt: t, completedAt: t },
+    { id: id("att"), publishJobId: jid, attemptNumber: 1, requestSnapshot, responseSnapshot, createdAt: t },
+  );
+  const [r] = await db.select().from(publishJobs).where(eq(publishJobs.id, jid));
+  return { job: job(r) };
+}
+export async function executePublish(db: DbClient, productId: string, channel: PublishChannel, key?: string, adapter?: MarketplaceAdapter): Promise<PublishExecutionResult> { assertKnownPublishChannel(channel); const product = await getProductById(db, productId); const validation = validatePublish(product, channel); if (!validation.valid) throw new BadRequestError("Publish validation failed"); if (channel === PublishChannel.NoctellaWeb) return executeNoctellaWebPublish(db, productId, product, channel, key); const connection = await active(db, channel); const payload = buildPublishPayload(product, product.images, channel); const idem = key ?? `${productId}:${channel}:${crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`; const [existing] = await db.select().from(publishJobs).where(eq(publishJobs.idempotencyKey, idem)); if (existing) return { job: job(existing), externalListing: existing.externalListingId ? (await listExternalListings(db, productId)).find((l) => l.externalListingId === existing.externalListingId) : undefined };
   const sameChannelListings = await db.select().from(externalListings).where(and(eq(externalListings.productId, productId), eq(externalListings.channel, channel)));
   if (sameChannelListings.some((l) => !isTerminalListingStatus(l.externalStatus))) throw new ConflictError("An active listing already exists for this product on this channel");
   const jid = id("job"); await db.insert(publishJobs).values({ id: jid, productId, channel, status: PublishJobStatus.Processing, idempotencyKey: idem, payloadSnapshot: JSON.stringify(payload), attemptCount: 0, createdAt: now(), updatedAt: now() });
