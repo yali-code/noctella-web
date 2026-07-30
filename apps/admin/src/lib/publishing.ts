@@ -1,5 +1,6 @@
 import { PublishChannel, type Product, type PublishPayload, type PublishPreview, type PublishValidation } from "@noctella/shared";
 import { api } from "./api";
+import { MARKETPLACE_CHANNELS } from "./marketplaces";
 
 export const ADMIN_PUBLISH_CHANNELS = [
   { value: PublishChannel.Ebay, label: "eBay" },
@@ -9,6 +10,17 @@ export const ADMIN_PUBLISH_CHANNELS = [
 
 export function channelLabel(channel: PublishChannel): string {
   return ADMIN_PUBLISH_CHANNELS.find((item) => item.value === channel)?.label ?? channel;
+}
+
+/**
+ * Sprint 84: true only for channels that go through the external-marketplace OAuth/
+ * MarketplaceConnection flow (eBay/Etsy). Noctella Web is our own direct storefront and never
+ * has - or needs - a MarketplaceConnection, so the publishing page must not gate Execute Publish
+ * or show connection status for it. Reuses MARKETPLACE_CHANNELS (the same list already used by
+ * the marketplace-connections management page) instead of duplicating it.
+ */
+export function requiresMarketplaceConnection(channel: PublishChannel): boolean {
+  return MARKETPLACE_CHANNELS.includes(channel);
 }
 
 export function getChannelDraftTitle(product: Product, channel: PublishChannel): string {

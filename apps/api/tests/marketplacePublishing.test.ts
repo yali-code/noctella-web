@@ -9,6 +9,7 @@ import { decryptCredential, encryptCredential } from "../src/services/credential
 import { ConflictError } from "../src/services/errors";
 import { createOAuthState } from "../src/services/oauthState";
 import { completeConnect, disconnect, endExternalListing, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
+import { buildPublishPayload } from "../src/services/publishing";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 
 const key = Buffer.alloc(32, 7).toString("base64");
@@ -183,5 +184,168 @@ describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
     await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
     await expect(executePublish(database, "p1", PublishChannel.Ebay, "second", adapter)).rejects.toBeInstanceOf(ConflictError);
     expect(adapter.createCalls()).toBe(1);
+  });
+});
+
+describe("marketplace publish direct channel (Noctella Web, Sprint 84)", () => {
+  async function noctellaProduct(database: TestDb, id = "nw1", overrides: Partial<{ stockQuantity: number }> = {}) {
+    await database.insert(schema.products).values({ id, sku: id, title: "Moon", slug: id, type: "single", status: "draft", stockQuantity: overrides.stockQuantity ?? 1, priceEur: 10, wooProductName: "Web Moon", wooShortDescription: "Short", wooLongDescription: "Long description", wooListingPriceEur: 10, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  }
+
+  it("succeeds with no MarketplaceConnection and no adapter argument, publishes the product, and creates no ExternalListing", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw1");
+    const result = await executePublish(database, "nw1", PublishChannel.NoctellaWeb, "nw-key");
+    expect(result.job.status).toBe(PublishJobStatus.Succeeded);
+    expect(result.externalListing).toBeUndefined();
+    expect(await listExternalListings(database, "nw1")).toHaveLength(0);
+    expect(await listConnections(database)).toHaveLength(0);
+    const [productRow] = await database.select().from(schema.products).where(eq(schema.products.id, "nw1"));
+    expect(productRow.status).toBe("published");
+  });
+
+  it("never invokes the marketplace adapter for Noctella Web", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw-spy");
+    const createListing = vi.fn();
+    const adapter = makeAdapter({ createListing });
+    await executePublish(database, "nw-spy", PublishChannel.NoctellaWeb, "spy-key", adapter);
+    expect(createListing).not.toHaveBeenCalled();
+  });
+
+  it("creates exactly one Succeeded PublishJob with attemptCount 1 and exactly one PublishAttempt with the approved direct-publication snapshots", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw2");
+    const result = await executePublish(database, "nw2", PublishChannel.NoctellaWeb, "nw2-key");
+    const jobs = await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw2"));
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].status).toBe(PublishJobStatus.Succeeded);
+    expect(jobs[0].attemptCount).toBe(1);
+    expect(jobs[0].externalListingId).toBeNull();
+    expect(jobs[0].externalListingUrl).toBeNull();
+    const { attempts } = await getPublishJob(database, result.job.id);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].attemptNumber).toBe(1);
+    const request = attempts[0].requestSnapshot as any;
+    expect(request.title).toBe("Web Moon");
+    expect(request.channel).toBe(PublishChannel.NoctellaWeb);
+    const response = attempts[0].responseSnapshot as any;
+    expect(response).toMatchObject({ direct: true, channel: PublishChannel.NoctellaWeb, productStatus: "published" });
+    expect(response.publishedAt).toBeTruthy();
+    expect(response.publishedAt).toBe(jobs[0].completedAt);
+  });
+
+  it("repeat execution with the same idempotency key returns the existing job, with no second job/attempt/listing/status mutation", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw3");
+    const first = await executePublish(database, "nw3", PublishChannel.NoctellaWeb, "nw3-key");
+    const [afterFirst] = await database.select().from(schema.products).where(eq(schema.products.id, "nw3"));
+    const second = await executePublish(database, "nw3", PublishChannel.NoctellaWeb, "nw3-key");
+    expect(second.job.id).toBe(first.job.id);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw3"))).toHaveLength(1);
+    expect(await database.select().from(schema.publishAttempts).where(eq(schema.publishAttempts.publishJobId, first.job.id))).toHaveLength(1);
+    expect(await listExternalListings(database, "nw3")).toHaveLength(0);
+    const [afterSecond] = await database.select().from(schema.products).where(eq(schema.products.id, "nw3"));
+    expect(afterSecond.updatedAt).toBe(afterFirst.updatedAt);
+    expect(afterSecond.status).toBe("published");
+  });
+
+  it("validation failure produces no product-status mutation, no job, no attempt, and no external listing", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw-invalid", { stockQuantity: 0 });
+    await expect(executePublish(database, "nw-invalid", PublishChannel.NoctellaWeb, "bad-key")).rejects.toThrow(/validation/);
+    const [productRow] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-invalid"));
+    expect(productRow.status).toBe("draft");
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw-invalid"))).toHaveLength(0);
+    expect(await listExternalListings(database, "nw-invalid")).toHaveLength(0);
+  });
+
+  it("still rejects a genuinely unsupported channel value the same way as before", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw-bogus");
+    await expect(executePublish(database, "nw-bogus", "amazon" as PublishChannel, "bogus-key")).rejects.toThrow(/Unsupported/);
+  });
+
+  it("connection lifecycle APIs still reject Noctella Web (unchanged)", async () => {
+    const adapter = makeAdapter();
+    await expect(startConnect(PublishChannel.NoctellaWeb, "Default", adapter)).rejects.toThrow(/Unsupported/);
+    await expect(completeConnect(db(), PublishChannel.NoctellaWeb, "code", signedState(PublishChannel.NoctellaWeb), "", "Default", adapter)).rejects.toThrow(/Unsupported/);
+    await expect(disconnect(db(), PublishChannel.NoctellaWeb)).rejects.toThrow(/Unsupported/);
+  });
+
+  // Sprint 84 correction: the real Admin UI (apps/admin/src/lib/marketplaces.ts's executePublish)
+  // sends only `{ channel }` - no idempotencyKey - so `key` is always undefined in production for
+  // this channel. Every test above supplied an explicit key; this test instead matches the real
+  // request shape exactly, and explicitly proves the automatic-key hash is stable across the very
+  // Draft -> Published transition the first call itself causes.
+  it("real Admin UI flow: repeat execution with no explicit idempotency key still returns the existing job, and the Draft->Published transition does not change the automatic payload hash", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw-auto");
+    const [beforeUpdate] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-auto"));
+
+    const first = await executePublish(database, "nw-auto", PublishChannel.NoctellaWeb);
+    expect(first.job.status).toBe(PublishJobStatus.Succeeded);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw-auto"))).toHaveLength(1);
+    expect((await getPublishJob(database, first.job.id)).attempts).toHaveLength(1);
+    expect(await listExternalListings(database, "nw-auto")).toHaveLength(0);
+    const [afterFirst] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-auto"));
+    expect(afterFirst.status).toBe("published");
+
+    // Explicit structural proof (not just behavioral inference): buildPublishPayload for Noctella
+    // Web never reads product.status, so recomputing it against the now-Published row produces
+    // byte-identical JSON to the pre-update payload - the automatic idempotency-key hash
+    // (productId:channel:sha256(payload)) is therefore stable across the very status change this
+    // call itself makes.
+    const payloadBefore = buildPublishPayload(beforeUpdate as any, [], PublishChannel.NoctellaWeb);
+    const payloadAfter = buildPublishPayload(afterFirst as any, [], PublishChannel.NoctellaWeb);
+    expect(JSON.stringify(payloadAfter)).toBe(JSON.stringify(payloadBefore));
+    expect((payloadBefore as any).status).toBeUndefined();
+    expect((payloadAfter as any).status).toBeUndefined();
+
+    const second = await executePublish(database, "nw-auto", PublishChannel.NoctellaWeb);
+    expect(second.job.id).toBe(first.job.id);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw-auto"))).toHaveLength(1);
+    expect(await database.select().from(schema.publishAttempts).where(eq(schema.publishAttempts.publishJobId, first.job.id))).toHaveLength(1);
+    expect(await listExternalListings(database, "nw-auto")).toHaveLength(0);
+    const [afterSecond] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-auto"));
+    expect(afterSecond.updatedAt).toBe(afterFirst.updatedAt);
+  });
+
+  // Sprint 84 correction: uses the same SQLite failure-injection pattern already established in
+  // this test suite family (e.g. reverseCompletedSaleSprint52B.test.ts's finance-entry trigger) to
+  // force the audit-row transaction to fail after updateProduct has already committed, proving both
+  // the rollback of the job/attempt pair and clean recovery on retry.
+  it("a failure during the job/attempt audit transaction rolls back both rows (product remains Published - approved partial-boundary behavior); a retry with the same automatic-key flow then recovers exactly one job and one attempt", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw-recover");
+    const sqlite = (database as any).$client;
+    sqlite.exec("CREATE TRIGGER fail_publish_attempt BEFORE INSERT ON publish_attempts BEGIN SELECT RAISE(ABORT, 'publish attempt insert failed'); END");
+    let caught: any;
+    try {
+      await executePublish(database, "nw-recover", PublishChannel.NoctellaWeb);
+    } catch (e) {
+      caught = e;
+    } finally {
+      sqlite.exec("DROP TRIGGER fail_publish_attempt");
+    }
+    expect(caught).toBeTruthy();
+    // The audit transaction (job + attempt) rolled back together - neither row exists.
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw-recover"))).toHaveLength(0);
+    expect(await database.select().from(schema.publishAttempts)).toHaveLength(0);
+    expect(await listExternalListings(database, "nw-recover")).toHaveLength(0);
+    // Approved partial-boundary behavior: updateProduct already committed in its own, earlier,
+    // self-contained transaction before the audit-insert failure, so the product is already
+    // Published even though no job/attempt exists yet to record it - documented and asserted here
+    // as the accepted trade-off (see executeNoctellaWebPublish's write-order comment).
+    const [afterFailure] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-recover"));
+    expect(afterFailure.status).toBe("published");
+
+    const retried = await executePublish(database, "nw-recover", PublishChannel.NoctellaWeb);
+    expect(retried.job.status).toBe(PublishJobStatus.Succeeded);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw-recover"))).toHaveLength(1);
+    expect(await database.select().from(schema.publishAttempts).where(eq(schema.publishAttempts.publishJobId, retried.job.id))).toHaveLength(1);
+    expect(await listExternalListings(database, "nw-recover")).toHaveLength(0);
+    const [afterRetry] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-recover"));
+    expect(afterRetry.status).toBe("published");
   });
 });
