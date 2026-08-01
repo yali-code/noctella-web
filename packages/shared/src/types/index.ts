@@ -350,7 +350,8 @@ export type PublishValidationIssueType =
   | "invalid_listing_status"
   | "inventory_unavailable"
   | "price_missing"
-  | "content_warning";
+  | "content_warning"
+  | "primary_product_photo_required";
 
 export interface PublishValidationIssue {
   type: PublishValidationIssueType;

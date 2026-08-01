@@ -1,4 +1,4 @@
-import { ListingStatus, ProductStatus, PublishChannel, type Product, type ProductImage, type PublishPayload, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
+import { ListingStatus, ProductStatus, PublishChannel, type Product, type ProductImage, type ProductPhoto, type PublishPayload, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { getProductById } from "./products";
 
@@ -22,13 +22,27 @@ function channelStatus(product: Product, channel: PublishChannel): ListingStatus
   return product.wooListingStatus ?? ListingStatus.Draft;
 }
 
-export function validatePublish(product: Product, channel: PublishChannel): PublishValidation {
+/**
+ * Sprint 87: publish validation is an invariant gate, not a read-side resilience policy - unlike
+ * the fallback-inclusive primary selection used by getPrimaryByProduct/listPubliclyVisibleByProduct
+ * (product-read/drizzle.ts) and the OrderItem snapshot query (order/drizzle.ts), which deliberately
+ * fall back to the best-available photo when no explicit Primary is set. Publishing must require an
+ * explicitly marked isPrimary photo whose processingStatus is Ready or Processing (matching Sprint
+ * 85's public-visibility policy and Sprint 86's snapshot-eligible statuses) - never a sortOrder/id
+ * fallback, and never Failed.
+ */
+function hasEligiblePrimaryPhoto(photos: ProductPhoto[] | undefined): boolean {
+  return (photos ?? []).some((photo) => photo.isPrimary === true && (photo.processingStatus === "Ready" || photo.processingStatus === "Processing"));
+}
+
+export function validatePublish(product: Product & { photos?: ProductPhoto[] }, channel: PublishChannel): PublishValidation {
   const errors: PublishValidationIssue[] = [];
   const warnings: PublishValidationIssue[] = [];
 
   if (product.status === ProductStatus.Archived) errors.push(issue("invalid_listing_status", "error", "Archived products cannot be published", "status"));
   if (product.stockQuantity < 1) errors.push(issue("inventory_unavailable", "error", "Product must have stock available", "stockQuantity"));
   if (product.priceEur <= 0) errors.push(issue("price_missing", "error", "Base EUR price must be greater than 0", "priceEur"));
+  if (!hasEligiblePrimaryPhoto(product.photos)) errors.push(issue("primary_product_photo_required", "error", "A Primary product photo is required before publishing.", "photos"));
   if (blank(product.conditionDescription)) warnings.push(issue("content_warning", "warning", "Condition description is recommended", "conditionDescription"));
 
   if (channel === PublishChannel.Ebay) {
