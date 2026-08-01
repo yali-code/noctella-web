@@ -106,7 +106,7 @@ async function toPublicProduct(
   context?: ProductReadServiceContext,
 ): Promise<PublicProduct> {
   context ??= createProductReadServiceContextForDb(db);
-  const photos = await context.repositories.photos.listReadyByProduct(row.id);
+  const photos = await context.repositories.photos.listPubliclyVisibleByProduct(row.id);
   const images = await context.repositories.photos.listLegacyCompatibleByProduct(row.id);
   const cat = row.categoryId ? await context.repositories.categories.getById(row.categoryId) : undefined;
   const col = row.collectionId ? await context.repositories.collections.getById(row.collectionId) : undefined;

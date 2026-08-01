@@ -74,8 +74,21 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     getPrimaryByProduct: async (productId: string) => (await db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(desc(productPhotos.isPrimary), asc(productPhotos.sortOrder), asc(productPhotos.id)).limit(1))[0],
     countByProduct: async (productId: string) => Number((await db.select({ total: sql<number>`count(*)` }).from(productPhotos).where(eq(productPhotos.productId, productId)))[0]?.total ?? 0),
     listReadyByProduct: async (productId: string) => db.select().from(productPhotos).where(and(eq(productPhotos.productId, productId), eq(productPhotos.processingStatus, "Ready"))).orderBy(asc(productPhotos.sortOrder), asc(productPhotos.id)),
+    // Sprint 85: the strict "Ready" gate above is correct for outbox/promotion-specific logic,
+    // but LocalPhotoStorage (the only storage backend implemented today) fully writes and awaits
+    // the photo file to disk before the ProductPhoto row is ever inserted (see
+    // services/products.ts's uploadProductPhoto - storage.saveProductPhoto() completes before the
+    // INSERT). "Processing" therefore already refers to a fully-written, publicly-servable file
+    // for this backend - it is not a real in-flight-upload risk, only an audit/promotion-tracking
+    // state waiting on the hourly outbox sweep. Gating public/Admin-list visibility on that sweep
+    // made photos invisible for up to an hour, or permanently if the promotion event is
+    // dead-lettered, even though the file was safe to serve the whole time. "Failed" is excluded
+    // because it is the model's genuine negative signal (promotion could not confirm the file).
+    // This visibility policy must be reconsidered before a genuinely asynchronous remote-storage
+    // backend (e.g. S3) is introduced, where "Processing" could mean the file is not yet present.
+    listPubliclyVisibleByProduct: async (productId: string) => db.select().from(productPhotos).where(and(eq(productPhotos.productId, productId), or(eq(productPhotos.processingStatus, "Ready"), eq(productPhotos.processingStatus, "Processing")))).orderBy(desc(productPhotos.isPrimary), asc(productPhotos.sortOrder), asc(productPhotos.id)),
     listAdminByProduct: async (productId: string) => photosRepo.listByProduct(productId),
-    listLegacyCompatibleByProduct: async (productId: string) => { const photos = await photosRepo.listReadyByProduct(productId); return photos.length ? photos : db.select().from(productImages).where(eq(productImages.productId, productId)).orderBy(asc(productImages.sortOrder), asc(productImages.id)); },
+    listLegacyCompatibleByProduct: async (productId: string) => { const photos = await photosRepo.listPubliclyVisibleByProduct(productId); return photos.length ? photos : db.select().from(productImages).where(eq(productImages.productId, productId)).orderBy(asc(productImages.sortOrder), asc(productImages.id)); },
   };
   return { products: productsRepo, categories: categoriesRepo, collections: collectionsRepo, photos: photosRepo };
 }

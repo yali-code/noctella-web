@@ -5,11 +5,11 @@ const root = path.resolve(__dirname, "..");
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 describe("Sprint 26 product read repository contracts", () => {
   const types = read("src/repositories/product-read/types.ts");
-  for (const name of ["getById","getBySku","getByErpReference","getByNoctellaId","list","search","count","listUpdatedSince","listByCategory","listByCollection","listByStatus","listPublished","getAvailabilityProjection","getWorkspaceReadProjection","listWithProductCounts","listReadyByProduct","listLegacyCompatibleByProduct"]) test(`contract exposes ${name}`, () => expect(types).toContain(name));
+  for (const name of ["getById","getBySku","getByErpReference","getByNoctellaId","list","search","count","listUpdatedSince","listByCategory","listByCollection","listByStatus","listPublished","getAvailabilityProjection","getWorkspaceReadProjection","listWithProductCounts","listReadyByProduct","listPubliclyVisibleByProduct","listLegacyCompatibleByProduct"]) test(`contract exposes ${name}`, () => expect(types).toContain(name));
 });
 describe("Sprint 26 SQLite/PostgreSQL executable repositories", () => {
   const drizzle = read("src/repositories/product-read/drizzle.ts");
-  for (const name of ["createDrizzleProductReadRepositories","dialect === \"postgres\"","ilike","like(sql`lower", "limit(pageSize", "offset(offset", "orderBy(...order", "eq(productPhotos.processingStatus, \"Ready\")", "listLegacyCompatibleByProduct", "getAvailabilityProjection", "listUpdatedSince", "count(*)"]) test(`repository implements ${name}`, () => expect(drizzle).toContain(name));
+  for (const name of ["createDrizzleProductReadRepositories","dialect === \"postgres\"","ilike","like(sql`lower", "limit(pageSize", "offset(offset", "orderBy(...order", "eq(productPhotos.processingStatus, \"Ready\")", "listPubliclyVisibleByProduct", "listLegacyCompatibleByProduct", "getAvailabilityProjection", "listUpdatedSince", "count(*)"]) test(`repository implements ${name}`, () => expect(drizzle).toContain(name));
 });
 describe("Sprint 26 factory", () => {
   const factory = read("src/repositories/product-read/factory.ts");
@@ -17,7 +17,10 @@ describe("Sprint 26 factory", () => {
 });
 describe("Sprint 26 route-used services are repository-backed", () => {
   for (const file of ["products.ts","publicCatalog.ts","categories.ts","collections.ts","erpIntegration.ts"]) test(`${file} uses repository context`, () => expect(read(`src/services/${file}`)).toContain("context.repositories"));
-  test("public catalog ready photos only", () => expect(read("src/services/publicCatalog.ts")).toContain("listReadyByProduct"));
+  // Sprint 85: public catalog shows Ready and Processing ProductPhoto rows (LocalPhotoStorage
+  // already fully wrote the file before the row existed) and excludes only Failed - see
+  // listPubliclyVisibleByProduct's doc comment in drizzle.ts for the full rationale.
+  test("public catalog uses the publicly-visible photo projection", () => expect(read("src/services/publicCatalog.ts")).toContain("listPubliclyVisibleByProduct"));
   test("admin product detail includes admin photos", () => expect(read("src/services/products.ts")).toContain("listAdminByProduct"));
   test("ERP projections use repository primary photo", () => expect(read("src/services/erpIntegration.ts")).toContain("getPrimaryByProduct"));
 });
@@ -69,6 +72,24 @@ async function seedReadDb() {
   return { db, repos: createDrizzleProductReadRepositories(db, sqliteSchema, "sqlite") };
 }
 
+// Sprint 85: isolated fixture reproducing the RC2 acceptance defect exactly - a single, freshly
+// uploaded Primary photo still in "Processing" (the normal state before the hourly outbox
+// promotion sweep runs) and nothing else. Kept separate from seedReadDb() so this product does
+// not shift the pagination/count/ordering assertions the existing Sprint 26 tests already rely on.
+async function seedProcessingPrimaryOnly() {
+  const db = createTestDb();
+  const now = "2026-01-06T00:00:00.000Z";
+  await db.insert(sqliteSchema.categories).values([{ id:"cat-g", name:"Gamma", slug:"gamma", displayOrder:1, isActive:true, createdAt:now, updatedAt:now }]);
+  await db.insert(sqliteSchema.products).values([
+    { id:"p4", erpReferenceId:null, sku:"SKU-4", title:"Gamma Vase", slug:"gamma-vase", type:ProductType.UniqueItem, status:ProductStatus.Published, categoryId:"cat-g", collectionId:null, description:"Processing-only primary photo", stockQuantity:1, priceEur:40, customsWarning:false, isFeatured:false, allowMakeOffer:false, allowCashOnDelivery:false, showInArchiveAfterSale:false, createdAt:now, updatedAt:now },
+    { id:"p5", erpReferenceId:null, sku:"SKU-5", title:"Delta Bowl", slug:"delta-bowl", type:ProductType.UniqueItem, status:ProductStatus.Published, categoryId:"cat-g", collectionId:null, description:"No photos at all", stockQuantity:1, priceEur:15, customsWarning:false, isFeatured:false, allowMakeOffer:false, allowCashOnDelivery:false, showInArchiveAfterSale:false, createdAt:now, updatedAt:now },
+  ] as any);
+  await db.insert(sqliteSchema.productPhotos).values([
+    { id:"ph4", productId:"p4", url:"/images/product-photos/gamma.webp", thumbnailUrl:"/images/product-photos/gamma-thumb.webp", altText:"gamma vase", sortOrder:0, isPrimary:true, filename:"gamma.webp", mimeType:"image/webp", sizeBytes:12345, width:1500, height:2000, processingStatus:"Processing", createdAt:now, updatedAt:now },
+  ] as any);
+  return { db, repos: createDrizzleProductReadRepositories(db, sqliteSchema, "sqlite") };
+}
+
 describe("Sprint 26 executable SQLite Product read repositories", () => {
   test("getById, getBySku and getByErpReference return products", async () => { const { repos } = await seedReadDb(); expect((await repos.products.getById("p1"))?.sku).toBe("SKU-1"); expect((await repos.products.getBySku("SKU-2"))?.id).toBe("p2"); expect((await repos.products.getByErpReference("erp-1"))?.id).toBe("p1"); });
   test("list paginates and uses stable updated/id ordering", async () => { const { repos } = await seedReadDb(); expect((await repos.products.list({ page:1, pageSize:2 })).map(p=>p.id)).toEqual(["p3","p2"]); expect((await repos.products.list({ page:2, pageSize:2 })).map(p=>p.id)).toEqual(["p1"]); });
@@ -82,6 +103,12 @@ describe("Sprint 26 executable SQLite Product read repositories", () => {
   test("photo get/list/primary/count/admin methods work", async () => { const { repos } = await seedReadDb(); expect((await repos.photos.getById("ph1"))?.url).toContain("ready"); expect(await repos.photos.countByProduct("p1")).toBe(3); expect((await repos.photos.listByProduct("p1")).map(p=>p.id)).toEqual(["ph2","ph1","ph3"]); expect((await repos.photos.getPrimaryByProduct("p1"))?.id).toBe("ph1"); expect((await repos.photos.listAdminByProduct("p1"))).toHaveLength(3); });
   test("ready public photos exclude Processing/Failed", async () => { const { repos } = await seedReadDb(); expect((await repos.photos.listReadyByProduct("p1")).map(p=>p.id)).toEqual(["ph1"]); });
   test("legacy compatible photos fall back to product images", async () => { const { repos } = await seedReadDb(); expect((await repos.photos.listLegacyCompatibleByProduct("p2"))[0].id).toBe("img-legacy"); });
+  // Sprint 85: listPubliclyVisibleByProduct includes Ready and Processing (LocalPhotoStorage has
+  // already fully written the file by the time the row exists) and excludes Failed. Primary
+  // (ph1, sortOrder 2) must sort ahead of the non-primary Processing photo (ph2, sortOrder 1),
+  // proving primary-first ordering overrides raw sortOrder.
+  test("publicly visible photos include Ready and Processing, exclude Failed, primary first", async () => { const { repos } = await seedReadDb(); expect((await repos.photos.listPubliclyVisibleByProduct("p1")).map(p=>p.id)).toEqual(["ph1","ph2"]); });
+  test("listLegacyCompatibleByProduct only falls back to legacy images when no publicly-visible ProductPhoto exists", async () => { const { repos } = await seedReadDb(); expect((await repos.photos.listLegacyCompatibleByProduct("p1")).map(p=>p.id)).toEqual(["ph1","ph2"]); });
 });
 
 describe("Sprint 26 executable PostgreSQL dialect repository coverage", () => {
@@ -95,6 +122,7 @@ describe("Sprint 26 executable PostgreSQL dialect repository coverage", () => {
   test("PostgreSQL dialect executes published and updatedSince filters", async () => { const { db } = await seedReadDb(); const repos = createDrizzleProductReadRepositories(db, postgresSchema, "postgres"); expect((await repos.products.listPublished({ pageSize:10 })).length).toBe(2); expect((await repos.products.listUpdatedSince("2026-01-04", { pageSize:10 })).map(p=>p.id)).toEqual(["p3"]); });
   test("PostgreSQL dialect executes category and collection reads", async () => { const { db } = await seedReadDb(); const repos = createDrizzleProductReadRepositories(db, postgresSchema, "postgres"); expect((await repos.categories.getBySlug("alpha"))?.id).toBe("cat-a"); expect((await repos.collections.getBySlug("archive"))?.id).toBe("col-a"); });
   test("PostgreSQL dialect executes Ready photo filtering", async () => { const { db } = await seedReadDb(); const repos = createDrizzleProductReadRepositories(db, postgresSchema, "postgres"); expect((await repos.photos.listReadyByProduct("p1")).map(p=>p.id)).toEqual(["ph1"]); });
+  test("PostgreSQL dialect executes publicly-visible photo filtering (Ready+Processing, primary first)", async () => { const { db } = await seedReadDb(); const repos = createDrizzleProductReadRepositories(db, postgresSchema, "postgres"); expect((await repos.photos.listPubliclyVisibleByProduct("p1")).map(p=>p.id)).toEqual(["ph1","ph2"]); });
   test("PostgreSQL dialect executes primary photo selection", async () => { const { db } = await seedReadDb(); const repos = createDrizzleProductReadRepositories(db, postgresSchema, "postgres"); expect((await repos.photos.getPrimaryByProduct("p1"))?.id).toBe("ph1"); });
   test("PostgreSQL dialect maps nullable and numeric fields", async () => { const { db } = await seedReadDb(); const repos = createDrizzleProductReadRepositories(db, postgresSchema, "postgres"); const p = await repos.products.getById("p3"); expect(p?.erpReferenceId).toBeNull(); expect(p?.priceEur).toBe(30); });
 });
@@ -110,7 +138,59 @@ describe("Sprint 26 actual route-used read services", () => {
   test("product list/detail/search/filter/pagination uses repositories", async () => { const { db, repos } = await seedReadDb(); const ctx = countingContext(repos); expect((await listProducts(db as any, { page:1, pageSize:1, search:"clock" } as any, ctx)).items).toHaveLength(1); expect((await getProductById(db as any, "p1", ctx)).photos).toHaveLength(3); expect(ctx.calls).toContain("products.list"); expect(ctx.calls).toContain("products.getById"); });
   test("category list/detail services use repositories", async () => { const { db, repos } = await seedReadDb(); const ctx = countingContext(repos); expect((await listCategories(db as any, { page:1, pageSize:10 } as any, ctx)).items[0].id).toBe("cat-a"); expect((await getCategoryById(db as any, "cat-a", ctx)).slug).toBe("alpha"); expect(ctx.calls).toContain("categories.list"); });
   test("collection list/detail services use repositories", async () => { const { db, repos } = await seedReadDb(); const ctx = countingContext(repos); expect((await listCollections(db as any, { page:1, pageSize:10 } as any, ctx)).items[0].id).toBe("col-a"); expect((await getCollectionById(db as any, "col-a", ctx)).slug).toBe("archive"); expect(ctx.calls).toContain("collections.list"); });
-  test("public catalog hides Processing/Failed photos", async () => { const { db, repos } = await seedReadDb(); const ctx = countingContext(repos); const p = await getPublicProductBySlug(db as any, "alpha-clock", ctx); expect(p.photos.map(ph=>ph.id)).toEqual(["ph1"]); expect(p.photos.every(ph=>!ph.url.includes("processing") && !ph.url.includes("failed"))).toBe(true); });
+  // Sprint 85: public detail now shows Ready and Processing photos (primary first), and still
+  // excludes Failed. This deliberately replaces the pre-Sprint-85 "Ready only" assertion below,
+  // per the approved Sprint 85 architecture (see drizzle.ts's listPubliclyVisibleByProduct).
+  test("public catalog shows Ready and Processing photos, primary first, and still hides Failed", async () => { const { db, repos } = await seedReadDb(); const ctx = countingContext(repos); const p = await getPublicProductBySlug(db as any, "alpha-clock", ctx); expect(p.photos.map(ph=>ph.id)).toEqual(["ph1","ph2"]); expect(p.photos.every(ph=>!ph.url.includes("failed"))).toBe(true); });
+  // Sprint 85: reproduces the exact RC2 acceptance defect via the public detail endpoint - a
+  // single Processing Primary photo must be returned, with every public DTO field preserved.
+  test("public detail returns a Processing Primary photo with all DTO fields preserved (RC2 acceptance regression)", async () => {
+    const { db, repos } = await seedProcessingPrimaryOnly();
+    const p = await getPublicProductBySlug(db as any, "gamma-vase", countingContext(repos));
+    expect(p.photos).toHaveLength(1);
+    expect(p.photos[0]).toMatchObject({ id: "ph4", url: "/images/product-photos/gamma.webp", thumbnailUrl: "/images/product-photos/gamma-thumb.webp", altText: "gamma vase", sortOrder: 0, isPrimary: true });
+    expect(p.images).toHaveLength(1);
+    expect(p.images[0].id).toBe("ph4");
+  });
+  test("public detail returns empty photos/images arrays without failing when a product has no photos", async () => {
+    const { db, repos } = await seedProcessingPrimaryOnly();
+    const p = await getPublicProductBySlug(db as any, "delta-bowl", countingContext(repos));
+    expect(p.photos).toEqual([]);
+    expect(p.images).toEqual([]);
+  });
+  test("public product list includes the Processing Primary photo for the matching item", async () => {
+    const { db, repos } = await seedProcessingPrimaryOnly();
+    const result = await listPublicProducts(db as any, { page: 1, pageSize: 10, sort: "newest" } as any, countingContext(repos));
+    const gamma = result.items.find((item) => item.slug === "gamma-vase");
+    expect(gamma?.photos.map((ph) => ph.id)).toEqual(["ph4"]);
+  });
+  test("Admin products list primaryImageUrl is populated from a Processing Primary photo (RC2 acceptance regression)", async () => {
+    const { db, repos } = await seedProcessingPrimaryOnly();
+    const result = await listProducts(db as any, { page: 1, pageSize: 10 } as any, countingContext(repos));
+    const gamma = result.items.find((item: any) => item.slug === "gamma-vase");
+    expect(gamma?.primaryImageUrl).toBe("/images/product-photos/gamma.webp");
+  });
+  test("legacy fallback does not trigger when a Processing publicly-visible ProductPhoto exists", async () => {
+    const { repos } = await seedProcessingPrimaryOnly();
+    expect((await repos.photos.listLegacyCompatibleByProduct("p4")).map((p: any) => p.id)).toEqual(["ph4"]);
+  });
+  test("consistency invariant: Admin detail, Admin list, public detail, and public list resolve the same primary photo", async () => {
+    const { db, repos } = await seedProcessingPrimaryOnly();
+    const ctx = countingContext(repos);
+    const adminDetail = await getProductById(db as any, "p4", ctx);
+    const adminList = await listProducts(db as any, { page: 1, pageSize: 10 } as any, ctx);
+    const publicDetail = await getPublicProductBySlug(db as any, "gamma-vase", ctx);
+    const publicList = await listPublicProducts(db as any, { page: 1, pageSize: 10, sort: "newest" } as any, ctx);
+    const adminListItem = adminList.items.find((item: any) => item.slug === "gamma-vase");
+    const publicListItem = publicList.items.find((item) => item.slug === "gamma-vase");
+    expect(adminDetail.photos.find((ph: any) => ph.isPrimary)?.url).toBe("/images/product-photos/gamma.webp");
+    expect(adminListItem?.primaryImageUrl).toBe("/images/product-photos/gamma.webp");
+    expect(publicDetail.photos.find((ph) => ph.isPrimary)?.url).toBe("/images/product-photos/gamma.webp");
+    expect(publicListItem?.photos.find((ph) => ph.isPrimary)?.url).toBe("/images/product-photos/gamma.webp");
+    // Admin detail alone additionally exposes operational processing metadata for every photo,
+    // regardless of visibility status - the other three surfaces deliberately do not.
+    expect(adminDetail.photos[0].processingStatus).toBe("Processing");
+  });
   test("public catalog list preserves response metadata", async () => { const { db, repos } = await seedReadDb(); const result = await listPublicProducts(db as any, { page:1, pageSize:10, sort:"newest" } as any, countingContext(repos)); expect(result).toMatchObject({ page:1, pageSize:10, total:2 }); });
   test("admin detail includes Processing/Failed status metadata", async () => { const { db, repos } = await seedReadDb(); const p = await getProductById(db as any, "p1", countingContext(repos)); expect(p.photos.map(ph=>ph.processingStatus).sort()).toEqual(["Failed","Processing","Ready"]); });
   test("ERP product list/detail/reference lookup use repositories", async () => { const { db, repos } = await seedReadDb(); const ctx = countingContext(repos); expect((await listProductProjections(db as any, { limit:10 }, ctx)).items).toHaveLength(3); expect((await getProductProjection(db as any, "p1", ctx))?.centralProductId).toBe("p1"); expect((await identityCheck(db as any, { erpReferenceId:"erp-1" }, ctx)).result).toBe("Match"); expect(ctx.calls).toContain("products.getByErpReference"); });

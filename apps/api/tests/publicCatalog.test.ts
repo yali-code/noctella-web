@@ -1,8 +1,9 @@
 import { ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it } from "vitest";
+import * as schema from "../src/db/schema";
 import { createCategory } from "../src/services/categories";
 import { createCollection } from "../src/services/collections";
-import { createProduct, updateProduct } from "../src/services/products";
+import { createProduct, listProducts, updateProduct } from "../src/services/products";
 import {
   getPublicCategoryBySlug,
   getPublicProductBySlug,
@@ -244,5 +245,49 @@ describe("public catalog service", () => {
       isActive: false,
     });
     await expect(getPublicCategoryBySlug(db, inactive.slug)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // Sprint 85: reproduces the RC2 acceptance defect end-to-end through the real product-write
+  // use case and the public/Admin-list service functions, inserting a ProductPhoto row directly
+  // (bypassing file storage) in the exact "Processing" state uploadProductPhoto leaves it in
+  // before the hourly outbox promotion sweep runs. Before the fix, this returned photos: [],
+  // images: [], and an empty Admin list thumbnail; ProductPhoto/product_photos is the only photo
+  // source involved - no legacy productImages row exists for this product.
+  it("returns a Processing Primary photo on public detail, public list, and Admin list (RC2 acceptance regression)", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({ title: "Gamma Vase", status: ProductStatus.Published }),
+    );
+    const now = new Date().toISOString();
+    await db.insert(schema.productPhotos).values({
+      id: "ph-rc2",
+      productId: product.id,
+      url: "/images/product-photos/gamma.webp",
+      thumbnailUrl: "/images/product-photos/gamma-thumb.webp",
+      altText: "gamma vase",
+      sortOrder: 0,
+      isPrimary: true,
+      filename: "gamma.webp",
+      mimeType: "image/webp",
+      sizeBytes: 12345,
+      width: 1500,
+      height: 2000,
+      processingStatus: "Processing",
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+
+    const detail = await getPublicProductBySlug(db, product.slug);
+    expect(detail.photos).toHaveLength(1);
+    expect(detail.photos[0]).toMatchObject({ id: "ph-rc2", isPrimary: true, url: "/images/product-photos/gamma.webp" });
+    expect(detail.images).toHaveLength(1);
+
+    const list = await listPublicProducts(db, { page: 1, pageSize: 20, sort: "newest" });
+    const listedGamma = list.items.find((item) => item.id === product.id);
+    expect(listedGamma?.photos.map((p) => p.id)).toEqual(["ph-rc2"]);
+
+    const adminList = await listProducts(db, { page: 1, pageSize: 20 } as any);
+    const adminListedGamma = adminList.items.find((item: any) => item.id === product.id);
+    expect(adminListedGamma?.primaryImageUrl).toBe("/images/product-photos/gamma.webp");
   });
 });
