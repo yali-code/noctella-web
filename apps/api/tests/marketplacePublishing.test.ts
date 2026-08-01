@@ -44,8 +44,35 @@ async function connect(database: TestDb, channel = PublishChannel.Ebay, adapter 
   if (expiresAt) await database.update(schema.marketplaceConnections).set({ tokenExpiresAt: expiresAt }).where(eq(schema.marketplaceConnections.channel, channel));
   return adapter;
 }
-async function product(database: TestDb, id = "p1") {
+// Sprint 87: every publish workflow requires an eligible explicit Primary ProductPhoto (Ready or
+// Processing) to pass validatePublish. Seeded here by default so every pre-existing test in this
+// file - which was never about photo eligibility - keeps exercising the same behavior it always
+// has, without needing a per-test edit. Pass `{ photo: false }` to get a product with no eligible
+// photo for the new Sprint 87 rejection tests.
+async function seedEligiblePhoto(database: TestDb, productId: string, overrides: Record<string, unknown> = {}) {
+  const now = new Date().toISOString();
+  await database.insert(schema.productPhotos).values({
+    id: `ph-${productId}`,
+    productId,
+    url: `/images/product-photos/${productId}.webp`,
+    thumbnailUrl: `/images/product-photos/${productId}-thumb.webp`,
+    altText: null,
+    sortOrder: 0,
+    isPrimary: true,
+    filename: `${productId}.webp`,
+    mimeType: "image/webp",
+    sizeBytes: 1024,
+    width: 800,
+    height: 600,
+    processingStatus: "Ready",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  } as any);
+}
+async function product(database: TestDb, id = "p1", overrides: { photo?: false | Record<string, unknown> } = {}) {
   await database.insert(schema.products).values({ id, sku: id, title: "Moon", slug: id, type: "single", status: "approved", stockQuantity: 2, priceEur: 10, ebayTitle: "eBay Moon", ebayDescription: "Desc", ebayCategory: "cat", ebayListingPriceEur: 12, etsyTitle: "Etsy Moon", etsyDescription: "Desc", etsyTags: JSON.stringify(["tag"]), etsyListingPriceEur: 13, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (overrides.photo !== false) await seedEligiblePhoto(database, id, overrides.photo ?? {});
 }
 
 beforeEach(() => { process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = key; process.env.MARKETPLACE_OAUTH_STATE_SECRET = "state-secret"; process.env.MARKETPLACE_PUBLISH_MAX_RETRIES = "3"; vi.restoreAllMocks(); });
@@ -188,8 +215,9 @@ describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
 });
 
 describe("marketplace publish direct channel (Noctella Web, Sprint 84)", () => {
-  async function noctellaProduct(database: TestDb, id = "nw1", overrides: Partial<{ stockQuantity: number }> = {}) {
+  async function noctellaProduct(database: TestDb, id = "nw1", overrides: Partial<{ stockQuantity: number; photo: false | Record<string, unknown> }> = {}) {
     await database.insert(schema.products).values({ id, sku: id, title: "Moon", slug: id, type: "single", status: "draft", stockQuantity: overrides.stockQuantity ?? 1, priceEur: 10, wooProductName: "Web Moon", wooShortDescription: "Short", wooLongDescription: "Long description", wooListingPriceEur: 10, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    if (overrides.photo !== false) await seedEligiblePhoto(database, id, overrides.photo ?? {});
   }
 
   it("succeeds with no MarketplaceConnection and no adapter argument, publishes the product, and creates no ExternalListing", async () => {
@@ -347,5 +375,108 @@ describe("marketplace publish direct channel (Noctella Web, Sprint 84)", () => {
     expect(await listExternalListings(database, "nw-recover")).toHaveLength(0);
     const [afterRetry] = await database.select().from(schema.products).where(eq(schema.products.id, "nw-recover"));
     expect(afterRetry.status).toBe("published");
+  });
+});
+
+describe("Sprint 87: require an eligible explicit Primary ProductPhoto before publishing", () => {
+  async function noctellaProduct(database: TestDb, id: string, overrides: Partial<{ stockQuantity: number; photo: false | Record<string, unknown> }> = {}) {
+    await database.insert(schema.products).values({ id, sku: id, title: "Moon", slug: id, type: "single", status: "draft", stockQuantity: overrides.stockQuantity ?? 1, priceEur: 10, wooProductName: "Web Moon", wooShortDescription: "Short", wooLongDescription: "Long description", wooListingPriceEur: 10, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    if (overrides.photo !== false) await seedEligiblePhoto(database, id, overrides.photo ?? {});
+  }
+
+  it("Noctella Web: rejects execute with no eligible Primary photo - no PublishJob, no PublishAttempt, product status unchanged", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-none", { photo: false });
+    await expect(executePublish(database, "nw87-none", PublishChannel.NoctellaWeb, "nw87-none-key")).rejects.toThrow(/validation/);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw87-none"))).toHaveLength(0);
+    expect(await database.select().from(schema.publishAttempts)).toHaveLength(0);
+    const [productRow] = await database.select().from(schema.products).where(eq(schema.products.id, "nw87-none"));
+    expect(productRow.status).toBe("draft");
+  });
+
+  it("Noctella Web: rejects when photos exist but none is an eligible explicit Primary (non-primary Ready only)", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-nonprimary", { photo: false });
+    await seedEligiblePhoto(database, "nw87-nonprimary", { id: "ph-nw87-nonprimary", isPrimary: false, processingStatus: "Ready" });
+    await expect(executePublish(database, "nw87-nonprimary", PublishChannel.NoctellaWeb)).rejects.toThrow(/validation/);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw87-nonprimary"))).toHaveLength(0);
+  });
+
+  it("Noctella Web: succeeds with an eligible Primary photo in status Ready", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-ready", { photo: { processingStatus: "Ready" } });
+    const result = await executePublish(database, "nw87-ready", PublishChannel.NoctellaWeb, "nw87-ready-key");
+    expect(result.job.status).toBe(PublishJobStatus.Succeeded);
+  });
+
+  it("Noctella Web: succeeds with an eligible Primary photo in status Processing", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-processing", { photo: { processingStatus: "Processing" } });
+    const result = await executePublish(database, "nw87-processing", PublishChannel.NoctellaWeb, "nw87-processing-key");
+    expect(result.job.status).toBe(PublishJobStatus.Succeeded);
+  });
+
+  it("Noctella Web: a Primary photo that is Failed is rejected the same as having none", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-failed", { photo: { processingStatus: "Failed" } });
+    await expect(executePublish(database, "nw87-failed", PublishChannel.NoctellaWeb)).rejects.toThrow(/validation/);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw87-failed"))).toHaveLength(0);
+  });
+
+  it("Noctella Web: explicit-key idempotent replay still works unchanged once the fixture has an eligible photo", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-idem-explicit", { photo: { processingStatus: "Ready" } });
+    const first = await executePublish(database, "nw87-idem-explicit", PublishChannel.NoctellaWeb, "nw87-idem-key");
+    const second = await executePublish(database, "nw87-idem-explicit", PublishChannel.NoctellaWeb, "nw87-idem-key");
+    expect(second.job.id).toBe(first.job.id);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw87-idem-explicit"))).toHaveLength(1);
+  });
+
+  it("Noctella Web: automatic-key (real Admin UI) idempotent replay still works unchanged once the fixture has an eligible photo", async () => {
+    const database = db();
+    await noctellaProduct(database, "nw87-idem-auto", { photo: { processingStatus: "Ready" } });
+    const first = await executePublish(database, "nw87-idem-auto", PublishChannel.NoctellaWeb);
+    const second = await executePublish(database, "nw87-idem-auto", PublishChannel.NoctellaWeb);
+    expect(second.job.id).toBe(first.job.id);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "nw87-idem-auto"))).toHaveLength(1);
+  });
+
+  it("eBay: publish validation fails before any connection/adapter execution when no eligible Primary photo exists, and creates no PublishJob/PublishAttempt", async () => {
+    const database = db();
+    const adapter = makeAdapter();
+    // Deliberately never connect eBay for this product - if validation did not run first, the
+    // failure would surface as "not connected" instead of "validation", which would disprove
+    // ordering rather than prove it.
+    await product(database, "p87-ebay-none", { photo: false });
+    await expect(executePublish(database, "p87-ebay-none", PublishChannel.Ebay, "p87-ebay-none-key", adapter)).rejects.toThrow(/validation/);
+    expect(adapter.createCalls()).toBe(0);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "p87-ebay-none"))).toHaveLength(0);
+    expect(await database.select().from(schema.publishAttempts)).toHaveLength(0);
+  });
+
+  it("Etsy: publish validation fails before any connection/adapter execution when no eligible Primary photo exists, and creates no PublishJob/PublishAttempt", async () => {
+    const database = db();
+    const adapter = makeAdapter();
+    await product(database, "p87-etsy-none", { photo: false });
+    await expect(executePublish(database, "p87-etsy-none", PublishChannel.Etsy, "p87-etsy-none-key", adapter)).rejects.toThrow(/validation/);
+    expect(adapter.createCalls()).toBe(0);
+    expect(await database.select().from(schema.publishJobs).where(eq(schema.publishJobs.productId, "p87-etsy-none"))).toHaveLength(0);
+    expect(await database.select().from(schema.publishAttempts)).toHaveLength(0);
+  });
+
+  it("retryPublishJob does not re-validate live ProductPhoto state - a retry still succeeds using the stored payloadSnapshot even after the Primary photo is deleted", async () => {
+    const database = db();
+    await connect(database);
+    await product(database, "p87-retry", { photo: { processingStatus: "Ready" } });
+    let fail = true;
+    const transient = makeAdapter({ createListing: async () => { if (fail) { fail = false; throw new Error("temporary"); } return { externalListingId: "retry-ok-87", externalStatus: "active" }; } });
+    const failed = await executePublish(database, "p87-retry", PublishChannel.Ebay, "p87-retry-key", transient);
+    expect(failed.job.status).toBe(PublishJobStatus.RetryPending);
+
+    // The Primary photo that made the original validated attempt legitimate is now gone entirely.
+    await database.delete(schema.productPhotos).where(eq(schema.productPhotos.productId, "p87-retry"));
+
+    const retried = await retryPublishJob(database, failed.job.id, transient);
+    expect(retried.job.status).toBe(PublishJobStatus.Succeeded);
   });
 });
