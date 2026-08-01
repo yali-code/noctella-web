@@ -189,3 +189,69 @@ describe("Order detail automatic-invoice outbox status and retry (Sprint 79 corr
     });
   });
 });
+
+describe("Order Items image snapshot rendering (Sprint 86)", () => {
+  it("resolves a relative OrderItem.productImageUrl against the configured API origin, not the raw stored value", async () => {
+    stubFetch();
+    vi.spyOn(ordersLib, "getOrder").mockResolvedValue({
+      ...baseOrder,
+      items: [
+        {
+          id: "item-1",
+          productId: "product-1",
+          productSku: "SKU-1",
+          productTitle: "Vintage Chronograph",
+          productSlug: "vintage-chronograph",
+          productType: "unique_item",
+          productImageUrl: "/images/product-photos/watch.webp",
+          quantity: 1,
+          unitPrice: 100,
+          totalPrice: 100,
+          currency: "EUR",
+        },
+      ],
+    } as any);
+    vi.spyOn(shipmentsLib, "listShipments").mockResolvedValue([]);
+    const { container } = render(<OrderDetailPage params={{ id: "order-1" }} />);
+    await screen.findByText("ORD-1");
+
+    // resolveApiAssetUrl (apps/admin/src/lib/api.ts) defaults NEXT_PUBLIC_API_BASE_URL to
+    // http://localhost:4000 when unset - proving the rendered <img> uses that resolved absolute
+    // URL, not the raw relative value stored in the database, confirms the real resolver ran
+    // rather than merely being present/imported. Queried via the DOM directly (not
+    // getByRole("img")) because this thumbnail intentionally uses alt="" - matching the existing
+    // convention for decorative list/table thumbnails elsewhere in Admin - which removes it from
+    // the accessible "img" role.
+    const img = container.querySelector("img") as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.src).toBe("http://localhost:4000/images/product-photos/watch.webp");
+  });
+
+  it("shows the — fallback, not a broken image, when productImageUrl is null", async () => {
+    stubFetch();
+    vi.spyOn(ordersLib, "getOrder").mockResolvedValue({
+      ...baseOrder,
+      items: [
+        {
+          id: "item-1",
+          productId: "product-1",
+          productSku: "SKU-1",
+          productTitle: "Vintage Chronograph",
+          productSlug: "vintage-chronograph",
+          productType: "unique_item",
+          productImageUrl: null,
+          quantity: 1,
+          unitPrice: 100,
+          totalPrice: 100,
+          currency: "EUR",
+        },
+      ],
+    } as any);
+    vi.spyOn(shipmentsLib, "listShipments").mockResolvedValue([]);
+    const { container } = render(<OrderDetailPage params={{ id: "order-1" }} />);
+    await screen.findByText("ORD-1");
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
