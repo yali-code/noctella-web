@@ -28,6 +28,7 @@ import {
   shipShipment,
   type ShipmentRow,
 } from "@/lib/shipments";
+import { resolveApiAssetUrl } from "@/lib/api";
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
@@ -427,7 +428,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
                 <td style={tdStyle}>
                   {item.productImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.productImageUrl} alt="" style={{ width: 44, height: 44, objectFit: "cover" }} />
+                    <img src={resolveApiAssetUrl(item.productImageUrl)} alt="" style={{ width: 44, height: 44, objectFit: "cover" }} />
                   ) : (
                     "—"
                   )}

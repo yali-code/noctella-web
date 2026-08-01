@@ -16,7 +16,10 @@ import { createOffer, acceptOffer, createDraftOrderFromOffer } from "../src/serv
 import { BadRequestError, ConflictError, NotFoundError } from "../src/services/errors";
 import { createOrderSchema, orderListQuerySchema } from "../src/validation/order";
 import { createPaymentSession, findPaymentByProviderReference } from "../src/payments/paymentRepository";
-import { products } from "../src/db/schema";
+import { products, productPhotos } from "../src/db/schema";
+import * as sqliteSchema from "../src/db/schema.sqlite";
+import * as postgresSchema from "../src/db/schema.postgres";
+import { createDrizzleOrderRepositories } from "../src/repositories/order/drizzle";
 import { createTestDb } from "./testDb";
 
 describe("order service", () => {
@@ -50,7 +53,10 @@ describe("order service", () => {
       showInArchiveAfterSale: false,
       priceEur: 1200,
       stockQuantity: 1,
-      images: [{ url: "https://example.com/watch.jpg", altText: "Watch", sortOrder: 0, isPrimary: true }],
+      // Sprint 86: deliberately no legacy `images` here - that write path targets the legacy
+      // productImages table, which order creation's image snapshot must NOT read from (see
+      // repositories/order/drizzle.ts's validateProductReferences). Tests that need this
+      // product to have a photo seed a ProductPhoto row directly, matching the real upload path.
     });
     productId = product.id;
     await seedPayment(db, PaymentProvider.Stripe, "mock_stripe_ref_1", PaymentStatus.Paid);
@@ -185,12 +191,44 @@ describe("order service", () => {
     await expect(createOrder(db, createOrderSchema.parse(baseOrderInput()))).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it("uses backend product snapshots and prices", async () => {
+  it("uses backend product snapshots and prices, and ignores a client-supplied image/title/price (Sprint 86)", async () => {
+    // Real upload path (productPhotos), never the legacy productImages table.
+    const now = new Date().toISOString();
+    await db.insert(productPhotos).values({
+      id: "ph-order-001",
+      productId,
+      url: "/images/product-photos/watch.webp",
+      thumbnailUrl: "/images/product-photos/watch-thumb.webp",
+      altText: "Watch",
+      sortOrder: 0,
+      isPrimary: true,
+      filename: "watch.webp",
+      mimeType: "image/webp",
+      sizeBytes: 4096,
+      width: 1500,
+      height: 2000,
+      processingStatus: "Ready",
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+
     const order = await createOrder(
       db,
       createOrderSchema.parse(
         baseOrderInput({
-          items: [{ productId, quantity: 1, title: "Fake cart title", unitPrice: 1 }],
+          items: [
+            {
+              productId,
+              quantity: 1,
+              title: "Fake cart title",
+              unitPrice: 1,
+              // Malicious/naive client-supplied image fields - orderItemInputSchema only
+              // recognizes productId/quantity, so Zod strips these before they ever reach the
+              // order-creation service.
+              productImageUrl: "https://attacker.example/fake.jpg",
+              imageUrl: "https://attacker.example/fake.jpg",
+            },
+          ],
           subtotalAmount: 1200,
           totalAmount: 1200,
         }),
@@ -202,7 +240,7 @@ describe("order service", () => {
       productTitle: "Vintage Chronograph",
       productSlug: "cart-title-ignored",
       productType: ProductType.UniqueItem,
-      productImageUrl: "https://example.com/watch.jpg",
+      productImageUrl: "/images/product-photos/watch.webp",
       unitPrice: 1200,
       totalPrice: 1200,
       currency: "EUR",
@@ -747,6 +785,169 @@ describe("order service", () => {
         type: StockMovementType.SaleRollback,
       });
       expect(rollbackMovements.items).toHaveLength(0);
+    });
+  });
+});
+
+describe("OrderItem image snapshot (Sprint 86)", () => {
+  let db: ReturnType<typeof createTestDb>;
+  let categoryId: string;
+
+  const address = {
+    fullName: "Jane Collector",
+    line1: "1 Rue Noctella",
+    city: "Paris",
+    postalCode: "75001",
+    country: "FR",
+  };
+
+  beforeEach(async () => {
+    db = createTestDb();
+    const category = await createCategory(db, { name: "Snapshots", displayOrder: 0, isActive: true });
+    categoryId = category.id;
+  });
+
+  async function seedProduct(sku: string) {
+    return createProduct(db, {
+      sku,
+      title: "Snapshot Test Product",
+      slug: `${sku.toLowerCase()}-slug`,
+      type: ProductType.UniqueItem,
+      status: ProductStatus.Published,
+      categoryId,
+      customsWarning: false,
+      isFeatured: false,
+      allowMakeOffer: false,
+      allowCashOnDelivery: false,
+      showInArchiveAfterSale: false,
+      priceEur: 100,
+      stockQuantity: 1,
+    });
+  }
+
+  async function seedPhoto(productId: string, overrides: Record<string, unknown> = {}) {
+    const now = new Date().toISOString();
+    const row = {
+      id: `ph-${Math.random().toString(36).slice(2, 10)}`,
+      productId,
+      url: "/images/product-photos/default.webp",
+      thumbnailUrl: "/images/product-photos/default-thumb.webp",
+      altText: null,
+      sortOrder: 0,
+      isPrimary: true,
+      filename: "default.webp",
+      mimeType: "image/webp",
+      sizeBytes: 2048,
+      width: 800,
+      height: 600,
+      processingStatus: "Ready",
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+    await db.insert(productPhotos).values(row as any);
+    return row;
+  }
+
+  async function payFor(reference: string) {
+    return createPaymentSession(db, {
+      provider: PaymentProvider.Stripe,
+      providerReference: reference,
+      status: PaymentStatus.Paid,
+      amount: 100,
+      currency: "EUR",
+      idempotencyKey: `test:${reference}:${Math.random()}`,
+    });
+  }
+
+  function orderInput(productId: string, reference: string, overrides: Record<string, unknown> = {}) {
+    return {
+      orderDraftId: `draft-${reference}`,
+      guestEmail: "jane@example.com",
+      status: OrderStatus.Pending,
+      paymentStatus: PaymentStatus.Paid,
+      paymentProvider: PaymentProvider.Stripe,
+      paymentReference: reference,
+      currency: "EUR" as const,
+      billingAddress: address,
+      shippingAddress: address,
+      subtotalAmount: 100,
+      totalAmount: 100,
+      items: [{ productId, quantity: 1 as const }],
+      ...overrides,
+    };
+  }
+
+  it("snapshots a Processing Primary ProductPhoto's relative URL", async () => {
+    const product = await seedProduct("SKU-SNAP-PROCESSING");
+    await seedPhoto(product.id, { id: "ph-processing", processingStatus: "Processing", url: "/images/product-photos/processing.webp", thumbnailUrl: "/images/product-photos/processing-thumb.webp" });
+    await payFor("ref-snap-processing");
+    const order = await createOrder(db, createOrderSchema.parse(orderInput(product.id, "ref-snap-processing")));
+    expect(order.items[0].productImageUrl).toBe("/images/product-photos/processing.webp");
+  });
+
+  it("snapshots a Ready Primary ProductPhoto's relative URL", async () => {
+    const product = await seedProduct("SKU-SNAP-READY");
+    await seedPhoto(product.id, { id: "ph-ready", processingStatus: "Ready", url: "/images/product-photos/ready.webp", thumbnailUrl: "/images/product-photos/ready-thumb.webp" });
+    await payFor("ref-snap-ready");
+    const order = await createOrder(db, createOrderSchema.parse(orderInput(product.id, "ref-snap-ready")));
+    expect(order.items[0].productImageUrl).toBe("/images/product-photos/ready.webp");
+  });
+
+  it("excludes a Failed ProductPhoto and still allows the order to be created with a null snapshot", async () => {
+    const product = await seedProduct("SKU-SNAP-FAILED");
+    await seedPhoto(product.id, { id: "ph-failed", processingStatus: "Failed", url: "/images/product-photos/failed.webp", thumbnailUrl: "/images/product-photos/failed-thumb.webp" });
+    await payFor("ref-snap-failed");
+    const order = await createOrder(db, createOrderSchema.parse(orderInput(product.id, "ref-snap-failed")));
+    expect(order.items[0].productImageUrl ?? null).toBeNull();
+  });
+
+  it("selects the Primary photo first even when a non-primary photo has a lower sortOrder", async () => {
+    const product = await seedProduct("SKU-SNAP-PRIMARY-ORDER");
+    await seedPhoto(product.id, { id: "ph-nonprimary", isPrimary: false, sortOrder: 0, url: "/images/product-photos/nonprimary.webp", thumbnailUrl: "/images/product-photos/nonprimary-thumb.webp" });
+    await seedPhoto(product.id, { id: "ph-primary", isPrimary: true, sortOrder: 1, url: "/images/product-photos/primary.webp", thumbnailUrl: "/images/product-photos/primary-thumb.webp" });
+    await payFor("ref-snap-primary-order");
+    const order = await createOrder(db, createOrderSchema.parse(orderInput(product.id, "ref-snap-primary-order")));
+    expect(order.items[0].productImageUrl).toBe("/images/product-photos/primary.webp");
+  });
+
+  it("creates the order successfully with a null/undefined snapshot when the product has no eligible photo", async () => {
+    const product = await seedProduct("SKU-SNAP-NONE");
+    await payFor("ref-snap-none");
+    const order = await createOrder(db, createOrderSchema.parse(orderInput(product.id, "ref-snap-none")));
+    expect(order.items[0].productImageUrl ?? null).toBeNull();
+  });
+
+  it("preserves the snapshot after the source ProductPhoto is later deleted", async () => {
+    const product = await seedProduct("SKU-SNAP-PERSIST");
+    const photo = await seedPhoto(product.id, { id: "ph-persist", url: "/images/product-photos/persist.webp", thumbnailUrl: "/images/product-photos/persist-thumb.webp" });
+    await payFor("ref-snap-persist");
+    const order = await createOrder(db, createOrderSchema.parse(orderInput(product.id, "ref-snap-persist")));
+    expect(order.items[0].productImageUrl).toBe("/images/product-photos/persist.webp");
+
+    await db.delete(productPhotos).where(eq(productPhotos.id, photo.id as string));
+
+    const reread = await getOrderById(db, order.id);
+    expect(reread.items[0].productImageUrl).toBe("/images/product-photos/persist.webp");
+  });
+
+  describe("repository-level dual-dialect coverage of the corrected ProductPhoto selection query", () => {
+    it("SQLite dialect: validateProductReferences returns the Ready/Processing primary photo URL, excluding Failed", async () => {
+      const product = await seedProduct("SKU-SNAP-SQLITE");
+      await seedPhoto(product.id, { id: "ph-sqlite-failed", isPrimary: false, sortOrder: 0, processingStatus: "Failed", url: "/images/product-photos/sqlite-failed.webp", thumbnailUrl: "/images/product-photos/sqlite-failed-thumb.webp" });
+      await seedPhoto(product.id, { id: "ph-sqlite-ready", isPrimary: true, sortOrder: 1, processingStatus: "Ready", url: "/images/product-photos/sqlite-ready.webp", thumbnailUrl: "/images/product-photos/sqlite-ready-thumb.webp" });
+      const repos = createDrizzleOrderRepositories(db, sqliteSchema, "sqlite");
+      const [ref] = await repos.orderItems.write.validateProductReferences([product.id]);
+      expect((ref as any).imageUrl).toBe("/images/product-photos/sqlite-ready.webp");
+    });
+
+    it("PostgreSQL dialect: validateProductReferences returns the Ready/Processing primary photo URL, excluding Failed", async () => {
+      const product = await seedProduct("SKU-SNAP-POSTGRES");
+      await seedPhoto(product.id, { id: "ph-pg-failed", isPrimary: false, sortOrder: 0, processingStatus: "Failed", url: "/images/product-photos/pg-failed.webp", thumbnailUrl: "/images/product-photos/pg-failed-thumb.webp" });
+      await seedPhoto(product.id, { id: "ph-pg-processing", isPrimary: true, sortOrder: 1, processingStatus: "Processing", url: "/images/product-photos/pg-processing.webp", thumbnailUrl: "/images/product-photos/pg-processing-thumb.webp" });
+      const repos = createDrizzleOrderRepositories(db, postgresSchema, "postgres");
+      const [ref] = await repos.orderItems.write.validateProductReferences([product.id]);
+      expect((ref as any).imageUrl).toBe("/images/product-photos/pg-processing.webp");
     });
   });
 });
