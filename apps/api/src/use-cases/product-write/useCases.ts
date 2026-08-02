@@ -1,19 +1,32 @@
 import { randomUUID } from "node:crypto";
 import { ProductStatus, ProductType } from "@noctella/shared";
 import type { ProductWriteRepositoryBundle } from "../../repositories/product-write/types";
-import { BadRequestError, ConflictError, NotFoundError } from "../../services/errors";
+import { BadRequestError, ConflictError, NotFoundError, ProductVersionConflictError } from "../../services/errors";
 import type { UnitOfWork } from "../../services/unitOfWork";
 import type { InventoryApplicationContext } from "../../services/inventoryApplicationContext";
 import type { AsynchronousProductWriteTransactionContext } from "../../application/product-write/transactionCapabilities";
 import { initializeInventoryInTransactionUseCase, setInventoryQuantityInTransactionUseCase } from "../../application/inventory";
 import { slugify } from "../../validation/common";
-import type { CreateProductInput, UpdateProductInput } from "../../validation/product";
+import type { CreateProductInput, UpdateProductCommandInput, UpdateProductInput } from "../../validation/product";
 import type { CreateCategoryInput, UpdateCategoryInput } from "../../validation/category";
 import type { CreateCollectionInput, UpdateCollectionInput } from "../../validation/collection";
 
 export interface ProductWriteUseCaseContext { unitOfWork: UnitOfWork; repositories: ProductWriteRepositoryBundle }
 type ProductInventoryWriteContext = Omit<InventoryApplicationContext, "unitOfWork"> & { unitOfWork: { run<T>(work: (context: AsynchronousProductWriteTransactionContext) => T | Promise<T>): Promise<Awaited<T>> } };
 const now = () => new Date().toISOString();
+/**
+ * Sprint 88 (ADR-017): a successful Product update must always produce a
+ * version token strictly newer than the one it conditionally replaced - two
+ * updates landing in the same millisecond must not collapse to an identical
+ * updatedAt, which would make the next caller's expectedUpdatedAt ambiguous.
+ * Falls back to the current clock for a legacy/non-parseable stored value.
+ */
+function nextUpdatedAt(currentUpdatedAt: string): string {
+  const nowMs = Date.now();
+  const currentMs = Date.parse(currentUpdatedAt);
+  if (Number.isNaN(currentMs)) return new Date(nowMs).toISOString();
+  return new Date(Math.max(nowMs, currentMs + 1)).toISOString();
+}
 const nullable = (v: unknown): string | number | boolean | null => v === undefined || v === null ? null : (typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? v : JSON.stringify(v));
 function stock(type: ProductType, requested?: number) { if (type === ProductType.UniqueItem) { const q = requested ?? 1; if (q > 1) throw new BadRequestError("Unique Item stock quantity cannot exceed 1"); return q; } return requested ?? 1; }
 function productValues(input: CreateProductInput | UpdateProductInput, extra: Record<string, unknown> = {}) { const out: Record<string, unknown> = { ...extra }; for (const [k,v] of Object.entries(input as Record<string, unknown>)) { if (k === "images" || k === "expectedUpdatedAt" || v === undefined) continue; out[k] = Array.isArray(v) ? JSON.stringify(v) : nullable(v); } return out as Record<string, string|number|boolean|null>; }
@@ -77,7 +90,7 @@ export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteCont
 export function updateProductWithInventoryUseCase(
   ctx: ProductInventoryWriteContext,
   id: string,
-  input: UpdateProductInput & { expectedUpdatedAt?: string },
+  input: UpdateProductCommandInput,
   erpMetadata?: Record<string, unknown>,
 ) {
   return chain(ctx.repositories.products.findById(id), (current) => {
@@ -85,11 +98,19 @@ export function updateProductWithInventoryUseCase(
     return chain(input.sku ? ctx.repositories.products.existsBySku(input.sku, id) : false, (duplicate) => {
       if (duplicate) throw new ConflictError(`SKU "${input.sku}" is already in use`);
       const { stockQuantity, expectedUpdatedAt, ...metadata } = input;
-      const values = productValues(metadata, { updatedAt: now(), ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}) });
+      // Sprint 88: explicit caller token is authoritative when supplied; a trusted internal caller
+      // that omits it falls back to the value just read above (command-time optimistic
+      // concurrency) - the HTTP route always supplies one, since its request validation requires
+      // the field. expectedUpdatedAt is never included in `metadata`/persisted Product values.
+      const effectiveExpectedUpdatedAt = expectedUpdatedAt ?? current.updatedAt;
+      const values = productValues(metadata, { updatedAt: nextUpdatedAt(current.updatedAt), ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}) });
       return ctx.unitOfWork.run(({ repositories }) => chain(
-        repositories.productWriteRepositories.products.updateWithExpectedVersion({ id, values, expectedUpdatedAt: expectedUpdatedAt ?? current.updatedAt }),
+        repositories.productWriteRepositories.products.updateWithExpectedVersion({ id, values, expectedUpdatedAt: effectiveExpectedUpdatedAt }),
         (updated) => {
-          if (!updated.updated) throw new ConflictError(updated.conflict?.message ?? "Product has changed");
+          if (!updated.updated) {
+            if (updated.conflict?.field === "id") throw new NotFoundError(updated.conflict.message);
+            throw new ProductVersionConflictError(id, effectiveExpectedUpdatedAt, updated.conflict?.currentValue ?? null);
+          }
           return chain(
             stockQuantity === undefined || stockQuantity === current.stockQuantity ? { id, updated: true } : chain(
               setInventoryQuantityInTransactionUseCase(ctx, repositories.inventoryRepositories, {

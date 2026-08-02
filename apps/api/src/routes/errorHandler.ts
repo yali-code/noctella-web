@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { ZodError } from "zod";
 import { formatZodError } from "../validation/common";
-import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from "../services/errors";
+import { BadRequestError, ConflictError, NotFoundError, ProductVersionConflictError, UnauthorizedError } from "../services/errors";
 import { InventoryUseCaseError, type InventoryErrorCategory } from "../application/inventory/errors";
 
 // Sprint 64D: InventoryUseCaseError previously fell through to the generic 500 branch below -
@@ -26,6 +26,18 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof NotFoundError) {
     res.status(404).json({ error: err.message });
+    return;
+  }
+  // Sprint 88: checked before the generic ConflictError branch below, since
+  // ProductVersionConflictError extends ConflictError - order matters here.
+  if (err instanceof ProductVersionConflictError) {
+    res.status(409).json({
+      error: err.message,
+      code: "PRODUCT_VERSION_CONFLICT",
+      productId: err.productId,
+      expectedUpdatedAt: err.expectedUpdatedAt,
+      currentUpdatedAt: err.currentUpdatedAt,
+    });
     return;
   }
   if (err instanceof ConflictError) {

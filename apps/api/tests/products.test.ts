@@ -1,9 +1,10 @@
 import { ProductStatus, ProductType } from "@noctella/shared";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCategory } from "../src/services/categories";
-import { BadRequestError, ConflictError } from "../src/services/errors";
+import { BadRequestError, ConflictError, ProductVersionConflictError } from "../src/services/errors";
 import { archiveProduct, createProduct, updateProduct } from "../src/services/products";
-import { createProductSchema } from "../src/validation/product";
+import { createProductSchema, updateProductRequestSchema } from "../src/validation/product";
+import { handleRouteError } from "../src/routes/errorHandler";
 import { createTestDb } from "./testDb";
 
 describe("product service", () => {
@@ -183,5 +184,99 @@ describe("product service", () => {
     expect(updated.marketplaceReadiness.etsy.ready).toBe(true);
     // eBay untouched and still not ready
     expect(updated.marketplaceReadiness.ebay.ready).toBe(false);
+  });
+
+  describe("Sprint 88: manual Product optimistic concurrency (ADR-017)", () => {
+    it("route request schema rejects an omitted expectedUpdatedAt (HTTP 400 at the route)", () => {
+      const result = updateProductRequestSchema.safeParse({ title: "New Title" });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.map((issue) => issue.path.join("."))).toContain("expectedUpdatedAt");
+      }
+    });
+
+    it("route request schema accepts editable fields plus a required expectedUpdatedAt", () => {
+      const result = updateProductRequestSchema.safeParse({ title: "New Title", expectedUpdatedAt: "2026-01-01T00:00:00.000Z" });
+      expect(result.success).toBe(true);
+    });
+
+    it("stale expectedUpdatedAt throws ProductVersionConflictError carrying productId/expectedUpdatedAt/currentUpdatedAt", async () => {
+      const product = await createProduct(db, baseInput());
+      await expect(
+        updateProduct(db, product.id, { title: "Attempt", expectedUpdatedAt: "stale-token" }),
+      ).rejects.toBeInstanceOf(ProductVersionConflictError);
+      let caught: unknown;
+      try {
+        await updateProduct(db, product.id, { title: "Attempt", expectedUpdatedAt: "stale-token" });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toMatchObject({
+        productId: product.id,
+        expectedUpdatedAt: "stale-token",
+        currentUpdatedAt: product.updatedAt,
+      });
+    });
+
+    it("maps ProductVersionConflictError to HTTP 409 with the exact PRODUCT_VERSION_CONFLICT response contract", async () => {
+      const product = await createProduct(db, baseInput());
+      let caught: unknown;
+      try {
+        await updateProduct(db, product.id, { title: "Attempt", expectedUpdatedAt: "stale-token" });
+      } catch (err) {
+        caught = err;
+      }
+      const status = vi.fn();
+      const json = vi.fn();
+      const res = { status: status.mockReturnValue({ json }) } as any;
+      handleRouteError(caught, res);
+      expect(status).toHaveBeenCalledWith(409);
+      expect(json).toHaveBeenCalledWith({
+        error: "This product changed after you opened it. Reload the latest version before saving again.",
+        code: "PRODUCT_VERSION_CONFLICT",
+        productId: product.id,
+        expectedUpdatedAt: "stale-token",
+        currentUpdatedAt: product.updatedAt,
+      });
+    });
+
+    it("a stale update mutates neither the Product nor its stock quantity", async () => {
+      const product = await createProduct(db, baseInput({ type: ProductType.LotItem, stockQuantity: 3 }));
+      await expect(
+        updateProduct(db, product.id, { title: "Should not apply", stockQuantity: 9, expectedUpdatedAt: "stale-token" }),
+      ).rejects.toBeInstanceOf(ProductVersionConflictError);
+      const { getProductById } = await import("../src/services/products");
+      const unchanged = await getProductById(db, product.id);
+      expect(unchanged.title).toBe(product.title);
+      expect(unchanged.stockQuantity).toBe(3);
+      expect(unchanged.updatedAt).toBe(product.updatedAt);
+    });
+
+    it("a successful update with the correct token returns a new updatedAt, and a second update using that returned token succeeds", async () => {
+      const product = await createProduct(db, baseInput());
+      const first = await updateProduct(db, product.id, { title: "First Save", expectedUpdatedAt: product.updatedAt });
+      expect(first.updatedAt).not.toBe(product.updatedAt);
+      const second = await updateProduct(db, product.id, { title: "Second Save", expectedUpdatedAt: first.updatedAt });
+      expect(second.title).toBe("Second Save");
+    });
+
+    it("advances updatedAt even under a frozen same-millisecond clock", async () => {
+      const product = await createProduct(db, baseInput());
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date(product.updatedAt));
+        const updated = await updateProduct(db, product.id, { title: "Frozen Clock Save", expectedUpdatedAt: product.updatedAt });
+        expect(new Date(updated.updatedAt).getTime()).toBeGreaterThan(new Date(product.updatedAt).getTime());
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("duplicate SKU on update remains an ordinary ConflictError, not a ProductVersionConflictError", async () => {
+      const first = await createProduct(db, baseInput());
+      const second = await createProduct(db, baseInput({ sku: "SKU-002", title: "Second Item" }));
+      await expect(updateProduct(db, second.id, { sku: first.sku })).rejects.toBeInstanceOf(ConflictError);
+      await expect(updateProduct(db, second.id, { sku: first.sku })).rejects.not.toBeInstanceOf(ProductVersionConflictError);
+    });
   });
 });
