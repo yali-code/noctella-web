@@ -3,7 +3,7 @@ import multer from "multer";
 import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import { archiveProduct, createProduct, deleteProductPhoto, getProductById, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
-import { createProductSchema, productListQuerySchema, updateProductSchema } from "../validation/product";
+import { createProductSchema, productListQuerySchema, updateProductRequestSchema } from "../validation/product";
 import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
 import { handleRouteError } from "./errorHandler";
@@ -88,7 +88,7 @@ router.post("/", requirePermission("products.edit"), async (req, res) => {
 
 router.put("/:id", requirePermission("products.edit"), async (req, res) => {
   try {
-    const input = updateProductSchema.parse(req.body);
+    const input = updateProductRequestSchema.parse(req.body);
     const product = await updateProduct(db, req.params.id, input);
     res.json(product);
   } catch (err) {

@@ -85,7 +85,12 @@ export async function executeUpdateProduct(db: DbClient, clientId: string, produ
     // product-write transaction (Sprint 50B). A metadata-only update has no product write
     // to be atomic with, so it keeps using the standalone (non-transactional) path — routing
     // it through updateProduct would incorrectly bump products.updatedAt for no field change.
-    if (Object.keys(productPatch).length) await updateProduct(db, productId, productPatch, erpMetadata);
+    // Sprint 88: the compatibility check above already validated p.expectedUpdatedAt against the
+    // pre-write read, but that comparison was non-atomic and its result was never forwarded to the
+    // write itself. Forwarding it here lets ERP's own already-intended token ride the atomic
+    // conditional update instead of a disconnected pre-check - never added to productPatch/
+    // updatedFields, since it is not a persisted Product field.
+    if (Object.keys(productPatch).length) await updateProduct(db, productId, { ...productPatch, ...(p.expectedUpdatedAt ? { expectedUpdatedAt: String(p.expectedUpdatedAt) } : {}) }, erpMetadata);
     else await upsertMeta(db, productId, erpMetadata);
     result = { productId, updatedFields:[...Object.keys(productPatch), ...Object.keys(erpMetadata)] };
   } catch (error) {

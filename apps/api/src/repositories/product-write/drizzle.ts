@@ -23,7 +23,17 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
       existsByErpReference: (erpReferenceId, excludeId) => exists(products, products.erpReferenceId, erpReferenceId, excludeId) as any,
       existsByNoctellaId(noctellaId, excludeProductId) { return exists(productErpMetadata, productErpMetadata.noctellaId, noctellaId, excludeProductId, productErpMetadata.productId) as any; },
       getVersionForUpdate(id) { return then(first(db.select({ updatedAt: products.updatedAt }).from(products).where(eq(products.id, id)), execution), row => row?.updatedAt ?? null); },
-      updateWithExpectedVersion({ id, values, expectedUpdatedAt }) { return then(this.getVersionForUpdate(id), current => { if (!current) return { id, updated: false, conflict: { field: "id", value: id, message: "Product not found" } }; if (expectedUpdatedAt && current !== expectedUpdatedAt) return { id, updated: false, conflict: { field: "updatedAt", value: expectedUpdatedAt, message: "Product has changed since expectedUpdatedAt" } }; return then(this.update({ id, values }), () => ({ id, updated: true })); }) as any; },
+      /**
+       * Sprint 88: one atomic conditional UPDATE ... WHERE id = :id AND
+       * updated_at = :expectedUpdatedAt, mirroring the proven cross-dialect
+       * pattern already used by repositories/inventory/drizzleCore.ts's
+       * products.updateWithVersion/inventory.updateWithVersion against this
+       * same table/column. Success is decided by the returned row count, not
+       * by a prior application-code read-then-compare - the diagnostic read
+       * below only runs after a failed update, to report which of the two
+       * failure reasons occurred and the actual current token.
+       */
+      updateWithExpectedVersion({ id, values, expectedUpdatedAt }) { return then(rows(db.update(products).set(normalize(values)).where(and(eq(products.id, id), eq(products.updatedAt, expectedUpdatedAt))).returning(), execution), (changed: any[]) => { if (changed.length) return { id, updated: true }; return then(this.getVersionForUpdate(id), (current: string | null) => { if (!current) return { id, updated: false, conflict: { field: "id", value: id, message: "Product not found" } }; return { id, updated: false, conflict: { field: "updatedAt", value: expectedUpdatedAt, currentValue: current, message: "Product has changed since expectedUpdatedAt" } }; }); }) as any; },
       createErpMetadata(record) { return then(run(db.insert(productErpMetadata).values(normalize(record)), execution), () => undefined); },
       updateErpMetadata(productId, values) { return then(run(db.update(productErpMetadata).set(normalize(values)).where(eq(productErpMetadata.productId, productId)), execution), () => undefined); },
       getErpMetadataForUpdate(productId) { return then(first(db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productId)), execution), row => row ?? null); },

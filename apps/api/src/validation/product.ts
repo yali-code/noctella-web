@@ -125,7 +125,12 @@ export const createProductSchema = baseProductSchema.superRefine((data, ctx) => 
   }
 });
 
-export const updateProductSchema = baseProductSchema.partial().superRefine((data, ctx) => {
+/**
+ * Sprint 88: shared so the HTTP request schema (which additionally requires
+ * expectedUpdatedAt) never re-implements these business rules - both schemas
+ * refine the same partial(baseProductSchema) shape through this one function.
+ */
+function refineUpdateProductFields(data: Partial<z.infer<typeof baseProductSchema>>, ctx: z.RefinementCtx) {
   const primaryCount = (data.images ?? []).filter((img) => img.isPrimary).length;
   if (primaryCount > 1) {
     ctx.addIssue({
@@ -141,7 +146,22 @@ export const updateProductSchema = baseProductSchema.partial().superRefine((data
       message: "Unique Item stock quantity cannot exceed 1",
     });
   }
-});
+}
+
+/** Internal/command shape: editable Product fields only, no version token. */
+export const updateProductSchema = baseProductSchema.partial().superRefine(refineUpdateProductFields);
+
+/**
+ * Sprint 88: HTTP request shape for PUT /api/products/:id - the same editable
+ * fields as updateProductSchema plus a required expectedUpdatedAt. Built by
+ * re-applying the shared refinement to base.partial().extend(...) rather than
+ * calling .extend() on the already-refined updateProductSchema, since a
+ * ZodEffects (the result of .superRefine()) does not safely expose .extend().
+ */
+export const updateProductRequestSchema = baseProductSchema
+  .partial()
+  .extend({ expectedUpdatedAt: z.string().min(1, "expectedUpdatedAt is required") })
+  .superRefine(refineUpdateProductFields);
 
 export const productListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -154,5 +174,16 @@ export const productListQuerySchema = z.object({
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
+/** Internal/command input: editable Product fields, no version token required. */
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+/**
+ * Sprint 88: Product update command input - the internal shape plus an
+ * optional caller-supplied expectedUpdatedAt. Trusted internal callers
+ * (marketplacePublishing, etc.) may omit it and fall back to command-time
+ * optimistic concurrency; the HTTP route always supplies one via
+ * UpdateProductRequestInput below.
+ */
+export type UpdateProductCommandInput = UpdateProductInput & { expectedUpdatedAt?: string };
+/** HTTP request input: editable Product fields with a required version token. */
+export type UpdateProductRequestInput = z.infer<typeof updateProductRequestSchema>;
 export type ProductListQuery = z.infer<typeof productListQuerySchema>;

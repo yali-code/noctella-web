@@ -42,6 +42,39 @@ describe("ERP inventory bridge", () => {
     const l:any = await labelData(db, created.productId); expect(l).toMatchObject({ sku:"ERP18-2", barcodeValue:"LBL", priceEur:50 });
     expect(JSON.stringify(await db.select().from(erpCommandExecutions))).not.toMatch(/opening stock.*quantityDelta/);
   });
+
+  describe("Sprint 88: ERP expectedUpdatedAt forwarding to the atomic Product write (ADR-017)", () => {
+    it("forwards expectedUpdatedAt into the atomic write, never reports it as an updated field, and the Product row actually changes", async () => {
+      const created: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "ERP88-1", title: "Before", categoryId, priceEur: 50 }, "create-88a"));
+      const row = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+      const upd: any = await executeUpdateProduct(db, "env", created.productId, env("UpdateProduct", { expectedUpdatedAt: row.updatedAt, title: "After Forward" }, "upd-88a"));
+      expect(upd.updatedFields).not.toContain("expectedUpdatedAt");
+      const after = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+      expect(after.title).toBe("After Forward");
+      expect(after.updatedAt).not.toBe(row.updatedAt);
+    });
+
+    it("a stale ERP expectedUpdatedAt rejects the Product-field update without mutating the Product", async () => {
+      const created: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "ERP88-2", title: "Before", categoryId, priceEur: 50 }, "create-88b"));
+      const row = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+      await expect(
+        executeUpdateProduct(db, "env", created.productId, env("UpdateProduct", { expectedUpdatedAt: "stale-erp-token", title: "Should Not Apply" }, "upd-88b")),
+      ).rejects.toBeInstanceOf(ConflictError);
+      const after = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+      expect(after.title).toBe("Before");
+      expect(after.updatedAt).toBe(row.updatedAt);
+    });
+
+    it("a metadata-only ERP command stays on the non-transactional path and does not bump Product.updatedAt", async () => {
+      const created: any = await executeCreateProduct(db, "env", env("CreateProduct", { sku: "ERP88-3", title: "Before", categoryId, priceEur: 50 }, "create-88c"));
+      const row = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+      const upd: any = await executeUpdateProduct(db, "env", created.productId, env("UpdateProduct", { expectedUpdatedAt: row.updatedAt, barcodeValue: "META-ONLY" }, "upd-88c"));
+      expect(upd.updatedFields).toContain("barcodeValue");
+      expect(upd.updatedFields).not.toContain("title");
+      const after = (await db.select().from(products).where(eq(products.id, created.productId)))[0];
+      expect(after.updatedAt).toBe(row.updatedAt);
+    });
+  });
 });
 
 describe("inventory command idempotency lifecycle (Sprint 49B)", () => {

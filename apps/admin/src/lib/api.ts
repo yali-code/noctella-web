@@ -26,11 +26,17 @@ export interface ApiErrorDetail {
 export class ApiError extends Error {
   details?: ApiErrorDetail[];
   status: number;
+  /** Sprint 88: stable machine-readable error code, e.g. "PRODUCT_VERSION_CONFLICT". */
+  code?: string;
+  /** Sprint 88: the parsed, bounded JSON error body - never raw response text. */
+  body?: Record<string, unknown>;
 
-  constructor(message: string, status: number, details?: ApiErrorDetail[]) {
+  constructor(message: string, status: number, details?: ApiErrorDetail[], code?: string, body?: Record<string, unknown>) {
     super(message);
     this.status = status;
     this.details = details;
+    this.code = code;
+    this.body = body;
   }
 }
 
@@ -84,7 +90,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     if (res.status === 401 && !isServer) redirectToLoginFromBrowser();
-    throw new ApiError(body?.error ?? res.statusText, res.status, body?.details);
+    throw new ApiError(body?.error ?? res.statusText, res.status, body?.details, typeof body?.code === "string" ? body.code : undefined, isJson ? body : undefined);
   }
 
   return body as T;

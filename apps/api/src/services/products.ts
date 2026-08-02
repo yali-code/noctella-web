@@ -16,7 +16,7 @@ import type { PhotoStorage, StoredProductPhoto } from "./photoStorage";
 import { photoStorage } from "./photoStorage";
 import { OutboxEventStatus, OutboxEventType } from "./outbox";
 import { slugify } from "../validation/common";
-import type { CreateProductInput, ProductListQuery, UpdateProductInput } from "../validation/product";
+import type { CreateProductInput, ProductListQuery, UpdateProductCommandInput } from "../validation/product";
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
@@ -348,14 +348,14 @@ export async function createProduct(
 export async function updateProduct(
   db: DbClient,
   id: string,
-  input: UpdateProductInput,
+  input: UpdateProductCommandInput,
   erpMetadata?: Record<string, unknown>,
 ): Promise<ProductWithImages> {
   const existing = await getProductById(db, id);
   if (input.categoryId !== undefined) await assertCategoryExists(db, input.categoryId);
   if (input.collectionId !== undefined) await assertCollectionExists(db, input.collectionId);
   const effectiveType = input.type ?? existing.type;
-  const patch: UpdateProductInput & { expectedUpdatedAt?: string } = { ...input };
+  const patch: UpdateProductCommandInput = { ...input };
   if (input.stockQuantity !== undefined || input.type !== undefined) {
     patch.stockQuantity = resolveStockQuantity(effectiveType, input.stockQuantity !== undefined ? input.stockQuantity : existing.stockQuantity);
   }

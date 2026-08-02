@@ -272,14 +272,22 @@ interface ProductFormProps {
   initialValues: ProductFormValues;
   submitLabel: string;
   onSubmit: (payload: ReturnType<typeof toApiPayload>) => Promise<void>;
+  /**
+   * Sprint 88: invoked only when the user explicitly clicks the version-conflict
+   * reload action - never called automatically. EditProductPage owns what
+   * "reload" means (a full page reload is acceptable if that is the smallest
+   * reliable behavior for the current Client Component structure).
+   */
+  onVersionConflictReload?: () => void;
 }
 
-export function ProductForm({ initialValues, submitLabel, onSubmit }: ProductFormProps) {
+export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionConflictReload }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues);
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [versionConflict, setVersionConflict] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -302,15 +310,22 @@ export function ProductForm({ initialValues, submitLabel, onSubmit }: ProductFor
     setSubmitting(true);
     setFormError(null);
     setFieldErrors({});
+    setVersionConflict(false);
     try {
       await onSubmit(toApiPayload(values));
     } catch (err) {
       if (err instanceof ApiError) {
-        setFormError(err.message);
-        if (err.details) {
-          const mapped: Record<string, string> = {};
-          for (const d of err.details) mapped[d.path] = d.message;
-          setFieldErrors(mapped);
+        // Sprint 88: a version conflict is shown separately and never clears `values` or
+        // resubmits/reloads on its own - the user must explicitly choose the reload action.
+        if (err.code === "PRODUCT_VERSION_CONFLICT") {
+          setVersionConflict(true);
+        } else {
+          setFormError(err.message);
+          if (err.details) {
+            const mapped: Record<string, string> = {};
+            for (const d of err.details) mapped[d.path] = d.message;
+            setFieldErrors(mapped);
+          }
         }
       } else {
         setFormError("Something went wrong. Please try again.");
@@ -322,6 +337,18 @@ export function ProductForm({ initialValues, submitLabel, onSubmit }: ProductFor
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 28, maxWidth: 780 }}>
+      {versionConflict && (
+        <div role="alert" style={{ border: "1px solid #c86a6a", padding: 12, borderRadius: 4 }}>
+          <p style={{ color: "#c86a6a", margin: 0 }}>
+            This product changed after you opened it. No local changes were written.
+          </p>
+          {onVersionConflictReload && (
+            <button type="button" onClick={onVersionConflictReload} style={{ marginTop: 8 }}>
+              Reload Latest Product
+            </button>
+          )}
+        </div>
+      )}
       {formError && <p style={{ color: "#c86a6a" }}>{formError}</p>}
 
       <Section title="Core">
