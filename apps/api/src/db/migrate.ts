@@ -28,6 +28,24 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureCompanyProfileTable(sqlite);
   ensureInvoiceAccountingColumns(sqlite);
   ensureOrderStatusCasingNormalized(sqlite);
+  ensureAiListingDraftColumns(sqlite);
+}
+
+/**
+ * Sprint 89: additive migration for the AI Draft generation-baseline column.
+ * `CREATE TABLE IF NOT EXISTS` in schema.sql is a no-op for the already-existing
+ * ai_listing_drafts table, matching the same established pattern as
+ * ensureMarketplaceColumns/ensurePaymentColumns - new nullable columns are added
+ * here, never by editing the original CREATE TABLE block. No backfill: existing
+ * rows keep base_product_updated_at = NULL and must be regenerated before approval.
+ */
+function ensureAiListingDraftColumns(sqlite: Database.Database): void {
+  const existing = new Set(
+    (sqlite.prepare("PRAGMA table_info(ai_listing_drafts)").all() as Array<{ name: string }>).map((row) => row.name),
+  );
+  if (!existing.has("base_product_updated_at")) {
+    sqlite.exec("ALTER TABLE ai_listing_drafts ADD COLUMN base_product_updated_at TEXT");
+  }
 }
 
 /**

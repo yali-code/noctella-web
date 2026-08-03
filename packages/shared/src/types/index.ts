@@ -289,6 +289,15 @@ export interface AiListingDraft extends Timestamps {
   aiModel?: string;
   generationPromptVersion?: string;
 
+  /**
+   * Sprint 89: the Product.updatedAt observed at generation time - the
+   * durable baseline used as expectedUpdatedAt at approval, so approval can
+   * detect a Product change that happened after this draft was generated.
+   * Null only for legacy rows generated before this field existed; those
+   * cannot be approved and must be regenerated.
+   */
+  baseProductUpdatedAt?: string;
+
   rejectionReason?: string;
   reviewedByAdminUserId?: ID;
   reviewedAt?: string;
