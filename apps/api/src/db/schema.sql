@@ -669,3 +669,18 @@ CREATE TABLE IF NOT EXISTS ai_product_intakes (
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE INDEX IF NOT EXISTS idx_ai_product_intakes_status ON ai_product_intakes(status);
+
+-- Sprint 91: AI Intake Photo foundation. A separate, minimal, private staged-photo
+-- concept for AiProductIntake - fully independent of ProductPhoto (no shared table,
+-- no shared storage lifecycle, no promotion logic). No foreign key, per this
+-- repository's established no-FK convention for optional cross-table pointers.
+CREATE TABLE IF NOT EXISTS ai_intake_photos (
+  id TEXT PRIMARY KEY,
+  intake_id TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  original_filename TEXT NOT NULL,
+  created_by_admin_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_intake_photos_intake ON ai_intake_photos(intake_id);
