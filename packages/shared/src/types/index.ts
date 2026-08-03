@@ -7,6 +7,7 @@ import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
 import { PublishChannel } from "../enums/publishChannel";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
+import { AiProductIntakeStatus } from "../enums/aiProductIntakeStatus";
 import { OfferStatus } from "../enums/offerStatus";
 import { PaymentProvider } from "../enums/paymentProvider";
 import { PaymentStatus } from "../enums/paymentStatus";
@@ -301,6 +302,24 @@ export interface AiListingDraft extends Timestamps {
   rejectionReason?: string;
   reviewedByAdminUserId?: ID;
   reviewedAt?: string;
+}
+
+/**
+ * Sprint 90: intake foundation only. No staged photos, provider payloads, or
+ * generated field proposals belong on this aggregate - those are owned by
+ * later sprints (91-95) and layered on top of this record via its id.
+ */
+export interface AiProductIntake extends Timestamps {
+  id: ID;
+  status: AiProductIntakeStatus;
+  createdByAdminUserId: ID;
+
+  /** Null until a future Sprint 94 apply transaction sets it; immutable once set. */
+  resultProductId?: ID;
+
+  cancelledAt?: string;
+  cancelledByAdminUserId?: ID;
+  cancellationReason?: string;
 }
 
 export interface Currency extends Timestamps {

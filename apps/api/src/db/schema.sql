@@ -651,3 +651,21 @@ CREATE INDEX IF NOT EXISTS idx_outbox_attempts_event ON outbox_attempts(outbox_e
 CREATE UNIQUE INDEX IF NOT EXISTS idx_return_requests_idempotency ON return_requests(idempotency_key);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_return_events_idempotency ON return_events(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_return_items_product ON return_items(product_id);
+
+-- Sprint 90: AI Product Intake foundation. A separate aggregate from
+-- ai_listing_drafts - no dependency on or reuse of that table. result_product_id
+-- is always NULL in Sprint 90 (reserved for a future Sprint 94 apply
+-- transaction) and deliberately has no foreign-key constraint per approved
+-- architecture.
+CREATE TABLE IF NOT EXISTS ai_product_intakes (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_by_admin_user_id TEXT NOT NULL,
+  result_product_id TEXT UNIQUE,
+  cancelled_at TEXT,
+  cancelled_by_admin_user_id TEXT,
+  cancellation_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_product_intakes_status ON ai_product_intakes(status);

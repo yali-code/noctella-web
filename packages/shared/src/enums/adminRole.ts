@@ -23,6 +23,8 @@ export type Permission =
   | "customers.manage"
   | "ai_drafts.view"
   | "ai_drafts.review"
+  | "ai_product_intakes.view"
+  | "ai_product_intakes.manage"
   | "settings.manage"
   | "users.manage"
   | "marketplace.view"
@@ -41,6 +43,8 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "customers.manage",
     "ai_drafts.view",
     "ai_drafts.review",
+    "ai_product_intakes.view",
+    "ai_product_intakes.manage",
     "settings.manage",
     "users.manage",
     "marketplace.view",
@@ -58,12 +62,14 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Permission[]> = {
     "customers.manage",
     "ai_drafts.view",
     "ai_drafts.review",
+    "ai_product_intakes.view",
+    "ai_product_intakes.manage",
     "settings.manage",
     "marketplace.view",
     "marketplace.manage",
     "analytics.view",
   ],
-  [AdminRole.ProductEditor]: ["products.view", "products.edit"],
+  [AdminRole.ProductEditor]: ["products.view", "products.edit", "ai_product_intakes.view", "ai_product_intakes.manage"],
   [AdminRole.OrderManager]: ["orders.view", "orders.manage", "customers.view"],
   [AdminRole.SupportAgent]: ["customers.view", "orders.view"],
   [AdminRole.AiReviewer]: ["ai_drafts.view", "ai_drafts.review", "products.view"],
