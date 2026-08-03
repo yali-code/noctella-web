@@ -73,3 +73,67 @@ export class UnauthorizedError extends Error {
     this.name = "UnauthorizedError";
   }
 }
+
+/**
+ * Sprint 93: thrown when an AI Intake proposal write's baseline (either "no
+ * proposal exists yet" for first generation, or "proposal id + updatedAt"
+ * for regeneration/field-review) no longer matches the current row at write
+ * time - a lost race, never resolved via last-write-wins.
+ */
+export class AiIntakeProposalVersionConflictError extends ConflictError {
+  constructor(message = "This proposal changed before the operation completed. Reload it and try again.") {
+    super(message);
+    this.name = "AiIntakeProposalVersionConflictError";
+  }
+}
+
+/**
+ * Sprint 93: thrown when POST /generate is called while any field decision
+ * is not Pending - regeneration is only allowed once every field has been
+ * explicitly reset to Pending, so a single generation's suggestions and
+ * metadata are never mixed with a prior generation's reviewed values.
+ */
+export class AiIntakeProposalReviewResetRequiredError extends ConflictError {
+  constructor() {
+    super("Reset all reviewed fields to pending before regenerating the proposal.");
+    this.name = "AiIntakeProposalReviewResetRequiredError";
+  }
+}
+
+/**
+ * Sprint 93: thrown when a field-review write is attempted against a
+ * proposal whose stored photo_set_fingerprint no longer matches the
+ * intake's current staged photos.
+ */
+export class AiIntakeProposalStaleError extends ConflictError {
+  constructor(message = "The staged photos changed after this proposal was generated. Regenerate the proposal before reviewing fields.") {
+    super(message);
+    this.name = "AiIntakeProposalStaleError";
+  }
+}
+
+/**
+ * Sprint 93: thrown when an atomic proposal write's intake-status EXISTS
+ * guard fails - the intake was cancelled after the service-layer pre-check
+ * passed but before the write completed (a race, not a simple bad-request).
+ */
+export class AiIntakeProposalIntakeNotOpenError extends ConflictError {
+  constructor() {
+    super("This intake is no longer Open. Generation and review are not available for a cancelled intake.");
+    this.name = "AiIntakeProposalIntakeNotOpenError";
+  }
+}
+
+/**
+ * Sprint 93 correction pass: thrown when a field-review request submits
+ * decision=Accepted for a field whose current AI suggestion is absent,
+ * empty, or (for keywords) reduces to zero entries after normalization -
+ * Accepted must always have an explicit, non-null stored value, never a
+ * silently-substituted Rejected/Pending decision.
+ */
+export class AiIntakeProposalSuggestionUnavailableError extends BadRequestError {
+  constructor() {
+    super("The selected field has no valid AI suggestion to accept.");
+    this.name = "AiIntakeProposalSuggestionUnavailableError";
+  }
+}

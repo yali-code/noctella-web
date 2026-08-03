@@ -684,3 +684,34 @@ CREATE TABLE IF NOT EXISTS ai_intake_photos (
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE INDEX IF NOT EXISTS idx_ai_intake_photos_intake ON ai_intake_photos(intake_id);
+
+-- Sprint 93: AI Intake Field Review foundation. One durable current proposal per
+-- AiProductIntake (enforced by the unique intake_id constraint below) - not a
+-- history table, not a generic AI job/execution record. No foreign key, per this
+-- repository's established no-FK convention.
+CREATE TABLE IF NOT EXISTS ai_intake_proposals (
+  id TEXT PRIMARY KEY,
+  intake_id TEXT NOT NULL UNIQUE,
+  suggested_title TEXT,
+  suggested_description TEXT,
+  suggested_keywords TEXT,
+  confidence_score REAL,
+  title_decision TEXT NOT NULL DEFAULT 'pending',
+  title_value TEXT,
+  title_reviewed_by_admin_user_id TEXT,
+  title_reviewed_at TEXT,
+  description_decision TEXT NOT NULL DEFAULT 'pending',
+  description_value TEXT,
+  description_reviewed_by_admin_user_id TEXT,
+  description_reviewed_at TEXT,
+  keywords_decision TEXT NOT NULL DEFAULT 'pending',
+  keywords_value TEXT,
+  keywords_reviewed_by_admin_user_id TEXT,
+  keywords_reviewed_at TEXT,
+  photo_set_fingerprint TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  provider_name TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);

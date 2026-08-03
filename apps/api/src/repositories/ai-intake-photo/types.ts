@@ -1,4 +1,4 @@
-export type AiIntakePhotoRecord = Record<string, string | number | null>;
+export type AiIntakePhotoRecord = Record<string, string | number | Date | null>;
 
 export interface AiIntakePhotoCreateInput {
   id: string;
@@ -10,11 +10,30 @@ export interface AiIntakePhotoCreateInput {
   updatedAt: string;
 }
 
+export interface AiIntakePhotoConflict {
+  reason: "intake_not_found" | "intake_not_open";
+  message: string;
+}
+
+export interface AiIntakePhotoWriteResult {
+  updated: boolean;
+  row?: AiIntakePhotoRecord;
+  conflict?: AiIntakePhotoConflict;
+}
+
 /**
  * Sprint 91: repository for the ai_intake_photos foundation table only.
- * Every operation here is single-statement, so no transaction capability is
- * needed - each method runs directly against the passed-in db handle,
- * matching repositories/ai-product-intake/types.ts's precedent.
+ * `create`/`listByIntake`/`findByIdAndIntake`/`deleteById` remain plain
+ * single-statement operations (used directly in tests and by the locked
+ * methods' own diagnostics).
+ *
+ * Sprint 93 correction pass: `createLockedIfIntakeOpen` and
+ * `deleteByIdLockedToIntake` additionally lock the related ai_product_intakes
+ * row (see services/aiIntakeLockTransactionCapabilityForDb.ts) before
+ * mutating - the same intake-row lock used by
+ * repositories/ai-intake-proposal/drizzle.ts's writes, so a proposal
+ * generation/regeneration/review transaction and a staged-photo insert or
+ * delete can never interleave for the same intake.
  */
 export interface AiIntakePhotoRepository {
   create(input: AiIntakePhotoCreateInput): Promise<AiIntakePhotoRecord>;
@@ -27,4 +46,8 @@ export interface AiIntakePhotoRepository {
    */
   findByIdAndIntake(intakeId: string, id: string): Promise<AiIntakePhotoRecord | null>;
   deleteById(id: string): Promise<void>;
+  /** Locks the intake row, re-verifies it exists and is Open, then inserts. */
+  createLockedIfIntakeOpen(input: AiIntakePhotoCreateInput): Promise<AiIntakePhotoWriteResult>;
+  /** Locks the intake row (regardless of its status - deletion is allowed for a cancelled intake), then deletes. */
+  deleteByIdLockedToIntake(intakeId: string, id: string): Promise<void>;
 }

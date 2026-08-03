@@ -245,6 +245,38 @@ export const aiIntakePhotos = pgTable("ai_intake_photos", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [index("idx_ai_intake_photos_intake").on(table.intakeId)]);
 
+/**
+ * Sprint 93: AI Intake Field Review foundation - one durable current
+ * proposal per intake (unique intakeId). No foreign key, matching the
+ * no-FK convention above.
+ */
+export const aiIntakeProposals = pgTable("ai_intake_proposals", {
+  id: text("id").primaryKey().notNull(),
+  intakeId: text("intake_id").notNull().unique(),
+  suggestedTitle: text("suggested_title"),
+  suggestedDescription: text("suggested_description"),
+  suggestedKeywords: text("suggested_keywords"),
+  confidenceScore: numeric("confidence_score", { precision: 18, scale: 6 }),
+  titleDecision: text("title_decision").notNull().default("pending"),
+  titleValue: text("title_value"),
+  titleReviewedByAdminUserId: text("title_reviewed_by_admin_user_id"),
+  titleReviewedAt: timestamp("title_reviewed_at", { withTimezone: true }),
+  descriptionDecision: text("description_decision").notNull().default("pending"),
+  descriptionValue: text("description_value"),
+  descriptionReviewedByAdminUserId: text("description_reviewed_by_admin_user_id"),
+  descriptionReviewedAt: timestamp("description_reviewed_at", { withTimezone: true }),
+  keywordsDecision: text("keywords_decision").notNull().default("pending"),
+  keywordsValue: text("keywords_value"),
+  keywordsReviewedByAdminUserId: text("keywords_reviewed_by_admin_user_id"),
+  keywordsReviewedAt: timestamp("keywords_reviewed_at", { withTimezone: true }),
+  photoSetFingerprint: text("photo_set_fingerprint").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull(),
+  providerName: text("provider_name").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
 export const offers = pgTable("offers", {
   id: text("id").primaryKey().notNull(),
   productId: text("product_id").notNull(),

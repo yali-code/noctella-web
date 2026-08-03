@@ -8,6 +8,7 @@ export * from "./enums/listingStatus";
 export * from "./enums/publishChannel";
 export * from "./enums/aiDraftStatus";
 export * from "./enums/aiProductIntakeStatus";
+export * from "./enums/aiIntakeFieldDecision";
 export * from "./enums/offerStatus";
 export * from "./enums/paymentProvider";
 export * from "./enums/paymentStatus";

@@ -393,6 +393,42 @@ export const aiIntakePhotos = sqliteTable(
   (table) => [index("idx_ai_intake_photos_intake").on(table.intakeId)],
 );
 
+/**
+ * Sprint 93: AI Intake Field Review foundation - one durable current
+ * proposal per intake (unique intakeId). No foreign key, matching the
+ * no-FK convention above.
+ */
+export const aiIntakeProposals = sqliteTable("ai_intake_proposals", {
+  id: text("id").primaryKey(),
+  intakeId: text("intake_id").notNull().unique(),
+  suggestedTitle: text("suggested_title"),
+  suggestedDescription: text("suggested_description"),
+  suggestedKeywords: text("suggested_keywords"),
+  confidenceScore: real("confidence_score"),
+  titleDecision: text("title_decision").notNull().default("pending"),
+  titleValue: text("title_value"),
+  titleReviewedByAdminUserId: text("title_reviewed_by_admin_user_id"),
+  titleReviewedAt: text("title_reviewed_at"),
+  descriptionDecision: text("description_decision").notNull().default("pending"),
+  descriptionValue: text("description_value"),
+  descriptionReviewedByAdminUserId: text("description_reviewed_by_admin_user_id"),
+  descriptionReviewedAt: text("description_reviewed_at"),
+  keywordsDecision: text("keywords_decision").notNull().default("pending"),
+  keywordsValue: text("keywords_value"),
+  keywordsReviewedByAdminUserId: text("keywords_reviewed_by_admin_user_id"),
+  keywordsReviewedAt: text("keywords_reviewed_at"),
+  photoSetFingerprint: text("photo_set_fingerprint").notNull(),
+  generatedAt: text("generated_at").notNull(),
+  providerName: text("provider_name").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 /** Sprint 4: minimal "Make an Offer" persistence. Never auto-accepted. */
 export const offers = sqliteTable("offers", {
   id: text("id").primaryKey(),

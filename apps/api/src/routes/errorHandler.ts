@@ -1,7 +1,20 @@
 import type { Response } from "express";
 import { ZodError } from "zod";
 import { formatZodError } from "../validation/common";
-import { AiDraftRegenerationRequiredError, AiDraftReviewConflictError, BadRequestError, ConflictError, NotFoundError, ProductVersionConflictError, UnauthorizedError } from "../services/errors";
+import {
+  AiDraftRegenerationRequiredError,
+  AiDraftReviewConflictError,
+  AiIntakeProposalIntakeNotOpenError,
+  AiIntakeProposalReviewResetRequiredError,
+  AiIntakeProposalStaleError,
+  AiIntakeProposalSuggestionUnavailableError,
+  AiIntakeProposalVersionConflictError,
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  ProductVersionConflictError,
+  UnauthorizedError,
+} from "../services/errors";
 import { InventoryUseCaseError, type InventoryErrorCategory } from "../application/inventory/errors";
 
 // Sprint 64D: InventoryUseCaseError previously fell through to the generic 500 branch below -
@@ -50,8 +63,32 @@ export function handleRouteError(err: unknown, res: Response): void {
     res.status(409).json({ error: err.message, code: "AI_DRAFT_REVIEW_CONFLICT" });
     return;
   }
+  // Sprint 93: checked before the generic ConflictError branch below, for the same
+  // subclass-ordering reason as the Sprint 88/89 conflict subclasses above.
+  if (err instanceof AiIntakeProposalReviewResetRequiredError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_REVIEW_RESET_REQUIRED" });
+    return;
+  }
+  if (err instanceof AiIntakeProposalStaleError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_STALE" });
+    return;
+  }
+  if (err instanceof AiIntakeProposalIntakeNotOpenError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_INTAKE_NOT_OPEN" });
+    return;
+  }
+  if (err instanceof AiIntakeProposalVersionConflictError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_VERSION_CONFLICT" });
+    return;
+  }
   if (err instanceof ConflictError) {
     res.status(409).json({ error: err.message });
+    return;
+  }
+  // Sprint 93 correction pass: checked before the generic BadRequestError branch below, for the
+  // same subclass-ordering reason as the ConflictError subclasses above.
+  if (err instanceof AiIntakeProposalSuggestionUnavailableError) {
+    res.status(400).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_SUGGESTION_UNAVAILABLE" });
     return;
   }
   if (err instanceof BadRequestError) {

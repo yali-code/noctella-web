@@ -8,6 +8,7 @@ import { ListingStatus } from "../enums/listingStatus";
 import { PublishChannel } from "../enums/publishChannel";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { AiProductIntakeStatus } from "../enums/aiProductIntakeStatus";
+import { AiIntakeFieldDecision } from "../enums/aiIntakeFieldDecision";
 import { OfferStatus } from "../enums/offerStatus";
 import { PaymentProvider } from "../enums/paymentProvider";
 import { PaymentStatus } from "../enums/paymentStatus";
@@ -333,6 +334,42 @@ export interface AiIntakePhoto extends Timestamps {
   storageKey: string;
   originalFilename: string;
   createdByAdminUserId: ID;
+}
+
+/**
+ * Sprint 93: one independently-reviewed field on an AiProductIntake's
+ * current proposal. `suggestion` is the AI's output for this field and is
+ * never mutated by a review decision (even Rejected retains it). `value` is
+ * the durable, explicitly-stored final value - populated only when
+ * `decision` is Accepted (a snapshot copy of `suggestion` taken at accept
+ * time, not derived dynamically) or Edited (the human-provided value);
+ * always null for Pending and Rejected.
+ */
+export interface AiIntakeReviewedField<T> {
+  suggestion: T | null;
+  decision: AiIntakeFieldDecision;
+  value: T | null;
+  reviewedByAdminUserId: ID | null;
+  reviewedAt: string | null;
+}
+
+/**
+ * Sprint 93: the durable, current (one-per-intake) generated proposal and
+ * its field-by-field review state. `stale` is computed at read time by
+ * comparing the stored photo_set_fingerprint against the intake's current
+ * staged photos - never persisted as a mutable boolean.
+ */
+export interface AiIntakeProposalReview extends Timestamps {
+  id: ID;
+  intakeId: ID;
+  title: AiIntakeReviewedField<string>;
+  description: AiIntakeReviewedField<string>;
+  keywords: AiIntakeReviewedField<string[]>;
+  confidenceScore?: number;
+  providerName: string;
+  promptVersion: string;
+  generatedAt: string;
+  stale: boolean;
 }
 
 export interface Currency extends Timestamps {
