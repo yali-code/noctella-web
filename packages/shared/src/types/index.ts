@@ -322,6 +322,19 @@ export interface AiProductIntake extends Timestamps {
   cancellationReason?: string;
 }
 
+/**
+ * Sprint 91: a private staged photo attached to an AiProductIntake, before any
+ * Product exists. Fully independent of ProductPhoto - promotion into a
+ * canonical ProductPhoto is a later sprint's concern, not modeled here.
+ */
+export interface AiIntakePhoto extends Timestamps {
+  id: ID;
+  intakeId: ID;
+  storageKey: string;
+  originalFilename: string;
+  createdByAdminUserId: ID;
+}
+
 export interface Currency extends Timestamps {
   id: ID;
   code: string;

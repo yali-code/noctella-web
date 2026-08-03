@@ -369,6 +369,30 @@ export const aiProductIntakes = sqliteTable(
   (table) => [index("idx_ai_product_intakes_status").on(table.status)],
 );
 
+/**
+ * Sprint 91: AI Intake Photo foundation - a separate, minimal, private
+ * staged-photo concept for AiProductIntake. Fully independent of
+ * productPhotos (no shared table, storage lifecycle, or promotion logic).
+ * No foreign-key constraint, matching the no-FK convention above.
+ */
+export const aiIntakePhotos = sqliteTable(
+  "ai_intake_photos",
+  {
+    id: text("id").primaryKey(),
+    intakeId: text("intake_id").notNull(),
+    storageKey: text("storage_key").notNull(),
+    originalFilename: text("original_filename").notNull(),
+    createdByAdminUserId: text("created_by_admin_user_id").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [index("idx_ai_intake_photos_intake").on(table.intakeId)],
+);
+
 /** Sprint 4: minimal "Make an Offer" persistence. Never auto-accepted. */
 export const offers = sqliteTable("offers", {
   id: text("id").primaryKey(),

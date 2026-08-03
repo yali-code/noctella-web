@@ -11,6 +11,8 @@ requiredSprint24Tables.splice(requiredSprint24Tables.indexOf("sale_financials") 
 // Sprint 90: AI Product Intake foundation - genuinely new table (not just new columns), so it
 // must be registered here for db:parity / db:migration-preview to track it.
 requiredSprint24Tables.push("ai_product_intakes");
+// Sprint 91: AI Intake Photo foundation - genuinely new table, registered for the same reason.
+requiredSprint24Tables.push("ai_intake_photos");
 export type Difference = { table?: string; column?: string; kind: string; message: string };
 export type ParityResult = { status: "PASS"|"FAIL"; blocking: Difference[]; warnings: Difference[]; tables: { name: string; sqlite: boolean; postgres: boolean; columns: number }[]; checksum: string };
 function schemaSql(){ return fs.readFileSync(path.join(__dirname,"../db/schema.sql"),"utf8") + "\n" + fs.readFileSync(path.join(__dirname,"../db/schema.sqlite.ts"),"utf8"); }
