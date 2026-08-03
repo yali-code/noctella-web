@@ -62,31 +62,33 @@ afterAll(() => {
 });
 
 describe("POST /api/ai-product-intakes/:id/generate", () => {
-  it("returns exactly the required 200 response shape for a permitted admin", async () => {
+  it("returns exactly the required 200 AiIntakeProposalReview response shape for a permitted admin", async () => {
     const intakeId = await createIntakeViaRoute();
-    // Upload a photo first so suggestedKeywords is populated (an empty-photos intake
-    // legitimately omits it, rather than sending an empty array - see the zero-photos test below).
     await request(app).post(`/api/ai-product-intakes/${intakeId}/photos`).set("Cookie", managerCookie).attach("photo", testImage, "front.png");
     const res = await request(app).post(`/api/ai-product-intakes/${intakeId}/generate`).set("Cookie", managerCookie).send({});
 
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body).sort()).toEqual(["metadata", "proposal"]);
-    expect(Object.keys(res.body.proposal).sort()).toEqual(
-      ["confidenceScore", "suggestedDescription", "suggestedKeywords", "suggestedTitle"].sort(),
+    expect(Object.keys(res.body).sort()).toEqual(
+      ["id", "intakeId", "title", "description", "keywords", "confidenceScore", "providerName", "promptVersion", "generatedAt", "createdAt", "updatedAt", "stale"].sort(),
     );
-    expect(Object.keys(res.body.metadata).sort()).toEqual(["promptVersion", "providerName"]);
-    expect(res.body.metadata.providerName).toBe("mock-intake-v1");
-    expect(res.body.metadata.promptVersion).toBe("sprint92-v1");
+    for (const field of ["title", "description", "keywords"]) {
+      expect(Object.keys(res.body[field]).sort()).toEqual(["suggestion", "decision", "value", "reviewedByAdminUserId", "reviewedAt"].sort());
+      expect(res.body[field].decision).toBe("pending");
+      expect(res.body[field].value).toBeNull();
+    }
+    expect(res.body.providerName).toBe("mock-intake-v1");
+    expect(res.body.promptVersion).toBe("sprint92-v1");
+    expect(res.body.stale).toBe(false);
   });
 
-  it("omits suggestedKeywords (rather than an empty array) for a zero-photo intake", async () => {
+  it("suggests null keywords for a zero-photo intake (not an empty array)", async () => {
     const intakeId = await createIntakeViaRoute();
     const res = await request(app).post(`/api/ai-product-intakes/${intakeId}/generate`).set("Cookie", managerCookie).send({});
     expect(res.status).toBe(200);
-    expect(res.body.proposal).not.toHaveProperty("suggestedKeywords");
+    expect(res.body.keywords.suggestion).toBeNull();
   });
 
-  it("is not a 201 (nothing is created)", async () => {
+  it("is not a 201 (per the approved contract, still 200 even though it persists)", async () => {
     const intakeId = await createIntakeViaRoute();
     const res = await request(app).post(`/api/ai-product-intakes/${intakeId}/generate`).set("Cookie", managerCookie).send({});
     expect(res.status).not.toBe(201);
@@ -97,7 +99,7 @@ describe("POST /api/ai-product-intakes/:id/generate", () => {
     await request(app).post(`/api/ai-product-intakes/${intakeId}/photos`).set("Cookie", managerCookie).attach("photo", testImage, "front.png");
     const res = await request(app).post(`/api/ai-product-intakes/${intakeId}/generate`).set("Cookie", managerCookie).send({});
     expect(res.status).toBe(200);
-    expect(res.body.proposal.suggestedTitle).toContain("1 photo");
+    expect(res.body.title.suggestion).toContain("1 photo");
   });
 
   it("rejects an unknown request body field", async () => {

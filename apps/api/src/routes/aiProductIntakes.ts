@@ -5,13 +5,17 @@ import { db } from "../db/client";
 import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../services/aiProductIntakes";
 import { deleteIntakePhoto, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
+import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import {
   aiProductIntakeListQuerySchema,
   cancelAiProductIntakeSchema,
   createAiProductIntakeSchema,
   generateAiIntakeProposalSchema,
 } from "../validation/aiProductIntake";
+import { descriptionFieldReviewSchema, keywordsFieldReviewSchema, titleFieldReviewSchema } from "../validation/aiIntakeProposal";
+import { BadRequestError } from "../services/errors";
 import { handleRouteError } from "./errorHandler";
+import type { AiIntakeProposalField } from "../repositories/ai-intake-proposal/types";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -93,14 +97,45 @@ router.delete("/:id/photos/:photoId", requirePermission("ai_product_intakes.mana
   }
 });
 
-// Sprint 92: AI Intake generation provider seam - synchronous, no DB write, no
-// persistence. Actor identity is not part of the response (nothing to
-// attribute it to); the strict empty body still rejects any client-supplied
-// field for consistency with every other endpoint on this router.
+// Sprint 92/93: AI Intake generation provider seam - Sprint 93 made this
+// server-authoritative and durable (persists exactly one current proposal
+// per intake). The strict empty body rejects any client-supplied field,
+// consistent with every other endpoint on this router.
 router.post("/:id/generate", requirePermission("ai_product_intakes.manage"), async (req, res) => {
   try {
     generateAiIntakeProposalSchema.parse(req.body ?? {});
     const result = await generateIntakeProposal(db, req.params.id);
+    res.json(result);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.get("/:id/proposal", requirePermission("ai_product_intakes.view"), async (req, res) => {
+  try {
+    const result = await getCurrentProposal(db, req.params.id);
+    res.json(result);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+const FIELD_SCHEMAS = {
+  title: titleFieldReviewSchema,
+  description: descriptionFieldReviewSchema,
+  keywords: keywordsFieldReviewSchema,
+} as const;
+
+// Sprint 93: actor (reviewer) identity always comes from req.adminUser.id,
+// never the request body.
+router.patch("/:id/proposal/fields/:field", requirePermission("ai_product_intakes.manage"), async (req: AuthedRequest, res) => {
+  try {
+    const field = req.params.field as AiIntakeProposalField;
+    const schema = FIELD_SCHEMAS[field];
+    if (!schema) throw new BadRequestError(`Unknown proposal field: "${req.params.field}"`);
+
+    const input = schema.parse(req.body ?? {});
+    const result = await updateProposalFieldReview(db, req.params.id, field, input.decision, input.value, req.adminUser!.id, input.expectedUpdatedAt);
     res.json(result);
   } catch (err) {
     handleRouteError(err, res);

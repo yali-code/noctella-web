@@ -7,8 +7,8 @@ import { aiIntakePhotoStorage as defaultStorage, type AiIntakePhotoStorage } fro
 import { createAiIntakePhotoRepository } from "../repositories/ai-intake-photo/factory";
 import type { AiIntakePhotoRecord, AiIntakePhotoRepository } from "../repositories/ai-intake-photo/types";
 import {
-  createAiIntakePhotoUseCase,
-  deleteAiIntakePhotoUseCase,
+  createAiIntakePhotoLockedUseCase,
+  deleteAiIntakePhotoLockedUseCase,
   findAiIntakePhotoUseCase,
   listAiIntakePhotosUseCase,
 } from "../use-cases/ai-intake-photo/useCases";
@@ -32,12 +32,17 @@ function repositoryFor(db: DbClient): AiIntakePhotoRepository {
 }
 
 /**
- * Sprint 91 upload sequence (approved): verify intake exists, verify it is
- * Open, validate MIME/size and write the file synchronously (both inside
- * storage.saveIntakePhoto), insert the DB row, and - only if that insert
- * fails - delete the newly-written file before propagating the error. No
- * queue, no outbox, mirroring the try/catch shape already established by
- * services/products.ts's uploadProductPhoto, but fully independent of it.
+ * Sprint 91 upload sequence (approved), Sprint 93-corrected: verify intake
+ * exists and is Open (fast pre-check), validate MIME/size and write the file
+ * synchronously (both inside storage.saveIntakePhoto - deliberately outside
+ * any database transaction, per the approved lock protocol), then insert the
+ * DB row under the same intake-row lock proposal writes use, re-verifying
+ * existence/Open status from a fresh read taken inside that lock - not just
+ * the earlier pre-check. If that insert fails for any reason (including the
+ * atomic guard rejecting a no-longer-Open intake), the newly-written file is
+ * deleted before the error propagates. No queue, no outbox, mirroring the
+ * try/catch shape already established by services/products.ts's
+ * uploadProductPhoto, but fully independent of it.
  */
 export async function uploadIntakePhoto(
   db: DbClient,
@@ -54,7 +59,7 @@ export async function uploadIntakePhoto(
 
   const stored = await storage.saveIntakePhoto(file);
   try {
-    const row = await createAiIntakePhotoUseCase(repositoryFor(db), {
+    const row = await createAiIntakePhotoLockedUseCase(repositoryFor(db), {
       id: randomUUID(),
       intakeId,
       storageKey: stored.storageKey,
@@ -95,5 +100,5 @@ export async function deleteIntakePhoto(
   const repository = repositoryFor(db);
   const existing = await findAiIntakePhotoUseCase(repository, intakeId, photoId);
   await storage.deleteIntakePhoto(existing.storageKey as string);
-  await deleteAiIntakePhotoUseCase(repository, photoId);
+  await deleteAiIntakePhotoLockedUseCase(repository, intakeId, photoId);
 }

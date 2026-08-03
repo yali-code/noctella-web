@@ -301,19 +301,20 @@ describe("ai intake generation provider seam (Sprint 92)", () => {
     });
   });
 
-  describe("service: generateIntakeProposal", () => {
+  describe("service: generateIntakeProposal (Sprint 93: now durable)", () => {
     it("succeeds for an Open intake with staged photos", async () => {
       const storage = mockPhotoStorage();
       await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
       const result = await generateIntakeProposal(db as any, intakeId);
-      expect(result.proposal.suggestedTitle).toContain("1 photo");
-      expect(result.metadata.providerName).toBe("mock-intake-v1");
-      expect(result.metadata.promptVersion).toBe(AI_INTAKE_PROMPT_VERSION);
+      expect(result.title.suggestion).toContain("1 photo");
+      expect(result.providerName).toBe("mock-intake-v1");
+      expect(result.promptVersion).toBe(AI_INTAKE_PROMPT_VERSION);
+      expect(result.stale).toBe(false);
     });
 
     it("succeeds for an Open intake with zero staged photos", async () => {
-      const result: AiIntakeGenerationResult = await generateIntakeProposal(db as any, intakeId);
-      expect(result.proposal.suggestedTitle).toContain("no photos");
+      const result = await generateIntakeProposal(db as any, intakeId);
+      expect(result.title.suggestion).toContain("no photos");
     });
 
     it("throws NotFoundError for a nonexistent intake", async () => {
@@ -330,7 +331,7 @@ describe("ai intake generation provider seam (Sprint 92)", () => {
         generate: vi.fn(async () => ({ proposal: { suggestedTitle: "custom" }, metadata: { providerName: "stub-provider", promptVersion: "x" } })),
       };
       const result = await generateIntakeProposal(db as any, intakeId, stubProvider);
-      expect(result.proposal.suggestedTitle).toBe("custom");
+      expect(result.title.suggestion).toBe("custom");
       expect(stubProvider.generate).toHaveBeenCalledTimes(1);
     });
 

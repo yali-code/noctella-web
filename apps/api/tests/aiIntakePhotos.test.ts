@@ -121,13 +121,25 @@ describe("ai intake photo foundation (Sprint 91)", () => {
 
   describe("list", () => {
     it("orders by created_at ASC then id ASC", async () => {
-      const storage = mockStorage();
-      const first = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "1.png", "admin-1", storage);
-      const second = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "2.png", "admin-1", storage);
-      const third = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "3.png", "admin-1", storage);
+      // Deterministic by construction - explicit ids/timestamps via the repository directly,
+      // rather than relying on uploadIntakePhoto's wall-clock createdAt and randomUUID() id both
+      // happening to land in creation order. Two rows deliberately share the same createdAt to
+      // prove the id ASC tiebreak; a third has a strictly later createdAt to prove the primary
+      // created_at ASC ordering. Inserted out of sorted order (B, C, A) so the assertion cannot
+      // pass by coincidentally matching insertion order.
+      const repository = createDrizzleAiIntakePhotoRepository(db as any, sqliteSchema);
+      const t1 = "2026-01-01T00:00:00.000Z";
+      const t2 = "2026-01-01T00:00:01.000Z"; // strictly later than t1
+      const photoA = { id: "00000000-0000-4000-8000-000000000001", intakeId, storageKey: "a.webp", originalFilename: "a.png", createdByAdminUserId: "admin-1", createdAt: t1, updatedAt: t1 };
+      const photoB = { id: "00000000-0000-4000-8000-000000000002", intakeId, storageKey: "b.webp", originalFilename: "b.png", createdByAdminUserId: "admin-1", createdAt: t1, updatedAt: t1 };
+      const photoC = { id: "00000000-0000-4000-8000-000000000003", intakeId, storageKey: "c.webp", originalFilename: "c.png", createdByAdminUserId: "admin-1", createdAt: t2, updatedAt: t2 };
+
+      await repository.create(photoB);
+      await repository.create(photoC);
+      await repository.create(photoA);
 
       const list = await listIntakePhotos(db as any, intakeId);
-      expect(list.map((p) => p.id)).toEqual([first.id, second.id, third.id]);
+      expect(list.map((p) => p.id)).toEqual([photoA.id, photoB.id, photoC.id]);
     });
 
     it("isolates photos between intakes", async () => {
