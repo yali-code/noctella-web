@@ -325,6 +325,11 @@ export const aiListingDrafts = sqliteTable("ai_listing_drafts", {
   aiModel: text("ai_model"),
   generationPromptVersion: text("generation_prompt_version"),
 
+  // Sprint 89: durable Product.updatedAt captured at generation time - see
+  // ensureAiListingDraftColumns in db/migrate.ts for the additive migration.
+  // Null for legacy rows; never backfilled.
+  baseProductUpdatedAt: text("base_product_updated_at"),
+
   rejectionReason: text("rejection_reason"),
   reviewedByAdminUserId: text("reviewed_by_admin_user_id"),
   reviewedAt: text("reviewed_at"),

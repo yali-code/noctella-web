@@ -160,14 +160,14 @@ async function assertSlugAvailable(db: DbClient, slug: string, excludeId?: strin
   }
 }
 
-async function assertCategoryExists(db: DbClient, categoryId: string): Promise<void> {
+export async function assertCategoryExists(db: DbClient, categoryId: string): Promise<void> {
   const [row] = await db.select({ id: categories.id }).from(categories).where(eq(categories.id, categoryId));
   if (!row) {
     throw new BadRequestError(`Category "${categoryId}" does not exist`);
   }
 }
 
-async function assertCollectionExists(db: DbClient, collectionId: string): Promise<void> {
+export async function assertCollectionExists(db: DbClient, collectionId: string): Promise<void> {
   const [row] = await db
     .select({ id: collections.id })
     .from(collections)

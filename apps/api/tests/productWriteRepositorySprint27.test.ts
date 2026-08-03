@@ -1,8 +1,12 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { eq } from "drizzle-orm";
 import { ProductStatus, ProductType } from "@noctella/shared";
 import { createDrizzleProductWriteRepositories } from "../src/repositories/product-write/drizzle";
+import { createSynchronousProductWriteRepositoryForDb } from "../src/repositories/product-write/factory";
+import { createInventoryRepositoryBundleForDb } from "../src/repositories/inventory/factory";
+import { updateProductWithInventoryInTransactionUseCase } from "../src/use-cases/product-write/useCases";
 import * as sqliteSchema from "../src/db/schema.sqlite";
 import * as postgresSchema from "../src/db/schema.postgres";
 import { createTestDb } from "./testDb";
@@ -49,4 +53,98 @@ describe("Sprint 88 atomic conditional Product update (ADR-017)", () => {
   test("Product-not-found remains distinguishable from a version conflict", async()=>{ const db=createTestDb(); const r=createDrizzleProductWriteRepositories(db, sqliteSchema, "sqlite"); const result=await r.products.updateWithExpectedVersion({ id:"missing", values:{ title:"x" }, expectedUpdatedAt:"anything" }); expect(result.updated).toBe(false); expect(result.conflict?.field).toBe("id"); expect(result.conflict?.currentValue).toBeUndefined(); });
   test("synchronous SQLite execution succeeds through the atomic path", async()=>{ const db=await seeded(); const r=createDrizzleProductWriteRepositories(db, sqliteSchema, "sqlite"); const version=await r.products.getVersionForUpdate("p"); expect((await r.products.updateWithExpectedVersion({ id:"p", values:{ title:"Sync" }, expectedUpdatedAt: version })).updated).toBe(true); });
   test("PostgreSQL dialect construction remains valid for the atomic conditional update", ()=>{ const db=createTestDb(); const r=createDrizzleProductWriteRepositories(db, postgresSchema, "postgres"); expect(r.products.updateWithExpectedVersion).toBeTypeOf("function"); expect(read("src/repositories/product-write/drizzle.ts")).toContain(".returning()"); expect(read("src/repositories/product-write/drizzle.ts")).not.toContain("better-sqlite3"); });
+});
+
+describe("Sprint 89 correction: nextUpdatedAt is Date-safe (Exact Review defect)", () => {
+  // A real Date object with a non-zero millisecond component - exactly the runtime shape
+  // PostgreSQL's Drizzle timestamp columns (no mode:"string") actually return, unlike a
+  // string, which Date.parse handles correctly. Exercised through the exported canonical
+  // transaction-scoped function (updateProductWithInventoryInTransactionUseCase) rather than
+  // by exporting the private nextUpdatedAt helper, per architecture-scope guidance.
+  const CURRENT_ISO = "2026-08-03T00:39:12.789Z";
+  const CURRENT_MS = Date.parse(CURRENT_ISO); // 1785717552789
+  const TRUNCATED_MS = Math.floor(CURRENT_MS / 1000) * 1000; // 1785717552000
+
+  async function seededWithPreciseTimestamp() {
+    const db = await seeded();
+    await db.update(sqliteSchema.products).set({ updatedAt: CURRENT_ISO }).where(eq(sqliteSchema.products.id, "p"));
+    return db;
+  }
+
+  function transactionScopedRepos(db: ReturnType<typeof createTestDb>) {
+    return {
+      repositories: {
+        productWriteRepositories: { products: createSynchronousProductWriteRepositoryForDb(db as any, "sqlite") },
+        inventoryRepositories: createInventoryRepositoryBundleForDb(db as any, "sqlite", true),
+      },
+      inventoryCtx: { clock: { now: () => new Date() }, idGenerator: { newId: () => "unused" } },
+    };
+  }
+
+  async function readUpdatedAtMs(db: ReturnType<typeof createTestDb>): Promise<number> {
+    const [row] = await db.select({ updatedAt: sqliteSchema.products.updatedAt }).from(sqliteSchema.products).where(eq(sqliteSchema.products.id, "p"));
+    return Date.parse(row.updatedAt);
+  }
+
+  afterEach(() => vi.useRealTimers());
+
+  test("A: Date object, Date.now equal to current time -> result is current + 1ms, strictly greater", async () => {
+    const db = await seededWithPreciseTimestamp();
+    const { repositories, inventoryCtx } = transactionScopedRepos(db);
+    vi.useFakeTimers();
+    vi.setSystemTime(CURRENT_MS);
+    await updateProductWithInventoryInTransactionUseCase(repositories as any, inventoryCtx, {
+      id: "p", values: { title: "Case A" }, expectedUpdatedAt: CURRENT_ISO, currentUpdatedAtForNextVersion: new Date(CURRENT_ISO),
+    });
+    vi.useRealTimers();
+    const resultMs = await readUpdatedAtMs(db);
+    expect(resultMs).toBe(CURRENT_MS + 1);
+    expect(resultMs).toBeGreaterThan(CURRENT_MS);
+  });
+
+  test("B: Date object, Date.now between the truncated-second and true current value -> result is current + 1ms, never less than current", async () => {
+    const db = await seededWithPreciseTimestamp();
+    const { repositories, inventoryCtx } = transactionScopedRepos(db);
+    const clockBetweenTruncatedAndTrue = TRUNCATED_MS + 500; // 1785717552500: earlier than CURRENT_MS, later than TRUNCATED_MS
+    expect(clockBetweenTruncatedAndTrue).toBeLessThan(CURRENT_MS);
+    expect(clockBetweenTruncatedAndTrue).toBeGreaterThan(TRUNCATED_MS);
+    vi.useFakeTimers();
+    vi.setSystemTime(clockBetweenTruncatedAndTrue);
+    await updateProductWithInventoryInTransactionUseCase(repositories as any, inventoryCtx, {
+      id: "p", values: { title: "Case B" }, expectedUpdatedAt: CURRENT_ISO, currentUpdatedAtForNextVersion: new Date(CURRENT_ISO),
+    });
+    vi.useRealTimers();
+    const resultMs = await readUpdatedAtMs(db);
+    expect(resultMs).toBe(CURRENT_MS + 1);
+    expect(resultMs).not.toBeLessThan(CURRENT_MS);
+  });
+
+  test("C: Date object, Date.now later than current -> result is at least Date.now and strictly greater than current", async () => {
+    const db = await seededWithPreciseTimestamp();
+    const { repositories, inventoryCtx } = transactionScopedRepos(db);
+    const laterClock = CURRENT_MS + 5000;
+    vi.useFakeTimers();
+    vi.setSystemTime(laterClock);
+    await updateProductWithInventoryInTransactionUseCase(repositories as any, inventoryCtx, {
+      id: "p", values: { title: "Case C" }, expectedUpdatedAt: CURRENT_ISO, currentUpdatedAtForNextVersion: new Date(CURRENT_ISO),
+    });
+    vi.useRealTimers();
+    const resultMs = await readUpdatedAtMs(db);
+    expect(resultMs).toBeGreaterThanOrEqual(laterClock);
+    expect(resultMs).toBeGreaterThan(CURRENT_MS);
+  });
+
+  test("D: existing ISO-string frozen-clock guarantee is preserved (string input, same millisecond)", async () => {
+    const db = await seededWithPreciseTimestamp();
+    const { repositories, inventoryCtx } = transactionScopedRepos(db);
+    vi.useFakeTimers();
+    vi.setSystemTime(CURRENT_MS);
+    await updateProductWithInventoryInTransactionUseCase(repositories as any, inventoryCtx, {
+      id: "p", values: { title: "Case D" }, expectedUpdatedAt: CURRENT_ISO, currentUpdatedAtForNextVersion: CURRENT_ISO,
+    });
+    vi.useRealTimers();
+    const resultMs = await readUpdatedAtMs(db);
+    expect(resultMs).toBe(CURRENT_MS + 1);
+    expect(resultMs).toBeGreaterThan(CURRENT_MS);
+  });
 });

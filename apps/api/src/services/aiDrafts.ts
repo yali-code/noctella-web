@@ -3,11 +3,13 @@ import { and, desc, eq, like, or, sql } from "drizzle-orm";
 import { AiDraftStatus, type AiListingDraft, ProductStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { aiListingDrafts, categories, collections, productImages, products } from "../db/schema";
-import { BadRequestError, NotFoundError } from "./errors";
-import { getProductById } from "./products";
+import { AiDraftRegenerationRequiredError, BadRequestError, NotFoundError } from "./errors";
+import { assertCategoryExists, assertCollectionExists, getProductById } from "./products";
 import { MockAiListingProvider } from "../ai/mockProvider";
 import type { AiListingProvider } from "../ai/provider";
 import type { AiDraftListQuery, RejectDraftInput, UpdateDraftInput } from "../validation/aiDraft";
+import { approveAiListingDraftUseCase } from "../use-cases/ai-draft/useCases";
+import { createAiDraftApprovalTransactionCapabilityForDb, type AiDraftApprovalTransactionDriver } from "./aiDraftApprovalTransactionCapabilityForDb";
 
 /** Swappable provider — Sprint 3 wires only the local mock, no external API. */
 const defaultProvider: AiListingProvider = new MockAiListingProvider();
@@ -34,6 +36,7 @@ function toDraft(row: typeof aiListingDrafts.$inferSelect): AiListingDraft {
     aiConfidenceScore: row.aiConfidenceScore ?? undefined,
     aiModel: row.aiModel ?? undefined,
     generationPromptVersion: row.generationPromptVersion ?? undefined,
+    baseProductUpdatedAt: row.baseProductUpdatedAt ?? undefined,
     rejectionReason: row.rejectionReason ?? undefined,
     reviewedByAdminUserId: row.reviewedByAdminUserId ?? undefined,
     reviewedAt: row.reviewedAt ?? undefined,
@@ -118,6 +121,10 @@ export async function generateDraft(
   provider: AiListingProvider = defaultProvider,
 ): Promise<AiListingDraft> {
   const product = await getProductById(db, productId); // throws NotFoundError if missing
+  // Sprint 89: captured from this exact read, before the provider call - this is the Product
+  // version used as generation input, and the durable baseline approval will later compare
+  // against. Never re-read after generation to derive this value.
+  const baseProductUpdatedAt = product.updatedAt;
 
   const now = new Date().toISOString();
   const id = randomUUID();
@@ -125,6 +132,7 @@ export async function generateDraft(
     id,
     productId,
     status: AiDraftStatus.Generating,
+    baseProductUpdatedAt,
     createdAt: now,
     updatedAt: now,
   });
@@ -286,14 +294,21 @@ export async function updateDraft(
 }
 
 /**
- * Approve (spec §6): copies approved draft values onto website/product
- * fields only. Never touches SKU, purchase cost, stock quantity, internal
- * notes, or ERP identity. Sets product status to Approved. Never publishes.
+ * Approve (spec §6, repaired Sprint 89/ADR-017): copies approved draft
+ * values onto website/product fields only, through the canonical Product
+ * write machinery, atomically with the Draft's status transition. Never
+ * touches SKU, purchase cost, stock quantity, internal notes, or ERP
+ * identity. Sets product status to Approved. Never publishes.
+ *
+ * Pre-transaction validation (status, baseline, category/collection
+ * existence) happens here, mirroring services/products.ts's updateProduct;
+ * the atomic Draft claim + canonical transaction-scoped Product update
+ * happen inside approveAiListingDraftUseCase's single transaction.
  */
 export async function approveDraft(
   db: DbClient,
   id: string,
-  reviewedByAdminUserId?: string,
+  reviewedByAdminUserId: string,
 ): Promise<AiListingDraft> {
   const existing = await getDraftRow(db, id);
   if (existing.status !== AiDraftStatus.PendingReview) {
@@ -301,47 +316,48 @@ export async function approveDraft(
       `Only a Pending Review draft can be approved (current status: "${existing.status}")`,
     );
   }
+  if (!existing.baseProductUpdatedAt) {
+    throw new AiDraftRegenerationRequiredError();
+  }
+  if (existing.suggestedCategoryId !== null) await assertCategoryExists(db, existing.suggestedCategoryId);
+  if (existing.suggestedCollectionId !== null) await assertCollectionExists(db, existing.suggestedCollectionId);
 
-  const reviewedAt = new Date().toISOString();
+  const productValues: Record<string, string | number | boolean | null> = {
+    ...(existing.generatedTitle !== null ? { title: existing.generatedTitle } : {}),
+    ...(existing.generatedDescription !== null ? { description: existing.generatedDescription } : {}),
+    ...(existing.generatedStory !== null ? { productStory: existing.generatedStory } : {}),
+    ...(existing.generatedConditionDescription !== null
+      ? { conditionDescription: existing.generatedConditionDescription }
+      : {}),
+    ...(existing.suggestedCategoryId !== null ? { categoryId: existing.suggestedCategoryId } : {}),
+    ...(existing.suggestedCollectionId !== null ? { collectionId: existing.suggestedCollectionId } : {}),
+    ...(existing.suggestedEurPrice !== null ? { priceEur: existing.suggestedEurPrice } : {}),
+    ...(existing.suggestedUsdPrice !== null ? { priceUsd: existing.suggestedUsdPrice } : {}),
+    ...(existing.suggestedMinimumOfferPrice !== null
+      ? { minOfferPrice: existing.suggestedMinimumOfferPrice }
+      : {}),
+    ...(existing.seoTitle !== null ? { seoTitle: existing.seoTitle } : {}),
+    ...(existing.metaDescription !== null ? { metaDescription: existing.metaDescription } : {}),
+    ...(existing.keywords !== null ? { keywords: existing.keywords } : {}),
+    ...(existing.shippingNote !== null ? { shippingNote: existing.shippingNote } : {}),
+    ...(existing.customsWarning !== null ? { customsWarning: existing.customsWarning } : {}),
+    status: ProductStatus.Approved,
+    // Explicitly NOT touched: sku, purchaseCost, stockQuantity, internalNotes, erpReferenceId,
+    // aiConfidenceScore, aiModel, generationPromptVersion, marketplace listing fields, ProductPhoto data.
+  };
 
-  await db
-    .update(products)
-    .set({
-      ...(existing.generatedTitle !== null ? { title: existing.generatedTitle } : {}),
-      ...(existing.generatedDescription !== null ? { description: existing.generatedDescription } : {}),
-      ...(existing.generatedStory !== null ? { productStory: existing.generatedStory } : {}),
-      ...(existing.generatedConditionDescription !== null
-        ? { conditionDescription: existing.generatedConditionDescription }
-        : {}),
-      ...(existing.suggestedCategoryId !== null ? { categoryId: existing.suggestedCategoryId } : {}),
-      ...(existing.suggestedCollectionId !== null
-        ? { collectionId: existing.suggestedCollectionId }
-        : {}),
-      ...(existing.suggestedEurPrice !== null ? { priceEur: existing.suggestedEurPrice } : {}),
-      ...(existing.suggestedUsdPrice !== null ? { priceUsd: existing.suggestedUsdPrice } : {}),
-      ...(existing.suggestedMinimumOfferPrice !== null
-        ? { minOfferPrice: existing.suggestedMinimumOfferPrice }
-        : {}),
-      ...(existing.seoTitle !== null ? { seoTitle: existing.seoTitle } : {}),
-      ...(existing.metaDescription !== null ? { metaDescription: existing.metaDescription } : {}),
-      ...(existing.keywords !== null ? { keywords: existing.keywords } : {}),
-      ...(existing.shippingNote !== null ? { shippingNote: existing.shippingNote } : {}),
-      ...(existing.customsWarning !== null ? { customsWarning: existing.customsWarning } : {}),
-      status: ProductStatus.Approved,
-      updatedAt: reviewedAt,
-      // Explicitly NOT touched: sku, purchaseCost, stockQuantity, internalNotes, erpReferenceId.
-    })
-    .where(eq(products.id, existing.productId));
+  const driver = ((process.env.DATABASE_DRIVER as AiDraftApprovalTransactionDriver) || "sqlite");
+  const capability = createAiDraftApprovalTransactionCapabilityForDb(db, driver);
+  const inventoryCtx = { clock: { now: () => new Date() }, idGenerator: { newId: () => randomUUID() } };
 
-  await db
-    .update(aiListingDrafts)
-    .set({
-      status: AiDraftStatus.Approved,
-      reviewedByAdminUserId,
-      reviewedAt,
-      updatedAt: reviewedAt,
-    })
-    .where(eq(aiListingDrafts.id, id));
+  await approveAiListingDraftUseCase(capability, inventoryCtx, {
+    id,
+    status: existing.status,
+    productId: existing.productId,
+    baseProductUpdatedAt: existing.baseProductUpdatedAt,
+    reviewedByAdminUserId,
+    productValues,
+  });
 
   return getDraftById(db, id);
 }

@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { ZodError } from "zod";
 import { formatZodError } from "../validation/common";
-import { BadRequestError, ConflictError, NotFoundError, ProductVersionConflictError, UnauthorizedError } from "../services/errors";
+import { AiDraftRegenerationRequiredError, AiDraftReviewConflictError, BadRequestError, ConflictError, NotFoundError, ProductVersionConflictError, UnauthorizedError } from "../services/errors";
 import { InventoryUseCaseError, type InventoryErrorCategory } from "../application/inventory/errors";
 
 // Sprint 64D: InventoryUseCaseError previously fell through to the generic 500 branch below -
@@ -38,6 +38,16 @@ export function handleRouteError(err: unknown, res: Response): void {
       expectedUpdatedAt: err.expectedUpdatedAt,
       currentUpdatedAt: err.currentUpdatedAt,
     });
+    return;
+  }
+  // Sprint 89: checked before the generic ConflictError branch below, for the same
+  // subclass-ordering reason as ProductVersionConflictError above.
+  if (err instanceof AiDraftRegenerationRequiredError) {
+    res.status(409).json({ error: err.message, code: "AI_DRAFT_REGENERATION_REQUIRED" });
+    return;
+  }
+  if (err instanceof AiDraftReviewConflictError) {
+    res.status(409).json({ error: err.message, code: "AI_DRAFT_REVIEW_CONFLICT" });
     return;
   }
   if (err instanceof ConflictError) {

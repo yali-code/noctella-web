@@ -23,9 +23,14 @@ export const updateDraftSchema = z.object({
   customsWarning: z.boolean().optional(),
 });
 
-export const approveDraftSchema = z.object({
-  reviewedByAdminUserId: z.string().optional(),
-});
+/**
+ * Sprint 89: the reviewer identity comes only from the authenticated
+ * session (req.adminUser.id) - never from the request body. A strict empty
+ * object rejects any body field, including a client-supplied
+ * reviewedByAdminUserId or any other unknown field, while still accepting
+ * the existing Admin client's empty-body request.
+ */
+export const approveDraftSchema = z.object({}).strict();
 
 export const rejectDraftSchema = z.object({
   rejectionReason: z.string().min(1, "Rejection reason is required"),

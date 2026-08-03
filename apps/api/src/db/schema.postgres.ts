@@ -199,6 +199,10 @@ export const aiListingDrafts = pgTable("ai_listing_drafts", {
   aiConfidenceScore: numeric("ai_confidence_score", { precision: 18, scale: 6 }),
   aiModel: text("ai_model"),
   generationPromptVersion: text("generation_prompt_version"),
+  // Sprint 89: same column type as products.updated_at above (timestamp with
+  // time zone, default Drizzle runtime representation) so a value copied
+  // directly from products.updatedAt round-trips without a type mismatch.
+  baseProductUpdatedAt: timestamp("base_product_updated_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason"),
   reviewedByAdminUserId: text("reviewed_by_admin_user_id"),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),

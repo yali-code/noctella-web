@@ -20,10 +20,19 @@ const now = () => new Date().toISOString();
  * updates landing in the same millisecond must not collapse to an identical
  * updatedAt, which would make the next caller's expectedUpdatedAt ambiguous.
  * Falls back to the current clock for a legacy/non-parseable stored value.
+ *
+ * Sprint 89 correction: PostgreSQL's Drizzle timestamp columns (no
+ * `mode:"string"`) return real Date objects at runtime despite the shared
+ * types declaring `string` - current.updatedAt/baseProductUpdatedAt can
+ * reach this function as either. Date.parse(Date) is unsafe: it coerces the
+ * Date to its default (non-ISO) string form first, which has no
+ * milliseconds field, silently truncating them and breaking strict
+ * monotonicity. A Date input must use getTime() directly; only a genuine
+ * string input goes through Date.parse.
  */
-function nextUpdatedAt(currentUpdatedAt: string): string {
+function nextUpdatedAt(currentUpdatedAt: string | Date): string {
   const nowMs = Date.now();
-  const currentMs = Date.parse(currentUpdatedAt);
+  const currentMs = currentUpdatedAt instanceof Date ? currentUpdatedAt.getTime() : Date.parse(currentUpdatedAt);
   if (Number.isNaN(currentMs)) return new Date(nowMs).toISOString();
   return new Date(Math.max(nowMs, currentMs + 1)).toISOString();
 }
@@ -87,6 +96,69 @@ export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteCont
   });
 }
 
+/**
+ * Sprint 89: the transaction-scoped body of updateProductWithInventoryUseCase,
+ * extracted so a caller that already owns a transaction spanning other
+ * domains (e.g. AI Draft approval) can run the identical canonical atomic
+ * Product update, Inventory sequencing, and ERP-metadata behavior inside its
+ * own transaction, instead of updateProductWithInventoryUseCase opening a
+ * second (nested) one. Takes repositories already bound to the caller's
+ * transaction handle - never opens a transaction itself.
+ *
+ * Sprint 89 correction: this function - not its callers - owns the
+ * monotonic-version invariant. `input.values` must contain business fields
+ * only; any `updatedAt` key it happens to carry is discarded, and a fresh
+ * value is always computed from `currentUpdatedAtForNextVersion` via the
+ * same nextUpdatedAt used everywhere else, so no caller (manual update or AI
+ * Draft approval) can omit or suppress a Product's version advancement. The
+ * same generated value is reused for Inventory's expectedVersion and its
+ * idempotency key when stock is being updated. Reuses updateWithExpectedVersion,
+ * ProductVersionConflictError, and NotFoundError unchanged.
+ */
+export function updateProductWithInventoryInTransactionUseCase(
+  repositories: AsynchronousProductWriteTransactionContext["repositories"],
+  inventoryCtx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  input: {
+    id: string;
+    values: Record<string, string | number | boolean | null>;
+    expectedUpdatedAt: string;
+    /**
+     * Sprint 89 correction: accepts either representation actually produced by
+     * the repository layer at runtime (a genuine string on SQLite, a real Date
+     * object on PostgreSQL timestamp columns) - see nextUpdatedAt above.
+     */
+    currentUpdatedAtForNextVersion: string | Date;
+    stockQuantity?: number;
+    currentStockQuantity?: number;
+  },
+  erpMetadata?: Record<string, unknown>,
+) {
+  const { id, expectedUpdatedAt, stockQuantity, currentStockQuantity, currentUpdatedAtForNextVersion } = input;
+  const { updatedAt: _ignoredCallerSuppliedUpdatedAt, ...businessValues } = input.values;
+  const newUpdatedAt = nextUpdatedAt(currentUpdatedAtForNextVersion);
+  const values = { ...businessValues, updatedAt: newUpdatedAt };
+  return chain(
+    repositories.productWriteRepositories.products.updateWithExpectedVersion({ id, values, expectedUpdatedAt }),
+    (updated) => {
+      if (!updated.updated) {
+        if (updated.conflict?.field === "id") throw new NotFoundError(updated.conflict.message);
+        throw new ProductVersionConflictError(id, expectedUpdatedAt, updated.conflict?.currentValue ?? null);
+      }
+      return chain(
+        stockQuantity === undefined || stockQuantity === currentStockQuantity ? { id, updated: true } : chain(
+          setInventoryQuantityInTransactionUseCase(inventoryCtx, repositories.inventoryRepositories, {
+            productId: id, quantity: stockQuantity, expectedVersion: newUpdatedAt,
+            idempotencyKey: `product-update-stock:${id}:${currentUpdatedAtForNextVersion}:${stockQuantity}`,
+            note: "Product update stock quantity",
+          }),
+          () => ({ id, updated: true }),
+        ),
+        (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
+      );
+    },
+  );
+}
+
 export function updateProductWithInventoryUseCase(
   ctx: ProductInventoryWriteContext,
   id: string,
@@ -103,26 +175,15 @@ export function updateProductWithInventoryUseCase(
       // concurrency) - the HTTP route always supplies one, since its request validation requires
       // the field. expectedUpdatedAt is never included in `metadata`/persisted Product values.
       const effectiveExpectedUpdatedAt = expectedUpdatedAt ?? current.updatedAt;
-      const values = productValues(metadata, { updatedAt: nextUpdatedAt(current.updatedAt), ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}) });
-      return ctx.unitOfWork.run(({ repositories }) => chain(
-        repositories.productWriteRepositories.products.updateWithExpectedVersion({ id, values, expectedUpdatedAt: effectiveExpectedUpdatedAt }),
-        (updated) => {
-          if (!updated.updated) {
-            if (updated.conflict?.field === "id") throw new NotFoundError(updated.conflict.message);
-            throw new ProductVersionConflictError(id, effectiveExpectedUpdatedAt, updated.conflict?.currentValue ?? null);
-          }
-          return chain(
-            stockQuantity === undefined || stockQuantity === current.stockQuantity ? { id, updated: true } : chain(
-              setInventoryQuantityInTransactionUseCase(ctx, repositories.inventoryRepositories, {
-                productId: id, quantity: stockQuantity, expectedVersion: String(values.updatedAt),
-                idempotencyKey: `product-update-stock:${id}:${current.updatedAt}:${stockQuantity}`,
-                note: "Product update stock quantity",
-              }),
-              () => ({ id, updated: true }),
-            ),
-            (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
-          );
-        },
+      // Sprint 89 correction: updatedAt is no longer computed/injected here - the
+      // transaction-scoped canonical function now owns generating and injecting the
+      // monotonic version, so it cannot be omitted by any caller.
+      const values = productValues(metadata, { ...(input.slug !== undefined ? { slug: slugify(input.slug) } : {}) });
+      return ctx.unitOfWork.run(({ repositories }) => updateProductWithInventoryInTransactionUseCase(
+        repositories,
+        ctx,
+        { id, values, expectedUpdatedAt: effectiveExpectedUpdatedAt, currentUpdatedAtForNextVersion: current.updatedAt, stockQuantity, currentStockQuantity: current.stockQuantity },
+        erpMetadata,
       ));
     });
   });
