@@ -342,6 +342,33 @@ export const aiListingDrafts = sqliteTable("ai_listing_drafts", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+/**
+ * Sprint 90: AI Product Intake foundation - a separate aggregate from
+ * ai_listing_drafts above (no dependency, no shared table). resultProductId
+ * is always null in Sprint 90; reserved for a future Sprint 94 apply
+ * transaction, deliberately no foreign-key constraint per approved
+ * architecture.
+ */
+export const aiProductIntakes = sqliteTable(
+  "ai_product_intakes",
+  {
+    id: text("id").primaryKey(),
+    status: text("status").notNull().default("open"),
+    createdByAdminUserId: text("created_by_admin_user_id").notNull(),
+    resultProductId: text("result_product_id").unique(),
+    cancelledAt: text("cancelled_at"),
+    cancelledByAdminUserId: text("cancelled_by_admin_user_id"),
+    cancellationReason: text("cancellation_reason"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [index("idx_ai_product_intakes_status").on(table.status)],
+);
+
 /** Sprint 4: minimal "Make an Offer" persistence. Never auto-accepted. */
 export const offers = sqliteTable("offers", {
   id: text("id").primaryKey(),

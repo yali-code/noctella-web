@@ -210,6 +210,25 @@ export const aiListingDrafts = pgTable("ai_listing_drafts", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
+/**
+ * Sprint 90: AI Product Intake foundation - a separate aggregate from
+ * ai_listing_drafts above (no dependency, no shared table). resultProductId
+ * is always null in Sprint 90; reserved for a future Sprint 94 apply
+ * transaction, deliberately no foreign-key constraint per approved
+ * architecture.
+ */
+export const aiProductIntakes = pgTable("ai_product_intakes", {
+  id: text("id").primaryKey().notNull(),
+  status: text("status").notNull().default("open"),
+  createdByAdminUserId: text("created_by_admin_user_id").notNull(),
+  resultProductId: text("result_product_id").unique(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledByAdminUserId: text("cancelled_by_admin_user_id"),
+  cancellationReason: text("cancellation_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_ai_product_intakes_status").on(table.status)]);
+
 export const offers = pgTable("offers", {
   id: text("id").primaryKey().notNull(),
   productId: text("product_id").notNull(),
