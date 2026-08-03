@@ -4,10 +4,12 @@ import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
 import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../services/aiProductIntakes";
 import { deleteIntakePhoto, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
+import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import {
   aiProductIntakeListQuerySchema,
   cancelAiProductIntakeSchema,
   createAiProductIntakeSchema,
+  generateAiIntakeProposalSchema,
 } from "../validation/aiProductIntake";
 import { handleRouteError } from "./errorHandler";
 
@@ -86,6 +88,20 @@ router.delete("/:id/photos/:photoId", requirePermission("ai_product_intakes.mana
   try {
     await deleteIntakePhoto(db, req.params.id, req.params.photoId);
     res.status(204).end();
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+// Sprint 92: AI Intake generation provider seam - synchronous, no DB write, no
+// persistence. Actor identity is not part of the response (nothing to
+// attribute it to); the strict empty body still rejects any client-supplied
+// field for consistency with every other endpoint on this router.
+router.post("/:id/generate", requirePermission("ai_product_intakes.manage"), async (req, res) => {
+  try {
+    generateAiIntakeProposalSchema.parse(req.body ?? {});
+    const result = await generateIntakeProposal(db, req.params.id);
+    res.json(result);
   } catch (err) {
     handleRouteError(err, res);
   }

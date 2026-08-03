@@ -26,5 +26,13 @@ export const cancelAiProductIntakeSchema = z
   })
   .strict();
 
+/**
+ * Sprint 92: no request input is required to trigger generation - actor
+ * identity comes only from req.adminUser.id, never the body. Strict so any
+ * unknown field, including a spoofed actor id, is rejected rather than
+ * silently stripped, mirroring createAiProductIntakeSchema above.
+ */
+export const generateAiIntakeProposalSchema = z.object({}).strict();
+
 export type AiProductIntakeListQuery = z.infer<typeof aiProductIntakeListQuerySchema>;
 export type CancelAiProductIntakeInput = z.infer<typeof cancelAiProductIntakeSchema>;
