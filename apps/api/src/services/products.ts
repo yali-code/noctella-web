@@ -20,6 +20,7 @@ import type { CreateProductInput, ProductListQuery, UpdateProductCommandInput } 
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
+import { categoryExistsInTransaction } from "../repositories/product-write/drizzle";
 import { createProductWithInventoryUseCase, updateProductWithInventoryUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
 import { createInventoryApplicationContextForDb } from "./inventoryApplicationContextForDb";
 import { createProductWriteTransactionCapabilityForDb } from "./productWriteTransactionCapabilityForDb";
@@ -160,9 +161,16 @@ async function assertSlugAvailable(db: DbClient, slug: string, excludeId?: strin
   }
 }
 
+/**
+ * Sprint 94 correction: delegates to repositories/product-write/drizzle.ts's
+ * categoryExistsInTransaction - the single production implementation of this
+ * check, also called directly (transaction-scoped) by
+ * use-cases/ai-intake-apply/useCases.ts. Never two independent expressions
+ * of the same rule.
+ */
 export async function assertCategoryExists(db: DbClient, categoryId: string): Promise<void> {
-  const [row] = await db.select({ id: categories.id }).from(categories).where(eq(categories.id, categoryId));
-  if (!row) {
+  const exists = await categoryExistsInTransaction(db, { categories } as any, categoryId, "asynchronous");
+  if (!exists) {
     throw new BadRequestError(`Category "${categoryId}" does not exist`);
   }
 }

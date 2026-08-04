@@ -665,6 +665,8 @@ CREATE TABLE IF NOT EXISTS ai_product_intakes (
   cancelled_at TEXT,
   cancelled_by_admin_user_id TEXT,
   cancellation_reason TEXT,
+  applied_at TEXT,
+  applied_by_admin_user_id TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );

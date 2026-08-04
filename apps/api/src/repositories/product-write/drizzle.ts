@@ -12,6 +12,28 @@ const first = (q: any, execution: Execution = "asynchronous"): Result<any> => th
 const run = (q: any, execution: Execution = "asynchronous"): Result<unknown> => execution === "synchronous" ? q.run() : Promise.resolve(q);
 const bool = (v: unknown) => v === true || v === 1;
 
+/**
+ * Sprint 94 correction: the single production implementation of "does this
+ * category id exist" - execution-aware so it can run as a plain async call
+ * (services/products.ts's assertCategoryExists, used by POST /api/products
+ * and PUT /api/products/:id) or synchronously/asynchronously against a
+ * locked transaction's tx handle (use-cases/ai-intake-apply/useCases.ts).
+ * Both canonical Product-creation paths call this same function - never two
+ * independent expressions of the same rule.
+ */
+export function categoryExistsInTransaction(
+  db: any,
+  schema: typeof sqliteSchema | typeof postgresSchema,
+  categoryId: string,
+  execution: Execution = "asynchronous",
+): Result<boolean> {
+  const categoriesTable = table(schema, "categories");
+  return then(
+    rows(db.select({ id: categoriesTable.id }).from(categoriesTable).where(eq(categoriesTable.id, categoryId)), execution),
+    (result: any[]) => result.length > 0,
+  );
+}
+
 export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres", execution: Execution = "asynchronous"): any {
   const products = table(schema, "products"), productErpMetadata = table(schema, "productErpMetadata"), categories = table(schema, "categories"), collections = table(schema, "collections"), productPhotos = table(schema, "productPhotos");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v === undefined ? null : v]));

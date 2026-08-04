@@ -1,8 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import type * as sqliteSchema from "../../db/schema.sqlite";
 import type * as postgresSchema from "../../db/schema.postgres";
 import type {
+  AiProductIntakeApplyInput,
+  AiProductIntakeApplyResult,
   AiProductIntakeCancelInput,
   AiProductIntakeCancelResult,
   AiProductIntakeCreateInput,
@@ -12,6 +14,68 @@ import type {
 } from "./types";
 
 type Schema = typeof sqliteSchema | typeof postgresSchema;
+type Execution = "synchronous" | "asynchronous";
+type Result<T> = T | Promise<T>;
+
+const then = <T, U>(value: Result<T>, next: (value: T) => Result<U>): Result<U> =>
+  value instanceof Promise ? value.then(next) : next(value);
+const rows = (q: any, execution: Execution): Result<any[]> =>
+  execution === "synchronous" ? (Array.isArray(q) ? q : q.all()) : Promise.resolve(q);
+
+/**
+ * Sprint 94 correction: the single production implementation of the guarded
+ * apply/finalization UPDATE - execution-aware so it can run either as a
+ * plain async call against the outer db (execution="asynchronous", used by
+ * the standalone repository's applyWithExpectedState below) or synchronously/
+ * asynchronously against a locked transaction's tx handle (used directly by
+ * services/aiIntakeApplyTransactionCapabilityForDb.ts). This is the one
+ * production source of truth for the finalization rule - never duplicated;
+ * both callers delegate to this function rather than each re-expressing the
+ * WHERE/SET clauses independently.
+ */
+export function applyIntakeWithExpectedStateInTransaction(
+  db: any,
+  schema: Schema,
+  execution: Execution,
+  input: AiProductIntakeApplyInput,
+): Result<AiProductIntakeApplyResult> {
+  const table = (schema as Record<string, any>).aiProductIntakes;
+  return then(
+    rows(
+      db
+        .update(table)
+        .set({
+          status: AiProductIntakeStatus.Applied,
+          resultProductId: input.resultProductId,
+          appliedAt: input.appliedAt,
+          appliedByAdminUserId: input.appliedByAdminUserId,
+          updatedAt: input.updatedAt,
+        })
+        .where(and(eq(table.id, input.id), eq(table.status, AiProductIntakeStatus.Open), isNull(table.resultProductId)))
+        .returning(),
+      execution,
+    ),
+    (changed: any[]) => {
+      if (changed.length) return { updated: true, row: changed[0] as AiProductIntakeRecord };
+      return then(rows(db.select().from(table).where(eq(table.id, input.id)), execution), (existingRows: any[]) => {
+        const existing = existingRows[0];
+        if (!existing) return { updated: false, conflict: { field: "id" as const, message: "AI product intake not found" } };
+        if (existing.resultProductId !== null) {
+          return {
+            updated: false,
+            conflict: { field: "resultProductId" as const, message: "This intake already has a result Product" },
+            row: existing as AiProductIntakeRecord,
+          };
+        }
+        return {
+          updated: false,
+          conflict: { field: "status" as const, message: `Expected status "${AiProductIntakeStatus.Open}" but found "${existing.status}"` },
+          row: existing as AiProductIntakeRecord,
+        };
+      });
+    },
+  );
+}
 
 /**
  * Sprint 90: no dedicated transaction capability - every operation here is a
@@ -85,6 +149,14 @@ export function createDrizzleAiProductIntakeRepository(db: any, schema: Schema):
         conflict: { field: "status", message: `Expected status "${input.expectedStatus}" but found "${existing.status}"` },
         row: existing as AiProductIntakeRecord,
       };
+    },
+
+    async applyWithExpectedState(input: AiProductIntakeApplyInput): Promise<AiProductIntakeApplyResult> {
+      // Delegates to the one production implementation - see
+      // applyIntakeWithExpectedStateInTransaction above, also called
+      // directly (transaction-scoped) by
+      // services/aiIntakeApplyTransactionCapabilityForDb.ts.
+      return applyIntakeWithExpectedStateInTransaction(db, schema, "asynchronous", input) as Promise<AiProductIntakeApplyResult>;
     },
   };
 }

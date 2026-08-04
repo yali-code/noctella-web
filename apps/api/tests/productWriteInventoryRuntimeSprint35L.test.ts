@@ -47,7 +47,11 @@ describe("Sprint 35L complete Product Write Inventory runtime migration", () => 
 
   test("migrated paths use the Product Write capability instead of general UnitOfWork Inventory mutation", () => {
     const useCases = readFileSync(new URL("../src/use-cases/product-write/useCases.ts", import.meta.url), "utf8");
-    const migrated = useCases.slice(useCases.indexOf("export function createProductWithInventoryUseCase"), useCases.indexOf("export async function createCategoryUseCase"));
+    // Sprint 94: createProductWithInventoryUseCase's body was extracted into
+    // createProductWithInventoryInTransactionUseCase (mirroring the existing
+    // updateProductWithInventoryInTransactionUseCase precedent) - the slice
+    // must start there to still cover both the create and update paths.
+    const migrated = useCases.slice(useCases.indexOf("export function createProductWithInventoryInTransactionUseCase"), useCases.indexOf("export async function createCategoryUseCase"));
     expect(migrated).toContain("repositories.productWriteRepositories.products.create");
     expect(migrated).toContain("repositories.productWriteRepositories.products.updateWithExpectedVersion");
     expect(migrated).not.toContain("repositories.inventoryRepositories.products");
