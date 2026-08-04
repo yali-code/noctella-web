@@ -19,9 +19,17 @@ function toIntake(row: AiProductIntakeRecord): AiProductIntake {
     cancelledAt: (row.cancelledAt as string | null) ?? undefined,
     cancelledByAdminUserId: (row.cancelledByAdminUserId as string | null) ?? undefined,
     cancellationReason: (row.cancellationReason as string | null) ?? undefined,
+    appliedAt: toOptionalIsoString(row.appliedAt as string | Date | null),
+    appliedByAdminUserId: (row.appliedByAdminUserId as string | null) ?? undefined,
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   };
+}
+
+/** Sprint 94: PostgreSQL timestamptz columns return Date instances at runtime - see toReviewedField's identical helper in services/aiIntakeProposals.ts. */
+function toOptionalIsoString(value: string | Date | null | undefined): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 /**

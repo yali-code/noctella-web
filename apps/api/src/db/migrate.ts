@@ -29,6 +29,29 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureInvoiceAccountingColumns(sqlite);
   ensureOrderStatusCasingNormalized(sqlite);
   ensureAiListingDraftColumns(sqlite);
+  ensureAiProductIntakeAppliedColumns(sqlite);
+}
+
+/**
+ * Sprint 94 correction: additive migration for the Save as Draft apply audit
+ * columns. `CREATE TABLE IF NOT EXISTS` in schema.sql is a no-op for the
+ * already-existing ai_product_intakes table (Sprint 90/93), matching the
+ * same established pattern as ensureAiListingDraftColumns/ensurePaymentColumns/
+ * ensureMarketplaceColumns - new nullable columns are added here, never by
+ * editing the original CREATE TABLE block. No backfill: existing rows keep
+ * applied_at/applied_by_admin_user_id = NULL, correctly reflecting that they
+ * were never applied.
+ */
+function ensureAiProductIntakeAppliedColumns(sqlite: Database.Database): void {
+  const existing = new Set(
+    (sqlite.prepare("PRAGMA table_info(ai_product_intakes)").all() as Array<{ name: string }>).map((row) => row.name),
+  );
+  if (!existing.has("applied_at")) {
+    sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN applied_at TEXT");
+  }
+  if (!existing.has("applied_by_admin_user_id")) {
+    sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN applied_by_admin_user_id TEXT");
+  }
 }
 
 /**

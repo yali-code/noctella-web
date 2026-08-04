@@ -359,6 +359,8 @@ export const aiProductIntakes = sqliteTable(
     cancelledAt: text("cancelled_at"),
     cancelledByAdminUserId: text("cancelled_by_admin_user_id"),
     cancellationReason: text("cancellation_reason"),
+    appliedAt: text("applied_at"),
+    appliedByAdminUserId: text("applied_by_admin_user_id"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),

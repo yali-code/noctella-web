@@ -73,27 +73,49 @@ function upsertErpMetadataInTransaction(repo: ErpMetadataCapableRepository, prod
     );
   });
 }
-export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteContext, input: CreateProductInput, erpMetadata?: Record<string, unknown>) {
+/**
+ * Sprint 94: the transaction-scoped body of createProductWithInventoryUseCase,
+ * extracted so a caller that already owns a transaction spanning other
+ * domains (e.g. AI Intake Save as Draft) can run the identical canonical
+ * atomic Product creation, Inventory initialization, and ERP-metadata
+ * behavior inside its own transaction, instead of createProductWithInventoryUseCase
+ * opening a second (nested) one - mirrors the Sprint 89 precedent
+ * (updateProductWithInventoryInTransactionUseCase) exactly. Takes repositories
+ * already bound to the caller's transaction handle - never opens a
+ * transaction itself. SKU-uniqueness is checked here (inside the transaction)
+ * rather than by the caller beforehand, so any caller composing this into a
+ * larger transaction gets the same conflict guarantee for free.
+ */
+export function createProductWithInventoryInTransactionUseCase(
+  repositories: AsynchronousProductWriteTransactionContext["repositories"],
+  inventoryCtx: Pick<InventoryApplicationContext, "clock" | "idGenerator">,
+  input: CreateProductInput,
+  erpMetadata?: Record<string, unknown>,
+) {
   const quantity = stock(input.type, input.stockQuantity);
   const slug = input.slug ? slugify(input.slug) : slugify(input.title);
   const t = now(), id = randomUUID();
-  return chain(ctx.repositories.products.existsBySku(input.sku), (exists) => {
+  return chain(repositories.productWriteRepositories.products.existsBySku(input.sku), (exists) => {
     if (exists) throw new ConflictError(`SKU "${input.sku}" is already in use`);
-    return ctx.unitOfWork.run(({ repositories }) => chain(
+    return chain(
       repositories.productWriteRepositories.products.create({ values: productValues(input, {
         id, slug, createdAt: t, updatedAt: t,
       }) }),
       () => chain(
         input.stockQuantity === undefined ? { id } : chain(
-          initializeInventoryInTransactionUseCase(ctx, repositories.inventoryRepositories, {
+          initializeInventoryInTransactionUseCase(inventoryCtx, repositories.inventoryRepositories, {
             productId: id, quantity, idempotencyKey: `product-create-stock:${id}`, note: "Product creation stock quantity",
           }),
           () => ({ id }),
         ),
         (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
       ),
-    ));
+    );
   });
+}
+
+export function createProductWithInventoryUseCase(ctx: ProductInventoryWriteContext, input: CreateProductInput, erpMetadata?: Record<string, unknown>) {
+  return ctx.unitOfWork.run(({ repositories }) => createProductWithInventoryInTransactionUseCase(repositories, ctx, input, erpMetadata));
 }
 
 /**

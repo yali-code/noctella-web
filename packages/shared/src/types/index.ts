@@ -315,12 +315,16 @@ export interface AiProductIntake extends Timestamps {
   status: AiProductIntakeStatus;
   createdByAdminUserId: ID;
 
-  /** Null until a future Sprint 94 apply transaction sets it; immutable once set. */
+  /** Null until a Sprint 94 apply transaction sets it; immutable once set. */
   resultProductId?: ID;
 
   cancelledAt?: string;
   cancelledByAdminUserId?: ID;
   cancellationReason?: string;
+
+  /** Sprint 94: set exactly once, together with resultProductId, when status transitions to Applied. */
+  appliedAt?: string;
+  appliedByAdminUserId?: ID;
 }
 
 /**

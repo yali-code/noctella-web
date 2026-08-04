@@ -6,6 +6,7 @@ import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../servi
 import { deleteIntakePhoto, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
+import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
 import {
   aiProductIntakeListQuerySchema,
   cancelAiProductIntakeSchema,
@@ -13,6 +14,7 @@ import {
   generateAiIntakeProposalSchema,
 } from "../validation/aiProductIntake";
 import { descriptionFieldReviewSchema, keywordsFieldReviewSchema, titleFieldReviewSchema } from "../validation/aiIntakeProposal";
+import { saveAiIntakeAsDraftSchema } from "../validation/aiIntakeApply";
 import { BadRequestError } from "../services/errors";
 import { handleRouteError } from "./errorHandler";
 import type { AiIntakeProposalField } from "../repositories/ai-intake-proposal/types";
@@ -141,5 +143,27 @@ router.patch("/:id/proposal/fields/:field", requirePermission("ai_product_intake
     handleRouteError(err, res);
   }
 });
+
+// Sprint 94: explicit human-triggered canonical apply transaction. Requires
+// both intake-management and Product-creation privilege, since this single
+// action performs both. Applying actor identity always comes from
+// req.adminUser.id, never the request body - title/description/keywords are
+// never accepted here either, since they are read server-side from the
+// durable proposal. An already-Applied intake is an idempotent success
+// (200, the existing Product), never a second Product.
+router.post(
+  "/:id/save-as-draft",
+  requirePermission("ai_product_intakes.manage"),
+  requirePermission("products.edit"),
+  async (req: AuthedRequest, res) => {
+    try {
+      const input = saveAiIntakeAsDraftSchema.parse(req.body ?? {});
+      const result = await saveAiIntakeAsDraft(db, req.params.id, input, req.adminUser!.id);
+      res.status(result.created ? 201 : 200).json(result.product);
+    } catch (err) {
+      handleRouteError(err, res);
+    }
+  },
+);
 
 export default router;

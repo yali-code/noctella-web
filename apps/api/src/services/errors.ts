@@ -137,3 +137,65 @@ export class AiIntakeProposalSuggestionUnavailableError extends BadRequestError 
     this.name = "AiIntakeProposalSuggestionUnavailableError";
   }
 }
+
+/**
+ * Sprint 94: thrown when Save as Draft is attempted against an intake that
+ * is not Open and not already Applied (i.e. Cancelled) - the atomic apply
+ * write's own guard rejected it, not just a service-layer pre-check.
+ */
+export class AiIntakeApplyIntakeNotOpenError extends ConflictError {
+  constructor() {
+    super("This intake is no longer Open. Save as Draft is not available for a cancelled intake.");
+    this.name = "AiIntakeApplyIntakeNotOpenError";
+  }
+}
+
+/**
+ * Sprint 94: thrown when the client's expectedProposalUpdatedAt no longer
+ * matches the current proposal row read inside the locked apply transaction
+ * - the proposal was reviewed or regenerated after the client last loaded it.
+ */
+export class AiIntakeApplyProposalVersionConflictError extends ConflictError {
+  constructor() {
+    super("This proposal changed before Save as Draft completed. Reload it and try again.");
+    this.name = "AiIntakeApplyProposalVersionConflictError";
+  }
+}
+
+/**
+ * Sprint 94: thrown when the durable proposal's title is not Accepted/Edited
+ * with a valid non-empty value (Pending/Rejected title blocks apply), or an
+ * Accepted/Edited optional field (description/keywords) has no valid stored
+ * value despite its decision claiming otherwise.
+ */
+export class AiIntakeApplyProposalNotReadyError extends ConflictError {
+  constructor(message = "The proposal is not ready to be saved as a draft - the title must be Accepted or Edited with a valid value.") {
+    super(message);
+    this.name = "AiIntakeApplyProposalNotReadyError";
+  }
+}
+
+/**
+ * Sprint 94: thrown when the staged photo set (read inside the locked apply
+ * transaction) no longer matches the proposal's stored photoSetFingerprint.
+ */
+export class AiIntakeApplyPhotoSetStaleError extends ConflictError {
+  constructor() {
+    super("The staged photos changed after this proposal was generated. Regenerate the proposal before saving as a draft.");
+    this.name = "AiIntakeApplyPhotoSetStaleError";
+  }
+}
+
+/**
+ * Sprint 94: thrown for an unrecoverable, defensive intake result-state
+ * conflict - status is Applied but resultProductId is null, or
+ * resultProductId is set but references no findable Product, or the
+ * apply write's own atomic guard failed despite the lock already being held.
+ * Never repaired by creating a second Product.
+ */
+export class AiIntakeApplyResultStateInvalidError extends ConflictError {
+  constructor(message = "This intake's applied result is in an unexpected state and cannot be resolved automatically.") {
+    super(message);
+    this.name = "AiIntakeApplyResultStateInvalidError";
+  }
+}

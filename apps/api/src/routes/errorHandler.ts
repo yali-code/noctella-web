@@ -4,6 +4,11 @@ import { formatZodError } from "../validation/common";
 import {
   AiDraftRegenerationRequiredError,
   AiDraftReviewConflictError,
+  AiIntakeApplyIntakeNotOpenError,
+  AiIntakeApplyPhotoSetStaleError,
+  AiIntakeApplyProposalNotReadyError,
+  AiIntakeApplyProposalVersionConflictError,
+  AiIntakeApplyResultStateInvalidError,
   AiIntakeProposalIntakeNotOpenError,
   AiIntakeProposalReviewResetRequiredError,
   AiIntakeProposalStaleError,
@@ -79,6 +84,28 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof AiIntakeProposalVersionConflictError) {
     res.status(409).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_VERSION_CONFLICT" });
+    return;
+  }
+  // Sprint 94: checked before the generic ConflictError branch below, for the same
+  // subclass-ordering reason as the Sprint 88/89/93 conflict subclasses above.
+  if (err instanceof AiIntakeApplyIntakeNotOpenError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_APPLY_INTAKE_NOT_OPEN" });
+    return;
+  }
+  if (err instanceof AiIntakeApplyProposalVersionConflictError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_APPLY_PROPOSAL_VERSION_CONFLICT" });
+    return;
+  }
+  if (err instanceof AiIntakeApplyProposalNotReadyError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_APPLY_PROPOSAL_NOT_READY" });
+    return;
+  }
+  if (err instanceof AiIntakeApplyPhotoSetStaleError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_APPLY_PHOTO_SET_STALE" });
+    return;
+  }
+  if (err instanceof AiIntakeApplyResultStateInvalidError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_APPLY_RESULT_STATE_INVALID" });
     return;
   }
   if (err instanceof ConflictError) {

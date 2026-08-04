@@ -22,7 +22,7 @@ const imageSchema = z.object({
  * services/products.ts, since they interact with defaults that zod alone
  * can't express cleanly.
  */
-const baseProductSchema = z.object({
+export const baseProductSchema = z.object({
   sku: z.string().min(1, "SKU is required"),
   title: z.string().min(1, "Title is required"),
   slug: z.string().min(1).optional(),
