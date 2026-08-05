@@ -9,7 +9,6 @@ import type { AiIntakePhotoRecord, AiIntakePhotoRepository } from "../repositori
 import {
   createAiIntakePhotoLockedUseCase,
   deleteAiIntakePhotoLockedUseCase,
-  findAiIntakePhotoUseCase,
   listAiIntakePhotosUseCase,
 } from "../use-cases/ai-intake-photo/useCases";
 
@@ -81,14 +80,34 @@ export async function listIntakePhotos(db: DbClient, intakeId: string): Promise<
 }
 
 /**
- * Deletion is allowed for a cancelled intake - no status check, only
- * existence/ownership. Required recovery ordering: find the photo, delete
- * the staged file (idempotent - an already-missing file is not an error),
- * and only then delete the database record. If storage deletion fails
- * unexpectedly, the error propagates and the database record is left
- * intact. If the database delete itself then fails, the record is also
- * left intact - a repeated request can complete successfully, since the
- * storage delete is safely repeatable against an already-missing file.
+ * Sprint 95 final correction: DB-first staged photo deletion. Deletion is
+ * allowed for Open and Cancelled intakes only (Applied/Finalized/
+ * unrecognized rejected, fail closed) - status check, ownership check, and
+ * the database row delete all happen inside ONE intake-row-lock transaction
+ * with NO filesystem mutation of any kind (see
+ * deleteAiIntakePhotoLockedUseCase / repositories/ai-intake-photo/drizzle.ts's
+ * deleteLockedToIntake). Only after that transaction has genuinely committed
+ * does this function delete the physical staged source file.
+ *
+ * This replaces the prior tombstone/quarantine-before-commit design, which
+ * performed a synchronous filesystem rename inside the locked transaction
+ * callback so it could be rolled back on failure. That design had an
+ * irreducible blind spot: a database COMMIT can fail strictly after the
+ * transaction callback has already returned (see better-sqlite3's
+ * transaction wrapper), so any restoration logic scoped inside the callback
+ * could never observe or compensate for a commit-phase failure. Performing
+ * zero filesystem work before commit removes this class of bug entirely
+ * instead of trying to catch it: whatever fails before commit (the DELETE
+ * statement, a later statement, the COMMIT itself, a PostgreSQL rejection, a
+ * process crash) leaves the row and the staged file exactly as they were, so
+ * no rollback/restore compensation is ever needed.
+ *
+ * The only residual failure mode is a crash or error during the post-commit
+ * file delete below, which is swallowed rather than surfaced: the DB row is
+ * already gone, so a retryable error would make a retry of this same request
+ * incorrectly 404, and there is nothing left to roll back. A private orphan
+ * source file with no owning row is an explicitly Sprint-96-owned cleanup
+ * state, never a data-integrity violation.
  */
 export async function deleteIntakePhoto(
   db: DbClient,
@@ -98,7 +117,15 @@ export async function deleteIntakePhoto(
 ): Promise<void> {
   await getIntakeById(db, intakeId); // throws NotFoundError if missing
   const repository = repositoryFor(db);
-  const existing = await findAiIntakePhotoUseCase(repository, intakeId, photoId);
-  await storage.deleteIntakePhoto(existing.storageKey as string);
-  await deleteAiIntakePhotoLockedUseCase(repository, intakeId, photoId);
+  const deletedPhoto = await deleteAiIntakePhotoLockedUseCase(repository, intakeId, photoId);
+
+  try {
+    await storage.deleteIntakePhoto(deletedPhoto.storageKey!);
+  } catch {
+    // Intentionally swallowed - the logical deletion (the DB row) already
+    // committed successfully; see the function comment above for why this
+    // must never be surfaced as a request failure.
+    // eslint-disable-next-line no-console
+    console.error("Staged AI intake photo file cleanup failed after a committed deletion - an orphan private file may remain (Sprint 96 cleanup scope)");
+  }
 }

@@ -3,7 +3,14 @@ import { AiProductIntakeStatus } from "@noctella/shared";
 import * as sqliteSchemaModule from "../../db/schema.sqlite";
 import type * as sqliteSchema from "../../db/schema.sqlite";
 import type * as postgresSchema from "../../db/schema.postgres";
-import type { AiIntakePhotoCreateInput, AiIntakePhotoRecord, AiIntakePhotoRepository, AiIntakePhotoWriteResult } from "./types";
+import type {
+  AiIntakePhotoCreateInput,
+  AiIntakePhotoDeleteConflict,
+  AiIntakePhotoDeleteResult,
+  AiIntakePhotoRecord,
+  AiIntakePhotoRepository,
+  AiIntakePhotoWriteResult,
+} from "./types";
 import {
   createAiIntakeLockTransactionCapabilityForDb,
   type AiIntakeLockTransactionCapability,
@@ -18,6 +25,26 @@ const then = <T, U>(value: Result<T>, next: (value: T) => Result<U>): Result<U> 
 const rows = (q: any, execution: Execution): Result<any[]> =>
   execution === "synchronous" ? (Array.isArray(q) ? q : q.all()) : Promise.resolve(q);
 const run = (q: any, execution: Execution): Result<unknown> => (execution === "synchronous" ? q.run() : Promise.resolve(q));
+
+/**
+ * Sprint 95 final correction: the single production implementation of "is
+ * this intake's current status allowed to have a staged photo deleted" -
+ * allowlisted (Open, Cancelled), never a blocklist, so any future status
+ * this file doesn't yet know about fails closed. Used once, inside
+ * deleteLockedToIntake's single locked transaction.
+ */
+const DELETION_ALLOWED_STATUSES: ReadonlySet<string> = new Set([AiProductIntakeStatus.Open, AiProductIntakeStatus.Cancelled]);
+
+function checkIntakeDeletable(intake: Record<string, any> | null): { allowed: true } | { allowed: false; conflict: AiIntakePhotoDeleteConflict } {
+  if (!intake) return { allowed: false, conflict: { reason: "intake_not_found", message: "AI product intake not found" } };
+  if (!DELETION_ALLOWED_STATUSES.has(intake.status)) {
+    return {
+      allowed: false,
+      conflict: { reason: "intake_not_deletable", message: `Staged photos cannot be deleted once the intake is "${intake.status}"` },
+    };
+  }
+  return { allowed: true };
+}
 
 /**
  * Sprint 91: no dedicated transaction capability for the plain single-
@@ -95,11 +122,33 @@ export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, ca
       }) as Promise<AiIntakePhotoWriteResult>;
     },
 
-    async deleteByIdLockedToIntake(intakeId: string, id: string): Promise<void> {
-      await lock.runWithLockedIntake(intakeId, ({ tx, schema: txSchema, execution }) => {
+    async deleteLockedToIntake(intakeId: string, id: string): Promise<AiIntakePhotoDeleteResult> {
+      return lock.runWithLockedIntake(intakeId, ({ tx, schema: txSchema, execution, intake }) => {
+        const gate = checkIntakeDeletable(intake);
+        if (!gate.allowed) return { deleted: false, conflict: gate.conflict } as AiIntakePhotoDeleteResult;
+
         const txTable = (txSchema as Record<string, any>).aiIntakePhotos;
-        return then(run(tx.delete(txTable).where(eq(txTable.id, id)), execution), () => undefined);
-      });
+        return then(
+          rows(tx.select().from(txTable).where(and(eq(txTable.id, id), eq(txTable.intakeId, intakeId))), execution),
+          (photoRows: any[]) => {
+            const photo = photoRows[0];
+            if (!photo) {
+              return { deleted: false, conflict: { reason: "photo_not_found" as const, message: "AI intake photo not found" } } as AiIntakePhotoDeleteResult;
+            }
+
+            // A pure database delete - no filesystem operation of any kind
+            // happens here or anywhere in this transaction, so no rollback
+            // compensation is ever needed: whatever fails (the DELETE
+            // statement itself, or the commit that follows this callback's
+            // return), the row and the staged file are simply left exactly
+            // as they were.
+            return then(run(tx.delete(txTable).where(eq(txTable.id, id)), execution), () => ({
+              deleted: true,
+              storageKey: photo.storageKey as string,
+            } as AiIntakePhotoDeleteResult));
+          },
+        );
+      }) as Promise<AiIntakePhotoDeleteResult>;
     },
   };
 }

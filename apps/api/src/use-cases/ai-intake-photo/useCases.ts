@@ -1,5 +1,5 @@
-import { BadRequestError, NotFoundError } from "../../services/errors";
-import type { AiIntakePhotoRepository } from "../../repositories/ai-intake-photo/types";
+import { AiIntakePhotoMutationNotAllowedError, BadRequestError, NotFoundError } from "../../services/errors";
+import type { AiIntakePhotoDeleteResult, AiIntakePhotoRepository } from "../../repositories/ai-intake-photo/types";
 
 export interface CreateAiIntakePhotoInput {
   id: string;
@@ -41,10 +41,7 @@ export async function listAiIntakePhotosUseCase(repository: AiIntakePhotoReposit
  * Sprint 91: scoped lookup - a photo id that exists but belongs to a
  * different intake is treated identically to a nonexistent photo (both
  * NotFoundError), so cross-intake access is structurally impossible rather
- * than merely permission-checked. Deletion is split into find/delete steps
- * (rather than one combined operation) so the caller can delete the staged
- * file between them - see services/aiIntakePhotos.ts's deleteIntakePhoto for
- * the required file-before-database-record ordering.
+ * than merely permission-checked.
  */
 export async function findAiIntakePhotoUseCase(repository: AiIntakePhotoRepository, intakeId: string, photoId: string) {
   const existing = await repository.findByIdAndIntake(intakeId, photoId);
@@ -58,13 +55,26 @@ export async function deleteAiIntakePhotoUseCase(repository: AiIntakePhotoReposi
 }
 
 /**
- * Sprint 93 correction pass: deletes the database record under the same
- * intake-row lock used by proposal writes and photo insertion, so a review
- * transaction that reads the current photo set can never be interleaved by
- * this delete after it has already acquired the lock. Deletion remains
- * allowed regardless of intake status (a cancelled intake's staged photos
- * can still be deleted), matching the existing service-layer behavior.
+ * Sprint 95 final correction: the single locked delete use case - status
+ * check, ownership check, and the database row delete all happen inside
+ * repository.deleteLockedToIntake's one intake-row-lock transaction, with no
+ * filesystem operation of any kind inside it. Returns the result (including
+ * the deleted row's storageKey) rather than void, so the caller
+ * (services/aiIntakePhotos.ts) can delete the physical staged file only
+ * after this promise has fully resolved - i.e. only after the transaction
+ * has genuinely committed.
  */
-export async function deleteAiIntakePhotoLockedUseCase(repository: AiIntakePhotoRepository, intakeId: string, photoId: string) {
-  await repository.deleteByIdLockedToIntake(intakeId, photoId);
+export async function deleteAiIntakePhotoLockedUseCase(
+  repository: AiIntakePhotoRepository,
+  intakeId: string,
+  photoId: string,
+): Promise<AiIntakePhotoDeleteResult> {
+  const result = await repository.deleteLockedToIntake(intakeId, photoId);
+  if (!result.deleted) {
+    if (result.conflict?.reason === "intake_not_found" || result.conflict?.reason === "photo_not_found") {
+      throw new NotFoundError(result.conflict.message);
+    }
+    throw new AiIntakePhotoMutationNotAllowedError(result.conflict?.message);
+  }
+  return result;
 }

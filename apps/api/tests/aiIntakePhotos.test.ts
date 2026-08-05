@@ -31,14 +31,29 @@ import { readFileSync } from "node:fs";
 const root = path.resolve(__dirname, "..");
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 
-function mockStorage(): AiIntakePhotoStorage & { saveIntakePhoto: ReturnType<typeof vi.fn>; deleteIntakePhoto: ReturnType<typeof vi.fn> } {
+/**
+ * Sprint 95 final correction: a minimal in-memory mock tracking only source
+ * file existence, matching the simplified (no quarantine/tombstone)
+ * AiIntakePhotoStorage interface - saveIntakePhoto/deleteIntakePhoto only.
+ */
+function mockStorage(): AiIntakePhotoStorage & {
+  saveIntakePhoto: ReturnType<typeof vi.fn>;
+  deleteIntakePhoto: ReturnType<typeof vi.fn>;
+  sourceExists: (storageKey: string) => boolean;
+} {
   let counter = 0;
+  const sources = new Set<string>();
   return {
     saveIntakePhoto: vi.fn(async () => {
       counter += 1;
-      return { storageKey: `mock-key-${counter}.webp` };
+      const storageKey = `mock-key-${counter}.webp`;
+      sources.add(storageKey);
+      return { storageKey };
     }),
-    deleteIntakePhoto: vi.fn(async () => {}),
+    deleteIntakePhoto: vi.fn(async (storageKey: string) => {
+      sources.delete(storageKey);
+    }),
+    sourceExists: (storageKey: string) => sources.has(storageKey),
   };
 }
 
@@ -169,43 +184,69 @@ describe("ai intake photo foundation (Sprint 91)", () => {
     });
   });
 
-  describe("delete", () => {
-    it("removes the database record and the staged file", async () => {
+  describe("delete (Sprint 95 final correction: DB-first, post-commit cleanup)", () => {
+    it("removes the database record inside a locked transaction, then deletes the staged file only after commit", async () => {
       const storage = mockStorage();
       const photo = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
       await deleteIntakePhoto(db as any, intakeId, photo.id, storage);
       expect(storage.deleteIntakePhoto).toHaveBeenCalledWith(photo.storageKey);
       expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(0);
+      expect(storage.sourceExists(photo.storageKey)).toBe(false);
     });
 
-    it("deletes the staged file BEFORE the database record (required recovery ordering)", async () => {
+    it("Sprint 95 final correction (serial-order proof): the database row is already committed-deleted by the time the post-commit file delete runs", async () => {
       const storage = mockStorage();
-      let rowStillPresentWhenStorageDeleteRan = false;
-      storage.deleteIntakePhoto.mockImplementation(async () => {
-        // Query the DB from inside the storage-delete call itself - if the service deleted the
-        // database record first (wrong order), this row would already be gone by now.
+      let rowPresentWhenFileDeleteRan: boolean | null = null;
+      storage.deleteIntakePhoto.mockImplementation(async (storageKey: string) => {
+        // Query the DB from inside the post-commit file delete itself - by the time it runs, the
+        // row must already be gone (committed), proving this happens strictly after the
+        // transaction, never interleaved with or before it.
         const rows = await db.select().from(aiIntakePhotos);
-        rowStillPresentWhenStorageDeleteRan = rows.length === 1;
+        rowPresentWhenFileDeleteRan = rows.length > 0;
       });
       const photo = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
       await deleteIntakePhoto(db as any, intakeId, photo.id, storage);
-      expect(rowStillPresentWhenStorageDeleteRan).toBe(true);
+      expect(rowPresentWhenFileDeleteRan).toBe(false);
       expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(0);
     });
 
-    it("propagates an unexpected storage-delete failure and leaves the database record intact", async () => {
+    it("Sprint 95 final correction: a database delete failure leaves the row and source file intact, and storage.deleteIntakePhoto is never called - since no filesystem mutation happens before commit, there is nothing to restore (no tombstone assertions remain)", async () => {
       const storage = mockStorage();
-      storage.deleteIntakePhoto.mockRejectedValue(new Error("simulated unexpected storage failure (e.g. EACCES)"));
       const photo = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
 
-      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).rejects.toThrow("simulated unexpected storage failure");
+      sqlite.prepare("CREATE TRIGGER fail_intake_photo_delete AFTER DELETE ON ai_intake_photos BEGIN SELECT RAISE(ABORT,'forced delete failure'); END;").run();
 
-      const remaining = await listIntakePhotos(db as any, intakeId);
-      expect(remaining).toHaveLength(1);
-      expect(remaining[0].id).toBe(photo.id);
+      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).rejects.toThrow();
+      expect(storage.deleteIntakePhoto).not.toHaveBeenCalled();
+      expect(storage.sourceExists(photo.storageKey)).toBe(true);
+      expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(1);
+
+      sqlite.prepare("DROP TRIGGER fail_intake_photo_delete;").run();
+      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).resolves.not.toThrow();
+      expect(storage.deleteIntakePhoto).toHaveBeenCalledWith(photo.storageKey);
+      expect(storage.sourceExists(photo.storageKey)).toBe(false);
+      expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(0);
     });
 
-    it("already-missing file still allows database deletion (real storage, idempotent rm)", async () => {
+    it("Sprint 95 final correction: a post-commit file delete failure still leaves the deletion logically successful, and logs one fixed, non-sensitive warning", async () => {
+      const storage = mockStorage();
+      const photo = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
+      storage.deleteIntakePhoto.mockRejectedValueOnce(new Error("simulated EACCES"));
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).resolves.not.toThrow();
+
+      // DB row remains deleted (never recreated) despite the post-commit cleanup failure.
+      expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(0);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(String(errorSpy.mock.calls[0][0])).not.toContain(photo.storageKey);
+      errorSpy.mockRestore();
+
+      // A retry of the same request returns the established missing-photo 404 behavior.
+      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it("already-missing source file still allows database deletion (real storage, idempotent post-commit delete)", async () => {
       const tempDir = await mkdtemp(path.join(os.tmpdir(), "noctella-ai-intake-photo-delete-"));
       try {
         const realStorage = new LocalAiIntakePhotoStorage(tempDir);
@@ -221,23 +262,6 @@ describe("ai intake photo foundation (Sprint 91)", () => {
       } finally {
         await rmDir(tempDir, { recursive: true, force: true });
       }
-    });
-
-    it("a database-delete failure after successful file removal can be retried successfully", async () => {
-      const storage = mockStorage();
-      const photo = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
-
-      sqlite.prepare("CREATE TRIGGER fail_intake_photo_delete AFTER DELETE ON ai_intake_photos BEGIN SELECT RAISE(ABORT,'forced delete failure'); END;").run();
-
-      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).rejects.toThrow();
-      // File deletion already ran (storage is idempotent) even though the DB delete rolled back.
-      expect(storage.deleteIntakePhoto).toHaveBeenCalledTimes(1);
-      expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(1);
-
-      sqlite.prepare("DROP TRIGGER fail_intake_photo_delete;").run();
-      await expect(deleteIntakePhoto(db as any, intakeId, photo.id, storage)).resolves.not.toThrow();
-      expect(storage.deleteIntakePhoto).toHaveBeenCalledTimes(2);
-      expect(await listIntakePhotos(db as any, intakeId)).toHaveLength(0);
     });
 
     it("rejects cross-intake deletion with NotFoundError, and does not delete the other intake's photo", async () => {
@@ -319,6 +343,7 @@ describe("ai intake photo foundation (Sprint 91)", () => {
       const { productPhotoStaticRoot } = await import("../src/services/photoStorage");
       expect(path.resolve(aiIntakePhotoStagingRoot)).not.toBe(path.resolve(productPhotoStaticRoot));
     });
+
   });
 
   describe("database foundation", () => {

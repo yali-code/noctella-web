@@ -9,6 +9,16 @@ import {
   AiIntakeApplyProposalNotReadyError,
   AiIntakeApplyProposalVersionConflictError,
   AiIntakeApplyResultStateInvalidError,
+  AiIntakePhotoFinalizationDestinationConflictError,
+  AiIntakePhotoFinalizationNoStagedPhotosError,
+  AiIntakePhotoFinalizationNotAppliedError,
+  AiIntakePhotoFinalizationPrimaryInvalidError,
+  AiIntakePhotoFinalizationProductNotDraftError,
+  AiIntakePhotoFinalizationProductPhotosExistError,
+  AiIntakePhotoFinalizationResultStateInvalidError,
+  AiIntakePhotoFinalizationSourceMissingError,
+  AiIntakePhotoFinalizationStateInvalidError,
+  AiIntakePhotoMutationNotAllowedError,
   AiIntakeProposalIntakeNotOpenError,
   AiIntakeProposalReviewResetRequiredError,
   AiIntakeProposalStaleError,
@@ -108,6 +118,44 @@ export function handleRouteError(err: unknown, res: Response): void {
     res.status(409).json({ error: err.message, code: "AI_INTAKE_APPLY_RESULT_STATE_INVALID" });
     return;
   }
+  // Sprint 95: checked before the generic ConflictError branch below, for the same
+  // subclass-ordering reason as the Sprint 88/89/93/94 conflict subclasses above.
+  if (err instanceof AiIntakePhotoMutationNotAllowedError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_MUTATION_NOT_ALLOWED" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationNotAppliedError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_NOT_APPLIED" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationProductNotDraftError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_PRODUCT_NOT_DRAFT" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationProductPhotosExistError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_PRODUCT_PHOTOS_EXIST" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationNoStagedPhotosError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_NO_STAGED_PHOTOS" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationSourceMissingError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_SOURCE_MISSING" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationDestinationConflictError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_DESTINATION_CONFLICT" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationStateInvalidError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_STATE_INVALID" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationResultStateInvalidError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_RESULT_STATE_INVALID" });
+    return;
+  }
   if (err instanceof ConflictError) {
     res.status(409).json({ error: err.message });
     return;
@@ -116,6 +164,10 @@ export function handleRouteError(err: unknown, res: Response): void {
   // same subclass-ordering reason as the ConflictError subclasses above.
   if (err instanceof AiIntakeProposalSuggestionUnavailableError) {
     res.status(400).json({ error: err.message, code: "AI_INTAKE_PROPOSAL_SUGGESTION_UNAVAILABLE" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoFinalizationPrimaryInvalidError) {
+    res.status(400).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_PRIMARY_INVALID" });
     return;
   }
   if (err instanceof BadRequestError) {

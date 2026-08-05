@@ -22,6 +22,17 @@ export interface StoredAiIntakePhoto {
 
 export interface AiIntakePhotoStorage {
   saveIntakePhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredAiIntakePhoto>;
+  /**
+   * Sprint 95 final correction: deletes the staged source file - always
+   * called AFTER the owning ai_intake_photos row has already been deleted in
+   * a committed database transaction (services/aiIntakePhotos.ts's
+   * deleteIntakePhoto), never before. Idempotent - an already-missing file
+   * is not an error (matches this method's original Sprint 91 contract
+   * exactly; no quarantine/tombstone concept exists here or anywhere in this
+   * file - a committed DB delete is the only source of truth for whether a
+   * staged photo has been deleted, and no filesystem mutation ever needs to
+   * be undone, since none happens before commit).
+   */
   deleteIntakePhoto(storageKey: string): Promise<void>;
 }
 
