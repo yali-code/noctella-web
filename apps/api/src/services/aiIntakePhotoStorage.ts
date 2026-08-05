@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { BadRequestError } from "./errors";
+import { deleteManagedFile } from "./managedFileDeletion";
 
 /**
  * Sprint 91: a dedicated, minimal storage implementation for AiIntakePhoto -
@@ -32,6 +33,18 @@ export interface AiIntakePhotoStorage {
    * file - a committed DB delete is the only source of truth for whether a
    * staged photo has been deleted, and no filesystem mutation ever needs to
    * be undone, since none happens before commit).
+   *
+   * Sprint 96: hardened to use managedFileDeletion.ts's lstat-based
+   * containment/symlink policy instead of a bare rm(path.join(...)) -
+   * storageKey is always server-generated (never client input), so this
+   * hardening is defense-in-depth, not a fix for a reachable exploit. Throws
+   * for any disposition other than "regular_file" (deleted) or
+   * "already_absent" (idempotent no-op) - the caller
+   * (services/aiIntakePhotos.ts) already wraps this call in a try/catch that
+   * swallows any failure behind one fixed, non-sensitive warning, so
+   * surfacing an anomalous disposition here (which should never legitimately
+   * occur for a server-owned key) is safe and does not change the public
+   * DELETE endpoint's success contract.
    */
   deleteIntakePhoto(storageKey: string): Promise<void>;
 }
@@ -72,7 +85,10 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage {
   }
 
   async deleteIntakePhoto(storageKey: string): Promise<void> {
-    await rm(path.join(this.root, storageKey), { force: true });
+    const disposition = await deleteManagedFile(this.root, storageKey);
+    if (disposition !== "regular_file" && disposition !== "already_absent") {
+      throw new Error(`Refusing to delete staged AI intake photo: unexpected disposition "${disposition}"`);
+    }
   }
 }
 

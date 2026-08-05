@@ -304,3 +304,46 @@ export class AiIntakePhotoFinalizationStateInvalidError extends ConflictError {
     this.name = "AiIntakePhotoFinalizationStateInvalidError";
   }
 }
+
+/**
+ * Sprint 96: thrown when a non-dry-run Admin cleanup execute request is
+ * received while AI_INTAKE_CLEANUP_EXECUTION_ENABLED is false - a deterministic
+ * refusal, never a silent downgrade to dry-run and never a silent no-op
+ * reported as success. Dry-run requests are never affected by this gate.
+ */
+export class AiIntakeCleanupExecutionDisabledError extends ConflictError {
+  constructor(message = "AI intake cleanup execution is currently disabled.") {
+    super(message);
+    this.name = "AiIntakeCleanupExecutionDisabledError";
+  }
+}
+
+/**
+ * Sprint 96: thrown when a cleanup retention/grace duration environment
+ * variable is set but does not parse to a finite positive number of
+ * milliseconds - an unexpected server configuration failure (500), never a
+ * client-facing 400, and never silently treated as "0" (which would make
+ * every candidate immediately eligible for destructive cleanup).
+ */
+export class AiIntakeCleanupConfigurationInvalidError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiIntakeCleanupConfigurationInvalidError";
+  }
+}
+
+/**
+ * Sprint 96: thrown when a staged AI intake photo DELETE (either the public
+ * single-photo path or the internal bounded retention-cleanup path) does not
+ * affect exactly the expected row(s) - a server integrity failure (500), not
+ * a lifecycle conflict (409). The row/status allowlist checks that produce a
+ * 409 AiIntakePhotoMutationNotAllowedError already ran before any DELETE
+ * statement executes; reaching this error means the DELETE itself behaved
+ * unexpectedly despite every precondition already having passed.
+ */
+export class AiIntakePhotoDeleteIntegrityFailureError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiIntakePhotoDeleteIntegrityFailureError";
+  }
+}

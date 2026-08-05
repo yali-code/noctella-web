@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm as rmDir, unlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm as rmDir, symlink, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
@@ -344,6 +344,57 @@ describe("ai intake photo foundation (Sprint 91)", () => {
       expect(path.resolve(aiIntakePhotoStagingRoot)).not.toBe(path.resolve(productPhotoStaticRoot));
     });
 
+    describe("Sprint 96: hardened containment/symlink policy (managedFileDeletion.ts)", () => {
+      it("rejects a traversal-shaped storage key, leaving the real target file untouched", async () => {
+        const buffer = await testImageBuffer();
+        const stored = await storage.saveIntakePhoto({ buffer, mimetype: "image/png", size: buffer.length });
+        const outsideMarker = path.join(tempDir, "..", `escape-marker-${path.basename(tempDir)}.txt`);
+        await writeFile(outsideMarker, "must never be touched");
+        try {
+          await expect(storage.deleteIntakePhoto(`../${path.basename(outsideMarker)}`)).rejects.toThrow();
+          expect(existsSync(outsideMarker)).toBe(true);
+          expect(existsSync(path.join(tempDir, stored.storageKey))).toBe(true);
+        } finally {
+          await unlink(outsideMarker).catch(() => {});
+        }
+      });
+
+      it("rejects an absolute-path storage key", async () => {
+        await expect(storage.deleteIntakePhoto(path.resolve(tempDir, "x.webp"))).rejects.toThrow();
+      });
+
+      it("rejects a storage key containing a path separator", async () => {
+        await expect(storage.deleteIntakePhoto("sub/dir.webp")).rejects.toThrow();
+        await expect(storage.deleteIntakePhoto("sub\\dir.webp")).rejects.toThrow();
+      });
+
+      it("retains (never deletes) a directory placed at the candidate path", async () => {
+        const dirName = "a-directory.webp";
+        await mkdir(path.join(tempDir, dirName));
+        await expect(storage.deleteIntakePhoto(dirName)).rejects.toThrow();
+        expect(existsSync(path.join(tempDir, dirName))).toBe(true);
+      });
+
+      it("retains (never deletes, never follows) a symlink placed at the candidate path", async () => {
+        const buffer = await testImageBuffer();
+        const real = await storage.saveIntakePhoto({ buffer, mimetype: "image/png", size: buffer.length });
+        const linkName = "a-symlink.webp";
+        try {
+          await symlink(path.join(tempDir, real.storageKey), path.join(tempDir, linkName));
+        } catch (err: any) {
+          if (err?.code === "EPERM" || err?.code === "EACCES") {
+            // Creating symlinks requires elevated privileges/Developer Mode on some Windows
+            // configurations - the containment/lstat policy this test exercises is still fully
+            // covered on CI (Linux). Nothing to assert if a symlink cannot even be created here.
+            return;
+          }
+          throw err;
+        }
+        await expect(storage.deleteIntakePhoto(linkName)).rejects.toThrow();
+        expect(existsSync(path.join(tempDir, linkName))).toBe(true);
+        expect(existsSync(path.join(tempDir, real.storageKey))).toBe(true);
+      });
+    });
   });
 
   describe("database foundation", () => {

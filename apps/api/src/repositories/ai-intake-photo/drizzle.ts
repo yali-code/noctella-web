@@ -3,6 +3,7 @@ import { AiProductIntakeStatus } from "@noctella/shared";
 import * as sqliteSchemaModule from "../../db/schema.sqlite";
 import type * as sqliteSchema from "../../db/schema.sqlite";
 import type * as postgresSchema from "../../db/schema.postgres";
+import { AiIntakePhotoDeleteIntegrityFailureError } from "../../services/errors";
 import type {
   AiIntakePhotoCreateInput,
   AiIntakePhotoDeleteConflict,
@@ -24,7 +25,6 @@ const then = <T, U>(value: Result<T>, next: (value: T) => Result<U>): Result<U> 
   value instanceof Promise ? value.then(next) : next(value);
 const rows = (q: any, execution: Execution): Result<any[]> =>
   execution === "synchronous" ? (Array.isArray(q) ? q : q.all()) : Promise.resolve(q);
-const run = (q: any, execution: Execution): Result<unknown> => (execution === "synchronous" ? q.run() : Promise.resolve(q));
 
 /**
  * Sprint 95 final correction: the single production implementation of "is
@@ -142,10 +142,33 @@ export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, ca
             // statement itself, or the commit that follows this callback's
             // return), the row and the staged file are simply left exactly
             // as they were.
-            return then(run(tx.delete(txTable).where(eq(txTable.id, id)), execution), () => ({
-              deleted: true,
-              storageKey: photo.storageKey as string,
-            } as AiIntakePhotoDeleteResult));
+            //
+            // Sprint 96 hardening: .returning() + an explicit affected-row
+            // check, reusing the exact .returning()/rows() shape already
+            // proven above for createLockedIfIntakeOpen's INSERT and by
+            // repositories/ai-product-intake/drizzle.ts's cancelWithExpectedState
+            // - no new dialect-specific code path is introduced. A zero- or
+            // multi-row result (structurally unreachable today given the
+            // photo was just selected, scoped by both id and intakeId, inside
+            // this same locked transaction moments earlier - but never simply
+            // assumed) is a deterministic server integrity failure, never
+            // silently treated as success.
+            //
+            // Sprint 96 correction pass: the DELETE itself is scoped by both
+            // id and intakeId (not id alone), matching the SELECT above -
+            // redundant defense-in-depth rather than relying solely on global
+            // primary-key uniqueness.
+            return then(
+              rows(tx.delete(txTable).where(and(eq(txTable.id, id), eq(txTable.intakeId, intakeId))).returning({ id: txTable.id }), execution),
+              (deletedRows: any[]) => {
+                if (deletedRows.length !== 1 || deletedRows[0].id !== id) {
+                  throw new AiIntakePhotoDeleteIntegrityFailureError(
+                    `Expected exactly one ai_intake_photos row to be deleted (id="${id}") but ${deletedRows.length} were affected`,
+                  );
+                }
+                return { deleted: true, storageKey: photo.storageKey as string } as AiIntakePhotoDeleteResult;
+              },
+            );
           },
         );
       }) as Promise<AiIntakePhotoDeleteResult>;

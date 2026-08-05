@@ -37,6 +37,7 @@ import { enqueueChannelStockSync, enqueueProductStockSync } from "./services/sto
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
+import { runAiIntakeCleanupForScheduler, MAX_CLEANUP_BATCH_SIZE } from "./services/aiIntakeCleanup";
 import { BackgroundJobType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
 import { externalListings } from "./db/schema";
@@ -126,7 +127,17 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     // dispatch attempt in services/orders.ts is only a best-effort responsiveness optimization;
     // this scheduled sweep is what actually guarantees eventual delivery (retries, dead-lettering).
     const salesInvoiceOutboxResults = await dispatchDueSalesInvoiceOutboxEvents(db, workerId, batchSize);
-    res.json({ processed, photoOutboxProcessed: photoOutboxResults.length, salesInvoiceOutboxProcessed: salesInvoiceOutboxResults.length });
+    // Sprint 96: same reuse for AI intake staged-photo retention cleanup and orphan-file recovery -
+    // never a second scheduler endpoint/cron. Cleanup has its own approved batch-size ceiling (500),
+    // applied only to this call; the other three domains' own batchSize behavior above is unchanged.
+    const cleanupBatchSize = Math.min(batchSize, MAX_CLEANUP_BATCH_SIZE);
+    const aiIntakeCleanup = await runAiIntakeCleanupForScheduler(db, { batchSize: cleanupBatchSize });
+    res.json({
+      processed,
+      photoOutboxProcessed: photoOutboxResults.length,
+      salesInvoiceOutboxProcessed: salesInvoiceOutboxResults.length,
+      aiIntakeCleanup,
+    });
   } catch (e) {
     next(e);
   }

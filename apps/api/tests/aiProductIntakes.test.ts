@@ -4,9 +4,9 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { AiProductIntakeStatus, AdminRole } from "@noctella/shared";
+import { AiProductIntakeStatus, AdminRole, AiIntakeFieldDecision, ProductType } from "@noctella/shared";
 import { ROLE_PERMISSIONS } from "@noctella/shared";
-import { NotFoundError } from "../src/services/errors";
+import { BadRequestError, NotFoundError } from "../src/services/errors";
 import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../src/services/aiProductIntakes";
 import { createAiProductIntakeRepository } from "../src/repositories/ai-product-intake/factory";
 import { createDrizzleAiProductIntakeRepository } from "../src/repositories/ai-product-intake/drizzle";
@@ -17,6 +17,13 @@ import { ensureSchema } from "../src/db/migrate";
 import { requiredSprint24Tables, runSchemaParity, validatePostgresMigrationSql } from "../src/services/databaseMigrationFoundation";
 import { MockAiListingProvider } from "../src/ai/mockProvider";
 import { createTestDb } from "./testDb";
+import { createCategory } from "../src/services/categories";
+import { uploadIntakePhoto } from "../src/services/aiIntakePhotos";
+import { generateIntakeProposal } from "../src/services/aiIntakeGeneration";
+import { updateProposalFieldReview } from "../src/services/aiIntakeProposals";
+import { saveAiIntakeAsDraft } from "../src/services/aiIntakeApply";
+import { finalizeAiIntakePhotos } from "../src/services/aiIntakePhotoFinalization";
+import type { AiIntakePhotoStorage } from "../src/services/aiIntakePhotoStorage";
 
 const root = path.resolve(__dirname, "..");
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
@@ -171,6 +178,62 @@ describe("ai product intake foundation (Sprint 90)", () => {
       expect(second.conflict?.field).toBe("status");
       expect(second.row?.status).toBe(AiProductIntakeStatus.Cancelled);
       expect(second.row?.cancelledByAdminUserId).toBe("admin-a");
+    });
+
+    it("Sprint 96: cancelling a Finalized intake is rejected with BadRequestError, and the intake remains Finalized (real end-to-end apply + finalize flow, not a direct DB row edit)", async () => {
+      function mockPhotoStorage(): AiIntakePhotoStorage {
+        let counter = 0;
+        return {
+          saveIntakePhoto: async () => {
+            counter += 1;
+            return { storageKey: `mock-key-${counter}.webp` };
+          },
+          deleteIntakePhoto: async () => {},
+        };
+      }
+
+      const category = await createCategory(db as any, { name: "Sprint 96 Cancel-Finalized Category", displayOrder: 0, isActive: true } as any);
+      const intake = await createIntake(db as any, "admin-1");
+      const storage = mockPhotoStorage();
+      await uploadIntakePhoto(db as any, intake.id, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
+
+      const generated = await generateIntakeProposal(db as any, intake.id, {
+        generate: async (req: any) => ({
+          proposal: { suggestedTitle: "Cancel Finalized Title", suggestedDescription: "d", suggestedKeywords: ["k"], confidenceScore: 0.8 },
+          metadata: { providerName: "stub-provider", promptVersion: req.prompt.version },
+        }),
+      } as any);
+      const reviewed = await updateProposalFieldReview(db as any, intake.id, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
+      await saveAiIntakeAsDraft(
+        db as any,
+        intake.id,
+        { sku: "SKU-CANCEL-FINALIZED-96", categoryId: category.id, type: ProductType.UniqueItem, priceEur: 10, expectedProposalUpdatedAt: reviewed.updatedAt } as any,
+        "admin-3",
+      );
+      const manifestDeps = {
+        readStagedPhotoBytes: async () => Buffer.from("bytes"),
+        writeDeterministicPhoto: async (input: any) => ({
+          mainStorageKey: input.mainStorageKey,
+          thumbnailStorageKey: input.thumbnailStorageKey,
+          url: `/images/product-photos/${input.mainStorageKey}`,
+          thumbnailUrl: `/images/product-photos/${input.thumbnailStorageKey}`,
+          mimeType: "image/webp",
+          sizeBytes: input.size,
+          width: 10,
+          height: 10,
+        }),
+      };
+      await finalizeAiIntakePhotos(db as any, intake.id, {}, "admin-4", manifestDeps as any);
+
+      const finalizedIntake = await getIntakeById(db as any, intake.id);
+      expect(finalizedIntake.status).toBe(AiProductIntakeStatus.Finalized);
+
+      await expect(cancelIntake(db as any, intake.id, "admin-5", "should not be allowed")).rejects.toBeInstanceOf(BadRequestError);
+
+      const intakeAfterRejectedCancel = await getIntakeById(db as any, intake.id);
+      expect(intakeAfterRejectedCancel.status).toBe(AiProductIntakeStatus.Finalized);
+      expect(intakeAfterRejectedCancel.cancelledAt).toBeUndefined();
+      expect(intakeAfterRejectedCancel.cancelledByAdminUserId).toBeUndefined();
     });
   });
 
