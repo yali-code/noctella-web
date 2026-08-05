@@ -9,6 +9,9 @@ import {
   AiIntakeApplyProposalNotReadyError,
   AiIntakeApplyProposalVersionConflictError,
   AiIntakeApplyResultStateInvalidError,
+  AiIntakeCleanupExecutionDisabledError,
+  AiIntakeCleanupConfigurationInvalidError,
+  AiIntakePhotoDeleteIntegrityFailureError,
   AiIntakePhotoFinalizationDestinationConflictError,
   AiIntakePhotoFinalizationNoStagedPhotosError,
   AiIntakePhotoFinalizationNotAppliedError,
@@ -156,6 +159,12 @@ export function handleRouteError(err: unknown, res: Response): void {
     res.status(409).json({ error: err.message, code: "AI_INTAKE_PHOTO_FINALIZATION_RESULT_STATE_INVALID" });
     return;
   }
+  // Sprint 96: checked before the generic ConflictError branch below, for the same
+  // subclass-ordering reason as every conflict subclass above.
+  if (err instanceof AiIntakeCleanupExecutionDisabledError) {
+    res.status(409).json({ error: err.message, code: "AI_INTAKE_CLEANUP_EXECUTION_DISABLED" });
+    return;
+  }
   if (err instanceof ConflictError) {
     res.status(409).json({ error: err.message });
     return;
@@ -176,6 +185,17 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof InventoryUseCaseError) {
     res.status(INVENTORY_ERROR_STATUS[err.category]).json({ error: err.message });
+    return;
+  }
+  // Sprint 96: deterministic 500s with a stable code - genuine server-side integrity/configuration
+  // failures, never a client-facing 4xx, but still distinguishable from the generic unhandled-error
+  // fallback below (which deliberately never includes a code, per the Sprint 69 rule beneath it).
+  if (err instanceof AiIntakeCleanupConfigurationInvalidError) {
+    res.status(500).json({ error: err.message, code: "AI_INTAKE_CLEANUP_CONFIGURATION_INVALID" });
+    return;
+  }
+  if (err instanceof AiIntakePhotoDeleteIntegrityFailureError) {
+    res.status(500).json({ error: err.message, code: "AI_INTAKE_PHOTO_DELETE_INTEGRITY_FAILURE" });
     return;
   }
   // Sprint 69: an unmapped exception's raw message, a JSON.stringify of it, or even a redacted

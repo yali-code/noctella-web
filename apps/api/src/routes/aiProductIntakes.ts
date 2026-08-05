@@ -8,6 +8,7 @@ import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
 import { finalizeAiIntakePhotos } from "../services/aiIntakePhotoFinalization";
+import { runAiIntakeCleanupForAdmin } from "../services/aiIntakeCleanup";
 import {
   aiProductIntakeListQuerySchema,
   cancelAiProductIntakeSchema,
@@ -17,12 +18,34 @@ import {
 import { descriptionFieldReviewSchema, keywordsFieldReviewSchema, titleFieldReviewSchema } from "../validation/aiIntakeProposal";
 import { saveAiIntakeAsDraftSchema } from "../validation/aiIntakeApply";
 import { finalizeAiIntakePhotosSchema } from "../validation/aiIntakePhotoFinalize";
+import { aiIntakeCleanupRunSchema } from "../validation/aiIntakeCleanup";
 import { BadRequestError } from "../services/errors";
 import { handleRouteError } from "./errorHandler";
 import type { AiIntakeProposalField } from "../repositories/ai-intake-proposal/types";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+/**
+ * Sprint 96: Admin dry-run/execute entry point for AI intake staged-photo
+ * retention cleanup and orphan-file recovery. Registered before the
+ * `/:id`-shaped routes below for readability; there is no actual routing
+ * collision either way ("/cleanup/run" is a two-segment path no other route
+ * in this router shares, and none of the `/:id/<literal>` routes below use
+ * "cleanup" or "run" as their literal segment). The route never inspects
+ * files, reads retention env vars, queries cleanup tables, classifies
+ * candidates, or deletes anything itself - it only parses/validates the
+ * request and delegates entirely to services/aiIntakeCleanup.ts.
+ */
+router.post("/cleanup/run", requirePermission("ai_product_intakes.manage"), async (req: AuthedRequest, res) => {
+  try {
+    const input = aiIntakeCleanupRunSchema.parse(req.body ?? {});
+    const result = await runAiIntakeCleanupForAdmin(db, { dryRun: input.dryRun, batchSize: input.batchSize });
+    res.json(result);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.post("/", requirePermission("ai_product_intakes.manage"), async (req: AuthedRequest, res) => {
   try {
