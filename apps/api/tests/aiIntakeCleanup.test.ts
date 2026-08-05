@@ -8,7 +8,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
-import { mkdir, mkdtemp, rm as rmDir, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm as rmDir, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -1045,7 +1045,8 @@ describe("Sprint 96 cleanup use case orchestration", () => {
       }
       const result = await runAiIntakeCleanupUseCase(deps(), baseInput({ now: new Date(Date.now() + 100_000_000), orphanGraceMs: 1, processStartedAt: new Date(Date.now() + 5000) }));
       expect(result.symlinksRetained).toBeGreaterThanOrEqual(1);
-      expect(existsSync(path.join(privateRoot, linkKey))).toBe(true);
+      const retainedLink = await lstat(path.join(privateRoot, linkKey));
+      expect(retainedLink.isSymbolicLink()).toBe(true);
     });
 
     it("source-already-absent during actual deletion is treated as idempotent, not a failure", async () => {
