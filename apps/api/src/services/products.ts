@@ -20,10 +20,13 @@ import type { CreateProductInput, ProductListQuery, UpdateProductCommandInput } 
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { ProductReadServiceContext } from "../repositories/product-read/types";
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
-import { categoryExistsInTransaction } from "../repositories/product-write/drizzle";
+import { categoryExistsInTransaction, createProductPhotoWithPromotionOutboxInTransaction, listProductPhotosInTransaction } from "../repositories/product-write/drizzle";
 import { createProductWithInventoryUseCase, updateProductWithInventoryUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
 import { createInventoryApplicationContextForDb } from "./inventoryApplicationContextForDb";
 import { createProductWriteTransactionCapabilityForDb } from "./productWriteTransactionCapabilityForDb";
+import { createProductPhotoMutationLockCapabilityForDb, type ProductPhotoMutationLockDriver } from "./productPhotoMutationLockTransactionCapabilityForDb";
+
+const then = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>): U | Promise<U> => (value instanceof Promise ? value.then(next) : next(value));
 
 
 function productWriteUseCaseContext(db: DbClient) {
@@ -380,6 +383,20 @@ export async function archiveProduct(db: DbClient, id: string): Promise<ProductW
 }
 
 
+/**
+ * Sprint 95 correction: the current photo count (which determines the new
+ * photo's sortOrder/isPrimary) and the metadata+outbox insert now happen
+ * together inside one Product-row-locked transaction (via
+ * productPhotoMutationLockTransactionCapabilityForDb.ts's shared lock
+ * helper), instead of reading the count outside any transaction and writing
+ * inside an ad-hoc dialect-detected one - closing the race where two
+ * concurrent uploads (or an upload racing Sprint 95 finalization) could both
+ * read the same pre-upload count. The metadata+outbox insert itself
+ * delegates to repositories/product-write/drizzle.ts's
+ * createProductPhotoWithPromotionOutboxInTransaction, the same function
+ * Sprint 95 intake-photo finalization uses - never two independent
+ * expressions of that rule.
+ */
 export async function uploadProductPhoto(
   db: DbClient,
   productId: string,
@@ -389,47 +406,53 @@ export async function uploadProductPhoto(
 ): Promise<ProductPhoto> {
   await getProductById(db, productId);
   const stored = await storage.saveProductPhoto(file);
-  const existing = await getPhotosForProduct(db, productId);
   const now = new Date().toISOString();
   const id = randomUUID();
+  const driver = ((process.env.DATABASE_DRIVER as string) || "sqlite") as ProductPhotoMutationLockDriver;
   try {
-    const values = {
-      id,
-      productId,
-      url: stored.url,
-      thumbnailUrl: stored.thumbnailUrl,
-      altText: altText ?? null,
-      sortOrder: existing.length,
-      isPrimary: existing.length === 0,
-      filename: stored.filename,
-      mimeType: stored.mimeType,
-      sizeBytes: stored.sizeBytes,
-      width: stored.width,
-      height: stored.height,
-      processingStatus: "Processing",
-      // Sprint 71: derived from the actual URLs (not `${stored.filename}-thumb`, which produced a
-      // key like "x.webp-thumb" that never matches the real "x-thumb.webp" file LocalPhotoStorage
-      // writes) so the outbox promotion handler can find the real files on disk.
-      storageKey: path.basename(stored.url),
-      thumbnailStorageKey: path.basename(stored.thumbnailUrl),
-      processingUpdatedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const eventValues = { id: randomUUID(), eventType: OutboxEventType.ProductPhotoPromoteRequested, aggregateType: "ProductPhoto", aggregateId: id, idempotencyKey: `product-photo-promote:${id}`, payload: JSON.stringify({ photoId: id, productId }), status: OutboxEventStatus.Pending, attemptCount: 0, maxAttempts: 3, availableAt: now, createdAt: now, updatedAt: now };
-    const runSync = (tx: DbClient) => {
-      void createProductWriteServiceContextForDb(tx).repositories.photos.createMetadata({ values });
-      (tx.insert(outboxEvents).values(eventValues) as unknown as { run(): void }).run();
-    };
-    const runAsync = async (tx: DbClient) => {
-      await createProductWriteServiceContextForDb(tx).repositories.photos.createMetadata({ values });
-      await tx.insert(outboxEvents).values(eventValues);
-    };
-    if (typeof (db as DbClient & { transaction?: unknown }).transaction === "function" && !Object.prototype.hasOwnProperty.call(db, "insert")) {
-      (db as DbClient & { transaction: (work: (tx: DbClient) => void) => void }).transaction(runSync);
-    } else {
-      await runAsync(db);
-    }
+    const lock = createProductPhotoMutationLockCapabilityForDb(db, driver);
+    await lock.runWithLockedProduct(productId, ({ tx, schema, execution }) =>
+      then(listProductPhotosInTransaction(tx, schema, execution, productId), (existingPhotos: any[]) => {
+        const values = {
+          id,
+          productId,
+          url: stored.url,
+          thumbnailUrl: stored.thumbnailUrl,
+          altText: altText ?? null,
+          sortOrder: existingPhotos.length,
+          isPrimary: existingPhotos.length === 0,
+          filename: stored.filename,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+          width: stored.width,
+          height: stored.height,
+          processingStatus: "Processing",
+          // Sprint 71: derived from the actual URLs (not `${stored.filename}-thumb`, which produced a
+          // key like "x.webp-thumb" that never matches the real "x-thumb.webp" file LocalPhotoStorage
+          // writes) so the outbox promotion handler can find the real files on disk.
+          storageKey: path.basename(stored.url),
+          thumbnailStorageKey: path.basename(stored.thumbnailUrl),
+          processingUpdatedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const outboxEvent = {
+          id: randomUUID(),
+          eventType: OutboxEventType.ProductPhotoPromoteRequested,
+          aggregateType: "ProductPhoto",
+          aggregateId: id,
+          idempotencyKey: `product-photo-promote:${id}`,
+          payload: JSON.stringify({ photoId: id, productId }),
+          status: OutboxEventStatus.Pending,
+          attemptCount: 0,
+          maxAttempts: 3,
+          availableAt: now,
+          createdAt: now,
+          updatedAt: now,
+        };
+        return createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, { values, outboxEvent });
+      }),
+    );
     await ensureSinglePrimary(db, productId);
     return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
   } catch (err) {

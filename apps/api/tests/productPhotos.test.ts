@@ -103,9 +103,14 @@ describe("product photo workflow", () => {
   });
 
   it("rolls back uploaded files if database persistence fails", async () => {
+    // Sprint 95: uploadProductPhoto now opens its DB write through the
+    // shared Product photo-mutation lock (a real db.transaction(...) call),
+    // not the old ad-hoc "does this object have insert as an own property"
+    // dialect heuristic - overriding .transaction itself is the entry point
+    // that actually simulates a failing DB write against the new code path.
     const storage = mockStorage();
     const failingDb = Object.create(db) as typeof db;
-    failingDb.insert = vi.fn(() => {
+    failingDb.transaction = vi.fn(() => {
       throw new Error("insert failed");
     }) as never;
     await expect(

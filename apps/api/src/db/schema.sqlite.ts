@@ -361,6 +361,8 @@ export const aiProductIntakes = sqliteTable(
     cancellationReason: text("cancellation_reason"),
     appliedAt: text("applied_at"),
     appliedByAdminUserId: text("applied_by_admin_user_id"),
+    finalizedAt: text("finalized_at"),
+    finalizedByAdminUserId: text("finalized_by_admin_user_id"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),

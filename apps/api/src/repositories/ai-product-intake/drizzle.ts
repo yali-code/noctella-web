@@ -8,6 +8,8 @@ import type {
   AiProductIntakeCancelInput,
   AiProductIntakeCancelResult,
   AiProductIntakeCreateInput,
+  AiProductIntakeFinalizeInput,
+  AiProductIntakeFinalizeResult,
   AiProductIntakeListQuery,
   AiProductIntakeRecord,
   AiProductIntakeRepository,
@@ -70,6 +72,55 @@ export function applyIntakeWithExpectedStateInTransaction(
         return {
           updated: false,
           conflict: { field: "status" as const, message: `Expected status "${AiProductIntakeStatus.Open}" but found "${existing.status}"` },
+          row: existing as AiProductIntakeRecord,
+        };
+      });
+    },
+  );
+}
+
+/**
+ * Sprint 95: the single production implementation of the guarded photo-
+ * finalization UPDATE - execution-aware, matching
+ * applyIntakeWithExpectedStateInTransaction's exact shape immediately above.
+ * WHERE id = ? AND status = 'applied' - zero affected rows means either
+ * not-found or the intake is no longer Applied (already Finalized, or never
+ * reached Applied), distinguished by conflict.field so the use case can
+ * treat "already Finalized with consistent state" as an idempotent success
+ * rather than an error. Used only by
+ * services/aiIntakePhotoFinalizeTransactionCapabilityForDb.ts - no standalone
+ * (non-transaction-scoped) caller exists, so this is not exposed on the
+ * public AiProductIntakeRepository interface, unlike applyWithExpectedState.
+ */
+export function finalizeIntakeWithExpectedStateInTransaction(
+  db: any,
+  schema: Schema,
+  execution: Execution,
+  input: AiProductIntakeFinalizeInput,
+): Result<AiProductIntakeFinalizeResult> {
+  const table = (schema as Record<string, any>).aiProductIntakes;
+  return then(
+    rows(
+      db
+        .update(table)
+        .set({
+          status: AiProductIntakeStatus.Finalized,
+          finalizedAt: input.finalizedAt,
+          finalizedByAdminUserId: input.finalizedByAdminUserId,
+          updatedAt: input.updatedAt,
+        })
+        .where(and(eq(table.id, input.id), eq(table.status, AiProductIntakeStatus.Applied)))
+        .returning(),
+      execution,
+    ),
+    (changed: any[]) => {
+      if (changed.length) return { updated: true, row: changed[0] as AiProductIntakeRecord };
+      return then(rows(db.select().from(table).where(eq(table.id, input.id)), execution), (existingRows: any[]) => {
+        const existing = existingRows[0];
+        if (!existing) return { updated: false, conflict: { field: "id" as const, message: "AI product intake not found" } };
+        return {
+          updated: false,
+          conflict: { field: "status" as const, message: `Expected status "${AiProductIntakeStatus.Applied}" but found "${existing.status}"` },
           row: existing as AiProductIntakeRecord,
         };
       });

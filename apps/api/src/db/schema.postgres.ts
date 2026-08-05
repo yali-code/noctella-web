@@ -227,6 +227,8 @@ export const aiProductIntakes = pgTable("ai_product_intakes", {
   cancellationReason: text("cancellation_reason"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   appliedByAdminUserId: text("applied_by_admin_user_id"),
+  finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+  finalizedByAdminUserId: text("finalized_by_admin_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [index("idx_ai_product_intakes_status").on(table.status)]);

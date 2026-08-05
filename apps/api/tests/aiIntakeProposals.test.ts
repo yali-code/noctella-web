@@ -44,14 +44,24 @@ import { createTestDb } from "./testDb";
 const root = path.resolve(__dirname, "..");
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
 
+/**
+ * Sprint 95 final correction: implements the simplified AiIntakePhotoStorage
+ * interface (saveIntakePhoto/deleteIntakePhoto only - no quarantine/tombstone
+ * concept remains) - mirrors aiIntakePhotos.test.ts's own mockStorage().
+ */
 function mockPhotoStorage(): AiIntakePhotoStorage {
   let counter = 0;
+  const sources = new Set<string>();
   return {
     saveIntakePhoto: vi.fn(async () => {
       counter += 1;
-      return { storageKey: `mock-key-${counter}.webp` };
+      const storageKey = `mock-key-${counter}.webp`;
+      sources.add(storageKey);
+      return { storageKey };
     }),
-    deleteIntakePhoto: vi.fn(async () => {}),
+    deleteIntakePhoto: vi.fn(async (storageKey: string) => {
+      sources.delete(storageKey);
+    }),
   };
 }
 

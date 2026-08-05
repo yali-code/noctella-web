@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as sqliteSchema from "../../db/schema.sqlite";
 import * as postgresSchema from "../../db/schema.postgres";
 import type { ProductWriteRepositoryBundle, SynchronousProductWriteRepository } from "./types";
@@ -32,6 +32,69 @@ export function categoryExistsInTransaction(
     rows(db.select({ id: categoriesTable.id }).from(categoriesTable).where(eq(categoriesTable.id, categoryId)), execution),
     (result: any[]) => result.length > 0,
   );
+}
+
+/**
+ * Sprint 95: the single production implementation of "insert one canonical
+ * ProductPhoto metadata row (Processing status) and enqueue its
+ * ProductPhotoPromoteRequested outbox event, together" - execution-aware, so
+ * it runs correctly whether called from a synchronous SQLite transaction
+ * callback or an asynchronous PostgreSQL one. Deliberately NOT built on top
+ * of createDrizzleProductWriteRepositories's `photos.createMetadata` (which
+ * always wraps its result in Promise.resolve(...), even on the synchronous
+ * SQLite path - awaiting/then-ing that inside a synchronous SQLite
+ * transaction callback would trip its "callback must stay fully synchronous"
+ * guard, exactly the class of bug this codebase has repeatedly corrected).
+ * Shared by uploadProductPhoto's own locked transaction and Sprint 95's
+ * intake-photo-finalization transaction - never two independent expressions
+ * of "how a ProductPhoto row + its promotion event are created."
+ */
+export function createProductPhotoWithPromotionOutboxInTransaction(
+  db: any,
+  schema: typeof sqliteSchema | typeof postgresSchema,
+  execution: Execution,
+  input: { values: Record<string, unknown>; outboxEvent: Record<string, unknown> },
+): Result<{ id: string }> {
+  const photosTable = table(schema, "productPhotos");
+  const outboxTable = table(schema, "outboxEvents");
+  const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === undefined ? null : v]));
+  return then(
+    run(db.insert(photosTable).values(normalize(input.values)), execution),
+    () => then(run(db.insert(outboxTable).values(input.outboxEvent), execution), () => ({ id: String(input.values.id) })),
+  );
+}
+
+/**
+ * Sprint 95: reads existing canonical ProductPhoto rows for a Product,
+ * execution-aware - used by intake-photo finalization to enforce "zero
+ * existing ProductPhoto rows" before creating any, and to find a
+ * pre-existing row at a deterministic id (a defensive inconsistent-state
+ * check). Mirrors categoryExistsInTransaction's pattern exactly.
+ */
+export function listProductPhotosInTransaction(
+  db: any,
+  schema: typeof sqliteSchema | typeof postgresSchema,
+  execution: Execution,
+  productId: string,
+): Result<any[]> {
+  const photosTable = table(schema, "productPhotos");
+  return rows(db.select().from(photosTable).where(eq(photosTable.productId, productId)), execution);
+}
+
+/**
+ * Sprint 95: reads any existing ProductPhoto rows matching the given ids,
+ * regardless of product - the defensive global deterministic-id-collision
+ * check required before a first finalization attempt inserts.
+ */
+export function findProductPhotosByIdsInTransaction(
+  db: any,
+  schema: typeof sqliteSchema | typeof postgresSchema,
+  execution: Execution,
+  ids: string[],
+): Result<any[]> {
+  const photosTable = table(schema, "productPhotos");
+  if (ids.length === 0) return execution === "synchronous" ? [] : Promise.resolve([]);
+  return rows(db.select().from(photosTable).where(inArray(photosTable.id, ids)), execution);
 }
 
 export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres", execution: Execution = "asynchronous"): any {

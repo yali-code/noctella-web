@@ -30,6 +30,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureOrderStatusCasingNormalized(sqlite);
   ensureAiListingDraftColumns(sqlite);
   ensureAiProductIntakeAppliedColumns(sqlite);
+  ensureAiProductIntakeFinalizationColumns(sqlite);
 }
 
 /**
@@ -51,6 +52,28 @@ function ensureAiProductIntakeAppliedColumns(sqlite: Database.Database): void {
   }
   if (!existing.has("applied_by_admin_user_id")) {
     sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN applied_by_admin_user_id TEXT");
+  }
+}
+
+/**
+ * Sprint 95: additive migration for the photo-finalization audit columns,
+ * matching the exact ensureAiProductIntakeAppliedColumns pattern above (and
+ * the same established PRAGMA table_info + conditional ALTER TABLE ADD
+ * COLUMN approach used throughout this file). Handles every starting shape
+ * independently (neither column present, only one of the two present, or
+ * both already present) and is safe to call repeatedly. No backfill:
+ * existing rows keep finalized_at/finalized_by_admin_user_id = NULL,
+ * correctly reflecting that they were never finalized.
+ */
+function ensureAiProductIntakeFinalizationColumns(sqlite: Database.Database): void {
+  const existing = new Set(
+    (sqlite.prepare("PRAGMA table_info(ai_product_intakes)").all() as Array<{ name: string }>).map((row) => row.name),
+  );
+  if (!existing.has("finalized_at")) {
+    sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN finalized_at TEXT");
+  }
+  if (!existing.has("finalized_by_admin_user_id")) {
+    sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN finalized_by_admin_user_id TEXT");
   }
 }
 

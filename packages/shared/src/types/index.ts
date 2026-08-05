@@ -325,6 +325,10 @@ export interface AiProductIntake extends Timestamps {
   /** Sprint 94: set exactly once, together with resultProductId, when status transitions to Applied. */
   appliedAt?: string;
   appliedByAdminUserId?: ID;
+
+  /** Sprint 95: set exactly once, when status transitions to Finalized. */
+  finalizedAt?: string;
+  finalizedByAdminUserId?: ID;
 }
 
 /**

@@ -7,6 +7,7 @@ import { deleteIntakePhoto, listIntakePhotos, uploadIntakePhoto } from "../servi
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
+import { finalizeAiIntakePhotos } from "../services/aiIntakePhotoFinalization";
 import {
   aiProductIntakeListQuerySchema,
   cancelAiProductIntakeSchema,
@@ -15,6 +16,7 @@ import {
 } from "../validation/aiProductIntake";
 import { descriptionFieldReviewSchema, keywordsFieldReviewSchema, titleFieldReviewSchema } from "../validation/aiIntakeProposal";
 import { saveAiIntakeAsDraftSchema } from "../validation/aiIntakeApply";
+import { finalizeAiIntakePhotosSchema } from "../validation/aiIntakePhotoFinalize";
 import { BadRequestError } from "../services/errors";
 import { handleRouteError } from "./errorHandler";
 import type { AiIntakeProposalField } from "../repositories/ai-intake-proposal/types";
@@ -159,6 +161,28 @@ router.post(
     try {
       const input = saveAiIntakeAsDraftSchema.parse(req.body ?? {});
       const result = await saveAiIntakeAsDraft(db, req.params.id, input, req.adminUser!.id);
+      res.status(result.created ? 201 : 200).json(result.product);
+    } catch (err) {
+      handleRouteError(err, res);
+    }
+  },
+);
+
+// Sprint 95: explicit human-triggered canonical photo finalization. Requires
+// both intake-management and Product-creation privilege, mirroring
+// /save-as-draft, since this single action both finalizes the intake and
+// creates canonical ProductPhoto rows. Actor identity always comes from
+// req.adminUser.id, never the request body - only an optional Primary
+// selection is ever accepted. An already-Finalized intake is an idempotent
+// success (200, the existing canonical Product), never a second write.
+router.post(
+  "/:id/finalize-photos",
+  requirePermission("ai_product_intakes.manage"),
+  requirePermission("products.edit"),
+  async (req: AuthedRequest, res) => {
+    try {
+      const input = finalizeAiIntakePhotosSchema.parse(req.body ?? {});
+      const result = await finalizeAiIntakePhotos(db, req.params.id, input, req.adminUser!.id);
       res.status(result.created ? 201 : 200).json(result.product);
     } catch (err) {
       handleRouteError(err, res);

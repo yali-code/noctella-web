@@ -21,6 +21,8 @@ function toIntake(row: AiProductIntakeRecord): AiProductIntake {
     cancellationReason: (row.cancellationReason as string | null) ?? undefined,
     appliedAt: toOptionalIsoString(row.appliedAt as string | Date | null),
     appliedByAdminUserId: (row.appliedByAdminUserId as string | null) ?? undefined,
+    finalizedAt: toOptionalIsoString(row.finalizedAt as string | Date | null),
+    finalizedByAdminUserId: (row.finalizedByAdminUserId as string | null) ?? undefined,
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   };

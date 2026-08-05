@@ -52,6 +52,24 @@ export interface AiProductIntakeApplyInput {
   updatedAt: string;
 }
 
+export interface AiProductIntakeFinalizeConflict {
+  field: "id" | "status";
+  message: string;
+}
+
+export interface AiProductIntakeFinalizeResult {
+  updated: boolean;
+  row?: AiProductIntakeRecord;
+  conflict?: AiProductIntakeFinalizeConflict;
+}
+
+export interface AiProductIntakeFinalizeInput {
+  id: string;
+  finalizedAt: string;
+  finalizedByAdminUserId: string;
+  updatedAt: string;
+}
+
 /**
  * Sprint 90: repository for the ai_product_intakes foundation table only.
  * All four Sprint 90 operations are single-statement, so no transaction

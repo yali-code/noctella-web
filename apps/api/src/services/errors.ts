@@ -199,3 +199,108 @@ export class AiIntakeApplyResultStateInvalidError extends ConflictError {
     this.name = "AiIntakeApplyResultStateInvalidError";
   }
 }
+
+/**
+ * Sprint 95: thrown when a staged AI intake photo delete is attempted
+ * against an intake whose current status (verified inside the intake-row
+ * lock, not just a service-layer pre-check) does not permit deletion - Open
+ * and Cancelled remain deletable (preserving Sprint 91/93 behavior); Applied,
+ * Finalized, and any future unrecognized status are rejected (fail closed).
+ */
+export class AiIntakePhotoMutationNotAllowedError extends ConflictError {
+  constructor(message = "Staged photos cannot be deleted once the intake has reached this status.") {
+    super(message);
+    this.name = "AiIntakePhotoDeletionNotAllowedError";
+  }
+}
+
+/**
+ * Sprint 95: thrown when POST /:id/finalize-photos is attempted against an
+ * intake that is not Applied and not already Finalized (i.e. Open or
+ * Cancelled) - the atomic finalization write's own guard rejected it, not
+ * just a service-layer pre-check.
+ */
+export class AiIntakePhotoFinalizationNotAppliedError extends ConflictError {
+  constructor(message = "This intake must be Applied before its photos can be finalized.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationNotAppliedError";
+  }
+}
+
+/**
+ * Sprint 95: thrown for an unrecoverable, defensive finalization result-state
+ * conflict - the intake is Applied but resultProductId is null, the
+ * referenced Product cannot be found, or an already-Finalized intake's
+ * recorded state (Product, ProductPhoto rows, Primary, audit fields) is
+ * internally inconsistent. Never repaired automatically.
+ */
+export class AiIntakePhotoFinalizationResultStateInvalidError extends ConflictError {
+  constructor(message = "This intake's finalization result is in an unexpected state and cannot be resolved automatically.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationResultStateInvalidError";
+  }
+}
+
+/** Sprint 95: thrown when the referenced Product is not in Draft status on a first finalization attempt. */
+export class AiIntakePhotoFinalizationProductNotDraftError extends ConflictError {
+  constructor(message = "The Product must remain in Draft status before its photos can be finalized.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationProductNotDraftError";
+  }
+}
+
+/** Sprint 95: thrown when the Product already has one or more canonical ProductPhoto rows - human-created photos are never appended to, replaced, or overridden. */
+export class AiIntakePhotoFinalizationProductPhotosExistError extends ConflictError {
+  constructor(message = "This Product already has canonical photos. Finalization only applies to a Product with no existing photos.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationProductPhotosExistError";
+  }
+}
+
+/** Sprint 95: thrown when the intake has no staged photos to finalize. */
+export class AiIntakePhotoFinalizationNoStagedPhotosError extends ConflictError {
+  constructor(message = "This intake has no staged photos to finalize.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationNoStagedPhotosError";
+  }
+}
+
+/** Sprint 95: thrown when a client-supplied primaryIntakePhotoId does not belong to the intake's current staged photo set. */
+export class AiIntakePhotoFinalizationPrimaryInvalidError extends BadRequestError {
+  constructor(message = "primaryIntakePhotoId does not reference a staged photo belonging to this intake.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationPrimaryInvalidError";
+  }
+}
+
+/** Sprint 95: thrown when a staged photo's source file is missing or unreadable at promotion time - a data-integrity conflict, not an unexpected server failure. */
+export class AiIntakePhotoFinalizationSourceMissingError extends ConflictError {
+  constructor(message = "A staged photo's source file could not be read.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationSourceMissingError";
+  }
+}
+
+/** Sprint 95: thrown when a deterministic canonical destination already exists with different bytes than the freshly-generated output - never silently overwritten. */
+export class AiIntakePhotoFinalizationDestinationConflictError extends ConflictError {
+  constructor(message = "A canonical photo destination already exists with different content.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationDestinationConflictError";
+  }
+}
+
+/**
+ * Sprint 95: thrown when the staged photo set re-read inside the
+ * authoritative transaction no longer matches the prepared file manifest
+ * (different staged photo ids, storage keys, order, or count than what was
+ * prepared outside the transaction), or when a pre-existing ProductPhoto row
+ * is found at a deterministic id before a first finalization attempt's
+ * insert - both indicate the operation cannot safely proceed and must fail
+ * before any write.
+ */
+export class AiIntakePhotoFinalizationStateInvalidError extends ConflictError {
+  constructor(message = "The staged photo set changed. Retry finalization.") {
+    super(message);
+    this.name = "AiIntakePhotoFinalizationStateInvalidError";
+  }
+}
