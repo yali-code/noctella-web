@@ -56,6 +56,8 @@ describe("Sprint 35K Product Write transaction capability", () => {
   test("public Product Write repository contract remains asynchronous", async () => {
     const result = createProductWriteRepositoryBundleForDb(createTestDb(), "sqlite").products.create({ values: values("p1", "SKU1") });
     expect(result).toBeInstanceOf(Promise);
-    await expect(result).resolves.toEqual({ id: "p1" });
+    // Sprint 98: create()'s result gained `created: boolean` to report a detected unique-constraint
+    // conflict without throwing - a successful creation is `{id, created: true}`.
+    await expect(result).resolves.toEqual({ id: "p1", created: true });
   });
 });

@@ -156,6 +156,48 @@ describe("POST /api/ai-product-intakes/:id/save-as-draft", () => {
     expect(res.body.code).toBe("AI_INTAKE_APPLY_INTAKE_NOT_OPEN");
   });
 
+  /**
+   * Sprint 98: proves the route no longer returns the previously unhandled 500 for this exact
+   * collision (see this file's own readyIntakeViaRoute comment above, written at Sprint 94 time,
+   * already documenting this as "a real, pre-existing characteristic ... unrelated to Sprint 94").
+   * Deliberately reuses the identical title across two intakes to force the slug collision that
+   * readyIntakeViaRoute's titleCounter otherwise avoids.
+   */
+  it("returns 409 (not the previously unhandled 500) with the safe generic conflict message when a duplicate title's derived slug collides with an existing Product", async () => {
+    const duplicateTitle = "Sprint 98 Duplicate Slug Title";
+
+    const firstIntakeId = await createIntakeViaRoute();
+    const firstGenerated = await request(app).post(`/api/ai-product-intakes/${firstIntakeId}/generate`).set("Cookie", managerCookie).send({});
+    const firstReviewed = await request(app)
+      .patch(`/api/ai-product-intakes/${firstIntakeId}/proposal/fields/title`)
+      .set("Cookie", managerCookie)
+      .send({ decision: "edited", value: duplicateTitle, expectedUpdatedAt: firstGenerated.body.updatedAt });
+    const firstSave = await request(app)
+      .post(`/api/ai-product-intakes/${firstIntakeId}/save-as-draft`)
+      .set("Cookie", managerCookie)
+      .send(baseSaveAsDraftBody({ expectedProposalUpdatedAt: firstReviewed.body.updatedAt }));
+    expect(firstSave.status).toBe(201);
+
+    const secondIntakeId = await createIntakeViaRoute();
+    const secondGenerated = await request(app).post(`/api/ai-product-intakes/${secondIntakeId}/generate`).set("Cookie", managerCookie).send({});
+    const secondReviewed = await request(app)
+      .patch(`/api/ai-product-intakes/${secondIntakeId}/proposal/fields/title`)
+      .set("Cookie", managerCookie)
+      .send({ decision: "edited", value: duplicateTitle, expectedUpdatedAt: secondGenerated.body.updatedAt });
+    const secondSave = await request(app)
+      .post(`/api/ai-product-intakes/${secondIntakeId}/save-as-draft`)
+      .set("Cookie", managerCookie)
+      .send(baseSaveAsDraftBody({ expectedProposalUpdatedAt: secondReviewed.body.updatedAt }));
+
+    expect(secondSave.status).toBe(409);
+    expect(secondSave.body.error).toBe("A product with this SKU or slug already exists.");
+    expect(secondSave.body.code).toBeUndefined(); // reuses the plain ConflictError - no new error code
+
+    const secondIntakeState = await request(app).get(`/api/ai-product-intakes/${secondIntakeId}`).set("Cookie", managerCookie);
+    expect(secondIntakeState.body.status).toBe("open");
+    expect(secondIntakeState.body.resultProductId).toBeFalsy();
+  });
+
   it("returns 404 for a nonexistent intake", async () => {
     const res = await request(app)
       .post("/api/ai-product-intakes/does-not-exist/save-as-draft")

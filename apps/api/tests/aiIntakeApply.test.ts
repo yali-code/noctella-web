@@ -9,6 +9,7 @@ import {
   AiIntakeApplyProposalVersionConflictError,
   AiIntakeApplyResultStateInvalidError,
   BadRequestError,
+  ConflictError,
   NotFoundError,
 } from "../src/services/errors";
 import { createIntake, cancelIntake, getIntakeById } from "../src/services/aiProductIntakes";
@@ -456,6 +457,51 @@ describe("AI intake explicit Save as Draft canonical apply transaction (Sprint 9
       expect(await db.select().from(products)).toHaveLength(1); // only the first intake's Product
       const intake = await getIntakeById(db as any, intakeId);
       expect(intake.status).toBe(AiProductIntakeStatus.Open);
+    });
+
+    /**
+     * Sprint 98: mirrors "a duplicate SKU creates nothing and leaves the intake Open" above, but
+     * for a title-derived slug collision - no application-level pre-check exists for slug (only
+     * existsBySku does), so this proves createProductWithInventoryInTransactionUseCase's
+     * repository-layer conflict translation covers AI Intake Save as Draft identically to normal
+     * Product creation, and that recovering with a genuinely unique title then succeeds.
+     */
+    it("a duplicate title's derived slug creates nothing and leaves the intake Open, resultProductId unset - a later unique title then succeeds", async () => {
+      const other = await createIntake(db as any, "admin-1");
+      const otherGenerated = await generateIntakeProposal(db as any, other.id, stubProvider());
+      const otherReviewed = await updateProposalFieldReview(db as any, other.id, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", otherGenerated.updatedAt);
+      const existing = await saveAiIntakeAsDraft(db as any, other.id, validRequest({ intakeId: other.id, expectedProposalUpdatedAt: otherReviewed.updatedAt, sku: "SKU-SLUG-OWNER" }) as any, "admin-3");
+      expect(existing.created).toBe(true);
+      expect(existing.product.title).toBe("Stub Title"); // same stub provider -> same derived slug
+
+      const proposal = await readyIntake();
+      const capability = createAiIntakeApplyTransactionCapabilityForDb(db as any, "sqlite");
+      let caught: unknown;
+      try {
+        await applyAiIntakeUseCase(capability, { intakeId, sku: "SKU-SLUG-CONFLICT", categoryId, type: ProductType.UniqueItem, priceEur: 10, expectedProposalUpdatedAt: proposal.updatedAt, actorId: "admin-3" });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(ConflictError);
+      expect((caught as Error).message).toBe("A product with this SKU or slug already exists.");
+      expect(await db.select().from(products)).toHaveLength(1); // only the first intake's Product
+      expect(await db.select().from(stockMovements)).toHaveLength(1); // only the first intake's initial movement
+      const intake = await getIntakeById(db as any, intakeId);
+      expect(intake.status).toBe(AiProductIntakeStatus.Open);
+      expect(intake.resultProductId).toBeUndefined();
+
+      // Recovery: editing the reviewed title to a genuinely unique value through the existing
+      // valid review flow, then retrying Save as Draft, succeeds - exactly one Product, one
+      // Inventory initialization, one initial StockMovement on this successful first application.
+      const edited = await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Edited, "A Genuinely Unique Title", "admin-2", proposal.updatedAt);
+      const recovered = await saveAiIntakeAsDraft(db as any, intakeId, validRequest({ expectedProposalUpdatedAt: edited.updatedAt, sku: "SKU-SLUG-RECOVERED" }) as any, "admin-3");
+      expect(recovered.created).toBe(true);
+      expect(recovered.product.title).toBe("A Genuinely Unique Title");
+      expect(await db.select().from(products)).toHaveLength(2);
+      expect(await db.select().from(stockMovements)).toHaveLength(2);
+      const finalIntake = await getIntakeById(db as any, intakeId);
+      expect(finalIntake.status).toBe(AiProductIntakeStatus.Applied);
+      expect(finalIntake.resultProductId).toBe(recovered.product.id);
     });
 
     it("a database failure during Inventory/StockMovement creation rolls back the Product too - no partial state", async () => {

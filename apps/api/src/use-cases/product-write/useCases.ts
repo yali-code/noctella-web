@@ -101,15 +101,24 @@ export function createProductWithInventoryInTransactionUseCase(
       repositories.productWriteRepositories.products.create({ values: productValues(input, {
         id, slug, createdAt: t, updatedAt: t,
       }) }),
-      () => chain(
-        input.stockQuantity === undefined ? { id } : chain(
-          initializeInventoryInTransactionUseCase(inventoryCtx, repositories.inventoryRepositories, {
-            productId: id, quantity, idempotencyKey: `product-create-stock:${id}`, note: "Product creation stock quantity",
-          }),
-          () => ({ id }),
-        ),
-        (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
-      ),
+      (createResult) => {
+        // Sprint 98: existsBySku above only rejects the common non-racing case - a genuine SKU or
+        // slug unique-constraint failure detected on the INSERT itself is reported here as
+        // created:false, never as a raw driver exception. Inventory, the initial StockMovement,
+        // and ERP metadata are never attempted, and (for AI Intake Save as Draft's caller) the
+        // intake is never transitioned to Applied, since this throw propagates out of the whole
+        // locked transaction before any of that runs.
+        if (!createResult.created) throw new ConflictError("A product with this SKU or slug already exists.");
+        return chain(
+          input.stockQuantity === undefined ? { id } : chain(
+            initializeInventoryInTransactionUseCase(inventoryCtx, repositories.inventoryRepositories, {
+              productId: id, quantity, idempotencyKey: `product-create-stock:${id}`, note: "Product creation stock quantity",
+            }),
+            () => ({ id }),
+          ),
+          (result) => erpMetadata ? chain(upsertErpMetadataInTransaction(repositories.productWriteRepositories.products, id, erpMetadata), () => result) : result,
+        );
+      },
     );
   });
 }
