@@ -327,7 +327,7 @@ describe("ai intake field review foundation (Sprint 93)", () => {
       await generateIntakeProposal(db as any, intakeId, stubProvider());
       const repository = createAiIntakeProposalRepository("sqlite", db);
       const [existing] = await db.select().from(aiIntakeProposals);
-      const result = await repository.updateFieldReviewAtomic(intakeId, existing.id, "title", "not-the-real-value", () => ({
+      const result = await repository.updateFieldReviewAtomic(intakeId, existing.id, "title", "not-the-real-value", AiIntakeFieldDecision.Accepted, () => ({
         decision: "accepted", value: "Stub Title", reviewedByAdminUserId: "admin-2", reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }));
       expect(result.updated).toBe(false);
@@ -339,10 +339,10 @@ describe("ai intake field review foundation (Sprint 93)", () => {
       const repository = createAiIntakeProposalRepository("sqlite", db);
       const [existing] = await db.select().from(aiIntakeProposals);
       const now = new Date().toISOString();
-      const first = await repository.updateFieldReviewAtomic(intakeId, existing.id, "title", existing.updatedAt, () => ({
+      const first = await repository.updateFieldReviewAtomic(intakeId, existing.id, "title", existing.updatedAt, AiIntakeFieldDecision.Accepted, () => ({
         decision: "accepted", value: "Stub Title", reviewedByAdminUserId: "admin-a", reviewedAt: now, updatedAt: new Date(Date.now() + 1000).toISOString(),
       }));
-      const second = await repository.updateFieldReviewAtomic(intakeId, existing.id, "description", existing.updatedAt, () => ({
+      const second = await repository.updateFieldReviewAtomic(intakeId, existing.id, "description", existing.updatedAt, AiIntakeFieldDecision.Accepted, () => ({
         decision: "accepted", value: "Stub description.", reviewedByAdminUserId: "admin-b", reviewedAt: now, updatedAt: new Date(Date.now() + 2000).toISOString(),
       }));
       expect(first.updated).toBe(true);
@@ -362,7 +362,7 @@ describe("ai intake field review foundation (Sprint 93)", () => {
       const [existing] = await db.select().from(aiIntakeProposals);
       await cancelIntake(db as any, intakeId, "admin-1");
       const repository = createAiIntakeProposalRepository("sqlite", db);
-      const result = await repository.updateFieldReviewAtomic(intakeId, existing.id, "title", existing.updatedAt, () => ({
+      const result = await repository.updateFieldReviewAtomic(intakeId, existing.id, "title", existing.updatedAt, AiIntakeFieldDecision.Accepted, () => ({
         decision: "accepted", value: "Stub Title", reviewedByAdminUserId: "admin-2", reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }));
       expect(result.updated).toBe(false);
@@ -438,6 +438,89 @@ describe("ai intake field review foundation (Sprint 93)", () => {
       expect(staleCheck.stale).toBe(true);
       const regenerated = await generateIntakeProposal(db as any, intakeId, stubProvider());
       expect(regenerated.stale).toBe(false);
+    });
+  });
+
+  /**
+   * Sprint 97: stale-proposal recovery. A field once reviewed and then made stale by a later
+   * staged-photo change could never reach Pending again before this correction (every PATCH,
+   * including decision:Pending, was rejected while stale) - which permanently blocked
+   * regeneration (it requires all three fields already Pending), an unrecoverable deadlock. The
+   * fix is a narrow exception: Pending is allowed while stale; Accepted/Edited/Rejected remain
+   * fully blocked while stale, exactly as before.
+   */
+  describe("stale-proposal recovery (Sprint 97)", () => {
+    /** Accepts the title (making it non-Pending) while NOT stale, then uploads a photo afterward to make the proposal stale. */
+    async function acceptTitleThenGoStale(): Promise<{ acceptedUpdatedAt: string }> {
+      const generated = await generateIntakeProposal(db as any, intakeId, stubProvider());
+      const accepted = await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
+      const storage = mockPhotoStorage();
+      await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("x"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", storage);
+      return { acceptedUpdatedAt: accepted.updatedAt };
+    }
+
+    it("a non-stale Pending reset still works (baseline, unaffected by the correction)", async () => {
+      const generated = await generateIntakeProposal(db as any, intakeId, stubProvider());
+      const accepted = await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
+      const reset = await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Pending, undefined, "admin-2", accepted.updatedAt);
+      expect(reset.title.decision).toBe(AiIntakeFieldDecision.Pending);
+    });
+
+    it("stale Edited is rejected", async () => {
+      const { acceptedUpdatedAt } = await acceptTitleThenGoStale();
+      await expect(
+        updateProposalFieldReview(db as any, intakeId, "description", AiIntakeFieldDecision.Edited, "Manual description", "admin-2", acceptedUpdatedAt),
+      ).rejects.toBeInstanceOf(AiIntakeProposalStaleError);
+    });
+
+    it("stale Rejected is rejected", async () => {
+      const { acceptedUpdatedAt } = await acceptTitleThenGoStale();
+      await expect(
+        updateProposalFieldReview(db as any, intakeId, "keywords", AiIntakeFieldDecision.Rejected, undefined, "admin-2", acceptedUpdatedAt),
+      ).rejects.toBeInstanceOf(AiIntakeProposalStaleError);
+    });
+
+    it("a stale Pending reset succeeds, clears value/reviewer/reviewedAt, preserves the suggestion, and advances updatedAt", async () => {
+      const { acceptedUpdatedAt } = await acceptTitleThenGoStale();
+      const reset = await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Pending, undefined, "admin-3", acceptedUpdatedAt);
+      expect(reset.title.decision).toBe(AiIntakeFieldDecision.Pending);
+      expect(reset.title.value).toBeNull();
+      expect(reset.title.reviewedByAdminUserId).toBeNull();
+      expect(reset.title.reviewedAt).toBeNull();
+      expect(reset.title.suggestion).toBe("Stub Title");
+      expect(new Date(reset.updatedAt).getTime()).toBeGreaterThan(new Date(acceptedUpdatedAt).getTime());
+    });
+
+    it("a stale Pending reset with an incorrect expectedUpdatedAt is rejected", async () => {
+      await acceptTitleThenGoStale();
+      await expect(
+        updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Pending, undefined, "admin-3", "not-the-real-updatedAt"),
+      ).rejects.toBeInstanceOf(AiIntakeProposalVersionConflictError);
+    });
+
+    it("resetting one field leaves the proposal stale (does not update photoSetFingerprint)", async () => {
+      const { acceptedUpdatedAt } = await acceptTitleThenGoStale();
+      await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Pending, undefined, "admin-3", acceptedUpdatedAt);
+      const afterReset = await getCurrentProposal(db as any, intakeId);
+      expect(afterReset.stale).toBe(true);
+    });
+
+    it("after all three fields are reset to Pending, regeneration succeeds and refreshes the photo fingerprint", async () => {
+      const { acceptedUpdatedAt } = await acceptTitleThenGoStale();
+      await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Pending, undefined, "admin-3", acceptedUpdatedAt);
+      // description/keywords were never reviewed in this flow - already Pending.
+      const regenerated = await generateIntakeProposal(db as any, intakeId, stubProvider());
+      expect(regenerated.stale).toBe(false);
+      expect(regenerated.title.decision).toBe(AiIntakeFieldDecision.Pending);
+    });
+
+    it("no Product, ProductPhoto, Inventory, or StockMovement row is ever created by stale-recovery reset/regeneration", async () => {
+      const { acceptedUpdatedAt } = await acceptTitleThenGoStale();
+      await updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Pending, undefined, "admin-3", acceptedUpdatedAt);
+      await generateIntakeProposal(db as any, intakeId, stubProvider());
+      expect(await db.select().from(products)).toHaveLength(0);
+      expect(await db.select().from(productPhotos)).toHaveLength(0);
+      expect(await db.select().from(stockMovements)).toHaveLength(0);
     });
   });
 

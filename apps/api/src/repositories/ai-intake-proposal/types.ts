@@ -1,3 +1,5 @@
+import type { AiIntakeFieldDecision } from "@noctella/shared";
+
 export type AiIntakeProposalRecord = Record<string, string | number | boolean | Date | null>;
 
 export interface AiIntakeProposalCreateInput {
@@ -85,12 +87,22 @@ export interface AiIntakeProposalRepository {
    * caller can compute the write payload (or throw a validation error, e.g.
    * for an Accepted decision with no valid suggestion) using data that is
    * provably current as of the write.
+   *
+   * Sprint 97: `requestedDecision` is the decision the caller is about to
+   * write - a narrow, explicit exception to the fingerprint-staleness check
+   * exists only when it is Pending (resetting a field back to Pending is how
+   * a stale proposal recovers, since regeneration itself requires every
+   * field to already be Pending). Accepted/Edited/Rejected remain fully
+   * blocked while stale. `requestedDecision` must equal `decide(...)`'s own
+   * returned `decision` field - this is verified by the implementation as an
+   * invariant, not merely assumed.
    */
   updateFieldReviewAtomic(
     intakeId: string,
     proposalId: string,
     field: AiIntakeProposalField,
     expectedUpdatedAt: string,
+    requestedDecision: AiIntakeFieldDecision,
     decide: (existing: AiIntakeProposalRecord) => AiIntakeProposalFieldReviewDecision,
   ): Promise<AiIntakeProposalWriteResult>;
 }

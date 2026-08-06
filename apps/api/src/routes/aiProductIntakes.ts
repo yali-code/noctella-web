@@ -3,7 +3,7 @@ import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
 import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../services/aiProductIntakes";
-import { deleteIntakePhoto, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
+import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
@@ -119,6 +119,25 @@ router.delete("/:id/photos/:photoId", requirePermission("ai_product_intakes.mana
   try {
     await deleteIntakePhoto(db, req.params.id, req.params.photoId);
     res.status(204).end();
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+/**
+ * Sprint 97: serves a staged photo's private bytes to the Admin browser.
+ * View-only permission (read, not a mutation). Never mounted as
+ * express.static - every request is permission-checked and intake/photo-
+ * ownership-checked per call. No status restriction: content remains
+ * readable for Open, Cancelled, Applied, and Finalized intakes alike.
+ */
+router.get("/:id/photos/:photoId/content", requirePermission("ai_product_intakes.view"), async (req, res) => {
+  try {
+    const buffer = await getIntakePhotoContent(db, req.params.id, req.params.photoId);
+    res.setHeader("Content-Type", "image/webp");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(buffer);
   } catch (err) {
     handleRouteError(err, res);
   }

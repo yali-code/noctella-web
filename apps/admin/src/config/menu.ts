@@ -22,6 +22,7 @@ export const adminMenuItems: AdminMenuItem[] = [
   { label: "Categories", href: "/categories" },
   { label: "Collections", href: "/collections" },
   { label: "AI Drafts", href: "/ai-drafts" },
+  { label: "AI Product Intake", href: "/ai-product-intakes" },
   { label: "Orders", href: "/orders" },
   { label: "Returns", href: "/returns" },
   { label: "Refunds", href: "/refunds" },

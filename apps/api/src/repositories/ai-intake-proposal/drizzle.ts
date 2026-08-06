@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { AiProductIntakeStatus } from "@noctella/shared";
+import { AiIntakeFieldDecision, AiProductIntakeStatus } from "@noctella/shared";
 import type * as sqliteSchema from "../../db/schema.sqlite";
 import type * as postgresSchema from "../../db/schema.postgres";
 import { computePhotoSetFingerprint } from "../../ai-intake/photoSetFingerprint";
@@ -197,6 +197,7 @@ export function createDrizzleAiIntakeProposalRepository(
       proposalId: string,
       field: AiIntakeProposalField,
       expectedUpdatedAt: string,
+      requestedDecision: AiIntakeFieldDecision,
       decide: (existing: AiIntakeProposalRecord) => AiIntakeProposalFieldReviewDecision,
     ): Promise<AiIntakeProposalWriteResult> {
       return capability.runWithLockedIntake(intakeId, ({ tx, schema: txSchema, execution, intake }) => {
@@ -217,7 +218,12 @@ export function createDrizzleAiIntakeProposalRepository(
             };
           }
           return then(currentPhotoFingerprint(tx, txSchema, intakeId, execution), (fingerprint) => {
-            if (fingerprint !== existing.photoSetFingerprint) {
+            const isStale = fingerprint !== existing.photoSetFingerprint;
+            // Sprint 97: the only exception to fingerprint-staleness rejection - a Pending reset is
+            // always allowed even while stale, since it is the sole way a stale proposal recovers
+            // (regeneration itself requires every field to already be Pending). Accepted/Edited/
+            // Rejected remain fully blocked while stale, exactly as before.
+            if (isStale && requestedDecision !== AiIntakeFieldDecision.Pending) {
               return { updated: false, conflict: { reason: "photo_context_changed" as const, message: "The staged photos changed after this proposal was generated." } };
             }
 
@@ -225,6 +231,12 @@ export function createDrizzleAiIntakeProposalRepository(
             // propagates out of the transaction (rolling it back) and out of this method, exactly
             // like a driver error, since no local try/catch here swallows it.
             const decision = decide(existing as AiIntakeProposalRecord);
+            if (decision.decision !== requestedDecision) {
+              // Defensive invariant only - decide() is always built from the same input.decision
+              // the caller already passed as requestedDecision, so this should never diverge. A
+              // fixed, non-sensitive message avoids leaking any caller-derived detail.
+              throw new Error("AI intake proposal field review decision mismatch");
+            }
             const columns: Record<AiIntakeProposalField, { decision: string; value: string; reviewedBy: string; reviewedAt: string }> = {
               title: { decision: "titleDecision", value: "titleValue", reviewedBy: "titleReviewedByAdminUserId", reviewedAt: "titleReviewedAt" },
               description: { decision: "descriptionDecision", value: "descriptionValue", reviewedBy: "descriptionReviewedByAdminUserId", reviewedAt: "descriptionReviewedAt" },
