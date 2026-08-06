@@ -1,8 +1,9 @@
 import { ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as schema from "../src/db/schema";
 import { createCategory } from "../src/services/categories";
 import { BadRequestError, ConflictError, ProductVersionConflictError } from "../src/services/errors";
-import { archiveProduct, createProduct, updateProduct } from "../src/services/products";
+import { archiveProduct, createProduct, getProductById, updateProduct } from "../src/services/products";
 import { createProductSchema, updateProductRequestSchema } from "../src/validation/product";
 import { handleRouteError } from "../src/routes/errorHandler";
 import { createTestDb } from "./testDb";
@@ -57,6 +58,37 @@ describe("product service", () => {
     await expect(createProduct(db, baseInput({ title: "Another Item" }))).rejects.toBeInstanceOf(
       ConflictError,
     );
+  });
+
+  /**
+   * Sprint 98: a duplicate title (different SKU) derives the same slug, which the database
+   * rejects via its unique constraint on `products.slug` - no application-level pre-check exists
+   * for slug (only existsBySku does). This proves the raw INSERT failure is translated into a
+   * clean canonical conflict instead of an unhandled exception, that Product A is left untouched,
+   * that no partial Product/StockMovement is created for the failed attempt, and that a later
+   * unique title still succeeds.
+   */
+  it("rejects a duplicate title's derived slug on creation from a different SKU, without creating a partial Product or StockMovement", async () => {
+    const productA = await createProduct(db, baseInput());
+    const productsBefore = (await db.select().from(schema.products)).length;
+    const movementsBefore = (await db.select().from(schema.stockMovements)).length;
+
+    let caught: unknown;
+    try {
+      await createProduct(db, baseInput({ sku: "SKU-002" })); // same default title -> same derived slug
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ConflictError);
+    expect((caught as Error).message).toBe("A product with this SKU or slug already exists.");
+
+    const unchanged = await getProductById(db, productA.id);
+    expect(unchanged.updatedAt).toBe(productA.updatedAt);
+    expect((await db.select().from(schema.products)).length).toBe(productsBefore);
+    expect((await db.select().from(schema.stockMovements)).length).toBe(movementsBefore);
+
+    const productC = await createProduct(db, baseInput({ sku: "SKU-003", title: "Vintage Chronograph Two" }));
+    expect(productC.slug).toBe("vintage-chronograph-two");
   });
 
   it("rejects a duplicate SKU on update", async () => {

@@ -13,6 +13,20 @@ const run = (q: any, execution: Execution = "asynchronous"): Result<unknown> => 
 const bool = (v: unknown) => v === true || v === 1;
 
 /**
+ * Sprint 98: PostgreSQL code 23505, or the established SQLite driver's
+ * "UNIQUE constraint failed" message form, or PostgreSQL's duplicate-key
+ * message form - the same cross-dialect signals already proven by
+ * repositories/ai-intake-proposal/drizzle.ts's isUniqueViolation. Kept as a
+ * separate local copy here per the approved Sprint 98 architecture decision
+ * (that existing helper is not extracted or modified).
+ */
+function isUniqueViolation(err: unknown): boolean {
+  const message = String((err as any)?.message ?? err);
+  const code = (err as any)?.code;
+  return code === "23505" || message.includes("UNIQUE constraint failed") || message.includes("duplicate key value violates unique constraint");
+}
+
+/**
  * Sprint 94 correction: the single production implementation of "does this
  * category id exist" - execution-aware so it can run as a plain async call
  * (services/products.ts's assertCategoryExists, used by POST /api/products
@@ -102,7 +116,35 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v === undefined ? null : v]));
   const exists = (tbl: any, col: any, value: string, excludeId?: string, idCol = tbl.id) => then(rows(db.select({ id: idCol }).from(tbl).where(eq(col, value)), execution), values => values.some((r: any) => r.id !== excludeId));
   const productRepository: SynchronousProductWriteRepository = {
-      create({ values }) { return then(run(db.insert(products).values(normalize(values)), execution), () => ({ id: String(values.id) })) as any; },
+      /**
+       * Sprint 98: catches a raw unique-constraint violation on this INSERT
+       * (SKU or slug - existsBySku above only prevents the common
+       * non-racing case) and reports it as `created: false` instead of
+       * letting the driver exception escape uncaught. Handles both the
+       * synchronous SQLite throw (caught by the try/catch, returned as a
+       * plain value - never a Promise, so the synchronous transaction
+       * callback stays synchronous) and the asynchronous PostgreSQL
+       * rejection (caught via .then's rejection handler). Any other
+       * exception is re-thrown unchanged in both branches.
+       */
+      create({ values }) {
+        try {
+          const result = run(db.insert(products).values(normalize(values)), execution);
+          if (result instanceof Promise) {
+            return result.then(
+              () => ({ id: String(values.id), created: true }),
+              (err: unknown) => {
+                if (isUniqueViolation(err)) return { id: String(values.id), created: false };
+                throw err;
+              },
+            ) as any;
+          }
+          return { id: String(values.id), created: true } as any;
+        } catch (err) {
+          if (isUniqueViolation(err)) return { id: String(values.id), created: false } as any;
+          throw err;
+        }
+      },
       update({ id, values }) { return then(run(db.update(products).set(normalize(values)).where(eq(products.id, id)), execution), () => ({ id, updated: true })) as any; },
       existsBySku: (sku, excludeId) => exists(products, products.sku, sku, excludeId) as any,
       existsByErpReference: (erpReferenceId, excludeId) => exists(products, products.erpReferenceId, erpReferenceId, excludeId) as any,

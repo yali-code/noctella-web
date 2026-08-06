@@ -14,7 +14,15 @@ export interface UpdateProductInput { id: string; values: ProductPersistenceReco
  * `update` method).
  */
 export type UpdateProductWithExpectedVersionInput = Omit<UpdateProductInput, "expectedUpdatedAt"> & { expectedUpdatedAt: string };
-export interface CreateProductResult { id: string }
+/**
+ * Sprint 98: `created: false` means the repository detected a raw database
+ * unique-constraint violation on the Product INSERT (SKU or slug) and
+ * translated it into this structured result instead of letting the driver
+ * exception escape uncaught - it never exposes which column, constraint, or
+ * dialect was involved. Any other exception from the INSERT is re-thrown
+ * unchanged by the repository and is not represented by this type.
+ */
+export interface CreateProductResult { id: string; created: boolean }
 export interface UpdateProductResult { id: string; updated: boolean; conflict?: ProductWriteConflict }
 export interface CreateCategoryInput { values: CategoryPersistenceRecord }
 export interface UpdateCategoryInput { id: string; values: CategoryPersistenceRecord }
