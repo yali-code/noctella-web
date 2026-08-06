@@ -24,6 +24,26 @@ interface Props {
 }
 
 /**
+ * Sprint 99: immediate client-side check before Save as Draft - the backend remains
+ * authoritative (this never replaces its validation, only avoids an unnecessary round trip for an
+ * obviously invalid value). priceEur is required; stockQuantity is optional but, when provided,
+ * must be a non-negative integer. Never coerces - an invalid value blocks submission with a
+ * message shown through the component's existing error area, not silently rounded/clamped.
+ */
+function validateSaveAsDraftFields(priceEur: string, stockQuantity: string): string | null {
+  if (priceEur.trim() === "") return "Price (EUR) is required.";
+  const price = Number(priceEur);
+  if (!Number.isFinite(price) || price < 0) return "Price (EUR) must be a number greater than or equal to 0.";
+  if (stockQuantity.trim() !== "") {
+    const stock = Number(stockQuantity);
+    if (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 0) {
+      return "Stock quantity must be a whole number greater than or equal to 0.";
+    }
+  }
+  return null;
+}
+
+/**
  * Sprint 97: Save-as-Draft (canonical Product/Inventory write) and Finalize
  * (canonical ProductPhoto write) - both explicit, human-confirmed, never
  * automatic. Primary selection always initializes to the first ordered
@@ -63,8 +83,13 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
 
   async function handleSaveAsDraft() {
     if (!proposal) return;
-    setSaving(true);
     setError(null);
+    const validationError = validateSaveAsDraftFields(priceEur, stockQuantity);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setSaving(true);
     try {
       await aiProductIntakesApi.saveAsDraft(intakeId, {
         sku,

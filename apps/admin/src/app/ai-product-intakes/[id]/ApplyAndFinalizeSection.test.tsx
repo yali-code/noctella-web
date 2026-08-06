@@ -148,6 +148,109 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  describe("Sprint 99: client-side price/stock validation", () => {
+    async function renderAndOpenConfirm(user: ReturnType<typeof userEvent.setup>) {
+      mockCategories();
+      const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "saveAsDraft").mockResolvedValue({} as any);
+      render(
+        <ApplyAndFinalizeSection
+          intakeId="intake-1"
+          intake={intake()}
+          photos={[]}
+          proposal={proposal}
+          onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+          onPhotosReload={vi.fn().mockResolvedValue([])}
+        />,
+      );
+      await screen.findByText("Category One");
+      await user.type(screen.getByPlaceholderText("SKU"), "SKU-1");
+      await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+      return spy;
+    }
+
+    it("missing price blocks submission", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      // Price left empty - the Confirm button is unreachable, matching the pre-existing disabled contract.
+      expect(screen.getByRole("button", { name: "Save as Draft" })).not.toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      expect(screen.getByRole("button", { name: "Confirm Save as Draft" })).toBeDisabled();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("non-numeric price blocks submission", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      await user.type(screen.getByPlaceholderText("Price (EUR)"), "abc");
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await screen.findByText("Price (EUR) must be a number greater than or equal to 0.");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("negative price blocks submission", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      await user.type(screen.getByPlaceholderText("Price (EUR)"), "-5");
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await screen.findByText("Price (EUR) must be a number greater than or equal to 0.");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("non-numeric stock blocks submission", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
+      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "abc");
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("fractional stock blocks submission", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
+      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "1.5");
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("negative stock blocks submission", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
+      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "-1");
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("valid zero price and zero stock are accepted and reach the API unchanged", async () => {
+      const user = userEvent.setup();
+      const spy = await renderAndOpenConfirm(user);
+      await user.type(screen.getByPlaceholderText("Price (EUR)"), "0");
+      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "0");
+      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await waitFor(() =>
+        expect(spy).toHaveBeenCalledWith("intake-1", {
+          sku: "SKU-1",
+          categoryId: "cat-1",
+          type: "unique_item",
+          priceEur: 0,
+          stockQuantity: 0,
+          expectedProposalUpdatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+      );
+    });
+  });
+
   it("shows the Product link once resultProductId is present", () => {
     render(
       <ApplyAndFinalizeSection
