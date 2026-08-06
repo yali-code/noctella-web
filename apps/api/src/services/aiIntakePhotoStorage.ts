@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { BadRequestError } from "./errors";
-import { deleteManagedFile } from "./managedFileDeletion";
+import { BadRequestError, NotFoundError } from "./errors";
+import { deleteManagedFile, statManagedFile } from "./managedFileDeletion";
 
 /**
  * Sprint 91: a dedicated, minimal storage implementation for AiIntakePhoto -
@@ -49,6 +49,18 @@ export interface AiIntakePhotoStorage {
   deleteIntakePhoto(storageKey: string): Promise<void>;
 }
 
+/**
+ * Sprint 97: a separate, narrow read capability for serving staged photo
+ * bytes to the Admin content endpoint - deliberately not a member of
+ * AiIntakePhotoStorage, so every existing upload/delete caller and mock is
+ * unaffected. Only ever called with a storageKey already resolved from a
+ * scoped DB row (services/aiIntakePhotos.ts's getIntakePhotoContent) - never
+ * a client-supplied value.
+ */
+export interface AiIntakePhotoContentStorage {
+  readIntakePhoto(storageKey: string): Promise<Buffer>;
+}
+
 const stagingRoot = process.env.AI_INTAKE_PHOTO_DIR ?? path.resolve(process.cwd(), "uploads/ai-intake-photos-private");
 
 function validateUpload(file: { mimetype: string; size: number }) {
@@ -60,7 +72,7 @@ function validateUpload(file: { mimetype: string; size: number }) {
   }
 }
 
-export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage {
+export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntakePhotoContentStorage {
   /**
    * Root defaults to the module-level private staging directory; an explicit
    * root may be passed (e.g. in tests, to write into an isolated mkdtemp
@@ -89,6 +101,30 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage {
     if (disposition !== "regular_file" && disposition !== "already_absent") {
       throw new Error(`Refusing to delete staged AI intake photo: unexpected disposition "${disposition}"`);
     }
+  }
+
+  /**
+   * Sprint 97: reads a staged photo's bytes for the Admin content endpoint.
+   * Uses the same lstat-based managedFileDeletion.ts classification already
+   * proven for delete - never follows a symlink, never reads a directory,
+   * never reads outside the contained root. `statManagedFile` (lstat) and
+   * this method's own `readFile` are two separate syscalls - this is not
+   * claimed to be race-free, only contained and symlink-safe at the moment
+   * of the lstat check; the accepted residual local-filesystem TOCTOU window
+   * matches the same assumption already accepted for deleteIntakePhoto and
+   * every other managedFileDeletion.ts consumer (storageKey is always
+   * server-generated, never client input).
+   */
+  async readIntakePhoto(storageKey: string): Promise<Buffer> {
+    const info = await statManagedFile(this.root, storageKey);
+    if (info.disposition === "already_absent") {
+      throw new NotFoundError("Staged photo file not found");
+    }
+    if (info.disposition !== "regular_file") {
+      // Fixed, non-sensitive message - never includes the disposition-derived path or key.
+      throw new Error("Staged AI intake photo could not be read");
+    }
+    return readFile(info.path!);
   }
 }
 

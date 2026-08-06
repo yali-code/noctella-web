@@ -3,12 +3,13 @@ import { AiProductIntakeStatus, type AiIntakePhoto } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { BadRequestError } from "./errors";
 import { getIntakeById } from "./aiProductIntakes";
-import { aiIntakePhotoStorage as defaultStorage, type AiIntakePhotoStorage } from "./aiIntakePhotoStorage";
+import { aiIntakePhotoStorage as defaultStorage, type AiIntakePhotoContentStorage, type AiIntakePhotoStorage } from "./aiIntakePhotoStorage";
 import { createAiIntakePhotoRepository } from "../repositories/ai-intake-photo/factory";
 import type { AiIntakePhotoRecord, AiIntakePhotoRepository } from "../repositories/ai-intake-photo/types";
 import {
   createAiIntakePhotoLockedUseCase,
   deleteAiIntakePhotoLockedUseCase,
+  findAiIntakePhotoUseCase,
   listAiIntakePhotosUseCase,
 } from "../use-cases/ai-intake-photo/useCases";
 
@@ -128,4 +129,25 @@ export async function deleteIntakePhoto(
     // eslint-disable-next-line no-console
     console.error("Staged AI intake photo file cleanup failed after a committed deletion - an orphan private file may remain (Sprint 96 cleanup scope)");
   }
+}
+
+/**
+ * Sprint 97: serves a staged photo's raw bytes to the Admin content
+ * endpoint. Intake-scoped by construction via findAiIntakePhotoUseCase - a
+ * photoId belonging to a different intake resolves identically to a
+ * nonexistent photo (both NotFoundError), so cross-intake access is
+ * structurally impossible rather than merely permission-checked. No
+ * lifecycle-status restriction applies - content remains readable for Open,
+ * Cancelled, Applied, and Finalized intakes alike.
+ */
+export async function getIntakePhotoContent(
+  db: DbClient,
+  intakeId: string,
+  photoId: string,
+  storage: AiIntakePhotoContentStorage = defaultStorage,
+): Promise<Buffer> {
+  await getIntakeById(db, intakeId); // throws NotFoundError if missing
+  const repository = repositoryFor(db);
+  const photo = await findAiIntakePhotoUseCase(repository, intakeId, photoId); // throws NotFoundError if missing/wrong intake
+  return storage.readIntakePhoto(photo.storageKey as string);
 }

@@ -230,18 +230,32 @@ function decideFieldReview(existing: AiIntakeProposalRecord, input: UpdateFieldR
  * immediately afterward, but the atomic repository call re-verifies the
  * fingerprint from a fresh read taken under the intake lock and is always
  * authoritative.
+ *
+ * Sprint 97: a Pending reset is exempt from this fast pre-check (and, inside
+ * the repository, from the authoritative check too) - resetting a field back
+ * to Pending is how a stale proposal recovers, since regeneration itself
+ * requires every field to already be Pending. Accepted/Edited/Rejected remain
+ * fully blocked while stale, on both the fast pre-check here and the
+ * authoritative repository check.
  */
 export async function updateFieldReviewUseCase(repository: AiIntakeProposalRepository, input: UpdateFieldReviewInput): Promise<AiIntakeProposalRecord> {
   const existing = await repository.findByIntakeId(input.intakeId);
   if (!existing) throw new NotFoundError("AI intake proposal not found");
 
-  const currentFingerprint = computePhotoSetFingerprint(input.photos);
-  if (currentFingerprint !== existing.photoSetFingerprint) {
-    throw new AiIntakeProposalStaleError();
+  if (input.decision !== AiIntakeFieldDecision.Pending) {
+    const currentFingerprint = computePhotoSetFingerprint(input.photos);
+    if (currentFingerprint !== existing.photoSetFingerprint) {
+      throw new AiIntakeProposalStaleError();
+    }
   }
 
-  const writeResult = await repository.updateFieldReviewAtomic(input.intakeId, existing.id as string, input.field, input.expectedUpdatedAt, (freshExisting) =>
-    decideFieldReview(freshExisting, input),
+  const writeResult = await repository.updateFieldReviewAtomic(
+    input.intakeId,
+    existing.id as string,
+    input.field,
+    input.expectedUpdatedAt,
+    input.decision,
+    (freshExisting) => decideFieldReview(freshExisting, input),
   );
 
   if (!writeResult.updated) translateConflict(writeResult.conflict);
