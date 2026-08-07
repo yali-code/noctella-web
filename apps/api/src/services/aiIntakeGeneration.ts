@@ -6,13 +6,10 @@ import { listIntakePhotos } from "./aiIntakePhotos";
 import { createIntakeScopedPhotoStorageKeyResolver } from "./aiIntakePhotoStorageKeyResolver";
 import { toProposalReview } from "./aiIntakeProposals";
 import { LocalAiIntakePhotoReader } from "../ai-intake/photoReader";
-import { MockAiIntakeGenerationProvider } from "../ai-intake/mockProvider";
+import { createAiIntakeGenerationProvider } from "../ai-intake/providerFactory";
 import type { AiIntakeGenerationProvider } from "../ai-intake/types";
 import { createAiIntakeProposalRepository } from "../repositories/ai-intake-proposal/factory";
 import { generateOrRegenerateProposalUseCase } from "../use-cases/ai-intake-proposal/useCases";
-
-/** Swappable provider - Sprint 92/93 wire only the local mock, no external API. */
-const defaultProvider: AiIntakeGenerationProvider = new MockAiIntakeGenerationProvider();
 
 /**
  * Sprint 93 (mandatory correction): generation is now server-authoritative
@@ -37,11 +34,18 @@ const defaultProvider: AiIntakeGenerationProvider = new MockAiIntakeGenerationPr
  * proposal) is only allowed once every field decision is Pending -
  * enforced both as a fast pre-check and, independently, as part of the
  * atomic persistence write's guard - see use-cases/ai-intake-proposal/useCases.ts.
+ *
+ * Sprint 101: the provider default is now env-driven
+ * (ai-intake/providerFactory.ts's createAiIntakeGenerationProvider, AI_INTAKE_PROVIDER=mock|openai,
+ * defaulting to Mock) rather than a fixed module-level instance. It is a default-parameter
+ * expression, not a top-level constant, so it is evaluated fresh on every call that omits the
+ * `provider` argument - a misconfigured environment fails only that specific request, never
+ * process startup - and existing test-only explicit-provider injection is unaffected.
  */
 export async function generateIntakeProposal(
   db: DbClient,
   intakeId: string,
-  provider: AiIntakeGenerationProvider = defaultProvider,
+  provider: AiIntakeGenerationProvider = createAiIntakeGenerationProvider(),
 ): Promise<AiIntakeProposalReview> {
   const intake = await getIntakeById(db, intakeId); // throws NotFoundError if missing
   if (intake.status !== AiProductIntakeStatus.Open) {
