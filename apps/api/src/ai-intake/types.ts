@@ -43,14 +43,29 @@ export interface AiIntakePhotoStorageKeyResolver {
 }
 
 /**
+ * Sprint 106: one existing, real category the AI may choose from - never a
+ * free-text or invented value. Populated by services/aiIntakeGeneration.ts
+ * from the existing canonical category list (services/categories.ts's
+ * listCategories), never duplicated/hardcoded here.
+ */
+export interface AiIntakeAllowedCategory {
+  id: string;
+  name: string;
+}
+
+/**
  * Minimal generation context - only values that already exist on
- * AiProductIntake/AiIntakePhoto. No marketplace, language, model,
- * temperature, actor, Product, Inventory, publishing state, or intake
- * status - none of these have an approved source or a current need.
+ * AiProductIntake/AiIntakePhoto, plus (Sprint 106) the existing canonical
+ * category list the AI may choose a suggestion from. No marketplace,
+ * language, model, temperature, actor, Product, Inventory, publishing state,
+ * or intake status - none of these have an approved source or a current need.
+ * `allowedCategories` is optional (defaults to none/no suggestion) so every
+ * existing caller that constructs a context without it remains valid.
  */
 export interface AiIntakeGenerationContext {
   intakeId: string;
   photos: AiIntakePhotoReference[];
+  allowedCategories?: AiIntakeAllowedCategory[];
 }
 
 export interface AiIntakePrompt {
@@ -70,16 +85,38 @@ export interface AiIntakeGenerationRequest {
 }
 
 /**
- * Minimal, typed, proposal-oriented result. No category, collection, price,
- * SKU, marketplace field, SEO field, Product status, or publishing
- * readiness - none of these are grounded in anything AiIntakeGenerationContext
- * actually contains (no Product exists yet to react to).
+ * Sprint 106: typed, proposal-oriented result - expanded from the original
+ * title/description/keywords/confidenceScore-only shape to cover the
+ * approved AI Full Product Analysis field set. Still deliberately excludes:
+ * SKU, barcode, Product id, stockQuantity, lotItemCount, purchaseCost/
+ * Currency, internalNotes, collectionId, physical measurements, weight,
+ * shippingProfile/Note, customsWarning, merchandising flags, and every
+ * marketplace-specific (eBay/Etsy/WooCommerce) field - none of these are
+ * grounded in anything AiIntakeGenerationContext actually contains, and the
+ * approved architecture keeps AI out of authority over all of them.
+ * suggestedCategoryId must be one of AiIntakeGenerationContext's own
+ * allowedCategories - never an invented category. suggestedPriceEur is a
+ * recommendation only, never an authoritative valuation. Every field is
+ * absent/undefined, never a fabricated placeholder, whenever it cannot be
+ * reliably determined from the supplied photos/context.
  */
 export interface AiIntakeProposal {
   suggestedTitle?: string;
   suggestedDescription?: string;
   suggestedKeywords?: string[];
   confidenceScore?: number;
+  suggestedCategoryId?: string;
+  suggestedBrand?: string;
+  suggestedModel?: string;
+  suggestedManufacturer?: string;
+  suggestedCountryOfOrigin?: string;
+  suggestedPeriod?: string;
+  suggestedMaterials?: string;
+  suggestedCondition?: string;
+  suggestedConditionDescription?: string;
+  suggestedSeoTitle?: string;
+  suggestedMetaDescription?: string;
+  suggestedPriceEur?: number;
 }
 
 export interface AiIntakeGenerationMetadata {

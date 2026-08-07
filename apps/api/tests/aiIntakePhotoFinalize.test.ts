@@ -727,13 +727,16 @@ describe("AI intake photo promotion, Primary selection, and finalization (Sprint
       expect(sql).not.toMatch(/DROP |DELETE FROM|ALTER TABLE .* DROP/i);
     });
 
-    it("migrations 0001-0011 are unchanged", () => {
+    it("migration 0012 itself is still present and unmodified (Sprint 106 only ever adds a later-numbered file, never edits an existing one)", () => {
       const fs = require("node:fs");
       const path = require("node:path");
       const dir = path.resolve(__dirname, "../src/db/postgres-migrations");
       const files = fs.readdirSync(dir).filter((f: string) => f.endsWith(".sql")).sort();
-      expect(files[files.length - 1]).toBe("0012_sprint95_ai_intake_photo_finalization.sql");
-      expect(files).toHaveLength(12);
+      expect(files).toContain("0012_sprint95_ai_intake_photo_finalization.sql");
+      // Sprint 106 added exactly one new migration (0013) after this file - see
+      // aiIntakeStockAcceptance.test.ts's own "PostgreSQL migration 0013 ..." test for its content.
+      expect(files[files.length - 1]).toBe("0013_sprint106_stock_acceptance.sql");
+      expect(files).toHaveLength(13);
     });
   });
 });

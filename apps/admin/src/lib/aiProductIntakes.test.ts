@@ -103,6 +103,13 @@ describe("aiProductIntakesApi (Sprint 97)", () => {
     expect(spy).toHaveBeenCalledWith("/api/ai-product-intakes/intake-1/save-as-draft", input);
   });
 
+  it("acceptIntoStock() posts the exact Stock Acceptance payload (no sku field)", async () => {
+    const spy = vi.spyOn(apiLib.api, "post").mockResolvedValue({});
+    const input = { categoryId: "cat-1", type: "unique_item", priceEur: 10, stockQuantity: 1, brand: "Acme", expectedProposalUpdatedAt: "t" };
+    await aiProductIntakesApi.acceptIntoStock("intake-1", input);
+    expect(spy).toHaveBeenCalledWith("/api/ai-product-intakes/intake-1/stock-acceptance", input);
+  });
+
   it("finalizePhotos() always sends an explicit primaryIntakePhotoId when provided", async () => {
     const spy = vi.spyOn(apiLib.api, "post").mockResolvedValue({});
     await aiProductIntakesApi.finalizePhotos("intake-1", "photo-1");

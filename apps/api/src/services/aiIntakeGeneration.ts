@@ -5,9 +5,11 @@ import { getIntakeById } from "./aiProductIntakes";
 import { listIntakePhotos } from "./aiIntakePhotos";
 import { createIntakeScopedPhotoStorageKeyResolver } from "./aiIntakePhotoStorageKeyResolver";
 import { toProposalReview } from "./aiIntakeProposals";
+import { listCategories } from "./categories";
+import { categoryListQuerySchema } from "../validation/category";
 import { LocalAiIntakePhotoReader } from "../ai-intake/photoReader";
 import { createAiIntakeGenerationProvider } from "../ai-intake/providerFactory";
-import type { AiIntakeGenerationProvider } from "../ai-intake/types";
+import type { AiIntakeAllowedCategory, AiIntakeGenerationProvider } from "../ai-intake/types";
 import { createAiIntakeProposalRepository } from "../repositories/ai-intake-proposal/factory";
 import { generateOrRegenerateProposalUseCase } from "../use-cases/ai-intake-proposal/useCases";
 
@@ -57,7 +59,14 @@ export async function generateIntakeProposal(
   const driver = (process.env.DATABASE_DRIVER as string) || "sqlite";
   const repository = createAiIntakeProposalRepository(driver, db);
 
-  const row = await generateOrRegenerateProposalUseCase(repository, provider, { intake, photos }, photoReader);
+  // Sprint 106: reuses the existing canonical category list (services/categories.ts) unchanged -
+  // never duplicated/hardcoded here - so the AI generation boundary can only ever suggest a
+  // category that genuinely exists. Active categories only (includeInactive: false), matching what
+  // an admin can actually select in the Product form.
+  const { items: categoryRows } = await listCategories(db, categoryListQuerySchema.parse({ pageSize: 100, includeInactive: false }));
+  const categories: AiIntakeAllowedCategory[] = categoryRows.map((category) => ({ id: category.id, name: category.name }));
+
+  const row = await generateOrRegenerateProposalUseCase(repository, provider, { intake, photos, categories }, photoReader);
   // The fingerprint just persisted was computed from the same photo read used to build the
   // generation context, so the freshly generated/regenerated proposal is never stale.
   return toProposalReview(row, false);

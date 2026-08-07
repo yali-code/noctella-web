@@ -374,6 +374,28 @@ export interface AiIntakeProposalReview extends Timestamps {
   description: AiIntakeReviewedField<string>;
   keywords: AiIntakeReviewedField<string[]>;
   confidenceScore?: number;
+  /**
+   * Sprint 106: expanded AI Full Product Analysis suggestions - flat,
+   * direct-value fields (unlike title/description/keywords above), mirroring
+   * confidenceScore's own existing precedent as a non-per-field-reviewed
+   * suggestion. Reviewed/edited as a whole by the admin at Stock Acceptance
+   * time, not through the per-field Accept/Edit/Reject/Pending mechanism.
+   * Absent/undefined whenever the AI could not reliably determine a value -
+   * never a fabricated placeholder.
+   */
+  suggestedCategoryId?: string;
+  suggestedBrand?: string;
+  suggestedModel?: string;
+  suggestedManufacturer?: string;
+  suggestedCountryOfOrigin?: string;
+  suggestedPeriod?: string;
+  suggestedMaterials?: string;
+  suggestedCondition?: string;
+  suggestedConditionDescription?: string;
+  suggestedSeoTitle?: string;
+  suggestedMetaDescription?: string;
+  /** AI-suggested EUR price - a recommendation only, never authoritative; the admin must review/approve or edit it before Stock Acceptance. */
+  suggestedPriceEur?: number;
   providerName: string;
   promptVersion: string;
   generatedAt: string;

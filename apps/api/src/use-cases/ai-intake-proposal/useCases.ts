@@ -13,7 +13,7 @@ import { releaseGenerationGuard, tryAcquireGenerationGuard } from "./generationG
 import { buildAiIntakeGenerationContext } from "../../ai-intake/context";
 import { computePhotoSetFingerprint } from "../../ai-intake/photoSetFingerprint";
 import { DeterministicAiIntakePromptBuilder } from "../../ai-intake/promptBuilder";
-import type { AiIntakeGenerationProvider, AiIntakePhotoReader, AiIntakePromptBuilder } from "../../ai-intake/types";
+import type { AiIntakeAllowedCategory, AiIntakeGenerationProvider, AiIntakePhotoReader, AiIntakePromptBuilder } from "../../ai-intake/types";
 import { normalizeKeywords } from "../../validation/aiIntakeProposal";
 import type {
   AiIntakeProposalConflict,
@@ -70,6 +70,8 @@ function translateConflict(conflict: AiIntakeProposalConflict | undefined): neve
 export interface GenerateOrRegenerateProposalInput {
   intake: AiProductIntake;
   photos: AiIntakePhoto[];
+  /** Sprint 106: the existing canonical category list, fetched by the caller (services/aiIntakeGeneration.ts) - optional so existing callers/tests remain valid. */
+  categories?: AiIntakeAllowedCategory[];
 }
 
 /**
@@ -110,12 +112,29 @@ export async function generateOrRegenerateProposalUseCase(
 
   try {
     const fingerprint = computePhotoSetFingerprint(input.photos);
-    const context = buildAiIntakeGenerationContext(input.intake, input.photos);
+    const context = buildAiIntakeGenerationContext(input.intake, input.photos, input.categories ?? []);
     const prompt = promptBuilder.build(context);
     const result = await provider.generate({ context, prompt, photoReader });
 
     const now = new Date().toISOString();
     const suggestedKeywords = result.proposal.suggestedKeywords ? JSON.stringify(result.proposal.suggestedKeywords) : null;
+    // Sprint 106: the twelve expanded AI Full Product Analysis suggestions - direct pass-through of
+    // whatever the provider returned (already null-when-unsure and schema-validated by the
+    // provider itself, e.g. openAiOutputSchema.ts) into the same shape both write methods share.
+    const expandedSuggestions = {
+      suggestedCategoryId: result.proposal.suggestedCategoryId ?? null,
+      suggestedBrand: result.proposal.suggestedBrand ?? null,
+      suggestedModel: result.proposal.suggestedModel ?? null,
+      suggestedManufacturer: result.proposal.suggestedManufacturer ?? null,
+      suggestedCountryOfOrigin: result.proposal.suggestedCountryOfOrigin ?? null,
+      suggestedPeriod: result.proposal.suggestedPeriod ?? null,
+      suggestedMaterials: result.proposal.suggestedMaterials ?? null,
+      suggestedCondition: result.proposal.suggestedCondition ?? null,
+      suggestedConditionDescription: result.proposal.suggestedConditionDescription ?? null,
+      suggestedSeoTitle: result.proposal.suggestedSeoTitle ?? null,
+      suggestedMetaDescription: result.proposal.suggestedMetaDescription ?? null,
+      suggestedPriceEur: result.proposal.suggestedPriceEur ?? null,
+    };
 
     const writeResult: AiIntakeProposalWriteResult = existing
       ? await repository.refreshPendingFields({
@@ -127,6 +146,7 @@ export async function generateOrRegenerateProposalUseCase(
           suggestedDescription: result.proposal.suggestedDescription ?? null,
           suggestedKeywords,
           confidenceScore: result.proposal.confidenceScore ?? null,
+          ...expandedSuggestions,
           generatedAt: now,
           providerName: result.metadata.providerName,
           promptVersion: result.metadata.promptVersion,
@@ -140,6 +160,7 @@ export async function generateOrRegenerateProposalUseCase(
           suggestedDescription: result.proposal.suggestedDescription ?? null,
           suggestedKeywords,
           confidenceScore: result.proposal.confidenceScore ?? null,
+          ...expandedSuggestions,
           generatedAt: now,
           providerName: result.metadata.providerName,
           promptVersion: result.metadata.promptVersion,

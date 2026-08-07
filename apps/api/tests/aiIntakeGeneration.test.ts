@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BadRequestError, NotFoundError } from "../src/services/errors";
 import { createIntake, cancelIntake } from "../src/services/aiProductIntakes";
+import { createCategory } from "../src/services/categories";
 import { uploadIntakePhoto } from "../src/services/aiIntakePhotos";
 import { generateIntakeProposal } from "../src/services/aiIntakeGeneration";
 import { generateAiIntakeProposalUseCase } from "../src/use-cases/ai-intake-generation/useCases";
@@ -82,12 +83,19 @@ describe("ai intake generation provider seam (Sprint 92)", () => {
       for (const value of Object.values(context.photos[0])) {
         expect(typeof value).not.toBe("function");
       }
-      expect(Object.keys(context)).toEqual(["intakeId", "photos"]);
+      // Sprint 106: allowedCategories joined the context shape (caller-fetched, defaults to []).
+      expect(Object.keys(context)).toEqual(["intakeId", "photos", "allowedCategories"]);
     });
 
-    it("works with an empty photo list", () => {
+    it("works with an empty photo list, and with no allowedCategories argument defaults to an empty array", () => {
       const context = buildAiIntakeGenerationContext({ id: intakeId } as any, []);
-      expect(context).toEqual({ intakeId, photos: [] });
+      expect(context).toEqual({ intakeId, photos: [], allowedCategories: [] });
+    });
+
+    it("Sprint 106: passes through a supplied allowedCategories list unchanged (pure mapping, never queries the database itself)", async () => {
+      const categories = [{ id: "cat-1", name: "Furniture" }];
+      const context = buildAiIntakeGenerationContext({ id: intakeId } as any, [], categories);
+      expect(context.allowedCategories).toBe(categories); // the exact reference, not a re-derived/re-fetched copy
     });
 
     it("is deterministic - identical input produces deep-equal output", async () => {
@@ -384,6 +392,41 @@ describe("ai intake generation provider seam (Sprint 92)", () => {
       await generateIntakeProposal(db as any, intakeId);
       expect(readSpy).not.toHaveBeenCalled();
       readSpy.mockRestore();
+    });
+
+    describe("Sprint 106: existing canonical category list reuse", () => {
+      it("fetches active categories via the existing canonical services/categories.ts listCategories and passes them into the generation context - never a hardcoded/duplicated list", async () => {
+        const category = await createCategory(db as any, { name: "Furniture", displayOrder: 0, isActive: true } as any);
+        let capturedContext: any;
+        const capturingProvider: AiIntakeGenerationProvider = {
+          generate: vi.fn(async (req) => {
+            capturedContext = req.context;
+            return { proposal: {}, metadata: { providerName: "capturing", promptVersion: req.prompt.version } };
+          }),
+        };
+        await generateIntakeProposal(db as any, intakeId, capturingProvider);
+        expect(capturedContext.allowedCategories).toEqual(expect.arrayContaining([{ id: category.id, name: "Furniture" }]));
+      });
+
+      it("excludes inactive categories, matching what an admin can actually select in the Product form", async () => {
+        const inactive = await createCategory(db as any, { name: "Retired Category", displayOrder: 0, isActive: false } as any);
+        let capturedContext: any;
+        const capturingProvider: AiIntakeGenerationProvider = {
+          generate: vi.fn(async (req) => {
+            capturedContext = req.context;
+            return { proposal: {}, metadata: { providerName: "capturing", promptVersion: req.prompt.version } };
+          }),
+        };
+        await generateIntakeProposal(db as any, intakeId, capturingProvider);
+        expect((capturedContext.allowedCategories as Array<{ id: string }>).some((c) => c.id === inactive.id)).toBe(false);
+      });
+
+      it("the Mock provider remains fully deterministic and never populates any of the twelve expanded suggestion fields", async () => {
+        const result = await generateIntakeProposal(db as any, intakeId);
+        expect(result.suggestedCategoryId).toBeUndefined();
+        expect(result.suggestedBrand).toBeUndefined();
+        expect(result.suggestedPriceEur).toBeUndefined();
+      });
     });
   });
 
