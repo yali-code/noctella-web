@@ -7,7 +7,7 @@ import {
   type AiIntakeProposalReview,
   type AiIntakeReviewedField,
 } from "@noctella/shared";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { aiProductIntakesApi } from "@/lib/aiProductIntakes";
 
@@ -43,6 +43,24 @@ export function ProposalReviewSection({ intakeId, intakeStatus, photos, proposal
   const [busyField, setBusyField] = useState<FieldName | null>(null);
   const [editingField, setEditingField] = useState<FieldName | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  /**
+   * Sprint 99: resets local edit-in-progress state (editingField/editValue) only when the
+   * incoming proposal is genuinely a different version - identified by id+updatedAt, the most
+   * stable identity available, never by object reference alone (a parent re-render passing the
+   * same proposal content must not interrupt an in-progress edit). Never auto-submits, auto-
+   * retries, or silently keeps editing against a proposal that no longer exists - it only clears
+   * local state; the backend's own expectedUpdatedAt check is unchanged and unaffected.
+   */
+  const proposalVersionKey = proposal ? `${proposal.id}:${proposal.updatedAt}` : null;
+  const lastProposalVersionKeyRef = useRef<string | null>(proposalVersionKey);
+  useEffect(() => {
+    if (lastProposalVersionKeyRef.current !== proposalVersionKey) {
+      lastProposalVersionKeyRef.current = proposalVersionKey;
+      setEditingField(null);
+      setEditValue("");
+    }
+  }, [proposalVersionKey]);
 
   const isOpen = intakeStatus === AiProductIntakeStatus.Open;
   const stale = proposal?.stale === true;

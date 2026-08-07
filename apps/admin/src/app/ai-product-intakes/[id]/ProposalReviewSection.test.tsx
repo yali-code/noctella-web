@@ -298,6 +298,98 @@ describe("ProposalReviewSection (Sprint 97)", () => {
     );
   });
 
+  describe("Sprint 99: local edit-state reset on proposal version change", () => {
+    async function startEditingTitle(user: ReturnType<typeof userEvent.setup>, initialProposal: any) {
+      const { rerender } = render(
+        <ProposalReviewSection
+          intakeId="intake-1"
+          intakeStatus={AiProductIntakeStatus.Open}
+          photos={[]}
+          proposal={initialProposal}
+          onProposalChanged={vi.fn()}
+          onProposalReload={vi.fn()}
+        />,
+      );
+      const editButtons = screen.getAllByRole("button", { name: "Edit" });
+      await user.click(editButtons[0]);
+      const input = screen.getByDisplayValue("Suggested value");
+      await user.clear(input);
+      await user.type(input, "My In-Progress Edit");
+      return rerender;
+    }
+
+    it("editing state remains when the same proposal version is re-rendered", async () => {
+      const user = userEvent.setup();
+      const rerender = await startEditingTitle(user, proposal());
+      rerender(
+        <ProposalReviewSection
+          intakeId="intake-1"
+          intakeStatus={AiProductIntakeStatus.Open}
+          photos={[]}
+          proposal={proposal()} // same id+updatedAt, deliberately a new object reference
+          onProposalChanged={vi.fn()}
+          onProposalReload={vi.fn()}
+        />,
+      );
+      expect(screen.getByDisplayValue("My In-Progress Edit")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save Edit" })).toBeInTheDocument();
+    });
+
+    it("editing state resets when proposal.updatedAt changes", async () => {
+      const user = userEvent.setup();
+      const rerender = await startEditingTitle(user, proposal());
+      rerender(
+        <ProposalReviewSection
+          intakeId="intake-1"
+          intakeStatus={AiProductIntakeStatus.Open}
+          photos={[]}
+          proposal={proposal({ updatedAt: "2026-01-02T00:00:00.000Z" })}
+          onProposalChanged={vi.fn()}
+          onProposalReload={vi.fn()}
+        />,
+      );
+      expect(screen.queryByDisplayValue("My In-Progress Edit")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Save Edit" })).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Edit" })[0]).toBeInTheDocument();
+    });
+
+    it("editing state resets when proposal identity changes", async () => {
+      const user = userEvent.setup();
+      const rerender = await startEditingTitle(user, proposal());
+      rerender(
+        <ProposalReviewSection
+          intakeId="intake-1"
+          intakeStatus={AiProductIntakeStatus.Open}
+          photos={[]}
+          proposal={proposal({ id: "proposal-2" })}
+          onProposalChanged={vi.fn()}
+          onProposalReload={vi.fn()}
+        />,
+      );
+      expect(screen.queryByDisplayValue("My In-Progress Edit")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Save Edit" })).not.toBeInTheDocument();
+    });
+
+    it("no API mutation is triggered by the reset", async () => {
+      const user = userEvent.setup();
+      const updateSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "updateFieldReview");
+      const generateSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "generateProposal");
+      const rerender = await startEditingTitle(user, proposal());
+      rerender(
+        <ProposalReviewSection
+          intakeId="intake-1"
+          intakeStatus={AiProductIntakeStatus.Open}
+          photos={[]}
+          proposal={proposal({ updatedAt: "2026-01-02T00:00:00.000Z" })}
+          onProposalChanged={vi.fn()}
+          onProposalReload={vi.fn()}
+        />,
+      );
+      expect(updateSpy).not.toHaveBeenCalled();
+      expect(generateSpy).not.toHaveBeenCalled();
+    });
+  });
+
   it("successful regeneration (after confirmation) replaces the complete proposal state", async () => {
     const user = userEvent.setup();
     const onProposalChanged = vi.fn();
