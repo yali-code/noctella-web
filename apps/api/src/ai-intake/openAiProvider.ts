@@ -4,7 +4,7 @@ import {
   AiIntakeProviderTooManyPhotosError,
   AiIntakeProviderUnavailableError,
 } from "../services/errors";
-import { AI_INTAKE_OPENAI_RESPONSE_JSON_SCHEMA, aiIntakeOpenAiResponseSchema, toAiIntakeProposal } from "./openAiOutputSchema";
+import { buildAiIntakeOpenAiResponseJsonSchema, buildAiIntakeOpenAiResponseZodSchema, toAiIntakeProposal } from "./openAiOutputSchema";
 import type { AiIntakeGenerationProvider, AiIntakeGenerationRequest, AiIntakeGenerationResult } from "./types";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -25,8 +25,13 @@ export interface AiIntakeOpenAiProviderConfig {
  */
 const OPENAI_SYSTEM_PROMPT_ADDENDUM =
   "Describe only what is reasonably visible in the supplied photos and intake metadata. " +
-  "Never invent or guess a maker, model, material, date, or provenance that is not clearly evidenced. " +
+  "Never invent or guess a maker, model, material, date, provenance, or any other fact that is not " +
+  "clearly evidenced - leave a field null/unknown rather than fabricate it. " +
   "Write concise, marketplace-neutral draft text only. " +
+  "If a category list is provided, choose the single best-fitting category id from that exact list " +
+  "only, or null if none genuinely fits - never invent a category id or name. " +
+  "A suggested EUR price is a rough recommendation only, never a certain valuation - leave it null " +
+  "if you cannot form a reasonable estimate from the photos alone. " +
   "You are producing a draft proposal for human review only - you never create or modify a Product, " +
   "never change Inventory, and never publish anything.";
 
@@ -63,20 +68,35 @@ export class OpenAiIntakeGenerationProvider implements AiIntakeGenerationProvide
       }),
     );
 
+    // Sprint 106: the existing canonical category list (never duplicated/hardcoded here - the
+    // caller, services/aiIntakeGeneration.ts, already sourced it from services/categories.ts)
+    // constrains suggestedCategoryId's JSON Schema `enum` below, and is also surfaced as readable
+    // text so the model has a real basis for choosing between the allowed ids.
+    const allowedCategories = context.allowedCategories ?? [];
+    const allowedCategoryIds = allowedCategories.map((category) => category.id);
+    const categoryListText =
+      allowedCategories.length > 0
+        ? `Available categories (choose suggestedCategoryId from this exact list, or null): ${allowedCategories.map((category) => `${category.id} = ${category.name}`).join("; ")}`
+        : "No categories are currently available - suggestedCategoryId must be null.";
+
     const body = {
       model: this.config.model,
       instructions: `${prompt.systemPrompt}\n\n${OPENAI_SYSTEM_PROMPT_ADDENDUM}`,
       input: [
         {
           role: "user",
-          content: [{ type: "input_text" as const, text: prompt.userPrompt }, ...imageInputs],
+          content: [
+            { type: "input_text" as const, text: prompt.userPrompt },
+            { type: "input_text" as const, text: categoryListText },
+            ...imageInputs,
+          ],
         },
       ],
       text: {
         format: {
           type: "json_schema",
           name: "ai_intake_proposal",
-          schema: AI_INTAKE_OPENAI_RESPONSE_JSON_SCHEMA,
+          schema: buildAiIntakeOpenAiResponseJsonSchema(allowedCategoryIds),
           strict: true,
         },
       },
@@ -122,7 +142,7 @@ export class OpenAiIntakeGenerationProvider implements AiIntakeGenerationProvide
       throw new AiIntakeProviderInvalidResponseError();
     }
 
-    const validated = aiIntakeOpenAiResponseSchema.safeParse(parsedJson);
+    const validated = buildAiIntakeOpenAiResponseZodSchema(allowedCategoryIds).safeParse(parsedJson);
     if (!validated.success) throw new AiIntakeProviderInvalidResponseError();
 
     return {

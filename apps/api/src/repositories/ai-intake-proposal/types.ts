@@ -2,7 +2,29 @@ import type { AiIntakeFieldDecision } from "@noctella/shared";
 
 export type AiIntakeProposalRecord = Record<string, string | number | boolean | Date | null>;
 
-export interface AiIntakeProposalCreateInput {
+/**
+ * Sprint 106: the twelve expanded AI Full Product Analysis suggestion
+ * fields - direct, single-value suggestions (see schema.sqlite.ts's
+ * aiIntakeProposals table comment for why these are not tracked with the
+ * per-field Accept/Edit/Reject/Pending decision columns title/description/
+ * keywords use). Shared by both the insert and refresh inputs below.
+ */
+export interface AiIntakeProposalExpandedSuggestions {
+  suggestedCategoryId: string | null;
+  suggestedBrand: string | null;
+  suggestedModel: string | null;
+  suggestedManufacturer: string | null;
+  suggestedCountryOfOrigin: string | null;
+  suggestedPeriod: string | null;
+  suggestedMaterials: string | null;
+  suggestedCondition: string | null;
+  suggestedConditionDescription: string | null;
+  suggestedSeoTitle: string | null;
+  suggestedMetaDescription: string | null;
+  suggestedPriceEur: number | null;
+}
+
+export interface AiIntakeProposalCreateInput extends AiIntakeProposalExpandedSuggestions {
   id: string;
   intakeId: string;
   /** Fingerprint computed from the same photo read used to build the generation context, before the provider was called. */
@@ -18,7 +40,7 @@ export interface AiIntakeProposalCreateInput {
   updatedAt: string;
 }
 
-export interface AiIntakeProposalRefreshInput {
+export interface AiIntakeProposalRefreshInput extends AiIntakeProposalExpandedSuggestions {
   id: string;
   intakeId: string;
   expectedUpdatedAt: string;

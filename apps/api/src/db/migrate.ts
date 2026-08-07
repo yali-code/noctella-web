@@ -31,6 +31,49 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureAiListingDraftColumns(sqlite);
   ensureAiProductIntakeAppliedColumns(sqlite);
   ensureAiProductIntakeFinalizationColumns(sqlite);
+  ensureAiIntakeProposalStockAcceptanceColumns(sqlite);
+  ensureProductSkuSequenceTable(sqlite);
+}
+
+/**
+ * Sprint 106: additive migration for the AI Full Product Analysis expanded
+ * suggestion columns - `CREATE TABLE IF NOT EXISTS` in schema.sql is a no-op
+ * for the already-existing ai_intake_proposals table (Sprint 93), matching
+ * the same established ensureAiProductIntakeAppliedColumns pattern. No
+ * backfill: existing proposal rows keep every new column NULL, correctly
+ * reflecting that they were generated before these fields existed.
+ */
+function ensureAiIntakeProposalStockAcceptanceColumns(sqlite: Database.Database): void {
+  const existing = new Set(
+    (sqlite.prepare("PRAGMA table_info(ai_intake_proposals)").all() as Array<{ name: string }>).map((row) => row.name),
+  );
+  const columns: Array<{ name: string; ddl: string }> = [
+    { name: "suggested_category_id", ddl: "TEXT" },
+    { name: "suggested_brand", ddl: "TEXT" },
+    { name: "suggested_model", ddl: "TEXT" },
+    { name: "suggested_manufacturer", ddl: "TEXT" },
+    { name: "suggested_country_of_origin", ddl: "TEXT" },
+    { name: "suggested_period", ddl: "TEXT" },
+    { name: "suggested_materials", ddl: "TEXT" },
+    { name: "suggested_condition", ddl: "TEXT" },
+    { name: "suggested_condition_description", ddl: "TEXT" },
+    { name: "suggested_seo_title", ddl: "TEXT" },
+    { name: "suggested_meta_description", ddl: "TEXT" },
+    { name: "suggested_price_eur", ddl: "REAL" },
+  ];
+  for (const column of columns) {
+    if (!existing.has(column.name)) sqlite.exec(`ALTER TABLE ai_intake_proposals ADD COLUMN ${column.name} ${column.ddl}`);
+  }
+}
+
+/**
+ * Sprint 106: the single persisted counter row source for system-generated
+ * Product SKUs (NOC-000001, NOC-000002, ...) - see
+ * repositories/product-write/drizzle.ts's allocateNextProductSkuInTransaction.
+ * A new, narrowly-scoped table, not an ALTER of an existing one.
+ */
+function ensureProductSkuSequenceTable(sqlite: Database.Database): void {
+  sqlite.exec("CREATE TABLE IF NOT EXISTS product_sku_sequence (id TEXT PRIMARY KEY, next_value INTEGER NOT NULL);");
 }
 
 /**

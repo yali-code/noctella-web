@@ -30,11 +30,11 @@ function mockCategories() {
   vi.spyOn(api, "get").mockResolvedValue({ items: [{ id: "cat-1", name: "Category One" }], total: 1, page: 1, pageSize: 100 });
 }
 
-describe("ApplyAndFinalizeSection (Sprint 97)", () => {
-  it("Save as Draft requires explicit confirmation and submits the exact canonical payload", async () => {
+describe("ApplyAndFinalizeSection (Sprint 97/106)", () => {
+  it("Stock Acceptance requires explicit confirmation, submits no sku, and includes only the entered optional fields", async () => {
     const user = userEvent.setup();
     mockCategories();
-    const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "saveAsDraft").mockResolvedValue({} as any);
+    const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({} as any);
     render(
       <ApplyAndFinalizeSection
         intakeId="intake-1"
@@ -46,22 +46,87 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       />,
     );
     await screen.findByText("Category One");
-    await user.type(screen.getByPlaceholderText("SKU"), "SKU-1");
     await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
     await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
-    await user.click(screen.getByRole("button", { name: "Save as Draft" }));
+    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     expect(spy).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+    await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith("intake-1", {
-        sku: "SKU-1",
         categoryId: "cat-1",
         type: "unique_item",
         priceEur: 10,
         stockQuantity: undefined,
+        brand: undefined,
+        model: undefined,
+        manufacturer: undefined,
+        countryOfOrigin: undefined,
+        period: undefined,
+        materials: undefined,
+        condition: undefined,
+        conditionDescription: undefined,
+        seoTitle: undefined,
+        metaDescription: undefined,
         expectedProposalUpdatedAt: "2026-01-01T00:00:00.000Z",
       }),
     );
+  });
+
+  it("never renders a SKU input - SKU is always system-generated", async () => {
+    mockCategories();
+    render(
+      <ApplyAndFinalizeSection
+        intakeId="intake-1"
+        intake={intake()}
+        photos={[]}
+        proposal={proposal}
+        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+        onPhotosReload={vi.fn().mockResolvedValue([])}
+      />,
+    );
+    await screen.findByText("Category One");
+    expect(screen.queryByPlaceholderText("SKU")).not.toBeInTheDocument();
+  });
+
+  it("pre-fills optional fields from the proposal's AI suggestions, editable before submission", async () => {
+    const user = userEvent.setup();
+    mockCategories();
+    const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({} as any);
+    const suggestedProposal = {
+      ...proposal,
+      suggestedCategoryId: "cat-1",
+      suggestedPriceEur: 42,
+      suggestedBrand: "Acme",
+      suggestedModel: "Model X",
+      suggestedManufacturer: "Acme Corp",
+      suggestedCountryOfOrigin: "Germany",
+      suggestedPeriod: "1920s",
+      suggestedMaterials: "Oak",
+      suggestedCondition: "Good",
+      suggestedConditionDescription: "Minor wear",
+      suggestedSeoTitle: "Antique Oak Item",
+      suggestedMetaDescription: "A fine antique item.",
+    };
+    render(
+      <ApplyAndFinalizeSection
+        intakeId="intake-1"
+        intake={intake()}
+        photos={[]}
+        proposal={suggestedProposal}
+        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+        onPhotosReload={vi.fn().mockResolvedValue([])}
+      />,
+    );
+    await screen.findByText("Category One");
+    expect(screen.getByDisplayValue("Acme")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("42")).toBeInTheDocument();
+    // The admin can override an AI-suggested value before confirming.
+    const brandInput = screen.getByPlaceholderText("Brand (optional)");
+    await user.clear(brandInput);
+    await user.type(brandInput, "Overridden Brand");
+    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+    await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("intake-1", expect.objectContaining({ brand: "Overridden Brand", model: "Model X" })));
   });
 
   it("Primary selection initializes to the first ordered staged photo and allows reselection", async () => {
@@ -151,7 +216,7 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
   describe("Sprint 99: client-side price/stock validation", () => {
     async function renderAndOpenConfirm(user: ReturnType<typeof userEvent.setup>) {
       mockCategories();
-      const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "saveAsDraft").mockResolvedValue({} as any);
+      const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({} as any);
       render(
         <ApplyAndFinalizeSection
           intakeId="intake-1"
@@ -163,7 +228,6 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
         />,
       );
       await screen.findByText("Category One");
-      await user.type(screen.getByPlaceholderText("SKU"), "SKU-1");
       await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
       return spy;
     }
@@ -172,9 +236,9 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const user = userEvent.setup();
       const spy = await renderAndOpenConfirm(user);
       // Price left empty - the Confirm button is unreachable, matching the pre-existing disabled contract.
-      expect(screen.getByRole("button", { name: "Save as Draft" })).not.toBeDisabled();
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      expect(screen.getByRole("button", { name: "Confirm Save as Draft" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Accept into Stock" })).not.toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      expect(screen.getByRole("button", { name: "Confirm Stock Acceptance" })).toBeDisabled();
       expect(spy).not.toHaveBeenCalled();
     });
 
@@ -182,8 +246,8 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const user = userEvent.setup();
       const spy = await renderAndOpenConfirm(user);
       await user.type(screen.getByPlaceholderText("Price (EUR)"), "abc");
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
       await screen.findByText("Price (EUR) must be a number greater than or equal to 0.");
       expect(spy).not.toHaveBeenCalled();
     });
@@ -192,8 +256,8 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const user = userEvent.setup();
       const spy = await renderAndOpenConfirm(user);
       await user.type(screen.getByPlaceholderText("Price (EUR)"), "-5");
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
       await screen.findByText("Price (EUR) must be a number greater than or equal to 0.");
       expect(spy).not.toHaveBeenCalled();
     });
@@ -203,8 +267,8 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const spy = await renderAndOpenConfirm(user);
       await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
       await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "abc");
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
       await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
       expect(spy).not.toHaveBeenCalled();
     });
@@ -214,8 +278,8 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const spy = await renderAndOpenConfirm(user);
       await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
       await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "1.5");
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
       await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
       expect(spy).not.toHaveBeenCalled();
     });
@@ -225,8 +289,8 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const spy = await renderAndOpenConfirm(user);
       await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
       await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "-1");
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
       await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
       expect(spy).not.toHaveBeenCalled();
     });
@@ -236,17 +300,19 @@ describe("ApplyAndFinalizeSection (Sprint 97)", () => {
       const spy = await renderAndOpenConfirm(user);
       await user.type(screen.getByPlaceholderText("Price (EUR)"), "0");
       await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "0");
-      await user.click(screen.getByRole("button", { name: "Save as Draft" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Save as Draft" }));
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
       await waitFor(() =>
-        expect(spy).toHaveBeenCalledWith("intake-1", {
-          sku: "SKU-1",
-          categoryId: "cat-1",
-          type: "unique_item",
-          priceEur: 0,
-          stockQuantity: 0,
-          expectedProposalUpdatedAt: "2026-01-01T00:00:00.000Z",
-        }),
+        expect(spy).toHaveBeenCalledWith(
+          "intake-1",
+          expect.objectContaining({
+            categoryId: "cat-1",
+            type: "unique_item",
+            priceEur: 0,
+            stockQuantity: 0,
+            expectedProposalUpdatedAt: "2026-01-01T00:00:00.000Z",
+          }),
+        ),
       );
     });
   });

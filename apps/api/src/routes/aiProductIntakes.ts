@@ -7,6 +7,7 @@ import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntak
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
+import { acceptAiIntakeIntoStock } from "../services/aiIntakeStockAcceptance";
 import { finalizeAiIntakePhotos } from "../services/aiIntakePhotoFinalization";
 import { runAiIntakeCleanupForAdmin } from "../services/aiIntakeCleanup";
 import {
@@ -17,6 +18,7 @@ import {
 } from "../validation/aiProductIntake";
 import { descriptionFieldReviewSchema, keywordsFieldReviewSchema, titleFieldReviewSchema } from "../validation/aiIntakeProposal";
 import { saveAiIntakeAsDraftSchema } from "../validation/aiIntakeApply";
+import { stockAcceptanceSchema } from "../validation/aiIntakeStockAcceptance";
 import { finalizeAiIntakePhotosSchema } from "../validation/aiIntakePhotoFinalize";
 import { aiIntakeCleanupRunSchema } from "../validation/aiIntakeCleanup";
 import { BadRequestError } from "../services/errors";
@@ -203,6 +205,30 @@ router.post(
     try {
       const input = saveAiIntakeAsDraftSchema.parse(req.body ?? {});
       const result = await saveAiIntakeAsDraft(db, req.params.id, input, req.adminUser!.id);
+      res.status(result.created ? 201 : 200).json(result.product);
+    } catch (err) {
+      handleRouteError(err, res);
+    }
+  },
+);
+
+// Sprint 106: explicit human-triggered canonical Stock Acceptance transaction
+// - the approved successor to /save-as-draft for the AI Intake workflow
+// (that endpoint remains unchanged and fully functional for backward
+// compatibility; the Admin UI now calls this one instead). Requires both
+// intake-management and Product-creation privilege, mirroring /save-as-draft
+// exactly. Acting admin identity always comes from req.adminUser.id, never
+// the request body - `sku` is never accepted here at all (system-generated).
+// An already-Applied intake is an idempotent success (200, the existing
+// Product), never a second Product, never a second SKU allocation.
+router.post(
+  "/:id/stock-acceptance",
+  requirePermission("ai_product_intakes.manage"),
+  requirePermission("products.edit"),
+  async (req: AuthedRequest, res) => {
+    try {
+      const input = stockAcceptanceSchema.parse(req.body ?? {});
+      const result = await acceptAiIntakeIntoStock(db, req.params.id, input, req.adminUser!.id);
       res.status(result.created ? 201 : 200).json(result.product);
     } catch (err) {
       handleRouteError(err, res);

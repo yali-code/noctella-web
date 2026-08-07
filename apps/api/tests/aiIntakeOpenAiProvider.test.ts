@@ -35,7 +35,11 @@ function fakePhotoReader(bytesByReferenceId: Record<string, string> = {}): AiInt
   };
 }
 
-function fakeRequest(photoCount: number, photoReader: AiIntakePhotoReader = fakePhotoReader()): AiIntakeGenerationRequest {
+function fakeRequest(
+  photoCount: number,
+  photoReader: AiIntakePhotoReader = fakePhotoReader(),
+  allowedCategories: Array<{ id: string; name: string }> = [],
+): AiIntakeGenerationRequest {
   return {
     context: {
       intakeId: "intake-1",
@@ -44,6 +48,7 @@ function fakeRequest(photoCount: number, photoReader: AiIntakePhotoReader = fake
         originalFilename: `photo-${i}.webp`,
         referenceId: `photo-${i}`,
       })),
+      allowedCategories,
     },
     prompt: { version: AI_INTAKE_PROMPT_VERSION, systemPrompt: "system", userPrompt: "user" },
     photoReader,
@@ -55,15 +60,46 @@ function rawResponse(body: unknown, init: { status?: number } = {}) {
 }
 
 /**
+ * Sprint 106: OpenAI's strict Structured Outputs mode requires every schema
+ * property to be present in a real response (missing/"optional" fields are
+ * represented as `null`, never an omitted key) - see
+ * openAiOutputSchema.ts's buildAiIntakeOpenAiResponseZodSchema, which has no
+ * `.optional()` anywhere. Test payloads below only specify the fields each
+ * test actually cares about; this default fills every other one of the
+ * twelve expanded suggestion fields with `null`, mirroring exactly what a
+ * real strict-mode response looks like for an unrequested field.
+ */
+const DEFAULT_PROPOSAL_FIELDS = {
+  suggestedTitle: null,
+  suggestedDescription: null,
+  suggestedKeywords: null,
+  confidenceScore: null,
+  suggestedCategoryId: null,
+  suggestedBrand: null,
+  suggestedModel: null,
+  suggestedManufacturer: null,
+  suggestedCountryOfOrigin: null,
+  suggestedPeriod: null,
+  suggestedMaterials: null,
+  suggestedCondition: null,
+  suggestedConditionDescription: null,
+  suggestedSeoTitle: null,
+  suggestedMetaDescription: null,
+  suggestedPriceEur: null,
+} as const;
+
+/**
  * Sprint 101 correction: builds the actual documented raw REST response
  * shape (`output[]` -> `{type: "message", content: [...]}` -> `{type:
  * "output_text", text}`) - NOT the SDK-only `output_text` convenience field,
  * which does not exist on the raw HTTP response body. Every "successful
  * response" test in this file goes through this helper, so they all
- * exercise the same parsing path a real API call would use.
+ * exercise the same parsing path a real API call would use. `payload` is
+ * merged onto DEFAULT_PROPOSAL_FIELDS (not replacing it) so each test only
+ * needs to specify the fields it actually cares about.
  */
-function structuredOutputResponse(payload: unknown, init: { status?: number } = {}) {
-  return rawResponse({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(payload) }] }] }, init);
+function structuredOutputResponse(payload: Record<string, unknown>, init: { status?: number } = {}) {
+  return rawResponse({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({ ...DEFAULT_PROPOSAL_FIELDS, ...payload }) }] }] }, init);
 }
 
 describe("AI Intake provider factory (Sprint 101)", () => {
@@ -180,6 +216,94 @@ describe("OpenAiIntakeGenerationProvider (Sprint 101)", () => {
     expect(result.proposal.suggestedDescription).toBeUndefined();
     expect(result.proposal.suggestedKeywords).toBeUndefined();
     expect(result.proposal.confidenceScore).toBeUndefined();
+  });
+
+  describe("Sprint 106: expanded AI Full Product Analysis fields", () => {
+    it("maps a successful response's twelve expanded fields into the AiIntakeProposal contract unchanged", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        structuredOutputResponse({
+          suggestedCategoryId: "cat-1",
+          suggestedBrand: "Acme",
+          suggestedModel: "Model X",
+          suggestedManufacturer: "Acme Corp",
+          suggestedCountryOfOrigin: "Germany",
+          suggestedPeriod: "1920s",
+          suggestedMaterials: "Oak",
+          suggestedCondition: "Good",
+          suggestedConditionDescription: "Minor wear",
+          suggestedSeoTitle: "Antique Oak Item",
+          suggestedMetaDescription: "A fine antique item.",
+          suggestedPriceEur: 42.5,
+        }),
+      );
+      const result = await provider().generate(fakeRequest(0, undefined, [{ id: "cat-1", name: "Furniture" }]));
+      expect(result.proposal.suggestedCategoryId).toBe("cat-1");
+      expect(result.proposal.suggestedBrand).toBe("Acme");
+      expect(result.proposal.suggestedModel).toBe("Model X");
+      expect(result.proposal.suggestedManufacturer).toBe("Acme Corp");
+      expect(result.proposal.suggestedCountryOfOrigin).toBe("Germany");
+      expect(result.proposal.suggestedPeriod).toBe("1920s");
+      expect(result.proposal.suggestedMaterials).toBe("Oak");
+      expect(result.proposal.suggestedCondition).toBe("Good");
+      expect(result.proposal.suggestedConditionDescription).toBe("Minor wear");
+      expect(result.proposal.suggestedSeoTitle).toBe("Antique Oak Item");
+      expect(result.proposal.suggestedMetaDescription).toBe("A fine antique item.");
+      expect(result.proposal.suggestedPriceEur).toBe(42.5);
+    });
+
+    it("null-when-unsure: every expanded field maps to undefined (never a fabricated value), matching the base fields' convention", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({}));
+      const result = await provider().generate(fakeRequest(0));
+      expect(result.proposal.suggestedCategoryId).toBeUndefined();
+      expect(result.proposal.suggestedBrand).toBeUndefined();
+      expect(result.proposal.suggestedModel).toBeUndefined();
+      expect(result.proposal.suggestedManufacturer).toBeUndefined();
+      expect(result.proposal.suggestedCountryOfOrigin).toBeUndefined();
+      expect(result.proposal.suggestedPeriod).toBeUndefined();
+      expect(result.proposal.suggestedMaterials).toBeUndefined();
+      expect(result.proposal.suggestedCondition).toBeUndefined();
+      expect(result.proposal.suggestedConditionDescription).toBeUndefined();
+      expect(result.proposal.suggestedSeoTitle).toBeUndefined();
+      expect(result.proposal.suggestedMetaDescription).toBeUndefined();
+      expect(result.proposal.suggestedPriceEur).toBeUndefined();
+    });
+
+    it("category constraint: the allowed category list is sent both as JSON Schema enum and as readable request text, and a real category id in the response is accepted", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({ suggestedCategoryId: "cat-2" }));
+      const result = await provider().generate(
+        fakeRequest(0, undefined, [{ id: "cat-1", name: "Furniture" }, { id: "cat-2", name: "Clocks" }]),
+      );
+      const [, init] = fetchSpy.mock.calls[0]!;
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.text.format.schema.properties.suggestedCategoryId.enum).toEqual(["cat-1", "cat-2", null]);
+      const categoryText = body.input[0].content.find((c: { type: string; text?: string }) => c.type === "input_text" && c.text?.includes("Available categories"));
+      expect(categoryText.text).toContain("cat-1 = Furniture");
+      expect(categoryText.text).toContain("cat-2 = Clocks");
+      expect(result.proposal.suggestedCategoryId).toBe("cat-2");
+    });
+
+    it("category constraint: a response category id outside the allowed list is rejected as an invalid response, never silently accepted", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({ suggestedCategoryId: "cat-invented" }));
+      await expect(provider().generate(fakeRequest(0, undefined, [{ id: "cat-1", name: "Furniture" }]))).rejects.toBeInstanceOf(
+        AiIntakeProviderInvalidResponseError,
+      );
+    });
+
+    it("category constraint: an empty allowed-category list degenerates to null-only - any non-null response value is rejected", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({ suggestedCategoryId: "cat-1" }));
+      await expect(provider().generate(fakeRequest(0, undefined, []))).rejects.toBeInstanceOf(AiIntakeProviderInvalidResponseError);
+    });
+
+    it("empty allowed-category list still sends a request (degenerate but not a crash) and a null response category id is accepted", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({ suggestedCategoryId: null }));
+      const result = await provider().generate(fakeRequest(0, undefined, []));
+      expect(result.proposal.suggestedCategoryId).toBeUndefined();
+    });
+
+    it("priceEur suggestion: schema-bounded to non-negative, an out-of-range negative value is rejected (never clamped)", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({ suggestedPriceEur: -5 }));
+      await expect(provider().generate(fakeRequest(0))).rejects.toBeInstanceOf(AiIntakeProviderInvalidResponseError);
+    });
   });
 
   describe("raw REST response shape (Sprint 101 correction)", () => {

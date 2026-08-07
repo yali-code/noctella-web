@@ -261,6 +261,20 @@ export const aiIntakeProposals = pgTable("ai_intake_proposals", {
   suggestedDescription: text("suggested_description"),
   suggestedKeywords: text("suggested_keywords"),
   confidenceScore: numeric("confidence_score", { precision: 18, scale: 6 }),
+  // Sprint 106: expanded AI Full Product Analysis suggestion fields - see
+  // schema.sqlite.ts's identical block for the full rationale.
+  suggestedCategoryId: text("suggested_category_id"),
+  suggestedBrand: text("suggested_brand"),
+  suggestedModel: text("suggested_model"),
+  suggestedManufacturer: text("suggested_manufacturer"),
+  suggestedCountryOfOrigin: text("suggested_country_of_origin"),
+  suggestedPeriod: text("suggested_period"),
+  suggestedMaterials: text("suggested_materials"),
+  suggestedCondition: text("suggested_condition"),
+  suggestedConditionDescription: text("suggested_condition_description"),
+  suggestedSeoTitle: text("suggested_seo_title"),
+  suggestedMetaDescription: text("suggested_meta_description"),
+  suggestedPriceEur: numeric("suggested_price_eur", { precision: 18, scale: 6 }),
   titleDecision: text("title_decision").notNull().default("pending"),
   titleValue: text("title_value"),
   titleReviewedByAdminUserId: text("title_reviewed_by_admin_user_id"),
@@ -279,6 +293,18 @@ export const aiIntakeProposals = pgTable("ai_intake_proposals", {
   promptVersion: text("prompt_version").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+/**
+ * Sprint 106: a single persisted counter row (id="product_sku") that is the
+ * sole source of truth for the next system-generated Product SKU
+ * (NOC-000001, NOC-000002, ...) - see
+ * repositories/product-write/drizzle.ts's allocateNextProductSkuInTransaction.
+ * Narrowly scoped to this one purpose, not a generic sequence facility.
+ */
+export const productSkuSequence = pgTable("product_sku_sequence", {
+  id: text("id").primaryKey().notNull(),
+  nextValue: integer("next_value").notNull(),
 });
 
 export const offers = pgTable("offers", {

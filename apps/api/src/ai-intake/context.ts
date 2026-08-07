@@ -1,5 +1,5 @@
 import type { AiIntakePhoto, AiProductIntake } from "@noctella/shared";
-import type { AiIntakeGenerationContext } from "./types";
+import type { AiIntakeAllowedCategory, AiIntakeGenerationContext } from "./types";
 
 /**
  * Sprint 92 (exact-review correction): pure mapping from already-fetched
@@ -13,8 +13,18 @@ import type { AiIntakeGenerationContext } from "./types";
  * built here contains no storage key value anywhere. Resolving a referenceId
  * back to a storage key happens only behind AiIntakePhotoReader, via
  * services/aiIntakePhotoStorageKeyResolver.ts.
+ *
+ * Sprint 106: `allowedCategories` is fetched by the caller from the existing
+ * canonical category list (services/categories.ts's listCategories) and
+ * passed through unchanged - this function never queries categories itself,
+ * matching its own established "pure mapping, no DB access" contract.
+ * Defaults to an empty array so every pre-Sprint-106 call site remains valid.
  */
-export function buildAiIntakeGenerationContext(intake: AiProductIntake, photos: AiIntakePhoto[]): AiIntakeGenerationContext {
+export function buildAiIntakeGenerationContext(
+  intake: AiProductIntake,
+  photos: AiIntakePhoto[],
+  allowedCategories: AiIntakeAllowedCategory[] = [],
+): AiIntakeGenerationContext {
   return {
     intakeId: intake.id,
     photos: photos.map((photo) => ({
@@ -22,5 +32,6 @@ export function buildAiIntakeGenerationContext(intake: AiProductIntake, photos: 
       originalFilename: photo.originalFilename,
       referenceId: photo.id,
     })),
+    allowedCategories,
   };
 }

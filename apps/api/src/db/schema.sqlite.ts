@@ -409,6 +409,23 @@ export const aiIntakeProposals = sqliteTable("ai_intake_proposals", {
   suggestedDescription: text("suggested_description"),
   suggestedKeywords: text("suggested_keywords"),
   confidenceScore: real("confidence_score"),
+  // Sprint 106: expanded AI Full Product Analysis suggestion fields - direct,
+  // single-value suggestions (not tracked with the per-field Accept/Edit/
+  // Reject/Pending decision columns title/description/keywords use below,
+  // since these are discrete values reviewed/edited as a whole at Stock
+  // Acceptance time, not long-form text needing word-level review).
+  suggestedCategoryId: text("suggested_category_id"),
+  suggestedBrand: text("suggested_brand"),
+  suggestedModel: text("suggested_model"),
+  suggestedManufacturer: text("suggested_manufacturer"),
+  suggestedCountryOfOrigin: text("suggested_country_of_origin"),
+  suggestedPeriod: text("suggested_period"),
+  suggestedMaterials: text("suggested_materials"),
+  suggestedCondition: text("suggested_condition"),
+  suggestedConditionDescription: text("suggested_condition_description"),
+  suggestedSeoTitle: text("suggested_seo_title"),
+  suggestedMetaDescription: text("suggested_meta_description"),
+  suggestedPriceEur: real("suggested_price_eur"),
   titleDecision: text("title_decision").notNull().default("pending"),
   titleValue: text("title_value"),
   titleReviewedByAdminUserId: text("title_reviewed_by_admin_user_id"),
@@ -431,6 +448,18 @@ export const aiIntakeProposals = sqliteTable("ai_intake_proposals", {
   updatedAt: text("updated_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
+ * Sprint 106: a single persisted counter row (id="product_sku") that is the
+ * sole source of truth for the next system-generated Product SKU
+ * (NOC-000001, NOC-000002, ...) - see
+ * repositories/product-write/drizzle.ts's allocateNextProductSkuInTransaction.
+ * Narrowly scoped to this one purpose, not a generic sequence facility.
+ */
+export const productSkuSequence = sqliteTable("product_sku_sequence", {
+  id: text("id").primaryKey(),
+  nextValue: integer("next_value").notNull(),
 });
 
 /** Sprint 4: minimal "Make an Offer" persistence. Never auto-accepted. */
