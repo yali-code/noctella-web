@@ -347,3 +347,60 @@ export class AiIntakePhotoDeleteIntegrityFailureError extends Error {
     this.name = "AiIntakePhotoDeleteIntegrityFailureError";
   }
 }
+
+/**
+ * Sprint 101: thrown when AI_INTAKE_PROVIDER is set to an unsupported value,
+ * or when AI_INTAKE_PROVIDER=openai but one or more of
+ * AI_INTAKE_OPENAI_API_KEY / AI_INTAKE_OPENAI_MODEL / AI_INTAKE_OPENAI_MAX_PHOTOS
+ * is missing or invalid. Always thrown before any network request is made
+ * (see ai-intake/providerFactory.ts) - a deterministic server configuration
+ * failure (500), never a client-facing 400. The message is always built from
+ * fixed, app-controlled text only (env var names, never their values), so it
+ * never risks echoing a secret.
+ */
+export class AiIntakeProviderConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiIntakeProviderConfigurationError";
+  }
+}
+
+/** Sprint 101: thrown when the real AI provider rejects the request as unauthenticated (HTTP 401/403) - never surfaces the API key or the provider's raw response body. */
+export class AiIntakeProviderAuthenticationError extends Error {
+  constructor(message = "The AI provider rejected the request as unauthenticated.") {
+    super(message);
+    this.name = "AiIntakeProviderAuthenticationError";
+  }
+}
+
+/** Sprint 101: thrown for a network-level failure, timeout, rate limit (429), or any provider-side 5xx - never surfaces the raw error or response body. */
+export class AiIntakeProviderUnavailableError extends Error {
+  constructor(message = "The AI provider is temporarily unavailable. Try again later.") {
+    super(message);
+    this.name = "AiIntakeProviderUnavailableError";
+  }
+}
+
+/** Sprint 101: thrown when the provider's response cannot be parsed, does not contain structured output text, or fails schema validation - the raw model/response body is never surfaced. */
+export class AiIntakeProviderInvalidResponseError extends Error {
+  constructor(message = "The AI provider returned an unusable response.") {
+    super(message);
+    this.name = "AiIntakeProviderInvalidResponseError";
+  }
+}
+
+/**
+ * Sprint 101: thrown by the real AI provider (never the Mock provider, which
+ * has no configured limit) when an intake's current staged-photo count
+ * exceeds AI_INTAKE_OPENAI_MAX_PHOTOS - rejected before any network request,
+ * never silently truncated. Extends ConflictError since this is a
+ * business-state precondition on the intake, not a malformed request body.
+ */
+export class AiIntakeProviderTooManyPhotosError extends ConflictError {
+  constructor(maxPhotos: number, actualPhotos: number) {
+    super(
+      `This intake has ${actualPhotos} staged photos, which exceeds the configured AI provider limit of ${maxPhotos}. Remove photos before generating a proposal.`,
+    );
+    this.name = "AiIntakeProviderTooManyPhotosError";
+  }
+}
