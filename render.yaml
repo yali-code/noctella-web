@@ -54,6 +54,16 @@ services:
       # before a real payment gateway is integrated.
       - key: MOCK_PAYMENTS_ENABLED
         value: "true"
+      # Sprint 104: deliberately left as "mock" here - merging this Blueprint change must never by
+      # itself activate paid OpenAI usage. The real provider is enabled later only through a
+      # separate, explicit operational step (switching this value in the Render dashboard, per the
+      # Sprint 104 activation plan), never as a side effect of a repository merge.
+      - key: AI_INTAKE_PROVIDER
+        value: mock
+      - key: AI_INTAKE_OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: AI_INTAKE_OPENAI_MAX_PHOTOS
+        value: "5"
       # Render-generated secrets - random values created by Render, never written to this file
       # or committed to source control. Verify the generated MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY
       # actually decodes to 32 bytes (see runbook risk note) before relying on marketplace
@@ -83,6 +93,8 @@ services:
       - key: ETSY_REDIRECT_URI
         sync: false
       - key: ETSY_WEBHOOK_SECRET
+        sync: false
+      - key: AI_INTAKE_OPENAI_API_KEY
         sync: false
 
   # --- B. Admin web service -------------------------------------------------------------------
