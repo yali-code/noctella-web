@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminRole, AiIntakeFieldDecision, AiProductIntakeStatus } from "@noctella/shared";
 import {
+  AiIntakeGenerationInProgressError,
   AiIntakeProposalIntakeNotOpenError,
   AiIntakeProposalReviewResetRequiredError,
   AiIntakeProposalStaleError,
@@ -73,6 +74,37 @@ function stubProvider(overrides: Partial<Parameters<AiIntakeGenerationProvider["
       ...result,
     })),
   };
+}
+
+/** Sprint 103: a manually-resolvable promise, used to deterministically control exactly when a fake provider/repository call settles. */
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+/** Lets already-queued microtasks (and one macrotask boundary) run before the test continues - used to let a started-but-not-awaited use-case call progress as far as it can before it hits an externally-controlled gate. */
+function flush(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** Sprint 103: a minimal fake AiIntakeProposalRepository for guard tests - only findByIntakeId and insertIfAbsentAndIntakeOpen are exercised (first-generation path); the other two methods are present only to satisfy the interface and are never called by these tests. */
+function fakeProposalRepository(overrides: Partial<AiIntakeProposalRepository> = {}): AiIntakeProposalRepository {
+  return {
+    findByIntakeId: vi.fn(async () => null),
+    insertIfAbsentAndIntakeOpen: vi.fn(async () => ({ updated: true, row: {} as any })),
+    refreshPendingFields: vi.fn(async () => ({ updated: true, row: {} as any })),
+    updateFieldReviewAtomic: vi.fn(async () => ({ updated: true, row: {} as any })),
+    ...overrides,
+  };
+}
+
+function fakePhotoReaderForGuardTests(): AiIntakePhotoReader {
+  return { read: vi.fn(async () => Buffer.from("")) };
 }
 
 describe("ai intake field review foundation (Sprint 93)", () => {
@@ -197,6 +229,133 @@ describe("ai intake field review foundation (Sprint 93)", () => {
       expect(result.updated).toBe(false);
       expect(result.conflict?.reason).toBe("intake_not_open");
       expect(await db.select().from(aiIntakeProposals)).toHaveLength(0);
+    });
+  });
+
+  describe("in-flight generation guard (Sprint 103)", () => {
+    it("two concurrent first-generation attempts for the same intake: the provider is invoked exactly once, and the second request rejects immediately (before the first finishes) with the generation-in-progress conflict", async () => {
+      const providerGate = deferred<void>();
+      const provider: AiIntakeGenerationProvider = {
+        generate: vi.fn(async () => {
+          await providerGate.promise;
+          return { proposal: { suggestedTitle: "A" }, metadata: { providerName: "x", promptVersion: "v1" } };
+        }),
+      };
+      const repository = fakeProposalRepository();
+      const photoReader = fakePhotoReaderForGuardTests();
+      const intake = { id: intakeId, status: AiProductIntakeStatus.Open } as any;
+
+      const first = generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader);
+      await flush(); // let A's pre-check resolve, acquire the guard, and reach (and suspend inside) provider.generate()
+
+      // B must reject NOW, without waiting for A - proven by asserting before providerGate is ever resolved.
+      await expect(
+        generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader),
+      ).rejects.toBeInstanceOf(AiIntakeGenerationInProgressError);
+      expect(provider.generate).toHaveBeenCalledTimes(1);
+
+      providerGate.resolve();
+      await first;
+      expect(provider.generate).toHaveBeenCalledTimes(1);
+    });
+
+    it("persistence-phase protection: a second request arriving after the provider has already succeeded, but before persistence has completed, still cannot reach the provider", async () => {
+      const provider: AiIntakeGenerationProvider = {
+        generate: vi.fn(async () => ({ proposal: { suggestedTitle: "A" }, metadata: { providerName: "x", promptVersion: "v1" } })),
+      };
+      const persistenceGate = deferred<{ updated: true; row: any }>();
+      const repository = fakeProposalRepository({ insertIfAbsentAndIntakeOpen: vi.fn(() => persistenceGate.promise) });
+      const photoReader = fakePhotoReaderForGuardTests();
+      const intake = { id: intakeId, status: AiProductIntakeStatus.Open } as any;
+
+      const first = generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader);
+      await flush(); // A: provider already resolved, now suspended awaiting the deliberately-held-open persistence write
+
+      expect(provider.generate).toHaveBeenCalledTimes(1);
+      expect(repository.insertIfAbsentAndIntakeOpen).toHaveBeenCalledTimes(1);
+
+      await expect(
+        generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader),
+      ).rejects.toBeInstanceOf(AiIntakeGenerationInProgressError);
+
+      // B never reached the provider, and A's own (still in-flight) persistence call was not duplicated.
+      expect(provider.generate).toHaveBeenCalledTimes(1);
+      expect(repository.insertIfAbsentAndIntakeOpen).toHaveBeenCalledTimes(1);
+
+      persistenceGate.resolve({ updated: true, row: { id: "p1" } as any });
+      await first;
+    });
+
+    it("provider failure releases the guard - a later sequential request for the same intake can then reach the provider", async () => {
+      const provider: AiIntakeGenerationProvider = {
+        generate: vi
+          .fn()
+          .mockRejectedValueOnce(new Error("simulated provider failure"))
+          .mockResolvedValueOnce({ proposal: { suggestedTitle: "A" }, metadata: { providerName: "x", promptVersion: "v1" } }),
+      };
+      const repository = fakeProposalRepository();
+      const photoReader = fakePhotoReaderForGuardTests();
+      const intake = { id: intakeId, status: AiProductIntakeStatus.Open } as any;
+
+      await expect(generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader)).rejects.toThrow(
+        "simulated provider failure",
+      );
+      await expect(generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader)).resolves.toBeTruthy();
+      expect(provider.generate).toHaveBeenCalledTimes(2);
+    });
+
+    it("persistence failure releases the guard - a later sequential request for the same intake can then reach the provider", async () => {
+      const provider: AiIntakeGenerationProvider = {
+        generate: vi.fn(async () => ({ proposal: { suggestedTitle: "A" }, metadata: { providerName: "x", promptVersion: "v1" } })),
+      };
+      const repository = fakeProposalRepository({
+        insertIfAbsentAndIntakeOpen: vi
+          .fn()
+          .mockRejectedValueOnce(new Error("simulated persistence failure"))
+          .mockResolvedValueOnce({ updated: true, row: { id: "p1" } as any }),
+      });
+      const photoReader = fakePhotoReaderForGuardTests();
+      const intake = { id: intakeId, status: AiProductIntakeStatus.Open } as any;
+
+      await expect(generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader)).rejects.toThrow(
+        "simulated persistence failure",
+      );
+      await expect(generateOrRegenerateProposalUseCase(repository, provider, { intake, photos: [] }, photoReader)).resolves.toBeTruthy();
+      expect(provider.generate).toHaveBeenCalledTimes(2);
+    });
+
+    it("different intake IDs are fully independent - two truly concurrent generations for different intakes both succeed", async () => {
+      const providerGateA = deferred<void>();
+      const providerGateB = deferred<void>();
+      const provider: AiIntakeGenerationProvider = {
+        generate: vi.fn(async (req) => {
+          const gate = req.context.intakeId === "intake-a" ? providerGateA : providerGateB;
+          await gate.promise;
+          return { proposal: { suggestedTitle: "x" }, metadata: { providerName: "x", promptVersion: "v1" } };
+        }),
+      };
+      const repository = fakeProposalRepository();
+      const photoReader = fakePhotoReaderForGuardTests();
+
+      const first = generateOrRegenerateProposalUseCase(
+        repository,
+        provider,
+        { intake: { id: "intake-a", status: AiProductIntakeStatus.Open } as any, photos: [] },
+        photoReader,
+      );
+      const second = generateOrRegenerateProposalUseCase(
+        repository,
+        provider,
+        { intake: { id: "intake-b", status: AiProductIntakeStatus.Open } as any, photos: [] },
+        photoReader,
+      );
+      await flush();
+      expect(provider.generate).toHaveBeenCalledTimes(2); // both reached the provider - the guard is per-intake, not global
+
+      providerGateA.resolve();
+      providerGateB.resolve();
+      await expect(first).resolves.toBeTruthy();
+      await expect(second).resolves.toBeTruthy();
     });
   });
 
