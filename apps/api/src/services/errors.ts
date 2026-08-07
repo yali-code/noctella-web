@@ -419,3 +419,75 @@ export class AiIntakeGenerationInProgressError extends ConflictError {
     this.name = "AiIntakeGenerationInProgressError";
   }
 }
+
+/**
+ * Sprint 107: thrown when a second marketplace-preparation generate request
+ * for the same (productId, channel) arrives while an earlier attempt
+ * (provider call and/or persistence) is still in flight - see
+ * use-cases/marketplace-preparation/generationGuard.ts. Mirrors
+ * AiIntakeGenerationInProgressError's exact shape - extends ConflictError
+ * (generic 409, no special code, per the same established convention).
+ */
+export class MarketplacePreparationGenerationInProgressError extends ConflictError {
+  constructor(message = "A marketplace preparation is already in progress for this product and channel. Wait for it to complete, then try again.") {
+    super(message);
+    this.name = "MarketplacePreparationGenerationInProgressError";
+  }
+}
+
+/**
+ * Sprint 107: thrown when an approve request's expectedProposalUpdatedAt no
+ * longer matches the marketplace_preparations row's current updatedAt - the
+ * proposal was regenerated (or otherwise changed) since the admin loaded it.
+ * Mirrors AiIntakeApplyProposalVersionConflictError's exact shape/role.
+ */
+export class MarketplacePreparationVersionConflictError extends ConflictError {
+  constructor(message = "This marketplace preparation changed since you loaded it. Reload it and try again.") {
+    super(message);
+    this.name = "MarketplacePreparationVersionConflictError";
+  }
+}
+
+/**
+ * Sprint 107: thrown when approval is attempted on a marketplace preparation
+ * that is not currently Pending (already Applied, or never generated) -
+ * requires a fresh generate before it can be approved again.
+ */
+export class MarketplacePreparationNotPendingError extends ConflictError {
+  constructor(message = "Only a Pending marketplace preparation can be approved. Regenerate it first.") {
+    super(message);
+    this.name = "MarketplacePreparationNotPendingError";
+  }
+}
+
+/** Sprint 107: mirrors AiIntakeProviderConfigurationError exactly - a fixed configuration-error class scoped to the marketplace-preparation provider. */
+export class MarketplacePreparationProviderConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MarketplacePreparationProviderConfigurationError";
+  }
+}
+
+/** Sprint 107: mirrors AiIntakeProviderAuthenticationError exactly - never surfaces the API key or the provider's raw response body. */
+export class MarketplacePreparationProviderAuthenticationError extends Error {
+  constructor(message = "The AI provider rejected the request as unauthenticated.") {
+    super(message);
+    this.name = "MarketplacePreparationProviderAuthenticationError";
+  }
+}
+
+/** Sprint 107: mirrors AiIntakeProviderUnavailableError exactly - network-level failure, timeout, rate limit (429), or any provider-side 5xx. */
+export class MarketplacePreparationProviderUnavailableError extends Error {
+  constructor(message = "The AI provider is temporarily unavailable. Try again later.") {
+    super(message);
+    this.name = "MarketplacePreparationProviderUnavailableError";
+  }
+}
+
+/** Sprint 107: mirrors AiIntakeProviderInvalidResponseError exactly - the raw model/response body is never surfaced. */
+export class MarketplacePreparationProviderInvalidResponseError extends Error {
+  constructor(message = "The AI provider returned an unusable response.") {
+    super(message);
+    this.name = "MarketplacePreparationProviderInvalidResponseError";
+  }
+}

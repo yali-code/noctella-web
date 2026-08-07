@@ -33,6 +33,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureAiProductIntakeFinalizationColumns(sqlite);
   ensureAiIntakeProposalStockAcceptanceColumns(sqlite);
   ensureProductSkuSequenceTable(sqlite);
+  ensureMarketplacePreparationsTable(sqlite);
 }
 
 /**
@@ -74,6 +75,28 @@ function ensureAiIntakeProposalStockAcceptanceColumns(sqlite: Database.Database)
  */
 function ensureProductSkuSequenceTable(sqlite: Database.Database): void {
   sqlite.exec("CREATE TABLE IF NOT EXISTS product_sku_sequence (id TEXT PRIMARY KEY, next_value INTEGER NOT NULL);");
+}
+
+/**
+ * Sprint 107: the in-flight, unapproved AI marketplace-preparation proposal
+ * table - see schema.sqlite.ts's marketplacePreparations for the full
+ * rationale. A new, narrowly-scoped table (one row per productId+channel),
+ * not an ALTER of an existing one.
+ */
+function ensureMarketplacePreparationsTable(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS marketplace_preparations (
+  id TEXT PRIMARY KEY, product_id TEXT NOT NULL, channel TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+  base_product_updated_at TEXT NOT NULL, suggested_title TEXT, suggested_description TEXT,
+  suggested_condition_description TEXT, suggested_item_specifics TEXT, suggested_tags TEXT,
+  suggested_materials TEXT, suggested_style TEXT, suggested_occasion TEXT, suggested_short_description TEXT,
+  suggested_seo_title TEXT, suggested_meta_description TEXT, suggested_focus_keyword TEXT,
+  provider_name TEXT NOT NULL, prompt_version TEXT NOT NULL, generated_at TEXT NOT NULL,
+  applied_at TEXT, applied_by_admin_user_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_preparations_product_channel ON marketplace_preparations(product_id, channel);
+`);
 }
 
 /**

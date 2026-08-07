@@ -681,3 +681,53 @@ export const warehouseEvents = sqliteTable("warehouse_events", { id: text("id").
 export const payments = sqliteTable("payments", { id: text("id").primaryKey(), orderId: text("order_id"), provider: text("provider").notNull(), providerReference: text("provider_reference"), status: text("status").notNull(), amount: real("amount").notNull(), currency: text("currency").notNull().default("EUR"), idempotencyKey: text("idempotency_key").notNull().unique(), safeMetadata: text("safe_metadata"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table)=>[index("idx_payments_order").on(table.orderId), index("idx_payments_provider_reference").on(table.provider, table.providerReference), uniqueIndex("idx_payments_order_unique").on(table.orderId).where(sql`order_id IS NOT NULL`)]);
 export const customers = sqliteTable("customers", { id: text("id").primaryKey(), email: text("email"), displayName: text("display_name"), phone: text("phone"), erpReferenceId: text("erp_reference_id").unique(), safeMetadata: text("safe_metadata"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table)=>[uniqueIndex("idx_customers_email_unique").on(table.email)]);
 export const erpCustomerLinks = sqliteTable("erp_customer_links", { id: text("id").primaryKey(), customerId: text("customer_id").notNull(), erpReferenceId: text("erp_reference_id").notNull().unique(), status: text("status").notNull(), idempotencyKey: text("idempotency_key").notNull().unique(), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table)=>[index("idx_erp_customer_links_customer").on(table.customerId)]);
+
+/**
+ * Sprint 107: in-flight, unapproved AI marketplace-preparation proposal - one
+ * row per (productId, channel), narrowly scoped to the Marketplace
+ * Preparation stage between canonical Stock Acceptance and the existing,
+ * unchanged publish pipeline (services/publishing.ts/marketplacePublishing.ts).
+ * Never the destination of approved content itself - approval copies
+ * admin-reviewed values onto the existing Product marketplace-field columns
+ * (see use-cases/marketplace-preparation/useCases.ts), exactly mirroring
+ * ai_listing_drafts' approve-then-write-to-Product pattern, deliberately not
+ * reusing that table (it has no channel dimension and is independently owned
+ * - see Sprint 107 Discovery). baseProductUpdatedAt is the AI-Draft-proven
+ * staleness baseline (Sprint 89 pattern), compared against Product.updatedAt
+ * via the existing updateWithExpectedVersion mechanism at approval time -
+ * never a new versioning system.
+ */
+export const marketplacePreparations = sqliteTable(
+  "marketplace_preparations",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id").notNull(),
+    channel: text("channel").notNull(),
+    status: text("status").notNull().default("pending"),
+    baseProductUpdatedAt: text("base_product_updated_at").notNull(),
+    suggestedTitle: text("suggested_title"),
+    suggestedDescription: text("suggested_description"),
+    suggestedConditionDescription: text("suggested_condition_description"),
+    suggestedItemSpecifics: text("suggested_item_specifics"),
+    suggestedTags: text("suggested_tags"), // JSON-encoded string[] (Etsy)
+    suggestedMaterials: text("suggested_materials"),
+    suggestedStyle: text("suggested_style"),
+    suggestedOccasion: text("suggested_occasion"),
+    suggestedShortDescription: text("suggested_short_description"),
+    suggestedSeoTitle: text("suggested_seo_title"),
+    suggestedMetaDescription: text("suggested_meta_description"),
+    suggestedFocusKeyword: text("suggested_focus_keyword"),
+    providerName: text("provider_name").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    generatedAt: text("generated_at").notNull(),
+    appliedAt: text("applied_at"),
+    appliedByAdminUserId: text("applied_by_admin_user_id"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [uniqueIndex("idx_marketplace_preparations_product_channel").on(table.productId, table.channel)],
+);
