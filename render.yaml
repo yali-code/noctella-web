@@ -54,12 +54,13 @@ services:
       # before a real payment gateway is integrated.
       - key: MOCK_PAYMENTS_ENABLED
         value: "true"
-      # Sprint 104: deliberately left as "mock" here - merging this Blueprint change must never by
-      # itself activate paid OpenAI usage. The real provider is enabled later only through a
-      # separate, explicit operational step (switching this value in the Render dashboard, per the
-      # Sprint 104 activation plan), never as a side effect of a repository merge.
+      # Sprint 105: "openai" is now the intended persistent staging provider after a successful
+      # controlled smoke test. Provider selection is owned by this repository/Blueprint value;
+      # a durable rollback to Mock must change this value back to "mock" here. Dashboard-only
+      # overrides may be overwritten by a future Blueprint sync. The API key remains operator-managed
+      # through `sync: false` below.
       - key: AI_INTAKE_PROVIDER
-        value: mock
+        value: openai
       - key: AI_INTAKE_OPENAI_MODEL
         value: gpt-4o-mini
       - key: AI_INTAKE_OPENAI_MAX_PHOTOS
