@@ -796,3 +796,36 @@ export const adminAuthEvents = pgTable("admin_auth_events", {
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [index("idx_admin_auth_events_email_created").on(table.email, table.createdAt), index("idx_admin_auth_events_admin_user").on(table.adminUserId)]);
+
+/**
+ * Sprint 107: mirrors schema.sqlite.ts's marketplacePreparations exactly -
+ * see that file for the full rationale (in-flight, unapproved AI
+ * marketplace-preparation proposal, one row per (productId, channel), never
+ * the destination of approved content itself).
+ */
+export const marketplacePreparations = pgTable("marketplace_preparations", {
+  id: text("id").primaryKey().notNull(),
+  productId: text("product_id").notNull(),
+  channel: text("channel").notNull(),
+  status: text("status").notNull().default("pending"),
+  baseProductUpdatedAt: timestamp("base_product_updated_at", { withTimezone: true }).notNull(),
+  suggestedTitle: text("suggested_title"),
+  suggestedDescription: text("suggested_description"),
+  suggestedConditionDescription: text("suggested_condition_description"),
+  suggestedItemSpecifics: text("suggested_item_specifics"),
+  suggestedTags: text("suggested_tags"),
+  suggestedMaterials: text("suggested_materials"),
+  suggestedStyle: text("suggested_style"),
+  suggestedOccasion: text("suggested_occasion"),
+  suggestedShortDescription: text("suggested_short_description"),
+  suggestedSeoTitle: text("suggested_seo_title"),
+  suggestedMetaDescription: text("suggested_meta_description"),
+  suggestedFocusKeyword: text("suggested_focus_keyword"),
+  providerName: text("provider_name").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  appliedByAdminUserId: text("applied_by_admin_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [uniqueIndex("idx_marketplace_preparations_product_channel").on(table.productId, table.channel)]);

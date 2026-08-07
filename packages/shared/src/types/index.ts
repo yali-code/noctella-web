@@ -6,6 +6,7 @@ import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
 import { PublishChannel } from "../enums/publishChannel";
+import { MarketplacePreparationStatus } from "../enums/marketplacePreparationStatus";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { AiProductIntakeStatus } from "../enums/aiProductIntakeStatus";
 import { AiIntakeFieldDecision } from "../enums/aiIntakeFieldDecision";
@@ -522,6 +523,40 @@ export interface PublishJob extends Timestamps { id: ID; productId: ID; channel:
 export interface PublishAttempt { id: ID; publishJobId: ID; attemptNumber: number; requestSnapshot: unknown; responseSnapshot?: unknown; errorCode?: string; errorMessage?: string; createdAt: string; }
 export interface ExternalListing { id: ID; productId: ID; channel: PublishChannel; connectionId: ID; externalListingId: string; externalListingUrl?: string; externalStatus: string; payloadSnapshot: PublishPayload; publishedAt: string; updatedAt: string; }
 export interface PublishExecutionResult { job: PublishJob; externalListing?: ExternalListing; attempts?: PublishAttempt[]; error?: MarketplaceApiError; }
+
+/**
+ * Sprint 107: the in-flight, unapproved AI marketplace-preparation proposal
+ * - one per (productId, channel). Never the destination of approved content
+ * itself; approval copies admin-reviewed values onto the existing Product
+ * marketplace-field columns (ebayTitle, etsyTags, wooProductName, etc. -
+ * unchanged). Flat suggestion fields, mirroring AiIntakeProposalReview's own
+ * confidenceScore/suggestedX precedent - not per-field Accept/Edit/Reject
+ * tracked. baseProductUpdatedAt is the AI-Draft-proven staleness baseline.
+ */
+export interface MarketplacePreparation extends Timestamps {
+  id: ID;
+  productId: ID;
+  channel: PublishChannel;
+  status: MarketplacePreparationStatus;
+  baseProductUpdatedAt: string;
+  suggestedTitle?: string;
+  suggestedDescription?: string;
+  suggestedConditionDescription?: string;
+  suggestedItemSpecifics?: string;
+  suggestedTags?: string[];
+  suggestedMaterials?: string;
+  suggestedStyle?: string;
+  suggestedOccasion?: string;
+  suggestedShortDescription?: string;
+  suggestedSeoTitle?: string;
+  suggestedMetaDescription?: string;
+  suggestedFocusKeyword?: string;
+  providerName: string;
+  promptVersion: string;
+  generatedAt: string;
+  appliedAt?: string;
+  appliedByAdminUserId?: string;
+}
 
 
 export interface MarketplaceWebhookEvent extends Timestamps { id: ID; channel: PublishChannel; externalEventId: string; eventType: string; status: string; signatureValid: boolean; payloadSnapshot: unknown; attemptCount: number; lastError?: string; receivedAt: string; processedAt?: string; }

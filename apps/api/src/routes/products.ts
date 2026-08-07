@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { requirePermission } from "../auth/permissions";
+import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
 import { archiveProduct, createProduct, deleteProductPhoto, getProductById, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
 import { createProductSchema, productListQuerySchema, updateProductRequestSchema } from "../validation/product";
@@ -10,6 +10,8 @@ import { handleRouteError } from "./errorHandler";
 import { getPublishPreview, getPublishValidation } from "../services/publishing";
 import { executePublish, listExternalListings, endExternalListing } from "../services/marketplacePublishing";
 import { publishRequestSchema } from "../validation/publishing";
+import { approveMarketplacePreparation, generateMarketplacePreparation, getCurrentMarketplacePreparation } from "../services/marketplacePreparation";
+import { approveMarketplacePreparationSchema, generateMarketplacePreparationSchema, getMarketplacePreparationQuerySchema } from "../validation/marketplacePreparation";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -65,6 +67,42 @@ router.get("/:id/external-listings", requirePermission("products.publish"), asyn
 
 router.post("/:id/external-listings/:listingId/end", requirePermission("products.publish"), async (req, res) => {
   try { res.json(await endExternalListing(db, req.params.id, req.params.listingId)); } catch (err) { handleRouteError(err, res); }
+});
+
+// Sprint 107: Marketplace Preparation - a new stage strictly BEFORE the existing, unchanged
+// publish pipeline above (validatePublish/buildPublishPayload/executePublish). Never publishes,
+// never creates a PublishJob/PublishAttempt/ExternalListing, never calls eBay/Etsy, never changes
+// Product.status or any marketplace listing status - approval only copies admin-reviewed values
+// onto the existing Product marketplace-field columns those existing publish routes already read.
+// Same permission as the rest of this file's publish surface (products.publish governs the whole
+// publish-adjacent journey, matching this file's own established convention above).
+router.post("/:id/marketplace-preparation", requirePermission("products.publish"), async (req, res) => {
+  try {
+    const input = generateMarketplacePreparationSchema.parse(req.body ?? {});
+    res.json(await generateMarketplacePreparation(db, req.params.id, input.channel));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.get("/:id/marketplace-preparation", requirePermission("products.publish"), async (req, res) => {
+  try {
+    const input = getMarketplacePreparationQuerySchema.parse(req.query);
+    res.json(await getCurrentMarketplacePreparation(db, req.params.id, input.channel));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+// Actor identity always comes from req.adminUser.id, never the request body - mirrors every other
+// approval endpoint in this codebase (Stock Acceptance, AI Draft approve).
+router.post("/:id/marketplace-preparation/approve", requirePermission("products.publish"), async (req: AuthedRequest, res) => {
+  try {
+    const input = approveMarketplacePreparationSchema.parse(req.body ?? {});
+    res.json(await approveMarketplacePreparation(db, req.params.id, input, req.adminUser!.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
 });
 
 router.get("/:id", requirePermission("products.view"), async (req, res) => {
