@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AiIntakeFieldDecision, type AiIntakePhoto, type AiProductIntake } from "@noctella/shared";
 import {
+  AiIntakeGenerationInProgressError,
   AiIntakeProposalIntakeNotOpenError,
   AiIntakeProposalReviewResetRequiredError,
   AiIntakeProposalStaleError,
@@ -8,6 +9,7 @@ import {
   AiIntakeProposalVersionConflictError,
   NotFoundError,
 } from "../../services/errors";
+import { releaseGenerationGuard, tryAcquireGenerationGuard } from "./generationGuard";
 import { buildAiIntakeGenerationContext } from "../../ai-intake/context";
 import { computePhotoSetFingerprint } from "../../ai-intake/photoSetFingerprint";
 import { DeterministicAiIntakePromptBuilder } from "../../ai-intake/promptBuilder";
@@ -94,46 +96,62 @@ export async function generateOrRegenerateProposalUseCase(
     throw new AiIntakeProposalReviewResetRequiredError();
   }
 
-  const fingerprint = computePhotoSetFingerprint(input.photos);
-  const context = buildAiIntakeGenerationContext(input.intake, input.photos);
-  const prompt = promptBuilder.build(context);
-  const result = await provider.generate({ context, prompt, photoReader });
+  // Sprint 103: synchronous, atomic, immediate-reject claim - no await occurs between the
+  // pre-check above and this line, so no other generation attempt for this intake can interleave
+  // here. Held through the ENTIRE remainder of this function (provider call AND persistence, via
+  // the try/finally below) - releasing it immediately after provider.generate() returns would
+  // reopen the exact race this guard exists to close (see the Sprint 103 Architecture Discovery
+  // and its correction pass). Guards only against a duplicate paid provider call - the existing
+  // atomic persistence guard below (and the database's own UNIQUE constraint on
+  // ai_intake_proposals.intake_id) already made a duplicate proposal row impossible regardless.
+  if (!tryAcquireGenerationGuard(input.intake.id)) {
+    throw new AiIntakeGenerationInProgressError();
+  }
 
-  const now = new Date().toISOString();
-  const suggestedKeywords = result.proposal.suggestedKeywords ? JSON.stringify(result.proposal.suggestedKeywords) : null;
+  try {
+    const fingerprint = computePhotoSetFingerprint(input.photos);
+    const context = buildAiIntakeGenerationContext(input.intake, input.photos);
+    const prompt = promptBuilder.build(context);
+    const result = await provider.generate({ context, prompt, photoReader });
 
-  const writeResult: AiIntakeProposalWriteResult = existing
-    ? await repository.refreshPendingFields({
-        id: existing.id as string,
-        intakeId: input.intake.id,
-        expectedUpdatedAt: String(existing.updatedAt),
-        expectedPhotoFingerprint: fingerprint,
-        suggestedTitle: result.proposal.suggestedTitle ?? null,
-        suggestedDescription: result.proposal.suggestedDescription ?? null,
-        suggestedKeywords,
-        confidenceScore: result.proposal.confidenceScore ?? null,
-        generatedAt: now,
-        providerName: result.metadata.providerName,
-        promptVersion: result.metadata.promptVersion,
-        updatedAt: nextUpdatedAt(existing.updatedAt as string | Date),
-      })
-    : await repository.insertIfAbsentAndIntakeOpen({
-        id: randomUUID(),
-        intakeId: input.intake.id,
-        expectedPhotoFingerprint: fingerprint,
-        suggestedTitle: result.proposal.suggestedTitle ?? null,
-        suggestedDescription: result.proposal.suggestedDescription ?? null,
-        suggestedKeywords,
-        confidenceScore: result.proposal.confidenceScore ?? null,
-        generatedAt: now,
-        providerName: result.metadata.providerName,
-        promptVersion: result.metadata.promptVersion,
-        createdAt: now,
-        updatedAt: now,
-      });
+    const now = new Date().toISOString();
+    const suggestedKeywords = result.proposal.suggestedKeywords ? JSON.stringify(result.proposal.suggestedKeywords) : null;
 
-  if (!writeResult.updated) translateConflict(writeResult.conflict);
-  return writeResult.row!;
+    const writeResult: AiIntakeProposalWriteResult = existing
+      ? await repository.refreshPendingFields({
+          id: existing.id as string,
+          intakeId: input.intake.id,
+          expectedUpdatedAt: String(existing.updatedAt),
+          expectedPhotoFingerprint: fingerprint,
+          suggestedTitle: result.proposal.suggestedTitle ?? null,
+          suggestedDescription: result.proposal.suggestedDescription ?? null,
+          suggestedKeywords,
+          confidenceScore: result.proposal.confidenceScore ?? null,
+          generatedAt: now,
+          providerName: result.metadata.providerName,
+          promptVersion: result.metadata.promptVersion,
+          updatedAt: nextUpdatedAt(existing.updatedAt as string | Date),
+        })
+      : await repository.insertIfAbsentAndIntakeOpen({
+          id: randomUUID(),
+          intakeId: input.intake.id,
+          expectedPhotoFingerprint: fingerprint,
+          suggestedTitle: result.proposal.suggestedTitle ?? null,
+          suggestedDescription: result.proposal.suggestedDescription ?? null,
+          suggestedKeywords,
+          confidenceScore: result.proposal.confidenceScore ?? null,
+          generatedAt: now,
+          providerName: result.metadata.providerName,
+          promptVersion: result.metadata.promptVersion,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+    if (!writeResult.updated) translateConflict(writeResult.conflict);
+    return writeResult.row!;
+  } finally {
+    releaseGenerationGuard(input.intake.id);
+  }
 }
 
 export interface GetCurrentProposalResult {

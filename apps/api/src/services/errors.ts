@@ -404,3 +404,18 @@ export class AiIntakeProviderTooManyPhotosError extends ConflictError {
     this.name = "AiIntakeProviderTooManyPhotosError";
   }
 }
+
+/**
+ * Sprint 103: thrown when a second /generate request for the same intake
+ * arrives while an earlier attempt (provider call and/or persistence) is
+ * still in flight - see use-cases/ai-intake-proposal/generationGuard.ts.
+ * Extends ConflictError (immediate 409, no route/errorHandler.ts change
+ * needed) since this is a transient concurrency conflict, never a malformed
+ * request. Deliberately fixed/generic - never includes any provider detail.
+ */
+export class AiIntakeGenerationInProgressError extends ConflictError {
+  constructor(message = "A proposal generation is already in progress for this intake. Wait for it to complete, then try again.") {
+    super(message);
+    this.name = "AiIntakeGenerationInProgressError";
+  }
+}
