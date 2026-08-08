@@ -74,6 +74,7 @@ describe("Marketplace Preparation (Sprint 107)", () => {
     it("is fully deterministic and channel-scoped for eBay - only populates eBay-relevant fields", async () => {
       const product = await getProductById(db, productId);
       const context = buildMarketplacePreparationContext(product, PublishChannel.Ebay);
+      expect(context.brand).toBe("Omega"); // Sprint 110: a legitimate brand must reach the context unchanged.
       const provider = new MockMarketplacePreparationProvider();
       const prompt = new DeterministicMarketplacePreparationPromptBuilder().build(context);
       const first = await provider.generate({ context, prompt });
@@ -114,6 +115,101 @@ describe("Marketplace Preparation (Sprint 107)", () => {
       const path = await import("node:path");
       const src = await fs.readFile(path.resolve(__dirname, "../src/marketplace-prep/mockProvider.ts"), "utf8");
       expect(src).not.toMatch(/\bfetch\(|require\(["']https?["']\)|from ["']https?["']|axios/i);
+    });
+  });
+
+  // Sprint 110: the observed Sprint 108 smoke regression - a clearly-generic, non-brand canonical
+  // value (e.g. "Wood") must never reach a Marketplace Preparation provider as if it were a
+  // trustworthy brand fact. Exercised entirely through the deterministic Mock provider - no live
+  // OpenAI call is required, since the fix point (buildMarketplacePreparationContext) is upstream
+  // of both providers equally.
+  describe("brand factual-grounding guard (Sprint 110)", () => {
+    async function createProductWithBrand(brand: string | undefined) {
+      const unique = Math.random().toString(36).slice(2, 10);
+      const product = await createProduct(db, {
+        sku: `MP-${unique}`,
+        title: `Carved Item ${unique}`, // unique per call - a shared title would collide on slug (Sprint 106/107 precedent)
+        description: "An item with a questionable brand value.",
+        brand,
+        type: ProductType.UniqueItem,
+        status: ProductStatus.Draft,
+        categoryId,
+        priceEur: 250,
+        customsWarning: false,
+        isFeatured: false,
+        allowMakeOffer: false,
+        allowCashOnDelivery: false,
+        showInArchiveAfterSale: false,
+      } as any);
+      return getProductById(db, product.id);
+    }
+
+    it("a clearly-generic non-brand value ('Wood') is omitted from the context and never reaches eBay item specifics", async () => {
+      const product = await createProductWithBrand("Wood");
+      const context = buildMarketplacePreparationContext(product, PublishChannel.Ebay);
+      expect(context.brand).toBeUndefined();
+
+      const provider = new MockMarketplacePreparationProvider();
+      const prompt = new DeterministicMarketplacePreparationPromptBuilder().build(context);
+      const result = await provider.generate({ context, prompt });
+      expect(result.proposal.suggestedItemSpecifics ?? "").not.toContain("Brand: Wood");
+    });
+
+    it("case and surrounding whitespace do not defeat the guard", async () => {
+      const paddedContext = buildMarketplacePreparationContext(await createProductWithBrand(" wood "), PublishChannel.Ebay);
+      expect(paddedContext.brand).toBeUndefined();
+
+      const upperContext = buildMarketplacePreparationContext(await createProductWithBrand("WOOD"), PublishChannel.Ebay);
+      expect(upperContext.brand).toBeUndefined();
+    });
+
+    it("is exact-match only - a legitimate brand that merely contains a generic word is never filtered", async () => {
+      const product = await createProductWithBrand("Woodward");
+      const context = buildMarketplacePreparationContext(product, PublishChannel.Ebay);
+      expect(context.brand).toBe("Woodward");
+
+      const provider = new MockMarketplacePreparationProvider();
+      const prompt = new DeterministicMarketplacePreparationPromptBuilder().build(context);
+      const result = await provider.generate({ context, prompt });
+      expect(result.proposal.suggestedItemSpecifics).toContain("Brand: Woodward");
+    });
+
+    it("the shared prompt and the OpenAI addendum both state that supplied fields are context, not verified fact, without asserting the full prompt text", async () => {
+      const product = await createProductWithBrand("Wood");
+      const context = buildMarketplacePreparationContext(product, PublishChannel.Ebay);
+      const prompt = new DeterministicMarketplacePreparationPromptBuilder().build(context);
+      expect(prompt.systemPrompt).toContain("operator-accepted context, not independently");
+
+      // Sprint 110 correction: verifies the OpenAI addendum's actual effect on the real outbound
+      // request body (never source text) - mirrors this file's own OpenAiMarketplacePreparationProvider
+      // request-body-inspection convention below. The minimal valid structured response is inlined
+      // here rather than reaching into that later describe block's locally-scoped helpers.
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          output: [
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: JSON.stringify({ suggestedTitle: "x", suggestedDescription: null, suggestedConditionDescription: null, suggestedItemSpecifics: null }),
+                },
+              ],
+            },
+          ],
+        }),
+      } as Response);
+      const provider = new OpenAiMarketplacePreparationProvider({ apiKey: "sk-test", model: "gpt-test" });
+      await provider.generate({ context, prompt });
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      // Sprint 110 Correction 2: "supplied fields are operator-accepted context" appears only in
+      // OPENAI_SYSTEM_PROMPT_ADDENDUM ("The supplied fields are...") - the shared prompt instead
+      // says "The canonical fields below are...". This substring is already proven true of
+      // prompt.systemPrompt alone by the assertion above, so a shared substring here would pass
+      // even if the addendum were dropped from the request; this addendum-only phrase does not.
+      expect(body.instructions).toContain("supplied fields are operator-accepted context");
     });
   });
 

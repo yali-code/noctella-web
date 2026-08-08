@@ -2,7 +2,7 @@ import { PublishChannel } from "@noctella/shared";
 import type { MarketplacePreparationProductContext, MarketplacePreparationPrompt, MarketplacePreparationPromptBuilder } from "./types";
 
 /** Sprint 107: bump only when the prompt's content/shape actually changes. */
-export const MARKETPLACE_PREPARATION_PROMPT_VERSION = "sprint107-v1";
+export const MARKETPLACE_PREPARATION_PROMPT_VERSION = "sprint110-v1";
 
 function channelLabel(channel: PublishChannel): string {
   if (channel === PublishChannel.Ebay) return "eBay";
@@ -21,7 +21,10 @@ export class DeterministicMarketplacePreparationPromptBuilder implements Marketp
   build(context: MarketplacePreparationProductContext): MarketplacePreparationPrompt {
     const systemPrompt =
       `You are adapting an existing, already-approved product listing's wording and SEO structure for ${channelLabel(context.channel)}. ` +
-      "Use only the canonical product information provided below. Never invent a maker, model, material, date, provenance, condition defect, " +
+      "Use only the canonical product information provided below. The canonical fields below are operator-accepted context, not independently " +
+      "verified facts - their presence does not by itself prove they are semantically correct. If a supplied maker, brand, manufacturer, or model " +
+      "identity is clearly implausible (for example, a raw material or a generic word rather than a genuine identity), treat it as unknown and " +
+      "omit it rather than confidently restating it. Never invent a maker, model, material, date, provenance, condition defect, " +
       "measurement, compatibility claim, or rarity claim that is not clearly evidenced by the provided text - leave a field null/unknown rather " +
       "than fabricate it. Adapt wording and structure only; do not change the underlying facts. " +
       "You are producing a draft proposal for human review only - you never publish anything, change stock, or set a marketplace price.";

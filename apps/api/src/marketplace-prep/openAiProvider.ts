@@ -23,7 +23,9 @@ export interface MarketplacePreparationOpenAiProviderConfig {
  * OPENAI_SYSTEM_PROMPT_ADDENDUM precedent exactly.
  */
 const OPENAI_SYSTEM_PROMPT_ADDENDUM =
-  "Describe only what is reasonably supported by the supplied canonical product information. " +
+  "Describe only what is reasonably supported by the supplied canonical product information. The supplied fields are operator-accepted context, " +
+  "not independently verified facts - if a supplied maker, brand, manufacturer, or model identity is clearly implausible (for example, a raw " +
+  "material or a generic word rather than a genuine identity), treat it as unknown and omit it rather than confidently restating it. " +
   "Never invent or guess a maker, model, material, date, provenance, condition defect, measurement, compatibility claim, or rarity claim that is " +
   "not clearly evidenced - leave a field null/unknown rather than fabricate it. " +
   "Adapt wording and SEO structure only; never change the underlying facts, and never suggest a marketplace-specific price. " +
