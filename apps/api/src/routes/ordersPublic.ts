@@ -16,7 +16,7 @@ const router = Router();
 router.post("/", async (req, res) => {
   try {
     const input = createOrderSchema.parse(req.body);
-    const order = await createOrder(db, input);
+    const order = await createOrder(db, input, { pricingContext: "noctella_web" });
     res.status(201).json(order);
   } catch (err) {
     handleRouteError(err, res);

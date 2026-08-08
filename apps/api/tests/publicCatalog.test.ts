@@ -218,6 +218,23 @@ describe("public catalog service", () => {
     expect(publicProduct.title).toBe("Canonical fallback title");
   });
 
+  it("exposes the Noctella Web listing price with canonical fallback", async () => {
+    const wooPriced = await createProduct(
+      db,
+      baseInput({ title: "Woo-priced product", status: ProductStatus.Published, priceEur: 1200, wooListingPriceEur: 900 }),
+    );
+    const canonicalPriced = await createProduct(
+      db,
+      baseInput({ title: "Canonical-priced product", status: ProductStatus.Published, priceEur: 700 }),
+    );
+
+    const wooPublic = await getPublicProductBySlug(db, wooPriced.slug);
+    const canonicalPublic = await getPublicProductBySlug(db, canonicalPriced.slug);
+    expect(wooPublic.priceEur).toBe(900);
+    expect(wooPublic).not.toHaveProperty("wooListingPriceEur");
+    expect(canonicalPublic.priceEur).toBe(700);
+  });
+
   it("filters by category slug", async () => {
     const otherCategory = await createCategory(db, { name: "Pens", displayOrder: 1, isActive: true });
     await createProduct(
@@ -350,6 +367,17 @@ describe("public catalog service", () => {
     expect(result.page).toBe(1);
     expect(result.pageSize).toBe(20);
     expect(result.items.every((item) => !("wooProductName" in item))).toBe(true);
+  });
+
+  it("sorts ascending and descending by the effective Noctella Web price", async () => {
+    await createProduct(db, baseInput({ title: "Canonical 10", status: ProductStatus.Published, priceEur: 10, wooListingPriceEur: 40 }));
+    await createProduct(db, baseInput({ title: "Canonical 20", status: ProductStatus.Published, priceEur: 20, wooListingPriceEur: 5 }));
+    await createProduct(db, baseInput({ title: "Canonical Fallback 30", status: ProductStatus.Published, priceEur: 30 }));
+
+    const ascending = await listPublicProducts(db, { page: 1, pageSize: 20, sort: "price_asc" });
+    const descending = await listPublicProducts(db, { page: 1, pageSize: 20, sort: "price_desc" });
+    expect(ascending.items.map((item) => item.priceEur)).toEqual([5, 30, 40]);
+    expect(descending.items.map((item) => item.priceEur)).toEqual([40, 30, 5]);
   });
 
   it("paginates results", async () => {

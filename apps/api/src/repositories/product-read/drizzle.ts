@@ -28,8 +28,8 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
   const breakdownColumns: Record<ProductBreakdownDimension, any> = { category: products.categoryId, brand: products.brand, condition: products.condition, workflowStatus: products.status };
   const order = (q: ProductReadListQuery = {}) => {
     if (q.sort === "sku_asc") return [asc(products.sku), asc(products.id)];
-    if (q.sort === "price_asc") return [asc(products.priceEur), asc(products.id)];
-    if (q.sort === "price_desc") return [desc(products.priceEur), asc(products.id)];
+    if (q.sort === "price_asc") return [asc(sql`coalesce(${products.wooListingPriceEur}, ${products.priceEur})`), asc(products.id)];
+    if (q.sort === "price_desc") return [desc(sql`coalesce(${products.wooListingPriceEur}, ${products.priceEur})`), asc(products.id)];
     if (q.sort === "title_asc") return [asc(sql`coalesce(${products.wooProductName}, ${products.title})`), asc(products.id)];
     if (q.sort === "newest") return [desc(products.createdAt), asc(products.id)];
     return [desc(products.updatedAt), asc(products.id)];
