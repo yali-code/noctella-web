@@ -130,12 +130,30 @@ describe("ProductPublishingPage - Marketplace Preparation (Sprint 107)", () => {
     expect(executeButton).not.toBeDisabled();
   });
 
-  it("Sprint 109: renders an Edit Product link pointing to /products/<id>/edit next to the validation errors", async () => {
+  it("Sprint 109/112: renders an Edit Product link pointing to /products/<id>/edit when the preview loads normally", async () => {
     mockBaseLoads();
     vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
     render(<ProductPublishingPage params={{ id: "product-1" }} />);
 
     const link = await screen.findByRole("link", { name: "Edit Product" });
     expect(link).toHaveAttribute("href", "/products/product-1/edit");
+  });
+
+  it("Sprint 112: Edit Product still renders when the publish preview fails to load", async () => {
+    const getPreviewSpy = vi.spyOn(publishingLib.publishingApi, "getPreview").mockRejectedValue(new Error("Failed to load publishing preview"));
+    vi.spyOn(marketplacesLib.marketplaceApi, "listConnections").mockResolvedValue([]);
+    vi.spyOn(marketplacesLib.marketplaceApi, "listJobs").mockResolvedValue([]);
+    vi.spyOn(marketplacesLib.marketplaceApi, "externalListings").mockResolvedValue([]);
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+
+    // Sprint 112: the Edit Product link renders unconditionally, before any async load even
+    // settles - confirm the preview call genuinely failed (proving this is the failure path, not
+    // merely a slow success), then confirm Edit Product survives it. Its own error text is rendered
+    // through the existing safeError() redaction (unrelated, pre-existing, not asserted here).
+    await waitFor(() => expect(getPreviewSpy).toHaveBeenCalled());
+    const link = screen.getByRole("link", { name: "Edit Product" });
+    expect(link).toHaveAttribute("href", "/products/product-1/edit");
+    expect(screen.queryByRole("button", { name: "Execute Publish" })).not.toBeInTheDocument();
   });
 });

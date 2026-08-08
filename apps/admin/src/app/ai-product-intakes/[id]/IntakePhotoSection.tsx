@@ -21,7 +21,7 @@ interface Props {
 export function IntakePhotoSection({ intakeId, intakeStatus, photos, onPhotosChanged }: Props) {
   const [objectUrls, setObjectUrls] = useState<Record<string, string>>({});
   const [imageErrors, setImageErrors] = useState<Record<string, string>>({});
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -52,20 +52,37 @@ export function IntakePhotoSection({ intakeId, intakeStatus, photos, onPhotosCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intakeId, photos]);
 
+  /**
+   * Sprint 112: uploads every selected file sequentially - one awaited
+   * aiProductIntakesApi.uploadPhoto(...) call per file, reusing the existing
+   * single-photo endpoint unchanged, never in parallel - preserving the
+   * staged-photo order the backend already assigns per request. A failure on
+   * one file does not stop the remaining files from being attempted;
+   * already-successful uploads are never retried or rolled back.
+   */
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (files.length === 0) return;
     setUploading(true);
     setError(null);
-    try {
-      await aiProductIntakesApi.uploadPhoto(intakeId, file);
-      setFile(null);
-      await onPhotosChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to upload photo");
-    } finally {
-      setUploading(false);
+    let successCount = 0;
+    const failed: string[] = [];
+    for (const selected of files) {
+      try {
+        await aiProductIntakesApi.uploadPhoto(intakeId, selected);
+        successCount += 1;
+      } catch {
+        failed.push(selected.name);
+      }
     }
+    setFiles([]);
+    setUploading(false);
+    setError(
+      failed.length === 0
+        ? null
+        : `Uploaded ${successCount} of ${successCount + failed.length} photo(s). Failed: ${failed.join(", ")}.`,
+    );
+    await onPhotosChanged();
   }
 
   async function handleDelete(photoId: string) {
@@ -97,9 +114,14 @@ export function IntakePhotoSection({ intakeId, intakeStatus, photos, onPhotosCha
 
       {canUpload && (
         <form onSubmit={handleUpload} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <button type="submit" disabled={!file || uploading} style={primaryButtonStyle}>
-            {uploading ? "Uploading..." : "Upload photo"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          />
+          <button type="submit" disabled={files.length === 0 || uploading} style={primaryButtonStyle}>
+            {uploading ? "Uploading..." : files.length > 1 ? `Upload ${files.length} photos` : "Upload photo"}
           </button>
         </form>
       )}

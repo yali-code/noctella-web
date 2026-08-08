@@ -103,4 +103,96 @@ describe("IntakePhotoSection (Sprint 97)", () => {
     render(<IntakePhotoSection intakeId="intake-1" intakeStatus={AiProductIntakeStatus.Open} photos={[photo]} onPhotosChanged={vi.fn()} />);
     await screen.findByText("Failed to load photo");
   });
+
+  // Sprint 112: multi-select staged-photo upload usability. The backend remains single-photo-per-
+  // request (unchanged) - these tests prove the component uploads every selected file sequentially
+  // against the existing aiProductIntakesApi.uploadPhoto(...) function, one awaited call per file,
+  // never in parallel, preserving selection order.
+  function file(name: string): File {
+    return new File(["content"], name, { type: "image/jpeg" });
+  }
+
+  it("Sprint 112: the file input supports multiple selection", () => {
+    render(<IntakePhotoSection intakeId="intake-1" intakeStatus={AiProductIntakeStatus.Open} photos={[]} onPhotosChanged={vi.fn()} />);
+    expect(document.querySelector("input[type=file]")).toHaveAttribute("multiple");
+  });
+
+  it("Sprint 112: selecting multiple files uploads one call per file, in order, sequentially (not in parallel)", async () => {
+    const user = userEvent.setup();
+    const resolvers: Array<() => void> = [];
+    const calls: string[] = [];
+    const uploadSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "uploadPhoto").mockImplementation((_id, uploaded) => {
+      calls.push(uploaded.name);
+      return new Promise((resolve) => {
+        resolvers.push(() => resolve(undefined as any));
+      });
+    });
+    const onPhotosChanged = vi.fn().mockResolvedValue([]);
+    render(<IntakePhotoSection intakeId="intake-1" intakeStatus={AiProductIntakeStatus.Open} photos={[]} onPhotosChanged={onPhotosChanged} />);
+
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    await user.upload(input, [file("a.jpg"), file("b.jpg"), file("c.jpg")]);
+    await user.click(screen.getByRole("button", { name: /Upload 3 photos/ }));
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
+    expect(calls).toEqual(["a.jpg"]);
+
+    resolvers[0]!();
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(2));
+    expect(calls).toEqual(["a.jpg", "b.jpg"]);
+
+    resolvers[1]!();
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(3));
+    expect(calls).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+
+    resolvers[2]!();
+    await waitFor(() => expect(onPhotosChanged).toHaveBeenCalled());
+  });
+
+  it("Sprint 112: single-file selection still works", async () => {
+    const user = userEvent.setup();
+    const uploadSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "uploadPhoto").mockResolvedValue(undefined as any);
+    render(<IntakePhotoSection intakeId="intake-1" intakeStatus={AiProductIntakeStatus.Open} photos={[]} onPhotosChanged={vi.fn().mockResolvedValue([])} />);
+
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    await user.upload(input, file("solo.jpg"));
+    await user.click(screen.getByRole("button", { name: "Upload photo" }));
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
+    expect(uploadSpy).toHaveBeenCalledWith("intake-1", expect.objectContaining({ name: "solo.jpg" }));
+  });
+
+  it("Sprint 112: a middle-file failure does not prevent the later file from being attempted, and is reported", async () => {
+    const user = userEvent.setup();
+    const uploadSpy = vi
+      .spyOn(aiProductIntakesLib.aiProductIntakesApi, "uploadPhoto")
+      .mockResolvedValueOnce(undefined as any)
+      .mockRejectedValueOnce(new ApiError("upload failed", 500))
+      .mockResolvedValueOnce(undefined as any);
+    const onPhotosChanged = vi.fn().mockResolvedValue([]);
+    render(<IntakePhotoSection intakeId="intake-1" intakeStatus={AiProductIntakeStatus.Open} photos={[]} onPhotosChanged={onPhotosChanged} />);
+
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    await user.upload(input, [file("a.jpg"), file("bad.jpg"), file("c.jpg")]);
+    await user.click(screen.getByRole("button", { name: /Upload 3 photos/ }));
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(3));
+    expect(uploadSpy).toHaveBeenNthCalledWith(3, "intake-1", expect.objectContaining({ name: "c.jpg" }));
+    await screen.findByText(/Uploaded 2 of 3 photo.*Failed: bad\.jpg/);
+    expect(onPhotosChanged).toHaveBeenCalled();
+  });
+
+  it("Sprint 112: does not resend already-completed files once the batch finishes and the selection resets", async () => {
+    const user = userEvent.setup();
+    const uploadSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "uploadPhoto").mockResolvedValue(undefined as any);
+    render(<IntakePhotoSection intakeId="intake-1" intakeStatus={AiProductIntakeStatus.Open} photos={[]} onPhotosChanged={vi.fn().mockResolvedValue([])} />);
+
+    const input = document.querySelector("input[type=file]") as HTMLInputElement;
+    await user.upload(input, [file("a.jpg"), file("b.jpg")]);
+    await user.click(screen.getByRole("button", { name: /Upload 2 photos/ }));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(2));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Upload photo" })).toBeDisabled());
+    expect(uploadSpy).toHaveBeenCalledTimes(2);
+  });
 });
