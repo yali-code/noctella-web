@@ -145,6 +145,51 @@ describe("public catalog service", () => {
     expect(publicProduct.description).toBe("Canonical fallback description");
   });
 
+  it("exposes Noctella Web SEO values instead of canonical SEO values", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        seoTitle: "Canonical SEO title",
+        metaDescription: "Canonical meta description",
+        wooSeoTitle: "Approved Noctella Web SEO title",
+        wooMetaDescription: "Approved Noctella Web meta description",
+      }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.seoTitle).toBe("Approved Noctella Web SEO title");
+    expect(publicProduct.metaDescription).toBe("Approved Noctella Web meta description");
+    expect(publicProduct).not.toHaveProperty("wooSeoTitle");
+    expect(publicProduct).not.toHaveProperty("wooMetaDescription");
+  });
+
+  it("falls back to canonical SEO values when Noctella Web SEO values are absent", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        seoTitle: "Canonical fallback SEO title",
+        metaDescription: "Canonical fallback meta description",
+      }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.seoTitle).toBe("Canonical fallback SEO title");
+    expect(publicProduct.metaDescription).toBe("Canonical fallback meta description");
+  });
+
+  it("leaves public SEO values undefined when Noctella Web and canonical SEO values are absent", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({ status: ProductStatus.Published }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.seoTitle).toBeUndefined();
+    expect(publicProduct.metaDescription).toBeUndefined();
+  });
+
   it("filters by category slug", async () => {
     const otherCategory = await createCategory(db, { name: "Pens", displayOrder: 1, isActive: true });
     await createProduct(
