@@ -7,6 +7,7 @@ import { findPaymentByProviderReference, linkPaymentToOrder } from "../payments/
 import type { CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
 import { createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, transitionOrderStatusUseCase, updateOrderPaymentStatusUseCase, formatOrderNumber, type PaidOrderOutboxPort } from "../use-cases/order/useCases";
 import { dispatchDueSalesInvoiceOutboxEvents, enqueueSalesInvoiceDraftForPaidOrderSync } from "./salesInvoiceOutbox";
+import type { OrderPricingContext } from "../repositories/order/types";
 
 export interface OrderWithItems { id:string; orderNumber:string; items:unknown[]; [key:string]:unknown }
 function uow(db:DbClient){ return new SqliteUnitOfWork(db); }
@@ -37,10 +38,12 @@ export async function getOrderByOrderNumber(db:DbClient,orderNumber:string):Prom
  * email, or channel string (channel already defaults to "Internal" for both callers today, so it
  * is not a reliable signal).
  */
-export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ enqueueInvoiceDraft?:boolean }={}):Promise<OrderWithItems>{
+export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ enqueueInvoiceDraft?:boolean; pricingContext?:OrderPricingContext }={}):Promise<OrderWithItems>{
   const session = await findPaymentByProviderReference(db, input.paymentProvider, input.paymentReference);
   if (!session) throw new NotFoundError("Payment session not found");
   if (session.status !== PaymentStatus.Paid) throw new BadRequestError("Orders can only be created from paid payments");
+  const pricingContext = options.pricingContext ?? "canonical";
+  if (pricingContext === "noctella_web" && session.currency !== "EUR") throw new BadRequestError("Noctella Web payments must use EUR");
 
   const idempotencyKey = input.orderDraftId;
   const existingOrder = await uow(db).run(({ repositories }) => repositories.order.orders.write.findByIdempotencyKey(idempotencyKey));
@@ -49,7 +52,7 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
   }
 
   const outbox = options.enqueueInvoiceDraft===false ? undefined : paidOrderOutbox;
-  const result = await createInternalOrderUseCase(uow(db),sync(db),undefined,undefined,"sqlite",outbox).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
+  const result = await createInternalOrderUseCase(uow(db),sync(db),undefined,undefined,"sqlite",outbox,pricingContext,{ amount:session.amount, currency:session.currency }).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
 
   await linkPaymentToOrder(db, session.id, result.id).catch(()=>undefined);
   // Sprint 79: the durable outbox event (enqueued above, inside the same transaction as the order

@@ -67,13 +67,15 @@ describe("order service", () => {
     provider: string,
     providerReference: string,
     status: string,
+    amount = 1200,
+    currency = "EUR",
   ) {
     return createPaymentSession(testDb, {
       provider,
       providerReference,
       status,
-      amount: 1200,
-      currency: "EUR",
+      amount,
+      currency,
       idempotencyKey: `test:${provider}:${providerReference}:${Math.random()}`,
     });
   }
@@ -245,6 +247,115 @@ describe("order service", () => {
       totalPrice: 1200,
       currency: "EUR",
     });
+  });
+
+  it("uses and snapshots the effective Noctella Web price for direct storefront orders", async () => {
+    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    await seedPayment(db, PaymentProvider.Stripe, "woo-price-paid", PaymentStatus.Paid, 900);
+    const order = await createOrder(
+      db,
+      createOrderSchema.parse(baseOrderInput({
+        orderDraftId: "draft-woo-price",
+        paymentReference: "woo-price-paid",
+        subtotalAmount: 900,
+        totalAmount: 900,
+        items: [{ productId, quantity: 1, unitPrice: 1 }],
+      })),
+      { pricingContext: "noctella_web" },
+    );
+
+    expect(order).toMatchObject({ subtotalAmount: 900, totalAmount: 900 });
+    expect(order.items[0]).toMatchObject({ unitPrice: 900, totalPrice: 900 });
+    expect((await getProductById(db, productId)).stockQuantity).toBe(0);
+  });
+
+  it("uses canonical fallback pricing for direct storefront orders without a Woo price", async () => {
+    const order = await createOrder(
+      db,
+      createOrderSchema.parse(baseOrderInput()),
+      { pricingContext: "noctella_web" },
+    );
+    expect(order.items[0]).toMatchObject({ unitPrice: 1200, totalPrice: 1200 });
+  });
+
+  it("accepts equivalent decimal EUR payment and authoritative subtotal values after cent normalization", async () => {
+    await updateProduct(db, productId, { wooListingPriceEur: 0.1 });
+    const secondProduct = await createProduct(db, {
+      sku: "SKU-ORDER-DECIMAL",
+      title: "Decimal Price Product",
+      slug: "decimal-price-product",
+      type: ProductType.UniqueItem,
+      status: ProductStatus.Published,
+      categoryId,
+      customsWarning: false,
+      isFeatured: false,
+      allowMakeOffer: false,
+      allowCashOnDelivery: false,
+      showInArchiveAfterSale: false,
+      priceEur: 0.2,
+      stockQuantity: 1,
+    });
+    await seedPayment(db, PaymentProvider.Stripe, "decimal-paid-session", PaymentStatus.Paid, 0.3);
+
+    const order = await createOrder(
+      db,
+      createOrderSchema.parse(baseOrderInput({
+        orderDraftId: "draft-decimal-payment",
+        paymentReference: "decimal-paid-session",
+        subtotalAmount: 0.3,
+        totalAmount: 0.3,
+        items: [{ productId, quantity: 1 }, { productId: secondProduct.id, quantity: 1 }],
+      })),
+      { pricingContext: "noctella_web" },
+    );
+
+    expect(order.subtotalAmount).toBeCloseTo(0.3);
+    expect(order.totalAmount).toBeCloseTo(0.3);
+    expect(order.items.map((item: any) => item.unitPrice).sort((a: number, b: number) => a - b)).toEqual([0.1, 0.2]);
+  });
+
+  it("preserves canonical pricing for non-Noctella-Web internal orders", async () => {
+    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    const order = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
+    expect(order.items[0]).toMatchObject({ unitPrice: 1200, totalPrice: 1200 });
+  });
+
+  it("rejects stale direct-storefront totals without creating an order or mutating inventory", async () => {
+    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    const ordersBefore = await listOrders(db, orderListQuerySchema.parse({}));
+    const movementsBefore = await listStockMovements(db, { productId, page: 1, pageSize: 20 });
+    await expect(
+      createOrder(db, createOrderSchema.parse(baseOrderInput()), { pricingContext: "noctella_web" }),
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect((await listOrders(db, orderListQuerySchema.parse({}))).pagination.total).toBe(ordersBefore.pagination.total);
+    expect((await getProductById(db, productId)).stockQuantity).toBe(1);
+    expect((await listStockMovements(db, { productId, page: 1, pageSize: 20 })).items).toHaveLength(movementsBefore.items.length);
+  });
+
+  it("rejects a paid-session amount that differs from the authoritative Noctella Web subtotal", async () => {
+    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    await seedPayment(db, PaymentProvider.Stripe, "wrong-paid-amount", PaymentStatus.Paid, 800);
+    await expect(
+      createOrder(
+        db,
+        createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-wrong-amount", paymentReference: "wrong-paid-amount", subtotalAmount: 900, totalAmount: 900 })),
+        { pricingContext: "noctella_web" },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect((await getProductById(db, productId)).stockQuantity).toBe(1);
+  });
+
+  it("rejects a non-EUR paid session for direct Noctella Web checkout", async () => {
+    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    await seedPayment(db, PaymentProvider.Stripe, "usd-paid-session", PaymentStatus.Paid, 900, "USD");
+    await expect(
+      createOrder(
+        db,
+        createOrderSchema.parse(baseOrderInput({ orderDraftId: "draft-usd-session", paymentReference: "usd-paid-session", subtotalAmount: 900, totalAmount: 900 })),
+        { pricingContext: "noctella_web" },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestError);
+    expect((await getProductById(db, productId)).stockQuantity).toBe(1);
   });
 
   it("rejects mismatched totals", async () => {
