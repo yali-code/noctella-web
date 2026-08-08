@@ -13,7 +13,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
   const mapProduct = (row: any) => { if (!row) return row; const copy = { ...row }; for (const key of numericFields) if (copy[key] != null) copy[key] = Number(copy[key]); return copy; };
   const productWhere = async (q: ProductReadListQuery = {}) => {
     const filters: any[] = [];
-    if (q.search) { const s = searchTerm(q.search); if (s) filters.push(or(contains(products.title, s), contains(products.sku, s), contains(products.description, s))); }
+    if (q.search) { const s = searchTerm(q.search); if (s) filters.push(or(contains(products.title, s), contains(products.sku, s), contains(products.description, s), contains(products.wooProductName, s))); }
     if (q.status) filters.push(eq(products.status, q.status));
     if (q.type) filters.push(eq(products.type, q.type));
     if (q.categoryId) filters.push(eq(products.categoryId, q.categoryId));
