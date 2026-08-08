@@ -250,7 +250,7 @@ describe("order service", () => {
   });
 
   it("uses and snapshots the effective Noctella Web price for direct storefront orders", async () => {
-    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    await updateProduct(db, productId, { wooProductName: "Vintage Leica Camera", wooListingPriceEur: 900 });
     await seedPayment(db, PaymentProvider.Stripe, "woo-price-paid", PaymentStatus.Paid, 900);
     const order = await createOrder(
       db,
@@ -259,13 +259,13 @@ describe("order service", () => {
         paymentReference: "woo-price-paid",
         subtotalAmount: 900,
         totalAmount: 900,
-        items: [{ productId, quantity: 1, unitPrice: 1 }],
+        items: [{ productId, quantity: 1, unitPrice: 1, productTitle: "Customer-supplied title" }],
       })),
       { pricingContext: "noctella_web" },
     );
 
     expect(order).toMatchObject({ subtotalAmount: 900, totalAmount: 900 });
-    expect(order.items[0]).toMatchObject({ unitPrice: 900, totalPrice: 900 });
+    expect(order.items[0]).toMatchObject({ productTitle: "Vintage Leica Camera", unitPrice: 900, totalPrice: 900 });
     expect((await getProductById(db, productId)).stockQuantity).toBe(0);
   });
 
@@ -275,7 +275,19 @@ describe("order service", () => {
       createOrderSchema.parse(baseOrderInput()),
       { pricingContext: "noctella_web" },
     );
-    expect(order.items[0]).toMatchObject({ unitPrice: 1200, totalPrice: 1200 });
+    expect(order.items[0]).toMatchObject({ productTitle: "Vintage Chronograph", unitPrice: 1200, totalPrice: 1200 });
+  });
+
+  it("preserves the original direct-storefront title snapshot on idempotent replay after a product rename", async () => {
+    await updateProduct(db, productId, { wooProductName: "Original Noctella Web Title" });
+    const input = createOrderSchema.parse(baseOrderInput());
+    const first = await createOrder(db, input, { pricingContext: "noctella_web" });
+    await updateProduct(db, productId, { wooProductName: "Renamed Noctella Web Title" });
+    const replay = await createOrder(db, input, { pricingContext: "noctella_web" });
+
+    expect(replay.id).toBe(first.id);
+    expect(first.items[0]).toMatchObject({ productTitle: "Original Noctella Web Title" });
+    expect(replay.items[0]).toMatchObject({ productTitle: "Original Noctella Web Title" });
   });
 
   it("accepts equivalent decimal EUR payment and authoritative subtotal values after cent normalization", async () => {
@@ -315,9 +327,9 @@ describe("order service", () => {
   });
 
   it("preserves canonical pricing for non-Noctella-Web internal orders", async () => {
-    await updateProduct(db, productId, { wooListingPriceEur: 900 });
+    await updateProduct(db, productId, { wooProductName: "Noctella Web Title", wooListingPriceEur: 900 });
     const order = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
-    expect(order.items[0]).toMatchObject({ unitPrice: 1200, totalPrice: 1200 });
+    expect(order.items[0]).toMatchObject({ productTitle: "Vintage Chronograph", unitPrice: 1200, totalPrice: 1200 });
   });
 
   it("rejects stale direct-storefront totals without creating an order or mutating inventory", async () => {

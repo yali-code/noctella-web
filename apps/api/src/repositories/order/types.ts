@@ -10,7 +10,7 @@ export interface CreateOrderItemInput { id:string; orderId:string; productId:str
 export interface CreateInternalOrderInput { id?:string; orderNumber?:string; orderDraftId:string; idempotencyKey?:string; externalOrderId?:string; channel:"Internal"|"Direct"|"LocalPickup"; customerId?:string; guestEmail:string; status:OrderStatus; paymentStatus:PaymentStatus; paymentProvider?:string; paymentReference?:string; currency:PriceCurrency|string; billingAddress:Address; shippingAddress:Address; subtotalAmount:number; totalAmount:number; notes?:string; items:Array<{productId:string; quantity:number}> }
 export type OrderPricingContext = "canonical" | "noctella_web";
 export interface PaidSessionPricing { amount:number; currency:string }
-export interface OrderProductReference { id:string; sku:string; title:string; slug:string; type:string; priceEur:number; wooListingPriceEur:number|null; stockQuantity:number; status:string; imageUrl?:string }
+export interface OrderProductReference { id:string; sku:string; title:string; wooProductName:string|null; slug:string; type:string; priceEur:number; wooListingPriceEur:number|null; stockQuantity:number; status:string; imageUrl?:string }
 export interface UpdateOrderStatusInput { id:string; status:OrderStatus; expectedVersion?:number }
 export interface UpdateOrderPaymentStatusInput { id:string; paymentStatus:PaymentStatus; expectedVersion?:number }
 export interface CancelOrderInput { id:string; reason?:string; expectedVersion?:number }

@@ -49,7 +49,8 @@ export function createInternalOrderUseCase(
           if (p.stockQuantity < line.quantity) throw new BadRequestError("Insufficient stock");
           const unitPrice = pricingContext === "noctella_web" ? p.wooListingPriceEur ?? p.priceEur : p.priceEur;
           subtotal += unitPrice * line.quantity;
-          itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle: p.title, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });
+          const productTitle = pricingContext === "noctella_web" ? p.wooProductName ?? p.title : p.title;
+          itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });
         }
         const subtotalCents = toEurCents(subtotal);
         if (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents) throw new BadRequestError("Submitted totals do not match current product prices");
