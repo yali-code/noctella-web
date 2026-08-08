@@ -190,6 +190,34 @@ describe("public catalog service", () => {
     expect(publicProduct.metaDescription).toBeUndefined();
   });
 
+  it("exposes the Noctella Web product name instead of the canonical title", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        title: "Canonical product title",
+        wooProductName: "Approved Noctella Web product name",
+      }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.title).toBe("Approved Noctella Web product name");
+    expect(publicProduct).not.toHaveProperty("wooProductName");
+  });
+
+  it("falls back to the canonical title when no Noctella Web product name exists", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        title: "Canonical fallback title",
+      }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.title).toBe("Canonical fallback title");
+  });
+
   it("filters by category slug", async () => {
     const otherCategory = await createCategory(db, { name: "Pens", displayOrder: 1, isActive: true });
     await createProduct(
