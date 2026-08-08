@@ -129,4 +129,13 @@ describe("ProductPublishingPage - Marketplace Preparation (Sprint 107)", () => {
     const executeButton = await screen.findByRole("button", { name: "Execute Publish" });
     expect(executeButton).not.toBeDisabled();
   });
+
+  it("Sprint 109: renders an Edit Product link pointing to /products/<id>/edit next to the validation errors", async () => {
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+
+    const link = await screen.findByRole("link", { name: "Edit Product" });
+    expect(link).toHaveAttribute("href", "/products/product-1/edit");
+  });
 });
