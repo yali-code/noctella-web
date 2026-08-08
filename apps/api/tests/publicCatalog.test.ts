@@ -117,6 +117,34 @@ describe("public catalog service", () => {
     }
   });
 
+  it("exposes the Noctella Web long description instead of the canonical description", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        description: "Canonical description",
+        wooLongDescription: "Approved Noctella Web description",
+      }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.description).toBe("Approved Noctella Web description");
+    expect(publicProduct).not.toHaveProperty("wooLongDescription");
+  });
+
+  it("falls back to the canonical description when no Noctella Web long description exists", async () => {
+    const product = await createProduct(
+      db,
+      baseInput({
+        status: ProductStatus.Published,
+        description: "Canonical fallback description",
+      }),
+    );
+
+    const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.description).toBe("Canonical fallback description");
+  });
+
   it("filters by category slug", async () => {
     const otherCategory = await createCategory(db, { name: "Pens", displayOrder: 1, isActive: true });
     await createProduct(
