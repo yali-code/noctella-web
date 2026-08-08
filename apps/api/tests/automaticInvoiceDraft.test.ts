@@ -6,11 +6,11 @@ import { ErpInvoiceStatus, ErpInvoiceType, OrderStatus, PaymentProvider, Payment
 import { ensureSchema } from "../src/db/migrate";
 import * as schema from "../src/db/schema";
 import { createCategory } from "../src/services/categories";
-import { createProduct } from "../src/services/products";
+import { createProduct, updateProduct } from "../src/services/products";
 import { createOrder, cancelOrder, updateOrderPaymentStatus } from "../src/services/orders";
 import { createPaymentSession } from "../src/payments/paymentRepository";
 import { upsertCompanyProfile } from "../src/services/companyProfile";
-import { listInvoices } from "../src/services/erpSalesFinanceBridge";
+import { createAutomaticSalesInvoiceDraft, listInvoices } from "../src/services/erpSalesFinanceBridge";
 import { OutboxEventStatus } from "../src/services/outbox";
 import { dispatchDueSalesInvoiceOutboxEvents, getOrderInvoiceOutboxStatus, retrySalesInvoiceDraftForOrder, salesInvoiceDraftIdempotencyKey } from "../src/services/salesInvoiceOutbox";
 
@@ -43,6 +43,20 @@ describe("Sprint 79 automatic Sales Invoice Draft creation on order completion",
     expect(lines).toHaveLength(1);
     expect(lines[0].productId).toBe(product.id);
     expect(lines[0].quantity).toBe(1);
+  });
+
+  it("copies the durable Noctella Web order-item title snapshot without reevaluating the current product title", async () => {
+    const cat = await createCategory(db, { name: "Direct-title-cat", displayOrder: 0, isActive: true });
+    const product = await createProduct(db, { sku: "SKU-DIRECT-TITLE", title: "Internal ERP Camera Title", wooProductName: "Vintage Leica Camera", slug: "direct-title-product", type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId: cat.id, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false, priceEur: 150, stockQuantity: 1, images: [] });
+    await createPaymentSession(db, { provider: PaymentProvider.Stripe, providerReference: "direct-title-ref", status: PaymentStatus.Paid, amount: 150, currency: "EUR", idempotencyKey: "direct-title-pay" });
+    const order = await createOrder(db, { orderDraftId: "direct-title-draft", guestEmail: "jane@example.com", status: OrderStatus.Processing, paymentStatus: PaymentStatus.Paid, paymentProvider: PaymentProvider.Stripe, paymentReference: "direct-title-ref", currency: PriceCurrency.Eur, billingAddress: address, shippingAddress: address, subtotalAmount: 150, totalAmount: 150, items: [{ productId: product.id, quantity: 1 as const }] }, { enqueueInvoiceDraft: false, pricingContext: "noctella_web" });
+    expect(order.items[0]).toMatchObject({ productTitle: "Vintage Leica Camera" });
+
+    await updateProduct(db, product.id, { wooProductName: "Renamed After Purchase" });
+    const invoice = await createAutomaticSalesInvoiceDraft(db, order.id);
+    const lines = await db.select().from(schema.invoiceLines).where(eq(schema.invoiceLines.invoiceId, invoice.id));
+    expect(lines).toHaveLength(1);
+    expect(lines[0].titleSnapshot).toBe("Vintage Leica Camera");
   });
 
   it("does not create a second invoice under concurrent order-creation retries of the same idempotency key", async () => {
