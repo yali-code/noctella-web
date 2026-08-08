@@ -304,6 +304,54 @@ describe("public catalog service", () => {
     expect(result.items[0]).not.toHaveProperty("wooProductName");
   });
 
+  it("sorts published products by the public Noctella Web title with canonical fallback", async () => {
+    await createProduct(
+      db,
+      baseInput({
+        title: "Alpha Canonical Name",
+        wooProductName: "Zulu Display Name",
+        status: ProductStatus.Published,
+      }),
+    );
+    await createProduct(
+      db,
+      baseInput({
+        title: "Zulu Canonical Name",
+        wooProductName: "Alpha Display Name",
+        status: ProductStatus.Published,
+      }),
+    );
+    await createProduct(
+      db,
+      baseInput({ title: "Beta Fallback Name", status: ProductStatus.Published }),
+    );
+    await createProduct(
+      db,
+      baseInput({
+        title: "Draft Canonical Name",
+        wooProductName: "Aardvark Draft Name",
+        status: ProductStatus.Draft,
+      }),
+    );
+
+    const result = await listPublicProducts(db, {
+      page: 1,
+      pageSize: 20,
+      sort: "title_asc",
+    });
+
+    expect(result.items.map((item) => item.title)).toEqual([
+      "Alpha Display Name",
+      "Beta Fallback Name",
+      "Zulu Display Name",
+    ]);
+    expect(result.items).toHaveLength(3);
+    expect(result.total).toBe(3);
+    expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(20);
+    expect(result.items.every((item) => !("wooProductName" in item))).toBe(true);
+  });
+
   it("paginates results", async () => {
     for (let i = 0; i < 3; i++) {
       await createProduct(
