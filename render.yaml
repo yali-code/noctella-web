@@ -65,6 +65,14 @@ services:
         value: gpt-4o-mini
       - key: AI_INTAKE_OPENAI_MAX_PHOTOS
         value: "5"
+      # Sprint 108: activates the already-implemented real OpenAI Marketplace Preparation
+      # provider (Sprint 107) in staging, reusing the existing AI_INTAKE_OPENAI_API_KEY/
+      # AI_INTAKE_OPENAI_MODEL credential above - no new secret. Provider selection is owned by
+      # this repository/Blueprint value for the same reason as AI_INTAKE_PROVIDER above:
+      # dashboard-only overrides may be overwritten by a future Blueprint sync. A durable
+      # rollback to Mock must change this value back to "mock" here.
+      - key: MARKETPLACE_PREP_PROVIDER
+        value: openai
       # Render-generated secrets - random values created by Render, never written to this file
       # or committed to source control. Verify the generated MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY
       # actually decodes to 32 bytes (see runbook risk note) before relying on marketplace
