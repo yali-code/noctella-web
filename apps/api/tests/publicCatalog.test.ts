@@ -273,6 +273,37 @@ describe("public catalog service", () => {
     expect(result.items[0].title).toBe("Art Deco Cigarette Case");
   });
 
+  it("searches published products by Noctella Web product name", async () => {
+    await createProduct(
+      db,
+      baseInput({
+        title: "Canonical Published Name",
+        wooProductName: "Noctella Aurora Timepiece",
+        status: ProductStatus.Published,
+      }),
+    );
+    await createProduct(
+      db,
+      baseInput({
+        title: "Canonical Draft Name",
+        wooProductName: "Noctella Aurora Draft",
+        status: ProductStatus.Draft,
+      }),
+    );
+
+    const result = await listPublicProducts(db, {
+      page: 1,
+      pageSize: 20,
+      sort: "newest",
+      search: "aUrOrA",
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+    expect(result.items[0].title).toBe("Noctella Aurora Timepiece");
+    expect(result.items[0]).not.toHaveProperty("wooProductName");
+  });
+
   it("paginates results", async () => {
     for (let i = 0; i < 3; i++) {
       await createProduct(
