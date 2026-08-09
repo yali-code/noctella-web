@@ -149,6 +149,9 @@ export function ProductDetailClient({ slug }: { slug: string }) {
               </span>
             )}
           </p>
+          {product.shortDescription && (
+            <p style={{ color: "var(--noctella-ivory)", margin: "8px 0 16px" }}>{product.shortDescription}</p>
+          )}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14, margin: "16px 0" }}>
             <Row label="Product Type" value={formatProductType(product.type)} />
