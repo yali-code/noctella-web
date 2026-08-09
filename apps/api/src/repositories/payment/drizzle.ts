@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import * as sqliteSchema from "../../db/schema.sqlite";
 import * as postgresSchema from "../../db/schema.postgres";
 import type { TransactionPaymentEventRepository, TransactionPaymentEventRecord, TransactionPaymentRecord, TransactionPaymentRepository } from "./types";
@@ -49,6 +49,7 @@ export function createTransactionPaymentRepositories(db: any, driver: "sqlite" |
 
   const eventRepository: TransactionPaymentEventRepository = {
     find: findEvent,
+    listByPaymentId: paymentId => then(rows(db.select().from(paymentEvents).where(eq(paymentEvents.paymentId, paymentId)).orderBy(asc(paymentEvents.createdAt), asc(paymentEvents.id)), execution), result => result.map(event)),
     claim: input => then(execute(db.insert(paymentEvents).values(input), execution), () => undefined),
     complete: (provider, eventId, paymentId, status, resultClassification, errorCode, updatedAt) => then(findEvent(provider, eventId), current => {
       if (!current) throw new Error("PAYMENT_EVENT_COMPLETION_REJECTED");

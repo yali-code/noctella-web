@@ -123,6 +123,27 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 128 — Stripe Staging Operations Visibility & Runbook
+
+### Capability Added
+
+- Authenticated provider-agnostic operational payment detail with a safe event projection including explicit `providerEventId`.
+- Minimal Admin payment detail and `manual_refund_required` operational guidance.
+- A separately authorized Stripe staging-validation runbook.
+
+### Dependencies Introduced or Changed
+
+- None. No schema or migration change.
+
+### Architectural Decisions
+
+- The operational capability is read only: no provider mutation, automatic refund, or manual-refund acknowledgement state.
+- Stripe activation and staging drills do not occur in this PR; external staging validation is post-merge and separately authorized.
+
+### Deferred Work
+
+- Operational Stripe test-mode activation, manual-refund reconciliation, Stripe refund adapter, refund accounting/CreditNote policy, and production activation.
+
 ## Sprint 127 — Stripe Checkout + Verified Payment Webhook
 
 ### Capability Added
