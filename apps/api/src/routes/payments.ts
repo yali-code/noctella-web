@@ -4,6 +4,8 @@ import { db } from "../db/client";
 import { listPayments } from "../payments/paymentRepository";
 import { listPaymentsQuerySchema } from "../validation/payment";
 import { handleRouteError } from "./errorHandler";
+import { z } from "zod";
+import { getPaymentOperationsDetail } from "../services/paymentOperations";
 
 /**
  * Sprint 6A shipped mock-only initialize/verify/cancel. Sprint 37A added
@@ -33,6 +35,15 @@ router.get("/", requirePermission("orders.view"), async (req, res) => {
         orderId: p.orderId,
       })),
     );
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.get("/:paymentId", requirePermission("orders.view"), async (req, res) => {
+  try {
+    const paymentId = z.string().min(1).parse(req.params.paymentId);
+    res.json(await getPaymentOperationsDetail(db, paymentId));
   } catch (err) {
     handleRouteError(err, res);
   }

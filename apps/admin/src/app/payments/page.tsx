@@ -73,7 +73,7 @@ export default function PaymentsPage() {
               )}
               {items.map((p) => (
                 <tr key={p.id} style={{ borderBottom: "1px solid rgba(122,106,79,0.3)" }}>
-                  <td style={tdStyle}>{p.provider}</td>
+                  <td style={tdStyle}><Link href={`/payments/${p.id}`}>{p.provider}</Link></td>
                   <td style={tdStyle}>{p.providerReference}</td>
                   <td style={tdStyle}>{p.status}</td>
                   <td style={tdStyle}>{p.amount.toFixed(2)}</td>
