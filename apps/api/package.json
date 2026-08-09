@@ -14,12 +14,15 @@
     "db:migration-preview": "tsx src/scripts/dbMigrationPreview.ts",
     "db:integrity": "tsx src/scripts/dbIntegrity.ts",
     "db:backup-check": "tsx src/scripts/dbBackupCheck.ts",
+    "db:backup": "tsx src/scripts/runDatabaseBackup.ts",
+    "db:restore-verify": "tsx src/scripts/verifyDatabaseRestore.ts",
     "bootstrap:admin": "tsx src/scripts/bootstrapAdmin.ts",
     "reset:admin-password": "tsx src/scripts/resetAdminPassword.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",
     "repo:parity": "tsx src/scripts/productReadRepositoryAudit.ts && tsx src/scripts/productWriteRepositoryAudit.ts && tsx src/scripts/orderRepositoryAudit.ts && tsx src/scripts/returnRepositoryFoundationAudit.ts && tsx src/scripts/refundRepositoryFoundationAudit.ts && tsx src/scripts/inventoryRepositoryAudit.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1106.0",
     "@noctella/shared": "2.1.0-rc.2",
     "@types/multer": "^2.2.0",
     "@types/pg": "^8.20.0",
