@@ -105,6 +105,23 @@ services:
         sync: false
       - key: AI_INTAKE_OPENAI_API_KEY
         sync: false
+      # Sprint 124: API-owned off-disk SQLite backup. These values are consulted only when the
+      # authenticated backup operation runs, not during normal API startup. Retention is owned by
+      # the destination lifecycle policy outside the application.
+      - key: DATABASE_BACKUP_S3_ENDPOINT
+        sync: false
+      - key: DATABASE_BACKUP_S3_REGION
+        sync: false
+      - key: DATABASE_BACKUP_S3_BUCKET
+        sync: false
+      - key: DATABASE_BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: DATABASE_BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: DATABASE_BACKUP_S3_PREFIX
+        value: database-backups
+      - key: DATABASE_BACKUP_S3_FORCE_PATH_STYLE
+        sync: false
 
   # --- B. Admin web service -------------------------------------------------------------------
   - type: web
@@ -170,6 +187,30 @@ services:
     envVars:
       # Render private networking: resolves to the API service's internal host:port, never a
       # public onrender.com hostname - the cron job never leaves Render's private network.
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-staging-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-staging-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN
+
+  # --- E. Database backup trigger ---------------------------------------------------------------
+  # Makes one authenticated API call daily at 03:00 UTC. It has no disk and no S3 credentials;
+  # only the API process opens SQLite and uploads the verified backup.
+  - type: cron
+    name: noctella-staging-database-backup
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "0 3 * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runDatabaseBackup.js
+    envVars:
       - key: API_HOSTPORT
         fromService:
           name: noctella-staging-api
