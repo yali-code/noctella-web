@@ -7,13 +7,11 @@ Record architectural capabilities, decisions, invariants, technical debt, deferr
 ## Existing Architecture Rules
 
 ```text
-Repository
+Route
 ↓
-Application Service
+Service
 ↓
-Use Cases
-↓
-Domain
+UseCase
 ↓
 Repository
 ```
@@ -79,6 +77,26 @@ Sales modernization is complete:
 - Application Services orchestrate only.
 - Business rules remain inside Use Cases.
 - API contracts remain unchanged.
+
+## Current Noctella Web Architecture Decisions (Sprints 114–122)
+
+### Public Presentation
+
+- Public Noctella Web contracts remain marketplace-neutral while the public projection uses approved marketplace-prepared values through these precedence rules: `title = wooProductName ?? title`, `description = wooLongDescription ?? description ?? undefined`, `shortDescription = wooShortDescription ?? undefined`, `priceEur = wooListingPriceEur ?? priceEur`, `seoTitle = wooSeoTitle ?? seoTitle ?? undefined`, and `metaDescription = wooMetaDescription ?? metaDescription ?? undefined`.
+- Woo-specific storage fields remain internal implementation details and are not exposed as public property names. `shortDescription` has no canonical or long-description fallback.
+- Customer-facing search includes `wooProductName`. Price sorting uses `coalesce(wooListingPriceEur, priceEur)`, title sorting uses `coalesce(wooProductName, title)`, and deterministic ID tie-breakers are preserved.
+
+### Direct Noctella Web Orders
+
+- Direct Noctella Web orders use the explicit `noctella_web` pricing context and effective unit price `wooListingPriceEur ?? priceEur`; other order contexts retain their established canonical pricing semantics.
+- EUR remains authoritative. Paid amounts are compared after deterministic integer-cent normalization, and stale or mismatched checkout/payment data fails closed without silent repricing. Mock payment infrastructure is not production payment readiness.
+- The direct Noctella Web order-item title is selected as `wooProductName ?? title` at creation. Its stored value is an immutable historical snapshot: later product edits do not rewrite it, and invoice drafting consumes that durable order-item title. Marketplace and other non-Noctella-Web contexts retain their established canonical behavior.
+
+### Transaction and Inventory Boundaries
+
+- Durable transactional work completes before external post-commit synchronization. Post-commit stock synchronization must occur after the final same-scope UnitOfWork transaction, and repository audit tooling structurally enforces that order.
+- Inventory atomicity and idempotency boundaries remain authoritative, and Inventory remains the source of truth.
+- Marketplace preparation does not replace Inventory authority. Marketplace fields remain optional at product creation and marketplace-specific validation remains publish-time; the Noctella Web presentation decisions above do not alter those boundaries.
 
 ## Validation Standard
 
