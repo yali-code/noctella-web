@@ -11,7 +11,8 @@ import {
   savePaymentSelection,
   type PaymentSelectionProvider,
 } from "@/lib/paymentSelection";
-import { initializeMockPayment } from "@/lib/payments";
+import { initializeMockPayment, initializeStripeCheckout } from "@/lib/payments";
+import { redirectToHostedCheckout } from "@/lib/stripeCheckoutFlow";
 import { ApiError } from "@/lib/api";
 
 interface MethodOption {
@@ -88,6 +89,13 @@ export default function CheckoutPaymentPage() {
     setSubmitting(true);
     setError(null);
     try {
+      if(selectedProvider==="stripe"){
+        const fullName=`${orderDraft.customer.firstName} ${orderDraft.customer.lastName}`.trim();
+        const address=(a:typeof orderDraft.shippingAddress)=>({fullName,line1:a.line1,line2:a.line2,city:a.city,region:a.state,postalCode:a.postalCode,country:a.country,phone:orderDraft.customer.phone});
+        const result=await initializeStripeCheckout({provider:"stripe",orderDraftId:orderDraft.id,guestEmail:orderDraft.customer.email,billingAddress:address(orderDraft.billingAddress??orderDraft.shippingAddress),shippingAddress:address(orderDraft.shippingAddress),notes:orderDraft.customerNote,items:orderDraft.items.map(x=>({productId:x.productId,quantity:1 as const}))});
+        savePaymentSelection(orderDraft.id,"stripe",{paymentId:result.paymentId,status:"pending"});
+        redirectToHostedCheckout(result.checkoutUrl); return;
+      }
       const result = await initializeMockPayment({
         provider: selectedProvider,
         orderDraftId: orderDraft.id,

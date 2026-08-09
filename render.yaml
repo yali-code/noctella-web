@@ -54,6 +54,14 @@ services:
       # before a real payment gateway is integrated.
       - key: MOCK_PAYMENTS_ENABLED
         value: "true"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_SUCCESS_URL
+        value: https://shop.staging.noctella.com/checkout/success
+      - key: STRIPE_CANCEL_URL
+        value: https://shop.staging.noctella.com/checkout/cancel
       # Sprint 105: "openai" is now the intended persistent staging provider after a successful
       # controlled smoke test. Provider selection is owned by this repository/Blueprint value;
       # a durable rollback to Mock must change this value back to "mock" here. Dashboard-only

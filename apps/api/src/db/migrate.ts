@@ -288,8 +288,16 @@ function ensurePaymentColumns(sqlite: Database.Database): void {
   if (!existing.has("provider_reference")) {
     sqlite.exec("ALTER TABLE payments ADD COLUMN provider_reference TEXT");
   }
-  sqlite.exec("CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference)");
+  for (const [name, ddl] of [["provider_transaction_reference","TEXT"],["expected_amount_cents","INTEGER"],["checkout_snapshot","TEXT"]] as const) if (!existing.has(name)) sqlite.exec(`ALTER TABLE payments ADD COLUMN ${name} ${ddl}`);
+  const duplicateSession = sqlite.prepare("SELECT provider, provider_reference FROM payments WHERE provider_reference IS NOT NULL GROUP BY provider, provider_reference HAVING COUNT(*) > 1 LIMIT 1").get();
+  if (duplicateSession) throw new Error("PAYMENT_PROVIDER_REFERENCE_CONFLICT");
+  const duplicateTransaction = sqlite.prepare("SELECT provider, provider_transaction_reference FROM payments WHERE provider_transaction_reference IS NOT NULL GROUP BY provider, provider_transaction_reference HAVING COUNT(*) > 1 LIMIT 1").get();
+  if (duplicateTransaction) throw new Error("PAYMENT_PROVIDER_TRANSACTION_REFERENCE_CONFLICT");
+  sqlite.exec("DROP INDEX IF EXISTS idx_payments_provider_reference");
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_reference_unique ON payments(provider, provider_reference) WHERE provider_reference IS NOT NULL");
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_transaction_unique ON payments(provider, provider_transaction_reference) WHERE provider_transaction_reference IS NOT NULL");
   sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_unique ON payments(order_id) WHERE order_id IS NOT NULL");
+  sqlite.exec("CREATE TABLE IF NOT EXISTS payment_events (id TEXT PRIMARY KEY, provider TEXT NOT NULL, provider_event_id TEXT NOT NULL, event_type TEXT NOT NULL, payment_id TEXT, status TEXT NOT NULL, result_classification TEXT, error_code TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)); CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_events_provider_event_unique ON payment_events(provider, provider_event_id); CREATE INDEX IF NOT EXISTS idx_payment_events_payment ON payment_events(payment_id)");
 }
 
 /**

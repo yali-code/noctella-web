@@ -1,0 +1,4 @@
+"use client";
+import Link from "next/link"; import { useSearchParams } from "next/navigation"; import { Suspense,useEffect,useState } from "react"; import { getPaymentStatus } from "@/lib/payments"; import { readPaymentStatusOnce } from "@/lib/stripeCheckoutFlow";
+function Content(){const id=useSearchParams().get("paymentId"),[status,setStatus]=useState<string>();useEffect(()=>{if(id)readPaymentStatusOnce(id,getPaymentStatus).then(x=>setStatus(x.status)).catch(()=>undefined)},[id]);return <section style={{padding:"60px 40px",textAlign:"center"}}><h1>Checkout not completed</h1><p>Returning from Stripe does not change payment or inventory state.</p>{status&&<p>Current status: {status}</p>}<Link href="/checkout/payment">Return to payment</Link></section>}
+export default function CheckoutCancelPage(){return <Suspense fallback={<section style={{padding:"60px 40px",textAlign:"center"}}>Loading checkout status...</section>}><Content/></Suspense>}

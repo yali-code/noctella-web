@@ -365,17 +365,23 @@ export const payments = pgTable("payments", {
   orderId: text("order_id"),
   provider: text("provider").notNull(),
   providerReference: text("provider_reference"),
+  providerTransactionReference: text("provider_transaction_reference"),
   status: text("status").notNull(),
   amount: numeric("amount", { precision: 18, scale: 6 }).notNull(),
+  expectedAmountCents: integer("expected_amount_cents"),
   currency: text("currency").notNull().default("EUR"),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   safeMetadata: jsonb("safe_metadata"),
+  checkoutSnapshot: jsonb("checkout_snapshot"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [
-  index("idx_payments_provider_reference").on(table.provider, table.providerReference),
+  uniqueIndex("idx_payments_provider_reference_unique").on(table.provider, table.providerReference).where(sql`provider_reference IS NOT NULL`),
+  uniqueIndex("idx_payments_provider_transaction_unique").on(table.provider, table.providerTransactionReference).where(sql`provider_transaction_reference IS NOT NULL`),
   uniqueIndex("idx_payments_order_unique").on(table.orderId).where(sql`order_id IS NOT NULL`),
 ]);
+
+export const paymentEvents = pgTable("payment_events", { id:text("id").primaryKey().notNull(), provider:text("provider").notNull(), providerEventId:text("provider_event_id").notNull(), eventType:text("event_type").notNull(), paymentId:text("payment_id"), status:text("status").notNull(), resultClassification:text("result_classification"), errorCode:text("error_code"), createdAt:timestamp("created_at",{withTimezone:true}).notNull().default(sql`now()`), updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().default(sql`now()`) }, table=>[uniqueIndex("idx_payment_events_provider_event_unique").on(table.provider,table.providerEventId),index("idx_payment_events_payment").on(table.paymentId)]);
 
 export const stockMovements = pgTable("stock_movements", {
   id: text("id").primaryKey().notNull(),

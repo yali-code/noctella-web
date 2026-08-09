@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/lib/api";
-import { cancelMockPayment, initializeMockPayment, verifyMockPayment } from "../src/lib/payments";
+import { cancelMockPayment, getPaymentStatus, initializeMockPayment, initializeStripeCheckout, verifyMockPayment } from "../src/lib/payments";
 
 function mockFetchOnce(status: number, body: unknown, ok: boolean) {
   global.fetch = vi.fn().mockResolvedValue({
@@ -67,6 +67,11 @@ describe("initializeMockPayment", () => {
       }),
     ).rejects.toBeInstanceOf(ApiError);
   });
+});
+
+describe("Sprint 127 Stripe payment client",()=>{
+  it("sends durable order input without browser monetary or URL authority",async()=>{mockFetchOnce(201,{paymentId:"payment-1",checkoutUrl:"https://checkout.stripe.test/1"},true);await initializeStripeCheckout({provider:"stripe",orderDraftId:"draft-1",guestEmail:"buyer@example.com",billingAddress:{line1:"1"},shippingAddress:{line1:"1"},items:[{productId:"product-1",quantity:1}]});const [url,options]=(fetch as ReturnType<typeof vi.fn>).mock.calls[0];expect(url).toContain("/api/payments/initialize");const body=JSON.parse(options.body as string);expect(body).not.toHaveProperty("amount");expect(body).not.toHaveProperty("currency");expect(body).not.toHaveProperty("successUrl");expect(body).not.toHaveProperty("cancelUrl");});
+  it("reads the public payment status without mutation",async()=>{mockFetchOnce(200,{status:"paid",order:{id:"order-1",orderNumber:"NOC-1"}},true);const result=await getPaymentStatus("payment-1");expect(result.status).toBe("paid");const [,options]=(fetch as ReturnType<typeof vi.fn>).mock.calls[0];expect(options?.method).toBeUndefined();});
 });
 
 describe("verifyMockPayment", () => {
