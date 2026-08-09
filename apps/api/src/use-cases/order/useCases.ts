@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import { OrderStatus, PaymentStatus, PriceCurrency, ProductStatus } from "@noctella/shared";
-import type { UnitOfWork } from "../../services/unitOfWork";
+import type { TransactionScopedRepositories, UnitOfWork } from "../../services/unitOfWork";
 import { BadRequestError, NotFoundError } from "../../services/errors";
 import type { CreateInternalOrderInput, OrderDetailProjection, OrderPricingContext, PaidSessionPricing, UpdateOrderPaymentStatusInput, UpdateOrderStatusInput, SaleRollbackInput } from "../../repositories/order/types";
 import { decreaseInventoryForSaleInTransactionUseCase, restoreInventoryForSaleRollbackInTransactionUseCase } from "../../application/inventory";
@@ -13,6 +13,79 @@ const clock:Clock={now:()=>new Date()}; const ids:IdGenerator={id:()=>randomUUID
 export function stablePayload(input:unknown){ return createHash("sha256").update(JSON.stringify(input,Object.keys(input as object).sort())).digest("hex"); }
 export function formatOrderNumber(date = new Date(), sequence = Math.floor(Math.random()*1_000_000)){ return `NOC-${date.getUTCFullYear()}${String(date.getUTCMonth()+1).padStart(2,"0")}${String(date.getUTCDate()).padStart(2,"0")}-${String(sequence).padStart(6,"0")}`; }
 const toEurCents = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
+
+export interface InternalOrderTransactionContext {
+  repositories: TransactionScopedRepositories;
+  clock: Clock;
+  idGenerator: IdGenerator;
+  inventoryDriver: InventoryRepositoryDriver;
+  outbox?: PaidOrderOutboxPort;
+  pricingContext: OrderPricingContext;
+  paidSession?: PaidSessionPricing;
+  orderId: string;
+  idempotencyKey: string;
+}
+
+export interface InternalOrderTransactionResult {
+  order: OrderDetailProjection;
+  affectedProductIds: string[];
+}
+
+/**
+ * Canonical order finalization inside an already-open transaction. It returns synchronously for
+ * transaction-scoped SQLite and preserves the existing Promise contract for async-capable drivers.
+ * It owns no UnitOfWork and performs no post-commit/external work.
+ */
+export function finalizeInternalOrderInTransaction(
+  input: CreateInternalOrderInput,
+  context: InternalOrderTransactionContext,
+): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> {
+  const { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, orderId, idempotencyKey: idem } = context;
+  const inventoryRepositories = createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite");
+  const existing = repositories.order.orders.write.findByIdempotencyKey(idem) as any;
+  if (existing?.id) {
+    return {
+      order: repositories.order.orders.read.getOrderDetailProjection(existing.id) as any,
+      affectedProductIds: [],
+    };
+  }
+  const products = repositories.order.orderItems.write.validateProductReferences(input.items.map((i) => i.productId)) as unknown as any[];
+  if (products.length !== input.items.length) throw new NotFoundError("Product not found");
+  const now = c.now().toISOString();
+  let subtotal = 0;
+  const itemRows = [] as any[];
+  for (const line of input.items) {
+    const p = products.find((x: any) => x.id === line.productId);
+    if (!p || p.status !== ProductStatus.Published) throw new BadRequestError("Orders can only include published products");
+    if (p.stockQuantity < line.quantity) throw new BadRequestError("Insufficient stock");
+    const unitPrice = pricingContext === "noctella_web" ? p.wooListingPriceEur ?? p.priceEur : p.priceEur;
+    subtotal += unitPrice * line.quantity;
+    const productTitle = pricingContext === "noctella_web" ? p.wooProductName ?? p.title : p.title;
+    itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });
+  }
+  const subtotalCents = toEurCents(subtotal);
+  if (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents) throw new BadRequestError("Submitted totals do not match current product prices");
+  if (pricingContext === "noctella_web" && (!paidSession || paidSession.currency !== "EUR" || toEurCents(paidSession.amount) !== subtotalCents)) throw new BadRequestError("Paid session does not match current Noctella Web price");
+  repositories.order.orders.write.create({ id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount: 0, taxAmount: 0, totalAmount: subtotal, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, createdAt: now, updatedAt: now, idempotencyKey: idem });
+  repositories.order.orderItems.write.createMany(itemRows);
+  const affectedProductIds: string[] = [];
+  const complete = (): InternalOrderTransactionResult => {
+    outbox?.enqueue(repositories.db, orderId);
+    const order = repositories.order.orders.read.getOrderDetailProjection(orderId) as any;
+    if (!order) throw new NotFoundError("Order not found");
+    return { order, affectedProductIds };
+  };
+  const mutate = (index: number): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> => {
+    if (index >= itemRows.length) return complete();
+    const row = itemRows[index];
+    const result = decreaseInventoryForSaleInTransactionUseCase({ clock: c, idGenerator: { newId: () => g.id() } }, inventoryRepositories, { productId: row.productId, quantity: row.quantity, orderId, orderItemId: row.id, note: `Sale for order ${orderId}`, idempotencyKey: `order-sale:${orderId}:${row.productId}` });
+    return result instanceof Promise
+      ? result.then(() => { affectedProductIds.push(row.productId); return mutate(index + 1); })
+      : ((affectedProductIds.push(row.productId)), mutate(index + 1));
+  };
+  return mutate(0);
+}
+
 export function createInternalOrderUseCase(
   uow: UnitOfWork,
   sync?: PostCommitStockSyncPort,
@@ -32,46 +105,11 @@ export function createInternalOrderUseCase(
       if (input.items.some((i) => !Number.isInteger(i.quantity) || i.quantity <= 0)) throw new BadRequestError("Order quantities must be positive integers");
       const idem = input.idempotencyKey ?? input.orderDraftId;
       const keyHash = stablePayload({ ...input, id: undefined, orderNumber: undefined });
-      const affected: string[] = [];
       const orderId = input.id ?? g.id();
-      const out = await uow.run(({ repositories }) => {
-        const inventoryRepositories = createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite");
-        const existing = repositories.order.orders.write.findByIdempotencyKey(idem) as any;
-        if (existing?.id) return repositories.order.orders.read.getOrderDetailProjection(existing.id) as any;
-        const products = repositories.order.orderItems.write.validateProductReferences(input.items.map((i) => i.productId)) as unknown as any[];
-        if (products.length !== input.items.length) throw new NotFoundError("Product not found");
-        const now = c.now().toISOString();
-        let subtotal = 0;
-        const itemRows = [] as any[];
-        for (const line of input.items) {
-          const p = products.find((x: any) => x.id === line.productId);
-          if (!p || p.status !== ProductStatus.Published) throw new BadRequestError("Orders can only include published products");
-          if (p.stockQuantity < line.quantity) throw new BadRequestError("Insufficient stock");
-          const unitPrice = pricingContext === "noctella_web" ? p.wooListingPriceEur ?? p.priceEur : p.priceEur;
-          subtotal += unitPrice * line.quantity;
-          const productTitle = pricingContext === "noctella_web" ? p.wooProductName ?? p.title : p.title;
-          itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });
-        }
-        const subtotalCents = toEurCents(subtotal);
-        if (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents) throw new BadRequestError("Submitted totals do not match current product prices");
-        if (pricingContext === "noctella_web" && (!paidSession || paidSession.currency !== "EUR" || toEurCents(paidSession.amount) !== subtotalCents)) throw new BadRequestError("Paid session does not match current Noctella Web price");
-        repositories.order.orders.write.create({ id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount: 0, taxAmount: 0, totalAmount: subtotal, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, createdAt: now, updatedAt: now, idempotencyKey: idem });
-        repositories.order.orderItems.write.createMany(itemRows);
-        const mutate = (index: number): any => {
-          if (index >= itemRows.length) {
-            outbox?.enqueue(repositories.db, orderId);
-            return repositories.order.orders.read.getOrderDetailProjection(orderId) as any;
-          }
-          const row = itemRows[index];
-          const result = decreaseInventoryForSaleInTransactionUseCase({ clock: c, idGenerator: { newId: () => g.id() } }, inventoryRepositories, { productId: row.productId, quantity: row.quantity, orderId, orderItemId: row.id, note: `Sale for order ${orderId}`, idempotencyKey: `order-sale:${orderId}:${row.productId}` });
-          return result instanceof Promise ? result.then(() => { affected.push(row.productId); return mutate(index + 1); }) : ((affected.push(row.productId)), mutate(index + 1));
-        };
-        return mutate(0);
-      });
-      for (const p of affected) await sync?.enqueue(p, `order-sale:${orderId}:${p}`).catch(() => undefined);
-      if (!out) throw new NotFoundError("Order not found");
+      const result = await uow.run(({ repositories }) => finalizeInternalOrderInTransaction(input, { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, orderId, idempotencyKey: idem }));
+      for (const p of result.affectedProductIds) await sync?.enqueue(p, `order-sale:${orderId}:${p}`).catch(() => undefined);
       void keyHash;
-      return out;
+      return result.order;
     },
   };
 }
