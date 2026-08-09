@@ -122,6 +122,23 @@ services:
         value: database-backups
       - key: DATABASE_BACKUP_S3_FORCE_PATH_STYLE
         sync: false
+      # Sprint 125: separate off-disk canonical product-photo backup destination. Consulted only
+      # by the API-owned backup/recovery-verification operations; the HTTP cron receives none of
+      # these values. Remote photo objects and manifests are never deleted by the application.
+      - key: PRODUCT_PHOTO_BACKUP_S3_ENDPOINT
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_REGION
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_BUCKET
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_PREFIX
+        value: product-photo-backups
+      - key: PRODUCT_PHOTO_BACKUP_S3_FORCE_PATH_STYLE
+        sync: false
 
   # --- B. Admin web service -------------------------------------------------------------------
   - type: web
@@ -210,6 +227,30 @@ services:
     schedule: "0 3 * * *"
     buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
     startCommand: node apps/api/dist/scripts/runDatabaseBackup.js
+    envVars:
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-staging-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-staging-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN
+
+  # --- F. Product-photo backup trigger ---------------------------------------------------------
+  # Makes one authenticated API call daily at 04:30 UTC. It has no disk, database/photo paths,
+  # or S3 credentials; only the API process enumerates and reads authoritative ProductPhotos.
+  - type: cron
+    name: noctella-staging-product-photo-backup
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "30 4 * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runProductPhotoBackup.js
     envVars:
       - key: API_HOSTPORT
         fromService:

@@ -16,6 +16,8 @@
     "db:backup-check": "tsx src/scripts/dbBackupCheck.ts",
     "db:backup": "tsx src/scripts/runDatabaseBackup.ts",
     "db:restore-verify": "tsx src/scripts/verifyDatabaseRestore.ts",
+    "photos:backup": "tsx src/scripts/runProductPhotoBackup.ts",
+    "photos:recovery-verify": "tsx src/scripts/verifyProductPhotoRecovery.ts",
     "bootstrap:admin": "tsx src/scripts/bootstrapAdmin.ts",
     "reset:admin-password": "tsx src/scripts/resetAdminPassword.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",

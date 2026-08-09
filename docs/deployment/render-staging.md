@@ -1,7 +1,8 @@
 # Render Staging Deployment Runbook
 
-Scope: the approved Render staging environment defined in `render.yaml`, Frankfurt region, four
-services (API, Admin, Storefront, background-job Cron). This is **RC staging infrastructure, not
+Scope: the approved Render staging environment defined in `render.yaml`, Frankfurt region, six
+services (API, Admin, Storefront, background-job Cron, database-backup Cron, product-photo-backup
+Cron). This is **RC staging infrastructure, not
 the final production architecture** — see "Explicit non-goals and risks" below before using this
 environment for anything beyond staging validation. `render.yaml` deploys whatever is on `main`
 (it is not pinned to a specific release tag), so this runbook applies across release candidates;
@@ -15,9 +16,10 @@ see `docs/releases/` for the capabilities and known limitations of a specific ca
    this status.
 2. **Create the Render Blueprint from `render.yaml`.** In the Render dashboard: New → Blueprint →
    point at this repository's `main` branch → Render parses `render.yaml` at the repo root.
-3. **Confirm the four Render resources** were created as declared: `noctella-staging-api` (web),
+3. **Confirm the six Render resources** were created as declared: `noctella-staging-api` (web),
    `noctella-staging-admin` (web), `noctella-staging-storefront` (web),
-   `noctella-staging-background-jobs` (cron). Do not proceed if any resource is missing or
+   `noctella-staging-background-jobs` (cron), `noctella-staging-database-backup` (cron), and
+   `noctella-staging-product-photo-backup` (cron). Do not proceed if any resource is missing or
    misconfigured relative to `render.yaml`.
 4. **Enter all `sync: false` / operator-provided secrets** in the Render dashboard for
    `noctella-staging-api`: `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, and any
@@ -40,8 +42,8 @@ see `docs/releases/` for the capabilities and known limitations of a specific ca
    - `shop.staging.noctella.com` → `noctella-staging-storefront`
 6. **Confirm the API's persistent disk is mounted at `/var/data`** (`noctella-staging-data`,
    1 GB, declared under `noctella-staging-api` in `render.yaml`). Do not proceed to step 8 if the
-   disk isn't attached — both the SQLite database and product photos live there, and neither is
-   backed up anywhere else in this staging setup.
+   disk isn't attached — both the SQLite database and product photos live there. Off-disk backup
+   code requires separately configured operator-owned destinations before it is operational.
 7. **Confirm the two disk-backed environment values are exactly**:
    - `DATABASE_URL=/var/data/noctella.sqlite`
    - `PRODUCT_PHOTO_DIR=/var/data/product-photos`
@@ -440,14 +442,16 @@ idempotent (step 31).
 ## Explicit non-goals and risks
 
 - **This staging setup uses SQLite and local product-photo storage on one persistent Render
-  disk.** There is no replication, no automated off-disk backup, and no object storage.
+  disk.** Sprint 124/125 provide separately configured off-disk backup capabilities, but they are
+  not operational until an operator configures and verifies both external destinations. There is
+  no replication, and object storage is not the primary serving layer.
 - **The API must remain single-instance.** SQLite on a single mounted disk cannot be safely
   shared across multiple running API instances — do not scale `noctella-staging-api` beyond one
   instance under this configuration.
 - **Disk-backed deploys can have brief downtime.** A new deploy that reattaches the persistent
   disk is not guaranteed to be zero-downtime; expect a short gap during API redeploys.
-- **This is not the final production architecture.** PostgreSQL/Supabase and object storage
-  remain explicitly deferred for this staging pass (see `.env.example`'s Postgres/Supabase
+- **This is not the final production architecture.** PostgreSQL/Supabase and primary product-photo
+  object storage remain explicitly deferred for this staging pass (see `.env.example`'s Postgres/Supabase
   section, all unused while `DATABASE_DRIVER=sqlite`).
 - **Do not use this staging environment for irreplaceable production data.** Treat everything on
   the persistent disk as disposable and reproducible from a fresh bootstrap, not as a system of

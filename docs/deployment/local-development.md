@@ -31,6 +31,6 @@ persistent disk — the same principle as above, already applied in staging.
 
 - **SQLite deployment must remain single-instance.** A single SQLite file cannot be safely shared
   across multiple concurrently-running API processes, locally or in staging.
-- **No automated off-disk backup exists**, locally or in staging, for either the SQLite database
-  or the product-photo directory. Treat both as reproducible from a fresh bootstrap, not as a
-  system of record, until an automated backup is added.
+- Sprint 124/125 provide API-owned off-disk backup capabilities for SQLite and canonical product
+  photos, but local development is not protected unless an operator deliberately configures and
+  runs those separate S3-compatible destinations. Do not treat unconfigured local paths as backed up.

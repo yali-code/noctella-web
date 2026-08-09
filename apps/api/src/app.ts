@@ -10,6 +10,7 @@ import collectionsRouter from "./routes/collections";
 import customersRouter from "./routes/customers";
 import databaseAdminRouter from "./routes/databaseAdmin";
 import { createDatabaseBackupRouter } from "./routes/databaseBackup";
+import { createProductPhotoBackupRouter } from "./routes/productPhotoBackup";
 import erpRouter from "./routes/erp";
 import marketplacesRouter from "./routes/marketplaces";
 import marketplaceAdminRouter from "./routes/marketplaceAdmin";
@@ -40,6 +41,7 @@ import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutb
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
 import { runAiIntakeCleanupForScheduler, MAX_CLEANUP_BATCH_SIZE } from "./services/aiIntakeCleanup";
 import { runDatabaseBackup } from "./services/databaseBackup";
+import { runProductPhotoBackup } from "./services/productPhotoBackup";
 import { BackgroundJobType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
 import { externalListings } from "./db/schema";
@@ -145,6 +147,7 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
   }
 });
 app.use("/api/background-jobs/database-backup", createDatabaseBackupRouter(() => runDatabaseBackup(db)));
+app.use("/api/background-jobs/product-photo-backup", createProductPhotoBackupRouter(() => runProductPhotoBackup(db)));
 
 // AUTHENTICATED ADMIN default: every route mounted below this line requires a valid admin
 // session by default. A new router added below this point is protected automatically; one
