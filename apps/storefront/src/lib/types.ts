@@ -12,6 +12,7 @@ export interface PublicProduct {
   slug: string;
   title: string;
   type: string;
+  shortDescription?: string;
   description?: string;
   productStory?: string;
   brand?: string;

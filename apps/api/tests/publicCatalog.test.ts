@@ -123,12 +123,15 @@ describe("public catalog service", () => {
       baseInput({
         status: ProductStatus.Published,
         description: "Canonical description",
+        wooShortDescription: "Approved Noctella Web short description",
         wooLongDescription: "Approved Noctella Web description",
       }),
     );
 
     const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.shortDescription).toBe("Approved Noctella Web short description");
     expect(publicProduct.description).toBe("Approved Noctella Web description");
+    expect(publicProduct).not.toHaveProperty("wooShortDescription");
     expect(publicProduct).not.toHaveProperty("wooLongDescription");
   });
 
@@ -142,6 +145,7 @@ describe("public catalog service", () => {
     );
 
     const publicProduct = await getPublicProductBySlug(db, product.slug);
+    expect(publicProduct.shortDescription).toBeUndefined();
     expect(publicProduct.description).toBe("Canonical fallback description");
   });
 
