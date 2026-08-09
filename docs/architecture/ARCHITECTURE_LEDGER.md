@@ -123,6 +123,34 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 127 — Stripe Checkout + Verified Payment Webhook
+
+### Capability Added
+
+- Hosted, card-only Stripe Checkout uses server-authoritative Noctella Web pricing and test-mode credentials only.
+- Verified raw-body `checkout.session.completed` events with `payment_status=paid` are the sole real-Stripe fulfillment authority; live-mode events fail closed.
+- Versioned durable checkout intent and frozen server-derived provider-request data preserve retry identity while current price and stock remain authoritative at webhook fulfillment.
+- Checkout Session, PaymentIntent, and provider-event identities are durable and unique.
+- Payment, event, order, inventory, stock movement, and paid-order invoice outbox completion share one atomic UnitOfWork; terminal stock/price failures use `manual_refund_required` without automatic refund.
+- Public payment status and Storefront success/cancel flows are read only.
+
+### Dependencies Introduced or Changed
+
+- Official Stripe Node SDK in `apps/api`; no other dependency added.
+
+### Architectural Decisions
+
+- SQLite remains the deployed single-instance database; PostgreSQL changes are structural parity only.
+- Real staging credentials are not configured, the Dashboard webhook is not registered, a real staging Checkout/webhook smoke test and manual-refund operational drill have not run, live mode is not activated, and production-readiness approval has not been granted.
+
+### Validation
+
+- Focused Stripe API: 5 files, 52 tests passed.
+- Required API regressions: 10 files, 423 tests passed.
+- Relevant Storefront: 6 files, 69 tests passed.
+- API, Storefront, and Shared typecheck/build passed; Storefront lint passed.
+- Architecture audit, repository parity, database parity, and final diff hygiene passed.
+
 ## Sprint <ID> — <Name>
 
 Date:

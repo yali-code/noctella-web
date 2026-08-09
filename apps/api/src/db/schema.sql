@@ -604,17 +604,23 @@ CREATE TABLE IF NOT EXISTS payments (
   order_id TEXT,
   provider TEXT NOT NULL,
   provider_reference TEXT,
+  provider_transaction_reference TEXT,
   status TEXT NOT NULL,
   amount REAL NOT NULL,
+  expected_amount_cents INTEGER,
   currency TEXT NOT NULL DEFAULT 'EUR',
   idempotency_key TEXT NOT NULL UNIQUE,
   safe_metadata TEXT,
+  checkout_snapshot TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
-CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_unique ON payments(order_id) WHERE order_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS payment_events (id TEXT PRIMARY KEY, provider TEXT NOT NULL, provider_event_id TEXT NOT NULL, event_type TEXT NOT NULL, payment_id TEXT, status TEXT NOT NULL, result_classification TEXT, error_code TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_events_provider_event_unique ON payment_events(provider, provider_event_id);
+CREATE INDEX IF NOT EXISTS idx_payment_events_payment ON payment_events(payment_id);
 
 CREATE TABLE IF NOT EXISTS customers (
   id TEXT PRIMARY KEY,

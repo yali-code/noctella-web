@@ -17,6 +17,10 @@ export function initializeMockPayment(
 ): Promise<InitializeMockPaymentResult> {
   return api.post<InitializeMockPaymentResult>("/api/payments/initialize", input);
 }
+export interface InitializeStripeCheckoutInput { provider:"stripe"; orderDraftId:string; guestEmail:string; billingAddress:Record<string,unknown>; shippingAddress:Record<string,unknown>; notes?:string; items:Array<{productId:string;quantity:1}> }
+export interface InitializeStripeCheckoutResult { paymentId:string; checkoutUrl:string }
+export function initializeStripeCheckout(input:InitializeStripeCheckoutInput){return api.post<InitializeStripeCheckoutResult>("/api/payments/initialize",input);}
+export function getPaymentStatus(paymentId:string){return api.get<{status:string;order?:{id:string;orderNumber:string}}>(`/api/payments/${encodeURIComponent(paymentId)}/status`);}
 
 export interface VerifyMockPaymentInput {
   provider: string;

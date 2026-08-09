@@ -10,6 +10,7 @@ export interface PaymentSelection {
   status?: string;
   amount?: number;
   currency?: string;
+  paymentId?: string;
 }
 
 const VALID_PROVIDERS: PaymentSelectionProvider[] = ["stripe", "paypal", "cash_on_delivery"];
@@ -26,6 +27,7 @@ function isValidPaymentSelection(value: unknown): value is PaymentSelection {
     (v.status === undefined || typeof v.status === "string") &&
     (v.amount === undefined || typeof v.amount === "number") &&
     (v.currency === undefined || typeof v.currency === "string")
+    && (v.paymentId === undefined || typeof v.paymentId === "string")
   );
 }
 
@@ -64,7 +66,7 @@ export function getPaymentSelectionForDraft(orderDraftId: string): PaymentSelect
 export function savePaymentSelection(
   orderDraftId: string,
   provider: PaymentSelectionProvider,
-  result?: { providerReference: string; status: string; amount?: number; currency?: string },
+  result?: { providerReference?: string; status?: string; amount?: number; currency?: string; paymentId?:string },
 ): PaymentSelection {
   const selection: PaymentSelection = {
     orderDraftId,
@@ -74,6 +76,7 @@ export function savePaymentSelection(
     status: result?.status,
     amount: result?.amount,
     currency: result?.currency,
+    paymentId: result?.paymentId,
   };
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(selection));

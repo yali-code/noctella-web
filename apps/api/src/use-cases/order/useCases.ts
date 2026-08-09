@@ -12,7 +12,11 @@ export interface PaidOrderOutboxPort { enqueue(tx:import("../../db/client").DbCl
 const clock:Clock={now:()=>new Date()}; const ids:IdGenerator={id:()=>randomUUID()};
 export function stablePayload(input:unknown){ return createHash("sha256").update(JSON.stringify(input,Object.keys(input as object).sort())).digest("hex"); }
 export function formatOrderNumber(date = new Date(), sequence = Math.floor(Math.random()*1_000_000)){ return `NOC-${date.getUTCFullYear()}${String(date.getUTCMonth()+1).padStart(2,"0")}${String(date.getUTCDate()).padStart(2,"0")}-${String(sequence).padStart(6,"0")}`; }
-const toEurCents = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
+export const toEurCents = (amount: number) => Math.round((amount + Number.EPSILON) * 100);
+export class TerminalStockUnavailableError extends BadRequestError { readonly code="INSUFFICIENT_STOCK"; constructor(){super("Insufficient stock");} }
+export class TerminalCheckoutPriceChangedError extends BadRequestError { readonly code="CHECKOUT_PRICE_CHANGED"; constructor(){super("Paid session does not match current Noctella Web price");} }
+export interface ResolvedNoctellaWebOrder { subtotal:number; subtotalCents:number; lines:Array<{product:any;quantity:number;unitPrice:number;title:string}> }
+export function resolveNoctellaWebOrder(items:Array<{productId:string;quantity:number}>,products:any[]):ResolvedNoctellaWebOrder { if(products.length!==items.length) throw new NotFoundError("Product not found"); let subtotal=0; const lines=items.map(line=>{const product=products.find(p=>p.id===line.productId); if(!product||product.status!==ProductStatus.Published) throw new BadRequestError("Orders can only include published products"); if(product.stockQuantity<line.quantity) throw new TerminalStockUnavailableError(); const unitPrice=product.wooListingPriceEur??product.priceEur; subtotal+=unitPrice*line.quantity; return{product,quantity:line.quantity,unitPrice,title:product.wooProductName??product.title};}); return{subtotal,subtotalCents:toEurCents(subtotal),lines}; }
 
 export interface InternalOrderTransactionContext {
   repositories: TransactionScopedRepositories;
@@ -54,18 +58,19 @@ export function finalizeInternalOrderInTransaction(
   const now = c.now().toISOString();
   let subtotal = 0;
   const itemRows = [] as any[];
+  const resolved = pricingContext === "noctella_web" ? resolveNoctellaWebOrder(input.items,products) : null;
   for (const line of input.items) {
     const p = products.find((x: any) => x.id === line.productId);
-    if (!p || p.status !== ProductStatus.Published) throw new BadRequestError("Orders can only include published products");
-    if (p.stockQuantity < line.quantity) throw new BadRequestError("Insufficient stock");
-    const unitPrice = pricingContext === "noctella_web" ? p.wooListingPriceEur ?? p.priceEur : p.priceEur;
+    if (!resolved && (!p || p.status !== ProductStatus.Published)) throw new BadRequestError("Orders can only include published products");
+    if (!resolved && p.stockQuantity < line.quantity) throw new TerminalStockUnavailableError();
+    const resolvedLine=resolved?.lines.find(x=>x.product.id===line.productId); const unitPrice = resolvedLine?.unitPrice ?? p.priceEur;
     subtotal += unitPrice * line.quantity;
-    const productTitle = pricingContext === "noctella_web" ? p.wooProductName ?? p.title : p.title;
+    const productTitle = resolvedLine?.title ?? p.title;
     itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });
   }
   const subtotalCents = toEurCents(subtotal);
-  if (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents) throw new BadRequestError("Submitted totals do not match current product prices");
-  if (pricingContext === "noctella_web" && (!paidSession || paidSession.currency !== "EUR" || toEurCents(paidSession.amount) !== subtotalCents)) throw new BadRequestError("Paid session does not match current Noctella Web price");
+  if (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents) { if(pricingContext==="noctella_web") throw new TerminalCheckoutPriceChangedError(); throw new BadRequestError("Submitted totals do not match current product prices"); }
+  if (pricingContext === "noctella_web" && (!paidSession || paidSession.currency !== "EUR" || toEurCents(paidSession.amount) !== subtotalCents)) throw new TerminalCheckoutPriceChangedError();
   repositories.order.orders.write.create({ id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount: 0, taxAmount: 0, totalAmount: subtotal, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, createdAt: now, updatedAt: now, idempotencyKey: idem });
   repositories.order.orderItems.write.createMany(itemRows);
   const affectedProductIds: string[] = [];

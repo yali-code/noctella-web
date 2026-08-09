@@ -15,6 +15,7 @@ import erpRouter from "./routes/erp";
 import marketplacesRouter from "./routes/marketplaces";
 import marketplaceAdminRouter from "./routes/marketplaceAdmin";
 import marketplaceSyncWebhookRouter from "./routes/marketplaceSync";
+import stripeWebhookRouter from "./routes/stripeWebhook";
 import liveVisitorsRouter from "./routes/liveVisitors";
 import offersRouter from "./routes/offers";
 import offersPublicRouter from "./routes/offersPublic";
@@ -83,6 +84,7 @@ app.use(cors({
 
 // PUBLIC: marketplace webhooks verify their own signature internally; mounted before
 // express.json() so they can read the raw request body for that verification.
+app.use("/api/webhooks/stripe", stripeWebhookRouter);
 app.use("/api/webhooks", marketplaceSyncWebhookRouter);
 app.use(express.json());
 // PUBLIC: product photos back both the admin app and the public storefront.

@@ -113,6 +113,7 @@ export default function CheckoutPaymentConfirmPage() {
   }
 
   const status = selection.status ?? "pending";
+  if(selection.provider==="stripe") return <section style={{padding:"60px 40px",textAlign:"center"}}><h1>Stripe Checkout</h1><p>Stripe payment status is confirmed securely by webhook.</p><Link href={selection.paymentId?`/checkout/success?paymentId=${encodeURIComponent(selection.paymentId)}`:"/checkout/payment"}>Check payment status</Link></section>;
   const { canVerify, canCancel, isFinal } = getPaymentActionState(status);
 
   return (
