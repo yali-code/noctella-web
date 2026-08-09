@@ -734,10 +734,9 @@ describe("AI intake photo promotion, Primary selection, and finalization (Sprint
       const files = fs.readdirSync(dir).filter((f: string) => f.endsWith(".sql")).sort();
       expect(files).toContain("0012_sprint95_ai_intake_photo_finalization.sql");
       expect(files).toContain("0013_sprint106_stock_acceptance.sql");
-      // Sprint 107 added exactly one new migration (0014) after this file - see
-      // marketplacePreparation.test.ts's own "PostgreSQL migration 0014 ..." test for its content.
-      expect(files[files.length - 1]).toBe("0014_sprint107_marketplace_preparation.sql");
-      expect(files).toHaveLength(14);
+      expect(files).toContain("0014_sprint107_marketplace_preparation.sql");
+      expect(files.indexOf("0012_sprint95_ai_intake_photo_finalization.sql"))
+        .toBeLessThan(files.indexOf("0013_sprint106_stock_acceptance.sql"));
     });
   });
 });

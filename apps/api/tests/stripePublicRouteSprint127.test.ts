@@ -3,6 +3,11 @@ import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { createPaymentsPublicRouter } from "../src/routes/paymentsPublic";
 
+vi.hoisted(() => {
+  process.env.DATABASE_DRIVER = "sqlite";
+  process.env.DATABASE_URL = ":memory:";
+});
+
 const address={fullName:"Jane Buyer",line1:"1 Main",city:"Paris",postalCode:"75001",country:"FR"};
 function fixture(){const initializeStripeCheckout=vi.fn(async()=>({paymentId:"payment-1",checkoutUrl:"https://checkout.stripe.test/1"}));const initializePaymentSession=vi.fn();const verifyPaymentSession=vi.fn();const cancelPaymentSession=vi.fn();const getPublicPaymentStatus=vi.fn();const app=express().use(express.json()).use("/api/payments",createPaymentsPublicRouter({initializeStripeCheckout,initializePaymentSession,verifyPaymentSession,cancelPaymentSession,getPublicPaymentStatus} as any));return{app,initializeStripeCheckout,verifyPaymentSession,cancelPaymentSession};}
 const valid={provider:"stripe",orderDraftId:"draft-1",guestEmail:"buyer@example.com",billingAddress:address,shippingAddress:address,items:[{productId:"product-1",quantity:1}]};

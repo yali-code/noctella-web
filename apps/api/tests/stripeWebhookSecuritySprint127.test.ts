@@ -1,4 +1,5 @@
 import Stripe from "stripe"; import request from "supertest"; import { afterEach,describe,expect,it,vi } from "vitest"; import { StripeCheckoutAdapter } from "../src/payments/stripe"; import { processStripeWebhook } from "../src/services/stripePayments"; import app from "../src/app";
+vi.hoisted(()=>{process.env.DATABASE_DRIVER="sqlite";process.env.DATABASE_URL=":memory:";});
 const secret="whsec_sprint127_test"; const payload=JSON.stringify({id:"evt_test",type:"checkout.session.completed",livemode:false,data:{object:{id:"cs_test",payment_status:"paid",currency:"eur",amount_total:100,payment_intent:"pi_test",metadata:{paymentId:"payment-1"},client_reference_id:"payment-1"}}});
 describe("Sprint 127 Stripe webhook security",()=>{
  afterEach(()=>vi.unstubAllEnvs());
