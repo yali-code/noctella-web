@@ -49,7 +49,7 @@ describe("warehouse command reliability lifecycle (Sprint 51B)", () => {
   function insertOrder(sqlite:Database.Database, orderId:string, itemIds:string[]) {
     const t = new Date().toISOString();
     sqlite.prepare(`INSERT INTO orders (id, order_number, guest_email, status, payment_status, subtotal_amount, shipping_amount, tax_amount, total_amount, currency, billing_address, shipping_address, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(orderId, `ORD-${orderId}`, "buyer@example.com", "Processing", "Paid", 100, 0, 0, 100, "EUR", "{}", "{}", t, t);
+      .run(orderId, `ORD-${orderId}`, "buyer@example.com", "processing", "Paid", 100, 0, 0, 100, "EUR", "{}", "{}", t, t);
     itemIds.forEach((itemId, i) => {
       const productId = `product-${orderId}-${i}`;
       sqlite.prepare(`INSERT INTO products (id, sku, title, slug, type, status, stock_quantity, price_eur, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`)
