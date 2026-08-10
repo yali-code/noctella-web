@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/lib/api";
-import { buildCreateOrderPayload, createOrderFromPaidPayment } from "../src/lib/orders";
+import { buildCashOnDeliveryOrderPayload, buildCreateOrderPayload, createCashOnDeliveryOrder, createOrderFromPaidPayment } from "../src/lib/orders";
 import type { OrderDraft } from "../src/lib/orderDraft";
 import type { PaymentSelection } from "../src/lib/paymentSelection";
 
@@ -111,5 +111,24 @@ describe("createOrderFromPaidPayment", () => {
     await expect(createOrderFromPaidPayment(draft, { ...payment, status: "pending" })).rejects.toBeInstanceOf(
       ApiError,
     );
+  });
+});
+
+describe("Sprint 129 Cash on Delivery order client", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  it("builds a stable intent-only payload with no monetary or payment authority", () => {
+    const payload = buildCashOnDeliveryOrderPayload(draft);
+    expect(payload).toMatchObject({ orderDraftId: "draft-1", guestEmail: "jane@example.com", items: [{ productId: "product-1", quantity: 1 }] });
+    for (const key of ["subtotalAmount", "totalAmount", "currency", "paymentStatus", "paymentProvider", "paymentReference"]) expect(payload).not.toHaveProperty(key);
+  });
+
+  it("posts the same stable draft ID to the dedicated COD endpoint", async () => {
+    mockFetchOnce(201, { id: "cod-order-1", orderNumber: "NOC-COD-1" }, true);
+    await expect(createCashOnDeliveryOrder(draft)).resolves.toEqual({ id: "cod-order-1", orderNumber: "NOC-COD-1" });
+    const [url, options] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain("/api/orders/cod");
+    expect(JSON.parse(options.body as string).orderDraftId).toBe("draft-1");
   });
 });

@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
-import { OrderStatus, PaymentStatus, PriceCurrency, ProductStatus } from "@noctella/shared";
+import { OrderStatus, PaymentProvider, PaymentStatus, PriceCurrency, ProductStatus } from "@noctella/shared";
 import type { TransactionScopedRepositories, UnitOfWork } from "../../services/unitOfWork";
 import { BadRequestError, NotFoundError } from "../../services/errors";
 import type { CreateInternalOrderInput, OrderDetailProjection, OrderPricingContext, PaidSessionPricing, UpdateOrderPaymentStatusInput, UpdateOrderStatusInput, SaleRollbackInput } from "../../repositories/order/types";
@@ -26,6 +26,7 @@ export interface InternalOrderTransactionContext {
   outbox?: PaidOrderOutboxPort;
   pricingContext: OrderPricingContext;
   paidSession?: PaidSessionPricing;
+  codPending?: true;
   orderId: string;
   idempotencyKey: string;
 }
@@ -44,7 +45,7 @@ export function finalizeInternalOrderInTransaction(
   input: CreateInternalOrderInput,
   context: InternalOrderTransactionContext,
 ): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> {
-  const { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, orderId, idempotencyKey: idem } = context;
+  const { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, codPending, orderId, idempotencyKey: idem } = context;
   const inventoryRepositories = createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite");
   const existing = repositories.order.orders.write.findByIdempotencyKey(idem) as any;
   if (existing?.id) {
@@ -55,6 +56,7 @@ export function finalizeInternalOrderInTransaction(
   }
   const products = repositories.order.orderItems.write.validateProductReferences(input.items.map((i) => i.productId)) as unknown as any[];
   if (products.length !== input.items.length) throw new NotFoundError("Product not found");
+  if (codPending && products.some((product) => product.allowCashOnDelivery !== true)) throw new BadRequestError("Cash on Delivery is not available for all products");
   const now = c.now().toISOString();
   let subtotal = 0;
   const itemRows = [] as any[];
@@ -69,8 +71,9 @@ export function finalizeInternalOrderInTransaction(
     itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });
   }
   const subtotalCents = toEurCents(subtotal);
-  if (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents) { if(pricingContext==="noctella_web") throw new TerminalCheckoutPriceChangedError(); throw new BadRequestError("Submitted totals do not match current product prices"); }
-  if (pricingContext === "noctella_web" && (!paidSession || paidSession.currency !== "EUR" || toEurCents(paidSession.amount) !== subtotalCents)) throw new TerminalCheckoutPriceChangedError();
+  if (!codPending && (toEurCents(input.subtotalAmount) !== subtotalCents || toEurCents(input.totalAmount) !== subtotalCents)) { if(pricingContext==="noctella_web") throw new TerminalCheckoutPriceChangedError(); throw new BadRequestError("Submitted totals do not match current product prices"); }
+  if (pricingContext === "noctella_web" && !codPending && (!paidSession || paidSession.currency !== "EUR" || toEurCents(paidSession.amount) !== subtotalCents)) throw new TerminalCheckoutPriceChangedError();
+  if (codPending && (input.status !== OrderStatus.Pending || input.paymentStatus !== PaymentStatus.Pending || input.paymentProvider !== PaymentProvider.CashOnDelivery || input.paymentReference)) throw new BadRequestError("Invalid Cash on Delivery order state");
   repositories.order.orders.write.create({ id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount: 0, taxAmount: 0, totalAmount: subtotal, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, createdAt: now, updatedAt: now, idempotencyKey: idem });
   repositories.order.orderItems.write.createMany(itemRows);
   const affectedProductIds: string[] = [];
@@ -118,6 +121,8 @@ export function createInternalOrderUseCase(
     },
   };
 }
+export interface CreateCashOnDeliveryOrderInput { orderDraftId:string; guestEmail:string; billingAddress:CreateInternalOrderInput["billingAddress"]; shippingAddress:CreateInternalOrderInput["shippingAddress"]; notes?:string; items:Array<{productId:string;quantity:number}> }
+export function createCashOnDeliveryOrderUseCase(uow:UnitOfWork,sync?:PostCommitStockSyncPort,c:Clock=clock,g:IdGenerator=ids,driver:InventoryRepositoryDriver="sqlite") { return { async execute(intent:CreateCashOnDeliveryOrderInput):Promise<OrderDetailProjection> { if(intent.items.some(item=>!Number.isInteger(item.quantity)||item.quantity<=0)) throw new BadRequestError("Order quantities must be positive integers"); const orderId=g.id(); const result=await uow.run(({repositories})=>finalizeInternalOrderInTransaction({orderDraftId:intent.orderDraftId,idempotencyKey:intent.orderDraftId,channel:"Direct",guestEmail:intent.guestEmail,status:OrderStatus.Pending,paymentStatus:PaymentStatus.Pending,paymentProvider:PaymentProvider.CashOnDelivery,currency:PriceCurrency.Eur,billingAddress:intent.billingAddress,shippingAddress:intent.shippingAddress,subtotalAmount:0,totalAmount:0,notes:intent.notes,items:intent.items},{repositories,clock:c,idGenerator:g,inventoryDriver:driver,pricingContext:"noctella_web",codPending:true,orderId,idempotencyKey:intent.orderDraftId})); for(const productId of result.affectedProductIds) await sync?.enqueue(productId,`order-sale:${result.order.id}:${productId}`).catch(()=>undefined); return result.order; } }; }
 export const getOrderDetailUseCase=(uow:UnitOfWork)=>({execute:(id:string)=>uow.run(({repositories})=>{const o=repositories.order.orders.read.getOrderDetailProjection(id); if(!o) throw new NotFoundError("Order not found"); return o;})});
 export interface CreateDraftOrderFromOfferInput { offerId:string; productId:string; customerName:string; customerEmail:string; offeredAmount:number; currency:string }
 /**
@@ -142,7 +147,7 @@ export const ORDER_STATUS_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]
  * createDraftOrderFromOfferUseCase) never decrement Inventory at creation,
  * so cancelling one must not restore Inventory either.
  */
-export function transitionOrderStatusUseCase(uow:UnitOfWork,c:Clock=clock,g:IdGenerator=ids,driver:InventoryRepositoryDriver="sqlite"){ return { execute(input:UpdateOrderStatusInput):Promise<OrderDetailProjection>{ return uow.run(({repositories})=>{ const order=repositories.order.orders.read.getById(input.id) as any; if(!order) throw new NotFoundError("Order not found"); if(order.status===input.status) return repositories.order.orders.read.getOrderDetailProjection(input.id) as any; const allowed=ORDER_STATUS_TRANSITIONS[order.status as OrderStatus]??[]; if(!allowed.includes(input.status)) throw new BadRequestError("Invalid order status transition"); if(input.status===OrderStatus.Cancelled && !order.offerId){ const inventoryRepositories=createInventoryRepositoryBundleForDb(repositories.db,driver,driver==="sqlite"); const items=repositories.order.orderItems.read.listByOrder(input.id) as unknown as any[]; const mutate=(index:number):any=>{ if(index>=items.length){ repositories.order.orders.write.updateStatus({id:input.id,status:input.status}); return repositories.order.orders.read.getOrderDetailProjection(input.id) as any; } const it=items[index]; const result=restoreInventoryForSaleRollbackInTransactionUseCase({clock:c,idGenerator:{newId:()=>g.id()}},inventoryRepositories,{productId:it.productId,quantity:it.quantity,orderId:input.id,orderItemId:it.id,note:"Order cancelled",idempotencyKey:`order-cancel:${input.id}:${it.productId}`}); return result instanceof Promise?result.then(()=>mutate(index+1)):mutate(index+1); }; return mutate(0); } repositories.order.orders.write.updateStatus({id:input.id,status:input.status}); return repositories.order.orders.read.getOrderDetailProjection(input.id) as any; }); } }; }
+export function transitionOrderStatusUseCase(uow:UnitOfWork,c:Clock=clock,g:IdGenerator=ids,driver:InventoryRepositoryDriver="sqlite",sync?:PostCommitStockSyncPort){ return { async execute(input:UpdateOrderStatusInput):Promise<OrderDetailProjection>{ const affected:string[]=[]; const result=await uow.run(({repositories})=>{ const order=repositories.order.orders.read.getById(input.id) as any; if(!order) throw new NotFoundError("Order not found"); if(order.status===input.status) return repositories.order.orders.read.getOrderDetailProjection(input.id) as any; const allowed=ORDER_STATUS_TRANSITIONS[order.status as OrderStatus]??[]; if(!allowed.includes(input.status)) throw new BadRequestError("Invalid order status transition"); if(input.status===OrderStatus.Cancelled && !order.offerId){ const inventoryRepositories=createInventoryRepositoryBundleForDb(repositories.db,driver,driver==="sqlite"); const items=repositories.order.orderItems.read.listByOrder(input.id) as unknown as any[]; const mutate=(index:number):any=>{ if(index>=items.length){ repositories.order.orders.write.updateStatus({id:input.id,status:input.status}); return repositories.order.orders.read.getOrderDetailProjection(input.id) as any; } const it=items[index]; const restored=restoreInventoryForSaleRollbackInTransactionUseCase({clock:c,idGenerator:{newId:()=>g.id()}},inventoryRepositories,{productId:it.productId,quantity:it.quantity,orderId:input.id,orderItemId:it.id,note:"Order cancelled",idempotencyKey:`order-cancel:${input.id}:${it.productId}`}); return restored instanceof Promise?restored.then(()=>{affected.push(it.productId);return mutate(index+1);}):((affected.push(it.productId)),mutate(index+1)); }; return mutate(0); } repositories.order.orders.write.updateStatus({id:input.id,status:input.status}); return repositories.order.orders.read.getOrderDetailProjection(input.id) as any; }); for(const productId of affected) await sync?.enqueue(productId,`order-cancel:${input.id}:${productId}`).catch(()=>undefined); return result; } }; }
 /**
  * Sprint 79 correction: the only existing hook point for an order (e.g. one derived from an
  * accepted offer, see createDraftOrderFromOfferUseCase) transitioning into PaymentStatus.Paid
