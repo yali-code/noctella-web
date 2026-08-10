@@ -16,7 +16,7 @@ export async function getShipment(id: string) { return api.get<ShipmentRow & { i
 export async function getShipmentEvents(id: string) { return api.get<unknown[]>(`/api/shipments/${id}/events`); }
 export async function getShipmentTracking(id: string) { return api.get<unknown[]>(`/api/shipments/${id}/tracking`); }
 
-export async function createShipment(orderId: string, payload: { carrierCode: string; customCarrierName?: string; trackingNumber?: string; trackingUrl?: string; shippingCost?: number }) {
+export async function createShipment(orderId: string, payload: { packingTaskId?: string; carrierCode: string; customCarrierName?: string; trackingNumber?: string; trackingUrl?: string; shippingCost?: number }) {
   return api.post<ShipmentRow & { items: unknown[] }>(`/api/orders/${orderId}/shipments`, payload);
 }
 export async function assignTracking(id: string, payload: { trackingNumber?: string; trackingUrl?: string; carrierCode?: string; customCarrierName?: string }) {

@@ -1,4 +1,4 @@
-import { and, desc, eq, like, sql } from "drizzle-orm";
+import { and, desc, eq, like, notInArray, sql } from "drizzle-orm";
 import * as schema from "../../db/schema.sqlite";
 export function createSqliteShipmentRepositories(db: any) {
   const shipments: any = {
@@ -24,6 +24,19 @@ export function createSqliteShipmentRepositories(db: any) {
 
   const items = { listByShipment: (id: string) => db.select().from(schema.shipmentItems).where(eq(schema.shipmentItems.shipmentId, id)).all?.() ?? db.select().from(schema.shipmentItems).where(eq(schema.shipmentItems.shipmentId, id)), create: (row: any) => db.insert(schema.shipmentItems).values(row).run() };
   const tracking = { listByShipment: (id: string) => db.select().from(schema.shipmentTrackingUpdates).where(eq(schema.shipmentTrackingUpdates.shipmentId, id)).orderBy(desc(schema.shipmentTrackingUpdates.createdAt)).all?.() ?? [], appendIdempotent: (row: any) => db.insert(schema.shipmentTrackingUpdates).values(row).onConflictDoNothing().run() };
-  return { shipments, events, items, tracking };
+  const orders = {
+    getById: (id: string) => db.select().from(schema.orders).where(eq(schema.orders.id, id)).get?.(),
+    markProcessingOrderShipped: (id: string, updatedAt: string) => Number(db.update(schema.orders).set({ status: "shipped", updatedAt }).where(and(eq(schema.orders.id, id), eq(schema.orders.status, "processing"))).run()?.changes ?? 0) === 1,
+    listItems: (orderId: string) => db.select().from(schema.orderItems).where(eq(schema.orderItems.orderId, orderId)).all?.() ?? []
+  };
+  const packing = {
+    getById: (id: string) => db.select().from(schema.packingTasks).where(eq(schema.packingTasks.id, id)).get?.(),
+    listReadyByOrder: (orderId: string) => { const rows = db.select().from(schema.packingTasks).where(and(eq(schema.packingTasks.orderId, orderId), eq(schema.packingTasks.status, "ReadyForShipment"))).all?.() ?? []; return rows.length === 1 ? rows : []; },
+    listLines: (packingTaskId: string) => db.select().from(schema.packingTaskLines).where(eq(schema.packingTaskLines.packingTaskId, packingTaskId)).all?.() ?? [],
+    associateShipment: (packingTaskId: string, shipmentId: string, updatedAt: string) => db.update(schema.packingTasks).set({ shipmentId, updatedAt }).where(eq(schema.packingTasks.id, packingTaskId)).run()
+  };
+  const jobs = { enqueue: (row: any) => db.insert(schema.backgroundJobs).values(row).onConflictDoNothing().run() };
+  const guards = { hasActiveShipment: (orderId: string) => Boolean(db.select({ id: schema.shipments.id }).from(schema.shipments).where(and(eq(schema.shipments.orderId, orderId), notInArray(schema.shipments.status, ["cancelled", "returned"]))).limit(1).get?.()) };
+  return { shipments, events, items, tracking, orders, packing, jobs, guards };
 }
 export const SQLITE_SHIPMENT_REPOSITORY_KIND = "native-sqlite-shipment-repository";

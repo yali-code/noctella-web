@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CarrierCode, OrderStatus, PaymentProvider, PaymentStatus, ProductStatus, ProductType, ShipmentStatus } from "@noctella/shared";
-import { ConflictError } from "../src/services/errors";
+import { BadRequestError, ConflictError } from "../src/services/errors";
 import { createCategory } from "../src/services/categories";
 import { createProduct } from "../src/services/products";
-import { createOrder } from "../src/services/orders";
+import { createOrder, updateOrderStatus } from "../src/services/orders";
 import { createPaymentSession } from "../src/payments/paymentRepository";
 import { createShipment, cancelShipment, markReady, markShipped, markReturned, getShipmentEvents } from "../src/services/shipments";
 import { createTestDb } from "./testDb";
+import * as schema from "../src/db/schema";
 
 const key = Buffer.alloc(32, 12).toString("base64");
 const address = { fullName: "Jane", line1: "1 Main", city: "Paris", postalCode: "75001", country: "FR" };
@@ -29,6 +30,10 @@ describe("createShipment duplicate-active-shipment guard (Sprint 60B)", () => {
     const product = await createProduct(db, { sku: "DUP-1", title: "Vase", slug: "vase-dup", type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId: category.id, priceEur: 100, purchaseCost: 40, stockQuantity: 1, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false });
     await createPaymentSession(db, { provider: PaymentProvider.Stripe, providerReference: "pay-dup", status: PaymentStatus.Paid, amount: 100, currency: "EUR", idempotencyKey: "test:pay-dup" });
     order = await createOrder(db, { orderDraftId: `draft-${Math.random()}`, guestEmail: "j@example.com", status: OrderStatus.Pending, paymentStatus: PaymentStatus.Paid, paymentProvider: PaymentProvider.Stripe, paymentReference: "pay-dup", currency: "EUR", billingAddress: address, shippingAddress: address, subtotalAmount: 100, totalAmount: 100, items: [{ productId: product.id, quantity: 1 }] });
+    await updateOrderStatus(db, order.id, { status: OrderStatus.Processing });
+    const now = new Date().toISOString();
+    await db.insert(schema.packingTasks).values({ id: "packing-dup", orderId: order.id, status: "ReadyForShipment", packageCount: 1, createdAt: now, updatedAt: now });
+    await db.insert(schema.packingTaskLines).values({ id: "packing-line-dup", packingTaskId: "packing-dup", productId: product.id, orderItemId: order.items[0].id, quantity: 1, createdAt: now });
   });
 
   it("a second create call while the existing shipment is still Draft replays the same shipment (unchanged behavior)", async () => {
@@ -60,21 +65,17 @@ describe("createShipment duplicate-active-shipment guard (Sprint 60B)", () => {
     expect(after).toHaveLength(before.length);
   });
 
-  it("a Cancelled prior shipment does not block creating a new shipment for the same order", async () => {
+  it("does not create a replacement from a packing task consumed by a Cancelled shipment", async () => {
     const first = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.UPS });
     await cancelShipment(db, first.id);
-    const second = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.UPS });
-    expect(second.id).not.toBe(first.id);
-    expect(second.status).toBe(ShipmentStatus.Draft);
+    await expect(createShipment(db, { orderId: order.id, carrierCode: CarrierCode.UPS })).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it("a Returned prior shipment does not block creating a new shipment for the same order", async () => {
+  it("does not create a replacement after Returned because the order remains Shipped", async () => {
     const first = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
     await markReady(db, first.id);
     await markShipped(db, first.id);
     await markReturned(db, first.id);
-    const second = await createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup });
-    expect(second.id).not.toBe(first.id);
-    expect(second.status).toBe(ShipmentStatus.Draft);
+    await expect(createShipment(db, { orderId: order.id, carrierCode: CarrierCode.LocalPickup })).rejects.toBeInstanceOf(BadRequestError);
   });
 });
