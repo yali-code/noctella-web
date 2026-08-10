@@ -42,6 +42,15 @@ export const createOrderSchema = z.object({
   items: z.array(orderItemInputSchema).min(1),
 });
 
+export const createCashOnDeliveryOrderSchema = z.object({
+  orderDraftId: z.string().min(1),
+  guestEmail: z.string().email(),
+  billingAddress: addressSchema,
+  shippingAddress: addressSchema,
+  notes: z.string().optional(),
+  items: z.array(orderItemInputSchema.strict()).min(1),
+}).strict();
+
 export const updateOrderStatusSchema = z.object({
   status: z.enum(ORDER_STATUS_VALUES as [OrderStatus, ...OrderStatus[]]),
 });
@@ -55,5 +64,6 @@ export const orderListQuerySchema = z.object({
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+export type CreateCashOnDeliveryOrderInput = z.infer<typeof createCashOnDeliveryOrderSchema>;
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;

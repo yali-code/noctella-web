@@ -4,8 +4,8 @@ import { SqliteUnitOfWork } from "./unitOfWork";
 import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { findPaymentByProviderReference, linkPaymentToOrder } from "../payments/paymentRepository";
-import type { CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
-import { createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, transitionOrderStatusUseCase, updateOrderPaymentStatusUseCase, formatOrderNumber, type PaidOrderOutboxPort } from "../use-cases/order/useCases";
+import type { CreateCashOnDeliveryOrderInput, CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
+import { createCashOnDeliveryOrderUseCase, createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, transitionOrderStatusUseCase, updateOrderPaymentStatusUseCase, formatOrderNumber, type PaidOrderOutboxPort } from "../use-cases/order/useCases";
 import { dispatchDueSalesInvoiceOutboxEvents, enqueueSalesInvoiceDraftForPaidOrderSync } from "./salesInvoiceOutbox";
 import type { OrderPricingContext } from "../repositories/order/types";
 
@@ -64,12 +64,13 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
 
   return result;
 }
+export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDeliveryOrderInput):Promise<OrderWithItems>{ return createCashOnDeliveryOrderUseCase(uow(db),sync(db)).execute(input) as unknown as Promise<OrderWithItems>; }
 /** Sprint 39A: the canonical transitionOrderStatusUseCase validates the transition and, when cancelling, restores Inventory. */
-export async function updateOrderStatus(db:DbClient,id:string,input:UpdateOrderStatusInput):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db)).execute({id,status:input.status}) as unknown as OrderWithItems; }
+export async function updateOrderStatus(db:DbClient,id:string,input:UpdateOrderStatusInput):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id,status:input.status}) as unknown as OrderWithItems; }
 /** Sprint 79 correction: the hook point for a Draft order (e.g. one derived from an accepted offer) transitioning into Paid after creation — see updateOrderPaymentStatusUseCase for the exact not-already-Paid -> Paid guard. */
 export async function updateOrderPaymentStatus(db:DbClient,id:string,input:{paymentStatus:PaymentStatus}):Promise<OrderWithItems>{ const result=await updateOrderPaymentStatusUseCase(uow(db),paidOrderOutbox).execute({id,paymentStatus:input.paymentStatus}) as unknown as OrderWithItems; if(input.paymentStatus===PaymentStatus.Paid) await dispatchDueSalesInvoiceOutboxEvents(db,"post-commit",1).catch(()=>undefined); return result; }
-export async function cancelOrder(db:DbClient,id:string):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db)).execute({id,status:OrderStatus.Cancelled}) as unknown as OrderWithItems; }
+export async function cancelOrder(db:DbClient,id:string):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id,status:OrderStatus.Cancelled}) as unknown as OrderWithItems; }
 /** Retained signature for compatibility; idempotencyKey/reason are no longer needed since transitionOrderStatusUseCase's own same-status check makes cancellation idempotent. */
-export async function createSaleRollback(db:DbClient,input:{orderId:string;idempotencyKey:string;reason?:string}){ return transitionOrderStatusUseCase(uow(db)).execute({id:input.orderId,status:OrderStatus.Cancelled}); }
+export async function createSaleRollback(db:DbClient,input:{orderId:string;idempotencyKey:string;reason?:string}){ return transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id:input.orderId,status:OrderStatus.Cancelled}); }
 export async function listOrders(db:DbClient,query:OrderListQuery){ let result=await listOrdersUseCase(uow(db)).execute(query); if(query.status) result={...result,items:result.items.filter((i:any)=>i.status===query.status),total:result.items.filter((i:any)=>i.status===query.status).length}; if(query.paymentStatus) result={...result,items:result.items.filter((i:any)=>i.paymentStatus===query.paymentStatus),total:result.items.filter((i:any)=>i.paymentStatus===query.paymentStatus).length}; return { data: await Promise.all(result.items.map((i:any)=>getOrderById(db,i.id))), pagination:{ page:query.page, pageSize:query.pageSize, total:result.total, totalPages:Math.ceil(result.total/query.pageSize) } }; }
 export const searchOrders = listOrders;

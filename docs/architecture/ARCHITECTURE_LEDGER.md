@@ -123,6 +123,24 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 129 — Cash on Delivery Order Flow
+
+### Capability Added
+
+- Public COD checkout creates an immediately pending Noctella Web order with `cash_on_delivery`, atomically decrements authoritative inventory, and records canonical Sale stock movements.
+- Server-authoritative Woo price/title fallback and product COD eligibility are evaluated inside the order transaction; stable `orderDraftId` provides replay idempotency.
+- Canonical cancellation restoration now schedules stock synchronization only after commit.
+
+### Dependencies Introduced or Changed
+
+- Test-only Storefront devDependencies were added: `@testing-library/react`, `@testing-library/user-event`, `@vitejs/plugin-react`, and `jsdom`, reusing the established Admin test stack and versions.
+- No runtime dependency, database schema, or migration change.
+
+### Architectural Decisions
+
+- COD acceptance creates no Payment, PaymentEvent, invoice, or paid-order outbox event and never marks the order paid.
+- Stripe remains preserved and deferred; COD settlement and reconciliation require later architecture approval.
+
 ## Sprint 128 — Stripe Staging Operations Visibility & Runbook
 
 ### Capability Added

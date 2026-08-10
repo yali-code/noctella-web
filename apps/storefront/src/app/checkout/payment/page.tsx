@@ -6,22 +6,8 @@ import { useEffect, useState } from "react";
 import { getCart, isCashOnDeliveryAvailable } from "@/lib/cart";
 import { getCheckoutDraft, isCheckoutDraftValid } from "@/lib/checkout";
 import { getOrRebuildOrderDraft, type OrderDraft } from "@/lib/orderDraft";
-import {
-  getPaymentSelectionForDraft,
-  savePaymentSelection,
-  type PaymentSelectionProvider,
-} from "@/lib/paymentSelection";
-import { initializeMockPayment, initializeStripeCheckout } from "@/lib/payments";
-import { redirectToHostedCheckout } from "@/lib/stripeCheckoutFlow";
+import { createCashOnDeliveryOrder, saveCreatedOrder } from "@/lib/orders";
 import { ApiError } from "@/lib/api";
-
-interface MethodOption {
-  provider: PaymentSelectionProvider;
-  name: string;
-  description: string;
-  available: boolean;
-  unavailableReason?: string;
-}
 
 export default function CheckoutPaymentPage() {
   const router = useRouter();
@@ -29,8 +15,7 @@ export default function CheckoutPaymentPage() {
   const [cartEmpty, setCartEmpty] = useState(false);
   const [checkoutInvalid, setCheckoutInvalid] = useState(false);
   const [orderDraft, setOrderDraft] = useState<OrderDraft | null>(null);
-  const [methods, setMethods] = useState<MethodOption[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<PaymentSelectionProvider | null>(null);
+  const [codAvailable, setCodAvailable] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,57 +42,19 @@ export default function CheckoutPaymentPage() {
     }
     setOrderDraft(draft);
 
-    const codAvailable = isCashOnDeliveryAvailable(cart);
-    setMethods([
-      { provider: "stripe", name: "Stripe", description: "Pay securely by card (mock).", available: true },
-      { provider: "paypal", name: "PayPal", description: "Pay with your PayPal account (mock).", available: true },
-      {
-        provider: "cash_on_delivery",
-        name: "Cash on Delivery",
-        description: "Pay in cash when your order arrives.",
-        available: codAvailable,
-        unavailableReason: codAvailable ? undefined : "Not available for the items in your cart.",
-      },
-    ]);
-
-    const existingSelection = getPaymentSelectionForDraft(draft.id);
-    if (existingSelection) {
-      setSelectedProvider(existingSelection.provider);
-    }
+    setCodAvailable(isCashOnDeliveryAvailable(cart));
 
     setLoaded(true);
   }, []);
 
-  function handleSelect(provider: PaymentSelectionProvider) {
-    if (!orderDraft) return;
-    setSelectedProvider(provider);
-    savePaymentSelection(orderDraft.id, provider);
-  }
-
-  async function handleInitialize() {
-    if (!orderDraft || !selectedProvider) return;
+  async function handleSubmit() {
+    if (!orderDraft || !codAvailable || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
-      if(selectedProvider==="stripe"){
-        const fullName=`${orderDraft.customer.firstName} ${orderDraft.customer.lastName}`.trim();
-        const address=(a:typeof orderDraft.shippingAddress)=>({fullName,line1:a.line1,line2:a.line2,city:a.city,region:a.state,postalCode:a.postalCode,country:a.country,phone:orderDraft.customer.phone});
-        const result=await initializeStripeCheckout({provider:"stripe",orderDraftId:orderDraft.id,guestEmail:orderDraft.customer.email,billingAddress:address(orderDraft.billingAddress??orderDraft.shippingAddress),shippingAddress:address(orderDraft.shippingAddress),notes:orderDraft.customerNote,items:orderDraft.items.map(x=>({productId:x.productId,quantity:1 as const}))});
-        savePaymentSelection(orderDraft.id,"stripe",{paymentId:result.paymentId,status:"pending"});
-        redirectToHostedCheckout(result.checkoutUrl); return;
-      }
-      const result = await initializeMockPayment({
-        provider: selectedProvider,
-        orderDraftId: orderDraft.id,
-        amount: orderDraft.currencySummary.eurSubtotal,
-        currency: "EUR",
-      });
-      savePaymentSelection(orderDraft.id, selectedProvider, {
-        ...result,
-        amount: orderDraft.currencySummary.eurSubtotal,
-        currency: "EUR",
-      });
-      router.push("/checkout/payment/confirm");
+      const order = await createCashOnDeliveryOrder(orderDraft);
+      saveCreatedOrder(order);
+      router.push("/checkout/success");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -169,12 +116,10 @@ export default function CheckoutPaymentPage() {
 
       <fieldset style={{ border: "1px solid var(--noctella-antique-gold)", borderRadius: 4, padding: 20 }}>
         <legend style={{ padding: "0 8px", color: "var(--noctella-bright-star-gold)", fontFamily: "var(--font-display)" }}>
-          Choose a payment method
+          Launch payment method
         </legend>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {methods.map((method) => (
-            <label
-              key={method.provider}
+          <label
               style={{
                 display: "flex",
                 alignItems: "flex-start",
@@ -182,41 +127,40 @@ export default function CheckoutPaymentPage() {
                 padding: 12,
                 border: "1px solid var(--noctella-aged-bronze)",
                 borderRadius: 4,
-                opacity: method.available ? 1 : 0.5,
-                cursor: method.available ? "pointer" : "not-allowed",
+                opacity: codAvailable ? 1 : 0.5,
+                cursor: codAvailable ? "default" : "not-allowed",
               }}
             >
               <input
                 type="radio"
                 name="paymentMethod"
-                value={method.provider}
-                checked={selectedProvider === method.provider}
-                disabled={!method.available}
-                onChange={() => handleSelect(method.provider)}
+                value="cash_on_delivery"
+                checked
+                disabled
+                readOnly
                 style={{ marginTop: 3 }}
               />
               <span>
-                <span style={{ display: "block", fontSize: 15 }}>{method.name}</span>
+                <span style={{ display: "block", fontSize: 15 }}>Cash on Delivery</span>
                 <span style={{ display: "block", fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
-                  {method.description}
+                  Pay when your order arrives.
                 </span>
-                {!method.available && method.unavailableReason && (
+                {!codAvailable && (
                   <span style={{ display: "block", fontSize: 12, color: "#c86a6a", marginTop: 4 }}>
-                    {method.unavailableReason}
+                    Not available for the items in your cart.
                   </span>
                 )}
               </span>
             </label>
-          ))}
         </div>
       </fieldset>
 
       <button
-        onClick={handleInitialize}
-        disabled={!selectedProvider || submitting}
+        onClick={handleSubmit}
+        disabled={!codAvailable || submitting}
         style={{ ...primaryButtonStyle, marginTop: 24 }}
       >
-        {submitting ? "Initializing..." : "Initialize Mock Payment"}
+        {submitting ? "Placing order..." : "Place Cash on Delivery Order"}
       </button>
 
       <p style={{ marginTop: 16 }}>

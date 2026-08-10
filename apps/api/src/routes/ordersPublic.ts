@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/client";
-import { createOrder } from "../services/orders";
-import { createOrderSchema } from "../validation/order";
+import { createCashOnDeliveryOrder, createOrder } from "../services/orders";
+import { createCashOnDeliveryOrderSchema, createOrderSchema } from "../validation/order";
 import { handleRouteError } from "./errorHandler";
 
 /**
@@ -12,6 +12,15 @@ import { handleRouteError } from "./errorHandler";
  * administrative router - no duplicated business logic.
  */
 const router = Router();
+
+router.post("/cod", async (req, res) => {
+  try {
+    const input = createCashOnDeliveryOrderSchema.parse(req.body);
+    res.status(201).json(await createCashOnDeliveryOrder(db, input));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.post("/", async (req, res) => {
   try {

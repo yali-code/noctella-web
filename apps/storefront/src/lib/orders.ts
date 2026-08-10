@@ -47,6 +47,21 @@ export function createOrderFromPaidPayment(draft: OrderDraft, payment: PaymentSe
   return api.post<CreateOrderResult>("/api/orders", buildCreateOrderPayload(draft, payment));
 }
 
+export function buildCashOnDeliveryOrderPayload(draft: OrderDraft) {
+  return {
+    orderDraftId: draft.id,
+    guestEmail: draft.customer.email,
+    billingAddress: toApiAddress(draft.billingAddress ?? draft.shippingAddress, draft.customer),
+    shippingAddress: toApiAddress(draft.shippingAddress, draft.customer),
+    notes: draft.customerNote,
+    items: draft.items.map((item) => ({ productId: item.productId, quantity: 1 as const })),
+  };
+}
+
+export function createCashOnDeliveryOrder(draft: OrderDraft): Promise<CreateOrderResult> {
+  return api.post<CreateOrderResult>("/api/orders/cod", buildCashOnDeliveryOrderPayload(draft));
+}
+
 function isValidCreatedOrder(value: unknown): value is CreateOrderResult {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
