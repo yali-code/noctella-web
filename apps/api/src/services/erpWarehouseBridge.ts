@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { sql } from "drizzle-orm";
+import { OrderStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { audit } from "./erpIntegration";
@@ -196,11 +197,9 @@ export async function changeReservation(db:DbClient, clientId:string, env:Env, r
   }
 }
 export async function expireReservations(db:DbClient){ await db.run(sql`UPDATE stock_reservations SET status='Expired', updated_at=${now()} WHERE status='Active' AND expires_at IS NOT NULL AND expires_at < ${now()}`); }
-async function orderLines(db:DbClient, orderId:string){ const o=await get(db,sql`SELECT * FROM orders WHERE id=${orderId}`); if(!o) throw new NotFoundError("Order not found"); return all(db,sql`SELECT * FROM order_items WHERE order_id=${orderId}`); }
 export async function createPickingTask(db:DbClient, clientId:string, env:Env, orderId:string){
   const existing=await startCommand(db,clientId,env,"CreatePickingTask","PickingTask",orderId); if(existing) return prior(existing);
   try {
-    const lines=await orderLines(db,orderId); if(!lines.length) throw new BadRequestError("Order has no items");
     const tid=id();
     /**
      * Sprint 59B: previously nothing prevented a second, independent picking task from being
@@ -211,6 +210,11 @@ export async function createPickingTask(db:DbClient, clientId:string, env:Env, o
      * task does not block a new one.
      */
     runWarehouseTransaction(db, (tx) => {
+      const order=(tx.all(sql`SELECT * FROM orders WHERE id=${orderId}`) as any[])[0];
+      if(!order) throw new NotFoundError("Order not found");
+      if(order.status!==OrderStatus.Processing) throw new BadRequestError("Order must be Processing before picking");
+      const lines=tx.all(sql`SELECT * FROM order_items WHERE order_id=${orderId}`) as any[];
+      if(!lines.length) throw new BadRequestError("Order has no items");
       const dup=tx.all(sql`SELECT id FROM picking_tasks WHERE order_id=${orderId} AND status!='Cancelled'`) as any[];
       if(dup.length) throw new ConflictError("An active picking task already exists for this order");
       tx.run(sql`INSERT INTO picking_tasks (id,order_id,status,assigned_client_id,safe_notes,created_at,updated_at) VALUES (${tid},${orderId},'Pending',${clientId},${env.payload?.safeNotes??null},${now()},${now()})`);
@@ -234,12 +238,21 @@ export async function getPickingTaskDetail(db:DbClient,tid:string){ const t=awai
 export async function updatePicking(db:DbClient,clientId:string,env:Env,tid:string, action:string, lineId?:string){
   const existing=await startCommand(db,clientId,env,action,"PickingTask",tid); if(existing) return prior(existing);
   try {
-    const t=await getPickingTask(db,tid); if(!t) throw new NotFoundError("Picking task not found");
-    let confirmQty:number|undefined, shortQty:number|undefined;
-    if(action==='ConfirmPickedLine'){ const p=env.payload??{}; const l=await get(db,sql`SELECT * FROM picking_task_lines WHERE id=${lineId} AND picking_task_id=${tid}`); const q=Number(p.pickedQuantity??l.requested_quantity); if(q<0||q>l.requested_quantity) throw new BadRequestError("pickedQuantity cannot exceed requestedQuantity"); confirmQty=q; }
-    if(action==='MarkPickingShort'){ const p=env.payload??{}; const l=await get(db,sql`SELECT * FROM picking_task_lines WHERE id=${lineId} AND picking_task_id=${tid}`); const q=Number(p.shortQuantity??(l.requested_quantity-l.picked_quantity)); if(q<0||q>l.requested_quantity) throw new BadRequestError("shortQuantity cannot exceed requestedQuantity"); shortQty=q; }
-    if(action==='CompletePickingTask'){ const bad=await get(db,sql`SELECT COUNT(*) c FROM picking_task_lines WHERE picking_task_id=${tid} AND picked_quantity + short_quantity < requested_quantity`); if(Number(bad.c)>0) throw new BadRequestError("Every line must be picked or short"); }
     runWarehouseTransaction(db, (tx) => {
+      const t=(tx.all(sql`SELECT * FROM picking_tasks WHERE id=${tid}`) as any[])[0];
+      if(!t) throw new NotFoundError("Picking task not found");
+      const required:Record<string,string[]>={StartPickingTask:["Pending"],ConfirmPickedLine:["InProgress"],MarkPickingShort:["InProgress"],CompletePickingTask:["InProgress"],CancelPickingTask:["Pending","InProgress","Picked"]};
+      if(!required[action]?.includes(t.status)) throw new BadRequestError(`Invalid picking task transition for ${action}`);
+      let confirmQty:number|undefined, shortQty:number|undefined;
+      if(action==='ConfirmPickedLine'||action==='MarkPickingShort'){
+        const l=(tx.all(sql`SELECT * FROM picking_task_lines WHERE id=${lineId} AND picking_task_id=${tid}`) as any[])[0];
+        if(!l) throw new NotFoundError("Picking task line not found");
+        const p=env.payload??{};
+        if(action==='ConfirmPickedLine'){ const q=Number(p.pickedQuantity??l.requested_quantity); if(q<0||q>l.requested_quantity) throw new BadRequestError("pickedQuantity cannot exceed requestedQuantity"); confirmQty=q; }
+        else { const q=Number(p.shortQuantity??(l.requested_quantity-l.picked_quantity)); if(q<0||q>l.requested_quantity) throw new BadRequestError("shortQuantity cannot exceed requestedQuantity"); shortQty=q; }
+      }
+      if(action==='CompletePickingTask'){ const bad=(tx.all(sql`SELECT COUNT(*) c FROM picking_task_lines WHERE picking_task_id=${tid} AND picked_quantity + short_quantity < requested_quantity`) as any[])[0]; if(Number(bad.c)>0) throw new BadRequestError("Every line must be picked or short"); }
+      if(action==='CancelPickingTask'){ const packing=tx.all(sql`SELECT id FROM packing_tasks WHERE picking_task_id=${tid} AND status!='Cancelled'`) as any[]; if(packing.length) throw new BadRequestError("Active packing task must be cancelled first"); }
       if(action==='StartPickingTask') tx.run(sql`UPDATE picking_tasks SET status='InProgress', started_at=COALESCE(started_at,${now()}), updated_at=${now()} WHERE id=${tid}`);
       if(action==='ConfirmPickedLine') tx.run(sql`UPDATE picking_task_lines SET picked_quantity=${confirmQty}, short_quantity=0, updated_at=${now()} WHERE id=${lineId}`);
       if(action==='MarkPickingShort') tx.run(sql`UPDATE picking_task_lines SET short_quantity=${shortQty}, updated_at=${now()} WHERE id=${lineId}`);
@@ -256,17 +269,25 @@ export async function updatePicking(db:DbClient,clientId:string,env:Env,tid:stri
 export async function createPackingTask(db:DbClient, clientId:string, env:Env, orderId:string){
   const existing=await startCommand(db,clientId,env,"CreatePackingTask","PackingTask",orderId); if(existing) return prior(existing);
   try {
-    const pick=env.payload?.pickingTaskId?await getPickingTask(db,env.payload.pickingTaskId):await get(db,sql`SELECT * FROM picking_tasks WHERE order_id=${orderId} AND status='Picked' ORDER BY completed_at DESC LIMIT 1`); if(!pick) throw new BadRequestError("Completed picking task is required");
-    const lines=await all(db,sql`SELECT * FROM picking_task_lines WHERE picking_task_id=${pick.id}`);
     const tid=id();
     /** Sprint 59B: same duplicate-task correction as createPickingTask, scoped to the picking
      * task instead of the order - see that function's comment for the full rationale. */
     runWarehouseTransaction(db, (tx) => {
-      const dup=tx.all(sql`SELECT id FROM packing_tasks WHERE picking_task_id=${pick.id} AND status!='Cancelled'`) as any[];
+      const order=(tx.all(sql`SELECT * FROM orders WHERE id=${orderId}`) as any[])[0];
+      if(!order) throw new NotFoundError("Order not found");
+      if(order.status!==OrderStatus.Processing) throw new BadRequestError("Order must be Processing before packing");
+      const requestedPickingTaskId=env.payload?.pickingTaskId;
+      const pick=(requestedPickingTaskId
+        ? tx.all(sql`SELECT * FROM picking_tasks WHERE id=${requestedPickingTaskId}`)
+        : tx.all(sql`SELECT * FROM picking_tasks WHERE order_id=${orderId} AND status='Picked' ORDER BY completed_at DESC LIMIT 1`)) as any[];
+      const selected=pick[0];
+      if(!selected||selected.order_id!==orderId||selected.status!=="Picked") throw new BadRequestError("A Picked task belonging to this order is required");
+      const lines=tx.all(sql`SELECT * FROM picking_task_lines WHERE picking_task_id=${selected.id}`) as any[];
+      const dup=tx.all(sql`SELECT id FROM packing_tasks WHERE picking_task_id=${selected.id} AND status!='Cancelled'`) as any[];
       if(dup.length) throw new ConflictError("An active packing task already exists for this picking task");
-      tx.run(sql`INSERT INTO packing_tasks (id,order_id,picking_task_id,status,package_count,created_at,updated_at) VALUES (${tid},${orderId},${pick.id},'Pending',1,${now()},${now()})`);
+      tx.run(sql`INSERT INTO packing_tasks (id,order_id,picking_task_id,status,package_count,created_at,updated_at) VALUES (${tid},${orderId},${selected.id},'Pending',1,${now()},${now()})`);
       for(const l of lines) tx.run(sql`INSERT INTO packing_task_lines (id,packing_task_id,product_id,order_item_id,quantity,created_at) VALUES (${id()},${tid},${l.product_id},${l.order_item_id},${l.picked_quantity},${now()})`);
-      eventInTransaction(tx,{orderId,pickingTaskId:pick.id,packingTaskId:tid,eventType:"PackingCreated",meta:{}});
+      eventInTransaction(tx,{orderId,pickingTaskId:selected.id,packingTaskId:tid,eventType:"PackingCreated",meta:{}});
     });
     return await finishCommand(db,clientId,env,"CreatePackingTask","PackingTask",tid,{packingTaskId:tid});
   } catch (error) {
@@ -281,10 +302,13 @@ export async function getPackingTaskDetail(db:DbClient,tid:string){ const t=awai
 export async function updatePacking(db:DbClient,clientId:string,env:Env,tid:string,action:string){
   const existing=await startCommand(db,clientId,env,action,"PackingTask",tid); if(existing) return prior(existing);
   try {
-    const t=await getPackingTask(db,tid); if(!t) throw new NotFoundError("Packing task not found");
     const p=env.payload??{};
     if(action==='UpdatePackingTask'){ if(p.packageCount!==undefined&&Number(p.packageCount)<=0) throw new BadRequestError("packageCount must be positive"); if(p.totalWeight!==undefined&&Number(p.totalWeight)<0) throw new BadRequestError("totalWeight must not be negative"); }
     runWarehouseTransaction(db, (tx) => {
+      const t=(tx.all(sql`SELECT * FROM packing_tasks WHERE id=${tid}`) as any[])[0];
+      if(!t) throw new NotFoundError("Packing task not found");
+      const required:Record<string,string[]>={StartPackingTask:["Pending"],UpdatePackingTask:["Pending","InProgress"],CompletePackingTask:["InProgress"],MarkPackingReady:["Packed"],CancelPackingTask:["Pending","InProgress","Packed","ReadyForShipment"]};
+      if(!required[action]?.includes(t.status)) throw new BadRequestError(`Invalid packing task transition for ${action}`);
       if(action==='StartPackingTask') tx.run(sql`UPDATE packing_tasks SET status='InProgress', started_at=COALESCE(started_at,${now()}), updated_at=${now()} WHERE id=${tid}`);
       if(action==='UpdatePackingTask') tx.run(sql`UPDATE packing_tasks SET package_count=${p.packageCount??t.package_count}, total_weight=${p.totalWeight??t.total_weight}, dimensions_snapshot=${p.dimensions?JSON.stringify(p.dimensions):t.dimensions_snapshot}, packing_materials_snapshot=${p.materials?JSON.stringify(p.materials):t.packing_materials_snapshot}, updated_at=${now()} WHERE id=${tid}`);
       if(action==='CompletePackingTask') tx.run(sql`UPDATE packing_tasks SET status='Packed', completed_at=${now()}, updated_at=${now()} WHERE id=${tid}`);

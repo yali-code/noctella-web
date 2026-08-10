@@ -123,6 +123,23 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 130 — Fulfillment / Order Operations
+
+### Capability Added
+
+- Existing OrderStatus, picking, packing, and warehouse-event architecture is reused; `Processing` is the only picking-eligible order state.
+- Picking and packing creation and actions enforce explicit transactional lifecycle guards.
+- Canonical order cancellation rejects non-cancelled picking or packing work; task cancellation has no Inventory effect, and canonical order cancellation remains the sole pre-shipment Inventory restoration authority.
+
+### Dependencies Introduced or Changed
+
+- None. No runtime dependency, database schema, migration, new order status, or new fulfillment entity.
+
+### Architectural Decisions
+
+- Shipping, tracking, and shipment outcome behavior remain Sprint 131 scope.
+- COD settlement and reconciliation remain Sprint 132 scope; fulfillment operations do not mutate payment state or create financial artifacts.
+
 ## Sprint 129 — Cash on Delivery Order Flow
 
 ### Capability Added
