@@ -123,6 +123,20 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 131 — Shipping & Tracking Foundation
+
+### Architectural Decisions
+
+- Shipment creation requires a Processing order and exactly one unconsumed ReadyForShipment packing task; shipment quantities exactly match packing quantities and the existing packing `shipment_id` records the atomic handoff.
+- One active shipment per order remains authoritative. Active shipments block canonical order cancellation before SaleRollback.
+- Shipment InTransit and Order Shipped are persisted atomically; a marketplace submission job is inserted only by the successful joint transaction.
+- Tracking remains required except for LocalPickup, and operator carrier/tracking identity edits are locked from InTransit onward. The manual label lifecycle is unchanged.
+- Delivered, DeliveryFailed, and Returned remain logistics-only and leave the order Shipped, without Inventory, payment, invoice, or accounting effects. COD settlement remains Sprint 132; invoice/accounting completion remains Sprint 133; replacement shipment after Returned is deferred.
+
+### Dependencies Introduced or Changed
+
+- None. No runtime dependency, schema change, or migration.
+
 ## Sprint 130 — Fulfillment / Order Operations
 
 ### Capability Added
