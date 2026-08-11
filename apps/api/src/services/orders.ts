@@ -5,7 +5,9 @@ import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { findPaymentByProviderReference, linkPaymentToOrder } from "../payments/paymentRepository";
 import type { CreateCashOnDeliveryOrderInput, CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
+import type { ShippingQuoteRequest } from "../validation/shipping";
 import { createCashOnDeliveryOrderUseCase, createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, settleCashOnDeliveryOrderUseCase, transitionOrderStatusUseCase, updateOrderPaymentStatusUseCase, formatOrderNumber, type PaidOrderOutboxPort } from "../use-cases/order/useCases";
+import { getShippingOptionsUseCase, type ResolvedShippingOption } from "../use-cases/shipping/useCases";
 import { dispatchDueSalesInvoiceOutboxEvents, enqueueSalesInvoiceDraftForPaidOrderSync } from "./salesInvoiceOutbox";
 import type { OrderPricingContext } from "../repositories/order/types";
 
@@ -65,6 +67,16 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
   return result;
 }
 export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDeliveryOrderInput):Promise<OrderWithItems>{ return createCashOnDeliveryOrderUseCase(uow(db),sync(db)).execute(input) as unknown as Promise<OrderWithItems>; }
+/**
+ * Sprint 134: public, non-mutating shipping-options quote - delegates entirely to the canonical
+ * Use Case (getShippingOptionsUseCase), which reads products through the same repository method
+ * order creation itself uses, never a direct DB query from this Service. Advisory only: the final
+ * COD submission independently re-resolves shipping inside its own checkout transaction (see
+ * finalizeInternalOrderInTransaction), so a stale quote can never become the charged amount.
+ */
+export async function getShippingOptions(db:DbClient,input:ShippingQuoteRequest):Promise<{items:ResolvedShippingOption[]}>{
+  return getShippingOptionsUseCase(uow(db)).execute(input);
+}
 /** Sprint 39A: the canonical transitionOrderStatusUseCase validates the transition and, when cancelling, restores Inventory. */
 export async function updateOrderStatus(db:DbClient,id:string,input:UpdateOrderStatusInput):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id,status:input.status}) as unknown as OrderWithItems; }
 /** Sprint 79 correction: the hook point for a Draft order (e.g. one derived from an accepted offer) transitioning into Paid after creation — see updateOrderPaymentStatusUseCase for the exact not-already-Paid -> Paid guard. */

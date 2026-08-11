@@ -23,6 +23,20 @@ export function mockPaymentsEnabled(env: NodeJS.ProcessEnv = process.env): boole
 }
 
 /**
+ * Sprint 134: fail-closed COD-only launch gate for real Stripe Checkout initialization -
+ * deliberately distinct from mockPaymentsEnabled above (which only gates the mock providers).
+ * Unlike mockPaymentsEnabled's NODE_ENV-based default, this always defaults to disabled
+ * regardless of environment: initial launch is Cash on Delivery only, and the mere presence of
+ * configured STRIPE_SECRET_KEY/STRIPE_SUCCESS_URL/STRIPE_CANCEL_URL values (e.g. inherited from a
+ * copied staging environment block) must never be the only thing standing between a public
+ * request and a real Stripe charge. An environment that genuinely wants real Stripe checkout
+ * reachable (e.g. a controlled staging smoke test) must explicitly opt in.
+ */
+export function stripePublicCheckoutEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.STRIPE_PUBLIC_CHECKOUT_ENABLED === "true";
+}
+
+/**
  * Throws BadRequestError for any provider not in the supported enum, or when mock payments are
  * not enabled in the current environment. This is the single choke point every mock
  * initialize/verify/cancel call passes through, so the gate applies uniformly to all three and

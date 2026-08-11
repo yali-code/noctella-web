@@ -123,6 +123,38 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 134 — Storefront Launch Hardening / Shipping Domain
+
+### Architectural Decisions
+
+- Shipping is authoritative server-side only. A public, non-mutating quote endpoint (`POST /api/orders/shipping-options`) exists purely for storefront presentation; the client can never submit a price that becomes the charged amount. Final COD checkout independently re-resolves shipping inside the existing checkout transaction and fails closed on any mismatch (stale quote, deactivated method, or an ineligible selection).
+- The launch shipping-rule vocabulary is intentionally minimal: `Free`, `FlatRate`, `FreeOverSubtotal` (`ShippingRuleType`). Weight tiers, postcode/zone rules, coupon-aware rules, and carrier-calculated live rates are explicitly deferred — not partially modeled, not stubbed with dead fields.
+- `Order.shippingMethodId`/`shippingMethodLabel` form an immutable checkout-time snapshot, written once at Order creation and never rewritten by later `shipping_methods` configuration changes (label, rate, active-state edits). This snapshot is deliberately distinct from `Shipment.carrierCode`/logistics cost, which remains separate fulfillment-domain data untouched by this sprint.
+- `countryCode` is the sole authority for country-based shipping eligibility, threaded additively through the existing `addressSchema` (optional, no new address table or migration). A missing/undefined `countryCode` only matches country-unrestricted shipping methods.
+- The existing `products.shippingProfile` placeholder column is activated with a controlled vocabulary (`standard|free|paid|oversize`, `ProductShippingProfile`); `null`/unset means `standard`. A shipping method's `shippingProfiles` restriction (or `null` = unrestricted) must cover **every** distinct effective profile in the cart — never a hidden SUM/MAX/CHEAPEST combination rule across mixed-profile carts.
+- Multiple eligible shipping methods are surfaced in deterministic `sortOrder` and never silently auto-resolved to "cheapest" or any other hidden precedence; the server auto-selects only when exactly one method is eligible (safe preselect), and fails closed (`BadRequestError`) when the client must choose but did not.
+- Bootstrap/legacy compatibility: when zero `shipping_methods` rows have ever been created (active or not), checkout resolves the pre-Sprint-134 legacy zero-shipping behavior unchanged, rather than failing closed — this is deliberately distinguished from "shipping is configured but nothing matches this cart/destination," which does fail closed (`BadRequestError("No shipping method is available for this destination and cart")`).
+- Shipping resolution is scoped strictly to the `codPending` path inside `finalizeInternalOrderInTransaction`. The Stripe/canonical `noctella_web` pricing-context path is explicitly untouched — Stripe's own subtotal-only paid-amount verification, computed at checkout-session creation before any Order exists, is disconnected from shipping, and extending shipping into that path would require redesigning Stripe checkout-session creation (explicitly out of scope).
+- Product lookups for the shipping quote endpoint go through the canonical `OrderItemWriteRepository.validateProductReferences` repository method (the same one order creation itself uses), via a dedicated `getShippingOptionsUseCase` — never a direct DB query from the Service layer, preserving the Route → Service → UseCase → Repository boundary.
+- A fail-closed, COD-only public Stripe checkout gate (`stripePublicCheckoutEnabled`) defaults to disabled regardless of `NODE_ENV`, checked before any Stripe-specific logic in `POST /api/payments/initialize`. Existing Stripe regression tests explicitly opt in via `STRIPE_PUBLIC_CHECKOUT_ENABLED=true`.
+- Required address/customer string fields (`fullName`, `line1`, `city`, `postalCode`, `country`) are hardened with `.trim().min(1)` server-side; optional/free-text fields are unchanged.
+
+### Dependencies Introduced or Changed
+
+- New table `shipping_methods` (SQLite: full columns; PostgreSQL: stub-only `id` column, matching this schema file's established post-Sprint-24 stub convention for not-yet-fully-ported tables). New columns `orders.shipping_method_id`, `orders.shipping_method_label` (both files). New repository (`repositories/shipping`), Use Case module (`use-cases/shipping/useCases.ts`), Admin CRUD service/routes (`services/shippingMethods.ts`, `routes/shippingMethods.ts`, `settings.manage` permission, mirroring `routes/categories.ts`), and public quote route. `TransactionScopedRepositories` gained `shippingMethods`, wired identically to the Sprint 127 payments precedent.
+
+### Technical Debt
+
+- None introduced beyond the explicit deferrals below. `apps/api/src/db/schema.postgres.ts`'s pre-existing stub-only convention (several post-foundation tables have no real columns) is unchanged, matched, not fixed, by this sprint.
+
+### Deferred (explicitly out of scope)
+
+- Weight-based shipping tiers, postcode/zone-level rules, coupon-aware shipping rules, carrier live-rate integration, and Local Pickup fulfillment wiring (`CarrierCode.LocalPickup` remains a Shipment/fulfillment-domain concept only, unrelated to checkout shipping-method selection). Rate limiting on public mutation routes (identified in Discovery, no defect found in CORS configuration).
+
+### Entry Conditions
+
+- A follow-up sprint may introduce weight tiers or carrier-calculated rates as additive `ShippingRuleType` values without breaking the existing three; Local Pickup fulfillment wiring can reuse the existing `shippingProfiles`/`countryCodes` eligibility mechanism when scheduled.
+
 ## Sprint 133 — Invoice / Accounting Completion
 
 ### Architectural Decisions

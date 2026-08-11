@@ -6,6 +6,10 @@ import { createPaymentsPublicRouter } from "../src/routes/paymentsPublic";
 vi.hoisted(() => {
   process.env.DATABASE_DRIVER = "sqlite";
   process.env.DATABASE_URL = ":memory:";
+  // Sprint 134: this suite deliberately exercises the real public Stripe-initialization route
+  // itself, so it explicitly opts into the new COD-only launch gate rather than relying on any
+  // default - see payments/paymentService.ts's stripePublicCheckoutEnabled.
+  process.env.STRIPE_PUBLIC_CHECKOUT_ENABLED = "true";
 });
 
 const address={fullName:"Jane Buyer",line1:"1 Main",city:"Paris",postalCode:"75001",country:"FR"};

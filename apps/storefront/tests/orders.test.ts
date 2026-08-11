@@ -70,6 +70,7 @@ describe("createOrderFromPaidPayment", () => {
         region: undefined,
         postalCode: "75001",
         country: "France",
+        countryCode: "FR",
         phone: "+331",
       },
       shippingAddress: {
@@ -80,6 +81,7 @@ describe("createOrderFromPaidPayment", () => {
         region: undefined,
         postalCode: "75001",
         country: "France",
+        countryCode: "FR",
         phone: "+331",
       },
       subtotalAmount: 1200,

@@ -169,12 +169,15 @@ export default function CheckoutReviewPage() {
               {draft.currencySummary.usdSubtotal !== undefined && (
                 <SummaryRow label="USD Subtotal" value={`$${draft.currencySummary.usdSubtotal.toFixed(2)}`} />
               )}
-              <SummaryRow label="Shipping" value="Calculated later" muted />
+              {/* Sprint 134: shipping is resolved authoritatively on the next (Payment) step, where
+                  the actual eligible methods/amount for the confirmed destination are shown -
+                  never a placeholder implying a still-pending future determination. */}
+              <SummaryRow label="Shipping" value="Shown on the next step" muted />
               <SummaryRow label="Taxes / Duties" value="Not included" muted />
               <hr className="noctella-divider" style={{ margin: "10px 0" }} />
               <SummaryRow
-                label="Total"
-                value={`€${draft.currencySummary.eurSubtotal.toFixed(2)} (cart subtotal only)`}
+                label="Subtotal"
+                value={`€${draft.currencySummary.eurSubtotal.toFixed(2)} (excludes shipping)`}
               />
             </div>
 

@@ -9,14 +9,16 @@ import {
 } from "@noctella/shared";
 import { z } from "zod";
 
+/** Sprint 134: countryCode is additive/optional - existing callers that never send it are unaffected. Required string fields are trimmed before the length check so whitespace-only values (" ") are rejected, not merely absent values. */
 const addressSchema = z.object({
-  fullName: z.string().min(1),
-  line1: z.string().min(1),
+  fullName: z.string().trim().min(1),
+  line1: z.string().trim().min(1),
   line2: z.string().optional(),
-  city: z.string().min(1),
+  city: z.string().trim().min(1),
   region: z.string().optional(),
-  postalCode: z.string().min(1),
-  country: z.string().min(1),
+  postalCode: z.string().trim().min(1),
+  country: z.string().trim().min(1),
+  countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/, "countryCode must be a two-letter ISO code").transform((v) => v.toUpperCase()).optional(),
   phone: z.string().optional(),
 });
 
@@ -49,6 +51,12 @@ export const createCashOnDeliveryOrderSchema = z.object({
   shippingAddress: addressSchema,
   notes: z.string().optional(),
   items: z.array(orderItemInputSchema.strict()).min(1),
+  // Sprint 134: non-authoritative shipping selection - the server always independently re-resolves
+  // the amount from current shipping-method configuration; shippingMethodId only identifies which
+  // eligible method to use, and expectedShippingAmountEur (if present) is compared in exact EUR
+  // cents purely to fail closed on a stale quote, never trusted as the charged amount.
+  shippingMethodId: z.string().min(1).optional(),
+  expectedShippingAmountEur: z.number().finite().min(0).optional(),
 }).strict();
 
 export const updateOrderStatusSchema = z.object({

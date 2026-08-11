@@ -339,6 +339,9 @@ export const orders = pgTable("orders", {
   billingAddress: jsonb("billing_address").notNull(),
   shippingAddress: jsonb("shipping_address").notNull(),
   notes: text("notes"),
+  // Sprint 134: immutable checkout-time shipping-method snapshot - see schema.sqlite.ts's orders table for the full rationale.
+  shippingMethodId: text("shipping_method_id"),
+  shippingMethodLabel: text("shipping_method_label"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
@@ -736,6 +739,14 @@ export const invoiceEvents = pgTable("invoice_events", {
 
 export const financeEntries = pgTable("finance_entries", {
   id: numeric("id", { precision: 18, scale: 6 }).primaryKey().notNull().default(sql`now()`),
+});
+
+// Sprint 134: stub only, matching this file's existing convention for every table introduced
+// after the Sprint 24 postgres foundation (see invoices/financeEntries above) - SQLite remains
+// the current authoritative deployment; this file's post-foundation tables are declared, not
+// functionally maintained, until a real Postgres migration effort resumes.
+export const shippingMethods = pgTable("shipping_methods", {
+  id: text("id").primaryKey().notNull().default(sql`now()`),
 });
 
 export const warehouses = pgTable("warehouses", {
