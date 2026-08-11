@@ -5,7 +5,7 @@ import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { findPaymentByProviderReference, linkPaymentToOrder } from "../payments/paymentRepository";
 import type { CreateCashOnDeliveryOrderInput, CreateOrderInput, OrderListQuery, UpdateOrderStatusInput } from "../validation/order";
-import { createCashOnDeliveryOrderUseCase, createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, transitionOrderStatusUseCase, updateOrderPaymentStatusUseCase, formatOrderNumber, type PaidOrderOutboxPort } from "../use-cases/order/useCases";
+import { createCashOnDeliveryOrderUseCase, createInternalOrderUseCase, getOrderDetailUseCase, listOrdersUseCase, settleCashOnDeliveryOrderUseCase, transitionOrderStatusUseCase, updateOrderPaymentStatusUseCase, formatOrderNumber, type PaidOrderOutboxPort } from "../use-cases/order/useCases";
 import { dispatchDueSalesInvoiceOutboxEvents, enqueueSalesInvoiceDraftForPaidOrderSync } from "./salesInvoiceOutbox";
 import type { OrderPricingContext } from "../repositories/order/types";
 
@@ -69,6 +69,8 @@ export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDe
 export async function updateOrderStatus(db:DbClient,id:string,input:UpdateOrderStatusInput):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id,status:input.status}) as unknown as OrderWithItems; }
 /** Sprint 79 correction: the hook point for a Draft order (e.g. one derived from an accepted offer) transitioning into Paid after creation — see updateOrderPaymentStatusUseCase for the exact not-already-Paid -> Paid guard. */
 export async function updateOrderPaymentStatus(db:DbClient,id:string,input:{paymentStatus:PaymentStatus}):Promise<OrderWithItems>{ const result=await updateOrderPaymentStatusUseCase(uow(db),paidOrderOutbox).execute({id,paymentStatus:input.paymentStatus}) as unknown as OrderWithItems; if(input.paymentStatus===PaymentStatus.Paid) await dispatchDueSalesInvoiceOutboxEvents(db,"post-commit",1).catch(()=>undefined); return result; }
+/** Sprint 132: explicit Cash on Delivery settlement - deliberately never wired to paidOrderOutbox (see settleCashOnDeliveryOrderUseCase's own doc comment); invoice/accounting completion remains Sprint 133. */
+export async function settleCashOnDeliveryOrder(db:DbClient,id:string,input:{collectedAmount:number}):Promise<OrderWithItems>{ const result=await settleCashOnDeliveryOrderUseCase(uow(db)).execute({orderId:id,collectedAmount:input.collectedAmount}); return result.order as unknown as OrderWithItems; }
 export async function cancelOrder(db:DbClient,id:string):Promise<OrderWithItems>{ return await transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id,status:OrderStatus.Cancelled}) as unknown as OrderWithItems; }
 /** Retained signature for compatibility; idempotencyKey/reason are no longer needed since transitionOrderStatusUseCase's own same-status check makes cancellation idempotent. */
 export async function createSaleRollback(db:DbClient,input:{orderId:string;idempotencyKey:string;reason?:string}){ return transitionOrderStatusUseCase(uow(db),undefined,undefined,"sqlite",sync(db)).execute({id:input.orderId,status:OrderStatus.Cancelled}); }

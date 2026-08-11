@@ -123,6 +123,22 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 132 — COD Settlement / Reconciliation
+
+### Architectural Decisions
+
+- Cash on Delivery settlement is an explicit, authoritative Admin action (`POST /api/orders/:id/settle-cod`); it is never inferred from `ShipmentStatus.Delivered` or any other logistics signal, and settlement does not require Delivered — a Pending COD order with no shipment at all can be settled.
+- The operator-provided `collectedAmount` is validated against the canonical `Order.totalAmount` using exact EUR-cents equality (`toEurCents`), with no epsilon, tolerance, or silent adjustment.
+- The `Order.paymentStatus` Pending → Paid transition uses a single guarded, row-count-verified conditional update (`markPendingCashOnDeliveryOrderPaid`, `WHERE id=? AND payment_status='pending' AND payment_provider='cash_on_delivery'`), mirroring shipment-core's `markProcessingOrderShipped` (Sprint 131). The existing generic, unconditional `updateOrderPaymentStatusUseCase`/`updatePaymentStatus` is not reused for this competing-state transition.
+- A successful first-time settlement atomically writes the guarded order transition, exactly one canonical `Payment` row (`provider=cash_on_delivery`, `status=paid`), and exactly one canonical `PaymentEvent` (`eventType=cod.settled`) in one synchronous SQLite transaction — reusing the existing, already-provider-neutral `TransactionPaymentRepository`/`TransactionPaymentEventRepository` (the same repositories Stripe uses) without any schema or repository-shape change.
+- Settlement identity is deterministic (`cod-settlement:<orderId>`), reused as both `Payment.idempotencyKey` and the `PaymentEvent.(provider, providerEventId)` pair. A coherent replay (Order already Paid, with a matching canonical Payment + PaymentEvent and the same `collectedAmount`) is an idempotent no-op — no second Payment, no second PaymentEvent, no invoice enqueue. Any divergence (Paid order with missing/inconsistent canonical settlement state, or a mismatched replay amount) fails closed with a typed Conflict error; it is never auto-repaired.
+- Settlement performs zero Inventory mutation (stock was already decremented at COD checkout acceptance, Sprint 129) and zero Shipment/Picking/Packing mutation — it remains technically independent of fulfillment state.
+- Settlement never enqueues the `SalesInvoiceDraftRequested` outbox event; the new use case has no outbox parameter at all. Invoice/accounting completion remains Sprint 133.
+
+### Dependencies Introduced or Changed
+
+- None. No runtime dependency, schema change, or migration. One new guarded repository method (`OrderWriteRepository.markPendingCashOnDeliveryOrderPaid`) was added; existing Payment/PaymentEvent repository methods were reused unchanged.
+
 ## Sprint 131 — Shipping & Tracking Foundation
 
 ### Architectural Decisions

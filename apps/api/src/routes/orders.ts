@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
-import { getOrderById, listOrders, updateOrderStatus } from "../services/orders";
+import { getOrderById, listOrders, settleCashOnDeliveryOrder, updateOrderStatus } from "../services/orders";
 import { getOrderInvoiceOutboxStatus, retrySalesInvoiceDraftForOrder } from "../services/salesInvoiceOutbox";
-import { orderListQuerySchema, updateOrderStatusSchema } from "../validation/order";
+import { orderListQuerySchema, settleCashOnDeliveryOrderSchema, updateOrderStatusSchema } from "../validation/order";
 import { handleRouteError } from "./errorHandler";
 
 /** Sprint 64C: guest order creation (POST /) moved to routes/ordersPublic.ts, mounted before
@@ -52,6 +52,17 @@ router.get("/:id/invoice-status", requirePermission("orders.view"), async (req, 
 router.post("/:id/invoice-status/retry", requirePermission("orders.manage"), async (req, res) => {
   try {
     res.json(await retrySalesInvoiceDraftForOrder(db, req.params.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+/** Sprint 132: explicit, authoritative Admin action recording that Cash on Delivery funds were collected. Never inferred from ShipmentStatus.Delivered or any other logistics signal. */
+router.post("/:id/settle-cod", requirePermission("orders.manage"), async (req, res) => {
+  try {
+    const input = settleCashOnDeliveryOrderSchema.parse(req.body);
+    const order = await settleCashOnDeliveryOrder(db, req.params.id, input);
+    res.json(order);
   } catch (err) {
     handleRouteError(err, res);
   }
