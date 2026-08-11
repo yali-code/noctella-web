@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getOrRebuildOrderDraft: vi.fn(),
   createCashOnDeliveryOrder: vi.fn(),
   saveCreatedOrder: vi.fn(),
+  getShippingOptions: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
@@ -21,9 +22,11 @@ vi.mock("@/lib/cart", () => ({ getCart: mocks.getCart, isCashOnDeliveryAvailable
 vi.mock("@/lib/checkout", () => ({ getCheckoutDraft: mocks.getCheckoutDraft, isCheckoutDraftValid: mocks.isCheckoutDraftValid }));
 vi.mock("@/lib/orderDraft", () => ({ getOrRebuildOrderDraft: mocks.getOrRebuildOrderDraft }));
 vi.mock("@/lib/orders", () => ({ createCashOnDeliveryOrder: mocks.createCashOnDeliveryOrder, saveCreatedOrder: mocks.saveCreatedOrder }));
+vi.mock("@/lib/shipping", () => ({ getShippingOptions: mocks.getShippingOptions }));
 
 const cart = { items: [{ productId: "product-1", quantity: 1 }] };
-const checkoutDraft = { customer: { email: "buyer@example.com" } };
+const checkoutDraft = { customer: { email: "buyer@example.com" }, shippingAddress: { line1: "1 Test St", city: "Sofia", postalCode: "1000", country: "BG", countryCode: "BG" } };
+const freeShippingOption = { shippingMethodId: "free-shipping", label: "Free Shipping", ruleType: "Free", amountEurCents: 0 };
 const orderDraft = {
   id: "stable-draft-129",
   customer: { firstName: "Ada", lastName: "Buyer", email: "buyer@example.com", phone: "" },
@@ -42,6 +45,7 @@ function arrange(codAvailable = true) {
   mocks.getOrRebuildOrderDraft.mockReturnValue(orderDraft);
   mocks.isCashOnDeliveryAvailable.mockReturnValue(codAvailable);
   mocks.createCashOnDeliveryOrder.mockResolvedValue(createdOrder);
+  mocks.getShippingOptions.mockResolvedValue({ items: [freeShippingOption] });
 }
 
 describe("Sprint 129 COD-only checkout presentation", () => {
@@ -74,7 +78,7 @@ describe("Sprint 129 COD-only checkout presentation", () => {
     render(createElement(CheckoutPaymentPage));
     await userEvent.click(await screen.findByRole("button", { name: "Place Cash on Delivery Order" }));
     await waitFor(() => expect(mocks.createCashOnDeliveryOrder).toHaveBeenCalledTimes(1));
-    expect(mocks.createCashOnDeliveryOrder).toHaveBeenCalledWith(orderDraft);
+    expect(mocks.createCashOnDeliveryOrder).toHaveBeenCalledWith(orderDraft, { shippingMethodId: "free-shipping", expectedShippingAmountEur: 0 });
     await waitFor(() => expect(mocks.saveCreatedOrder).toHaveBeenCalledWith(createdOrder));
     expect(mocks.push).toHaveBeenCalledWith("/checkout/success");
   });

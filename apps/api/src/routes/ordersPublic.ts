@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "../db/client";
-import { createCashOnDeliveryOrder, createOrder } from "../services/orders";
+import { createCashOnDeliveryOrder, createOrder, getShippingOptions } from "../services/orders";
 import { createCashOnDeliveryOrderSchema, createOrderSchema } from "../validation/order";
+import { shippingQuoteRequestSchema } from "../validation/shipping";
 import { handleRouteError } from "./errorHandler";
 
 /**
@@ -12,6 +13,16 @@ import { handleRouteError } from "./errorHandler";
  * administrative router - no duplicated business logic.
  */
 const router = Router();
+
+/** Sprint 134: public, non-mutating shipping-options quote - advisory only, see services/orders.ts::getShippingOptions. */
+router.post("/shipping-options", async (req, res) => {
+  try {
+    const input = shippingQuoteRequestSchema.parse(req.body);
+    res.json(await getShippingOptions(db, input));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.post("/cod", async (req, res) => {
   try {

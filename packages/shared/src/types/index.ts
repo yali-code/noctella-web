@@ -225,6 +225,8 @@ export interface Address {
   region?: string;
   postalCode: string;
   country: string;
+  /** Sprint 134: additive, optional 2-letter ISO country code - authoritative for shipping-method country eligibility when present. Absent on any address predating this field. */
+  countryCode?: string;
   phone?: string;
 }
 
@@ -247,6 +249,9 @@ export interface Order extends Timestamps {
   billingAddress: Address;
   shippingAddress: Address;
   notes?: string;
+  /** Sprint 134: immutable checkout-time shipping-method snapshot - null when shippingAmount was resolved without a configured shipping method (legacy/bootstrap state). Never a live reference; renaming/disabling the shipping method later never changes this. */
+  shippingMethodId?: string;
+  shippingMethodLabel?: string;
 }
 
 export interface OrderItem extends Timestamps {

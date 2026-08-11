@@ -2,6 +2,7 @@ import {
   DIMENSION_UNIT_VALUES,
   LISTING_STATUS_VALUES,
   PRICE_CURRENCY_VALUES,
+  PRODUCT_SHIPPING_PROFILE_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
   ProductType,
@@ -61,7 +62,8 @@ export const baseProductSchema = z.object({
 
   videoUrl: z.string().optional(),
 
-  shippingProfile: z.string().optional(),
+  /** Sprint 134: activates the previously-inert free-text placeholder as a controlled eligibility-classification vocabulary consumed by shipping-method resolution; unset/null is treated as Standard. */
+  shippingProfile: z.enum(PRODUCT_SHIPPING_PROFILE_VALUES as [string, ...string[]]).optional(),
   shippingNote: z.string().optional(),
   customsWarning: z.boolean().optional(),
 

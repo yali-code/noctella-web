@@ -4,6 +4,7 @@ import {
   DIMENSION_UNIT_VALUES,
   LISTING_STATUS_VALUES,
   PRICE_CURRENCY_VALUES,
+  PRODUCT_SHIPPING_PROFILE_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
   ProductType,
@@ -600,12 +601,19 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
       </Section>
 
       <Section title="Shipping">
-        <Field label="Shipping Profile (placeholder)">
-          <input
+        <Field label="Shipping Profile">
+          <select
             style={inputStyle}
             value={values.shippingProfile ?? ""}
-            onChange={(e) => set("shippingProfile", e.target.value)}
-          />
+            onChange={(e) => set("shippingProfile", e.target.value || undefined)}
+          >
+            <option value="">Standard (default)</option>
+            {PRODUCT_SHIPPING_PROFILE_VALUES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Shipping Note">
           <input

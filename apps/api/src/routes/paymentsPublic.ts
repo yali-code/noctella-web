@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/client";
 import { cancelPaymentSession, initializePaymentSession, verifyPaymentSession } from "../payments/paymentRepository";
+import { stripePublicCheckoutEnabled } from "../payments/paymentService";
 import { cancelPaymentSchema, initializePaymentSchema, verifyPaymentSchema } from "../validation/payment";
 import { initializeStripeCheckoutSchema } from "../validation/payment";
 import { getPublicPaymentStatus, initializeStripeCheckout } from "../services/stripePayments";
@@ -19,7 +20,11 @@ const router = Router();
 
 router.post("/initialize", async (req, res) => {
   try {
-    if(req.body?.provider==="stripe"){const input=initializeStripeCheckoutSchema.parse(req.body);const result=await dependencies.initializeStripeCheckout(db,{version:1,orderDraftId:input.orderDraftId,guestEmail:input.guestEmail,billingAddress:input.billingAddress,shippingAddress:input.shippingAddress,notes:input.notes,items:input.items});return res.status(201).json(result);}
+    if(req.body?.provider==="stripe"){
+      // Sprint 134: explicit, fail-closed COD-only launch gate - checked before any Stripe-specific
+      // logic runs, independent of whether Stripe keys/URLs happen to be configured in this environment.
+      if(!stripePublicCheckoutEnabled()) throw new BadRequestError("Stripe checkout is not enabled in this environment");
+      const input=initializeStripeCheckoutSchema.parse(req.body);const result=await dependencies.initializeStripeCheckout(db,{version:1,orderDraftId:input.orderDraftId,guestEmail:input.guestEmail,billingAddress:input.billingAddress,shippingAddress:input.shippingAddress,notes:input.notes,items:input.items});return res.status(201).json(result);}
     const input = initializePaymentSchema.parse(req.body);
     const result = await dependencies.initializePaymentSession(db, input);
     res.status(201).json(result);

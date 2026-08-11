@@ -501,6 +501,13 @@ export const orders = sqliteTable("orders", {
   billingAddress: text("billing_address").notNull(),
   shippingAddress: text("shipping_address").notNull(),
   notes: text("notes"),
+  // Sprint 134: immutable checkout-time shipping-method snapshot - never a foreign key (mirrors
+  // paymentReference's existing loose-reference convention), so disabling/editing/renaming a
+  // shipping_methods row after the fact never rewrites historical Orders. shippingMethodId is null
+  // whenever shippingAmount was resolved without a configured shipping method (legacy/bootstrap
+  // state - see use-cases/order/shipping.ts).
+  shippingMethodId: text("shipping_method_id"),
+  shippingMethodLabel: text("shipping_method_label"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
@@ -649,6 +656,16 @@ export const invoiceLines = sqliteTable("invoice_lines", { id: text("id").primar
 export const invoiceEvents = sqliteTable("invoice_events", { id: text("id").primaryKey(), invoiceId: text("invoice_id").notNull(), eventType: text("event_type").notNull(), previousStatus: text("previous_status"), newStatus: text("new_status"), safeMetadata: text("safe_metadata"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table) => [index("idx_invoice_events_invoice").on(table.invoiceId, table.createdAt)]);
 /** Sprint 79: singleton row (id "default") — one active company profile, used as the invoice seller-snapshot source. */
 export const companyProfile = sqliteTable("company_profile", { id: text("id").primaryKey(), legalName: text("legal_name").notNull(), tradeName: text("trade_name"), registrationNumber: text("registration_number").notNull(), vatNumber: text("vat_number"), addressLine1: text("address_line1").notNull(), addressLine2: text("address_line2"), city: text("city").notNull(), postalCode: text("postal_code").notNull(), country: text("country").notNull(), email: text("email").notNull(), phone: text("phone").notNull(), website: text("website"), bankName: text("bank_name"), iban: text("iban"), bic: text("bic"), invoiceFooter: text("invoice_footer"), defaultPaymentTermsDays: integer("default_payment_terms_days").notNull().default(14), defaultVatRate: real("default_vat_rate").notNull().default(20), defaultTaxTreatment: text("default_tax_treatment").notNull().default("StandardVAT"), defaultPricesIncludeVat: integer("default_prices_include_vat", { mode: "boolean" }).notNull().default(false), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) });
+
+/**
+ * Sprint 134: Admin-configurable checkout-time shipping methods. countryCodes/shippingProfiles
+ * are JSON-encoded string[] (null/empty = unrestricted - eligible for every country/profile).
+ * flatAmountEurCents/freeThresholdEurCents are deterministic integer EUR cents (never floating
+ * decimals), matching the project's canonical monetary-comparison convention. Never hard-deleted -
+ * isActive is the only lifecycle control, so historical Order shipping snapshots (orders.shipping_method_id/label)
+ * remain meaningful even after a method is retired.
+ */
+export const shippingMethods = sqliteTable("shipping_methods", { id: text("id").primaryKey(), label: text("label").notNull(), isActive: integer("is_active", { mode: "boolean" }).notNull().default(true), sortOrder: integer("sort_order").notNull().default(0), ruleType: text("rule_type").notNull(), flatAmountEurCents: integer("flat_amount_eur_cents"), freeThresholdEurCents: integer("free_threshold_eur_cents"), countryCodes: text("country_codes"), shippingProfiles: text("shipping_profiles"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table) => [index("idx_shipping_methods_active_sort").on(table.isActive, table.sortOrder)]);
 export const financeEntries = sqliteTable("finance_entries", { id: text("id").primaryKey(), orderId: text("order_id"), invoiceId: text("invoice_id"), refundId: text("refund_id"), saleReversalId: text("sale_reversal_id"), entryType: text("entry_type").notNull(), currency: text("currency").notNull().default("EUR"), amount: real("amount").notNull(), sourceReference: text("source_reference").notNull(), sourceSnapshot: text("source_snapshot").notNull(), idempotencyKey: text("idempotency_key").notNull(), occurredAt: text("occurred_at").notNull(), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table) => [uniqueIndex("idx_finance_entries_idempotency_unique").on(table.idempotencyKey), index("idx_finance_entries_order").on(table.orderId), index("idx_finance_entries_invoice").on(table.invoiceId), index("idx_finance_entries_refund").on(table.refundId), index("idx_finance_entries_reversal").on(table.saleReversalId), index("idx_finance_entries_type_date").on(table.entryType, table.occurredAt)]);
 
 export const customerProfiles = sqliteTable("customer_profiles", { id: text("id").primaryKey(), erpReferenceId: text("erp_reference_id"), marketplaceBuyerId: text("marketplace_buyer_id"), email: text("email"), phone: text("phone"), vatNumber: text("vat_number"), name: text("name"), status: text("status").notNull().default("Active"), source: text("source").notNull().default("ERP"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`) }, (table) => [index("idx_customer_profiles_email").on(table.email), index("idx_customer_profiles_phone").on(table.phone), index("idx_customer_profiles_erp").on(table.erpReferenceId), index("idx_customer_profiles_marketplace").on(table.marketplaceBuyerId), index("idx_customer_profiles_vat").on(table.vatNumber)]);

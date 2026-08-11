@@ -34,6 +34,14 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureAiIntakeProposalStockAcceptanceColumns(sqlite);
   ensureProductSkuSequenceTable(sqlite);
   ensureMarketplacePreparationsTable(sqlite);
+  ensureShippingMethodsTable(sqlite);
+}
+
+/** Sprint 134: Admin-configurable checkout-time shipping methods - see schema.sqlite.ts's shippingMethods table doc comment. */
+function ensureShippingMethodsTable(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS shipping_methods (id TEXT PRIMARY KEY, label TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, rule_type TEXT NOT NULL, flat_amount_eur_cents INTEGER, free_threshold_eur_cents INTEGER, country_codes TEXT, shipping_profiles TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP));
+CREATE INDEX IF NOT EXISTS idx_shipping_methods_active_sort ON shipping_methods(is_active, sort_order);`);
 }
 
 /**
@@ -355,6 +363,9 @@ const ORDER_COLUMNS: Array<{ table: string; name: string; ddl: string }> = [
   { table: "order_items", name: "product_slug", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "order_items", name: "product_type", ddl: "TEXT NOT NULL DEFAULT ''" },
   { table: "order_items", name: "product_image_url", ddl: "TEXT" },
+  // Sprint 134: immutable checkout-time shipping-method snapshot - see schema.sqlite.ts's orders table.
+  { table: "orders", name: "shipping_method_id", ddl: "TEXT" },
+  { table: "orders", name: "shipping_method_label", ddl: "TEXT" },
 ];
 
 function ensureOrderColumns(sqlite: Database.Database): void {

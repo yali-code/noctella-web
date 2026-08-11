@@ -8,12 +8,17 @@ const STORAGE_KEY = "noctella_created_order";
 export interface CreateOrderResult {
   id: string;
   orderNumber: string;
+  // Sprint 134: optional - present on the real API response (OrderWithItems) but not required for
+  // the stored/validated shape, so older persisted values (predating this field) remain valid.
+  totalAmount?: number;
+  shippingAmount?: number;
+  shippingMethodLabel?: string;
 }
 
 function toApiAddress(
   address: CheckoutAddress,
   customer: OrderDraft["customer"],
-): { fullName: string; line1: string; line2?: string; city: string; region?: string; postalCode: string; country: string; phone?: string } {
+): { fullName: string; line1: string; line2?: string; city: string; region?: string; postalCode: string; country: string; countryCode?: string; phone?: string } {
   return {
     fullName: `${customer.firstName} ${customer.lastName}`.trim(),
     line1: address.line1,
@@ -22,6 +27,8 @@ function toApiAddress(
     region: address.state,
     postalCode: address.postalCode,
     country: address.country,
+    // Sprint 134: additive - was already validated client-side but never forwarded to the API.
+    countryCode: address.countryCode,
     phone: customer.phone,
   };
 }
@@ -47,7 +54,8 @@ export function createOrderFromPaidPayment(draft: OrderDraft, payment: PaymentSe
   return api.post<CreateOrderResult>("/api/orders", buildCreateOrderPayload(draft, payment));
 }
 
-export function buildCashOnDeliveryOrderPayload(draft: OrderDraft) {
+/** Sprint 134: shippingMethodId/expectedShippingAmountEur are non-authoritative - the server always independently re-resolves the actual charged amount (see routes/ordersPublic.ts). */
+export function buildCashOnDeliveryOrderPayload(draft: OrderDraft, shipping?: { shippingMethodId: string; expectedShippingAmountEur: number }) {
   return {
     orderDraftId: draft.id,
     guestEmail: draft.customer.email,
@@ -55,17 +63,24 @@ export function buildCashOnDeliveryOrderPayload(draft: OrderDraft) {
     shippingAddress: toApiAddress(draft.shippingAddress, draft.customer),
     notes: draft.customerNote,
     items: draft.items.map((item) => ({ productId: item.productId, quantity: 1 as const })),
+    ...(shipping ? { shippingMethodId: shipping.shippingMethodId, expectedShippingAmountEur: shipping.expectedShippingAmountEur } : {}),
   };
 }
 
-export function createCashOnDeliveryOrder(draft: OrderDraft): Promise<CreateOrderResult> {
-  return api.post<CreateOrderResult>("/api/orders/cod", buildCashOnDeliveryOrderPayload(draft));
+export function createCashOnDeliveryOrder(draft: OrderDraft, shipping?: { shippingMethodId: string; expectedShippingAmountEur: number }): Promise<CreateOrderResult> {
+  return api.post<CreateOrderResult>("/api/orders/cod", buildCashOnDeliveryOrderPayload(draft, shipping));
 }
 
 function isValidCreatedOrder(value: unknown): value is CreateOrderResult {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return typeof v.id === "string" && typeof v.orderNumber === "string";
+  return (
+    typeof v.id === "string" &&
+    typeof v.orderNumber === "string" &&
+    (v.totalAmount === undefined || typeof v.totalAmount === "number") &&
+    (v.shippingAmount === undefined || typeof v.shippingAmount === "number") &&
+    (v.shippingMethodLabel === undefined || typeof v.shippingMethodLabel === "string")
+  );
 }
 
 export function saveCreatedOrder(order: CreateOrderResult): void {
