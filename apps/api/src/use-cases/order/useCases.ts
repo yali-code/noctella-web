@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from "node:crypto";
 import { OrderStatus, PaymentProvider, PaymentStatus, PriceCurrency, ProductStatus } from "@noctella/shared";
 import type { TransactionScopedRepositories, UnitOfWork } from "../../services/unitOfWork";
-import { BadRequestError, NotFoundError } from "../../services/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../../services/errors";
 import type { CreateInternalOrderInput, OrderDetailProjection, OrderPricingContext, PaidSessionPricing, UpdateOrderPaymentStatusInput, UpdateOrderStatusInput, SaleRollbackInput } from "../../repositories/order/types";
 import { decreaseInventoryForSaleInTransactionUseCase, restoreInventoryForSaleRollbackInTransactionUseCase } from "../../application/inventory";
 import { createInventoryRepositoryBundleForDb, type InventoryRepositoryDriver } from "../../repositories/inventory/factory";
@@ -158,5 +158,60 @@ export function transitionOrderStatusUseCase(uow:UnitOfWork,c:Clock=clock,g:IdGe
  * regardless, but the previous-status guard avoids even attempting it).
  */
 export const updateOrderPaymentStatusUseCase=(uow:UnitOfWork,outbox?:PaidOrderOutboxPort)=>({execute:(i:UpdateOrderPaymentStatusInput)=>uow.run(({repositories})=>{const before=repositories.order.orders.read.getById(i.id) as any; if(!before) throw new NotFoundError("Order not found"); const o=repositories.order.orders.write.updatePaymentStatus(i); if(!o) throw new NotFoundError("Order not found"); if(before.paymentStatus!==PaymentStatus.Paid && i.paymentStatus===PaymentStatus.Paid) outbox?.enqueue(repositories.db,i.id); return repositories.order.orders.read.getOrderDetailProjection(i.id);})});
+export interface SettleCashOnDeliveryOrderInput { orderId:string; collectedAmount:number }
+export interface SettleCashOnDeliveryOrderResult { order:OrderDetailProjection; paymentId:string; replay:boolean }
+const codSettlementIdempotencyKey=(orderId:string)=>`cod-settlement:${orderId}`;
+/**
+ * Sprint 132: explicit, authoritative Admin action recording that Cash on Delivery funds were
+ * actually collected. Deliberately never triggered by ShipmentStatus.Delivered or any other
+ * logistics signal (see shipment-core, Sprint 131 - untouched by this use case). Never mutates
+ * Inventory or Shipment/Picking/Packing. Never enqueues the invoice-draft outbox (Sprint 133
+ * remains fully separate) - unlike updateOrderPaymentStatusUseCase, this use case has no outbox
+ * parameter at all, so there is no seam through which invoice/accounting behavior could leak in.
+ *
+ * The Pending -> Paid transition is a single guarded, row-count-verified conditional UPDATE
+ * (repositories.order.orders.write.markPendingCashOnDeliveryOrderPaid) - the same safety shape as
+ * shipment-core's markProcessingOrderShipped (Sprint 131) - deliberately NOT the existing generic,
+ * unconditional updateOrderPaymentStatusUseCase/updatePaymentStatus, which has no competing-state
+ * guard and is not safe to reuse for this transition.
+ *
+ * Payment/PaymentEvent persistence reuses the existing, already-provider-neutral
+ * TransactionPaymentRepository/TransactionPaymentEventRepository (repositories.payments /
+ * repositories.paymentEvents, supplied by the same UnitOfWork Stripe already uses - see
+ * use-cases/payment/useCases.ts). createPendingCheckout performs an unrestricted insert (only
+ * setProviderReference/markPaidAndLinkOrder/markManualRefundRequired are Stripe-locked), so it
+ * safely persists an already-settled Cash on Delivery Payment row in one call; paymentEvents.claim
+ * is likewise a plain, provider-agnostic insert. No repositories/payment/* change was necessary.
+ *
+ * Idempotency: keyed on the deterministic `cod-settlement:<orderId>` identity, reused as both the
+ * Payment.idempotencyKey and the PaymentEvent.(provider,providerEventId) pair. A coherent replay
+ * (Order already Paid, with a matching canonical Payment+PaymentEvent, and the same collectedAmount)
+ * is an idempotent no-op. Any divergence - Order Paid without a matching canonical Payment/Event,
+ * or a mismatched collectedAmount on replay - fails closed with ConflictError; it is never
+ * auto-repaired.
+ */
+export function settleCashOnDeliveryOrderUseCase(uow:UnitOfWork,c:Clock=clock,g:IdGenerator=ids){ return { async execute(input:SettleCashOnDeliveryOrderInput):Promise<SettleCashOnDeliveryOrderResult>{ return uow.run(({repositories})=>{
+  const order=repositories.order.orders.read.getById(input.orderId) as any; if(!order) throw new NotFoundError("Order not found");
+  if(order.paymentProvider!==PaymentProvider.CashOnDelivery) throw new BadRequestError("Order is not a Cash on Delivery order");
+  const expectedCents=toEurCents(order.totalAmount); const collectedCents=toEurCents(input.collectedAmount); const idempotencyKey=codSettlementIdempotencyKey(input.orderId);
+  const verifyCoherentReplay=():SettleCashOnDeliveryOrderResult=>{
+    if(collectedCents!==expectedCents) throw new ConflictError("Collected amount does not match the settled Cash on Delivery payment");
+    const existingPayment=repositories.payments.findByIdempotencyKey(idempotencyKey) as any;
+    if(!existingPayment||existingPayment.orderId!==input.orderId||existingPayment.provider!=="cash_on_delivery"||existingPayment.status!=="paid"||existingPayment.expectedAmountCents!==expectedCents) throw new ConflictError("Cash on Delivery settlement state is inconsistent for this order");
+    const existingEvent=repositories.paymentEvents.find("cash_on_delivery",idempotencyKey) as any;
+    if(!existingEvent||existingEvent.paymentId!==existingPayment.id||existingEvent.status!=="completed") throw new ConflictError("Cash on Delivery settlement state is inconsistent for this order");
+    return {order:repositories.order.orders.read.getOrderDetailProjection(input.orderId) as any,paymentId:existingPayment.id,replay:true};
+  };
+  if(order.paymentStatus===PaymentStatus.Paid) return verifyCoherentReplay();
+  if(order.paymentStatus!==PaymentStatus.Pending) throw new BadRequestError("Cash on Delivery order is not in a Pending payment state");
+  if(collectedCents!==expectedCents) throw new BadRequestError("Collected amount does not match order total");
+  const now=c.now().toISOString();
+  const updated=repositories.order.orders.write.markPendingCashOnDeliveryOrderPaid(input.orderId,now) as unknown as boolean;
+  if(!updated) return verifyCoherentReplay();
+  const paymentId=g.id();
+  repositories.payments.createPendingCheckout({id:paymentId,orderId:input.orderId,provider:"cash_on_delivery",providerReference:null,providerTransactionReference:null,status:"paid",amount:order.totalAmount,expectedAmountCents:expectedCents,currency:"EUR",idempotencyKey,checkoutSnapshot:null,createdAt:now,updatedAt:now});
+  repositories.paymentEvents.claim({id:g.id(),provider:"cash_on_delivery",providerEventId:idempotencyKey,eventType:"cod.settled",paymentId,status:"completed",resultClassification:"fulfilled",errorCode:null,createdAt:now,updatedAt:now});
+  return {order:repositories.order.orders.read.getOrderDetailProjection(input.orderId) as any,paymentId,replay:false};
+}); } }; }
 export const cancelInternalOrderUseCase=(uow:UnitOfWork)=>({execute:(id:string)=>updateOrderStatusUseCase(uow).execute({id,status:OrderStatus.Cancelled as any})});
 export const createSaleRollbackUseCase=(uow:UnitOfWork,sync?:PostCommitStockSyncPort,g:IdGenerator=ids,c:Clock=clock,driver:InventoryRepositoryDriver="sqlite")=>({async execute(input:SaleRollbackInput){const affected:string[]=[]; const out=await uow.run(({repositories})=>{const inventoryRepositories=createInventoryRepositoryBundleForDb(repositories.db,driver,driver==="sqlite"); const items=repositories.order.orderItems.read.listByOrder(input.orderId) as unknown as any[]; const mutate=(index:number):any=>{if(index>=items.length)return repositories.order.orders.write.updateStatus({id:input.orderId,status:OrderStatus.Cancelled as any});const it=items[index];const result=restoreInventoryForSaleRollbackInTransactionUseCase({clock:c,idGenerator:{newId:()=>g.id()}},inventoryRepositories,{productId:it.productId,quantity:it.quantity,orderId:input.orderId,orderItemId:it.id,note:input.reason,idempotencyKey:`${input.idempotencyKey}:${it.productId}`});return result instanceof Promise?result.then(()=>{affected.push(it.productId);return mutate(index+1);}):((affected.push(it.productId)),mutate(index+1));};const result=mutate(0);return result instanceof Promise?result.then(()=>repositories.order.orders.read.getOrderDetailProjection(input.orderId)):repositories.order.orders.read.getOrderDetailProjection(input.orderId);});for(const p of affected)await sync?.enqueue(p,`rollback:${input.orderId}:${p}`).catch(()=>undefined);return out;}});

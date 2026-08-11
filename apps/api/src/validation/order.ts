@@ -55,6 +55,11 @@ export const updateOrderStatusSchema = z.object({
   status: z.enum(ORDER_STATUS_VALUES as [OrderStatus, ...OrderStatus[]]),
 });
 
+/** Sprint 132: operator-entered collected amount, validated against Order.totalAmount in exact EUR cents (no epsilon) by settleCashOnDeliveryOrderUseCase. */
+export const settleCashOnDeliveryOrderSchema = z.object({
+  collectedAmount: z.number().finite(),
+}).strict();
+
 export const orderListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -66,4 +71,5 @@ export const orderListQuerySchema = z.object({
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type CreateCashOnDeliveryOrderInput = z.infer<typeof createCashOnDeliveryOrderSchema>;
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;
+export type SettleCashOnDeliveryOrderInput = z.infer<typeof settleCashOnDeliveryOrderSchema>;
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
