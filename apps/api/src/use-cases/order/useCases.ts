@@ -165,9 +165,18 @@ const codSettlementIdempotencyKey=(orderId:string)=>`cod-settlement:${orderId}`;
  * Sprint 132: explicit, authoritative Admin action recording that Cash on Delivery funds were
  * actually collected. Deliberately never triggered by ShipmentStatus.Delivered or any other
  * logistics signal (see shipment-core, Sprint 131 - untouched by this use case). Never mutates
- * Inventory or Shipment/Picking/Packing. Never enqueues the invoice-draft outbox (Sprint 133
- * remains fully separate) - unlike updateOrderPaymentStatusUseCase, this use case has no outbox
- * parameter at all, so there is no seam through which invoice/accounting behavior could leak in.
+ * Inventory or Shipment/Picking/Packing.
+ *
+ * Sprint 133: on a first-time (non-replay) successful settlement, enqueues the same durable
+ * SalesInvoiceDraftRequested outbox intent finalizeInternalOrderInTransaction/
+ * updateOrderPaymentStatusUseCase already use for every other paid-order path - via the same
+ * generic, domain-agnostic `outbox?: PaidOrderOutboxPort` seam those use cases accept (Sprint 79's
+ * own documented reason: this Order use case never needs to import invoice-domain code directly;
+ * services/orders.ts supplies the real enqueueSalesInvoiceDraftForPaidOrderSync implementation).
+ * A coherent replay never calls outbox.enqueue - it returns from verifyCoherentReplay before
+ * reaching the first-time-success branch below, so it can never create a second durable intent.
+ * Automatic result is a Draft SalesInvoice only (via the existing dispatcher/handler); this use
+ * case never issues an invoice and never creates a financeEntries row.
  *
  * The Pending -> Paid transition is a single guarded, row-count-verified conditional UPDATE
  * (repositories.order.orders.write.markPendingCashOnDeliveryOrderPaid) - the same safety shape as
@@ -190,7 +199,7 @@ const codSettlementIdempotencyKey=(orderId:string)=>`cod-settlement:${orderId}`;
  * or a mismatched collectedAmount on replay - fails closed with ConflictError; it is never
  * auto-repaired.
  */
-export function settleCashOnDeliveryOrderUseCase(uow:UnitOfWork,c:Clock=clock,g:IdGenerator=ids){ return { async execute(input:SettleCashOnDeliveryOrderInput):Promise<SettleCashOnDeliveryOrderResult>{ return uow.run(({repositories})=>{
+export function settleCashOnDeliveryOrderUseCase(uow:UnitOfWork,outbox?:PaidOrderOutboxPort,c:Clock=clock,g:IdGenerator=ids){ return { async execute(input:SettleCashOnDeliveryOrderInput):Promise<SettleCashOnDeliveryOrderResult>{ return uow.run(({repositories})=>{
   const order=repositories.order.orders.read.getById(input.orderId) as any; if(!order) throw new NotFoundError("Order not found");
   if(order.paymentProvider!==PaymentProvider.CashOnDelivery) throw new BadRequestError("Order is not a Cash on Delivery order");
   const expectedCents=toEurCents(order.totalAmount); const collectedCents=toEurCents(input.collectedAmount); const idempotencyKey=codSettlementIdempotencyKey(input.orderId);
@@ -211,6 +220,7 @@ export function settleCashOnDeliveryOrderUseCase(uow:UnitOfWork,c:Clock=clock,g:
   const paymentId=g.id();
   repositories.payments.createPendingCheckout({id:paymentId,orderId:input.orderId,provider:"cash_on_delivery",providerReference:null,providerTransactionReference:null,status:"paid",amount:order.totalAmount,expectedAmountCents:expectedCents,currency:"EUR",idempotencyKey,checkoutSnapshot:null,createdAt:now,updatedAt:now});
   repositories.paymentEvents.claim({id:g.id(),provider:"cash_on_delivery",providerEventId:idempotencyKey,eventType:"cod.settled",paymentId,status:"completed",resultClassification:"fulfilled",errorCode:null,createdAt:now,updatedAt:now});
+  outbox?.enqueue(repositories.db,input.orderId);
   return {order:repositories.order.orders.read.getOrderDetailProjection(input.orderId) as any,paymentId,replay:false};
 }); } }; }
 export const cancelInternalOrderUseCase=(uow:UnitOfWork)=>({execute:(id:string)=>updateOrderStatusUseCase(uow).execute({id,status:OrderStatus.Cancelled as any})});

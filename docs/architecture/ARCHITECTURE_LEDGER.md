@@ -123,6 +123,25 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 133 — Invoice / Accounting Completion
+
+### Architectural Decisions
+
+- A settled Cash on Delivery order now enters the existing, already provider-neutral automatic Draft SalesInvoice pipeline — the same `SalesInvoiceDraftRequested` outbox mechanism Stripe-paid orders already use. No parallel COD-specific invoice queue, invoice model, or accounting authority was introduced.
+- On a first-time (non-replay) successful COD settlement, the durable `SalesInvoiceDraftRequested` outbox intent is persisted via the existing `enqueueSalesInvoiceDraftForPaidOrderSync` helper, inside the same synchronous SQLite transaction as the guarded `Order.paymentStatus` Pending → Paid transition, the canonical `Payment` insert, and the canonical `PaymentEvent` insert. All four writes commit or roll back together — proven by a real forced-SQL-trigger test on the `outbox_events` insert.
+- `settleCashOnDeliveryOrderUseCase` now accepts the same generic, domain-agnostic `PaidOrderOutboxPort` seam `finalizeInternalOrderInTransaction`/`updateOrderPaymentStatusUseCase` already use (Sprint 79's own established pattern) — the use case still never imports invoice-domain code directly; `services/orders.ts` supplies the real implementation.
+- A coherent settlement replay never calls the outbox port — it returns from the existing replay-verification path before reaching the first-time-success branch, so a repeated identical settlement creates no second Payment, PaymentEvent, or outbox row.
+- `services/orders.ts`'s `settleCashOnDeliveryOrder` adds the same existing-pattern best-effort immediate post-commit dispatch attempt (`dispatchDueSalesInvoiceOutboxEvents`, non-authoritative) already used by `updateOrderPaymentStatus`. The durable outbox row plus the existing scheduler/retry/dead-letter mechanism remains authoritative regardless of whether the immediate attempt succeeds.
+- Eventual processing of the durable event, through the existing unmodified `OutboxDispatcher`/`CreateSalesInvoiceDraftHandler`, creates exactly one Draft `SalesInvoice`, using the existing immutable stored `OrderItem.productTitle` snapshot for invoice line titles (never the live `Product` title).
+- No automatic invoice issuance and no automatic `financeEntries` row are created merely because a COD order settled and its Draft invoice was created — both remain tied to the existing explicit, manual invoice-issuance action, identical to Stripe-paid orders today.
+- `Order.paymentReference` for COD remains unchanged (`null`) — no external provider transaction reference is fabricated.
+- The existing generic Admin surfaces (`GET /orders/:id/invoice-status`, `POST /orders/:id/invoice-status/retry`) recognize the COD handoff without any new route; no schema migration was needed.
+- Stripe's existing automatic Draft SalesInvoice behavior is unchanged — no Stripe-specific file was modified.
+
+### Dependencies Introduced or Changed
+
+- None. No runtime dependency, schema change, or migration. `settleCashOnDeliveryOrderUseCase` gained one optional `PaidOrderOutboxPort` parameter and one `outbox?.enqueue(...)` call in its existing first-time-success branch; `services/orders.ts`'s `settleCashOnDeliveryOrder` was wired to the existing `paidOrderOutbox` and gained one best-effort dispatch line. No document/PDF generation and no formal double-entry ledger exist in this system; none was added.
+
 ## Sprint 132 — COD Settlement / Reconciliation
 
 ### Architectural Decisions

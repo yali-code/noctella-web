@@ -16,6 +16,7 @@ let createProduct: any;
 let categoryId: string;
 let SqliteUnitOfWork: any;
 let settleCashOnDeliveryOrderUseCase: any;
+let codOutbox: { enqueue: (tx: any, orderId: string) => void };
 const address = { fullName: "COD Buyer", line1: "1 Sofia Street", city: "Sofia", postalCode: "1000", country: "BG" };
 
 beforeAll(async () => {
@@ -25,6 +26,12 @@ beforeAll(async () => {
   createProduct = (await import("../src/services/products")).createProduct;
   ({ SqliteUnitOfWork } = await import("../src/services/unitOfWork"));
   ({ settleCashOnDeliveryOrderUseCase } = await import("../src/use-cases/order/useCases"));
+  // Sprint 133: the same generic PaidOrderOutboxPort wiring services/orders.ts's real
+  // settleCashOnDeliveryOrder uses - constructed locally here (matching this file's existing
+  // direct-use-case-call convention, e.g. codOrderSprint129.test.ts's own inline `sync` port)
+  // rather than importing the private paidOrderOutbox object services/orders.ts doesn't export.
+  const { enqueueSalesInvoiceDraftForPaidOrderSync } = await import("../src/services/salesInvoiceOutbox");
+  codOutbox = { enqueue: (tx, orderId) => enqueueSalesInvoiceDraftForPaidOrderSync(tx, orderId) };
   const category = await (await import("../src/services/categories")).createCategory(db, { name: "Sprint 132", displayOrder: 0, isActive: true });
   categoryId = category.id;
 });
@@ -65,7 +72,7 @@ function seedOrder(overrides: Record<string, unknown>) {
 }
 
 function settle(orderId: string, collectedAmount: number) {
-  return settleCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db)).execute({ orderId, collectedAmount });
+  return settleCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db), codOutbox).execute({ orderId, collectedAmount });
 }
 
 describe("Sprint 132 COD settlement", () => {
@@ -108,7 +115,7 @@ describe("Sprint 132 COD settlement", () => {
     }
   });
 
-  it("is idempotent on a coherent identical replay: no second Payment, no second PaymentEvent, no invoice outbox event", async () => {
+  it("is idempotent on a coherent identical replay: no second Payment, no second PaymentEvent, no second invoice outbox row", async () => {
     const order = await createCodOrder("replay");
     const first = await settle(order.id, order.totalAmount);
     const second = await settle(order.id, order.totalAmount);
@@ -116,7 +123,10 @@ describe("Sprint 132 COD settlement", () => {
     expect(second.paymentId).toBe(first.paymentId);
     expect(await db.select().from(schema.payments).where(eq(schema.payments.orderId, order.id))).toHaveLength(1);
     expect(await db.select().from(schema.paymentEvents).where(eq(schema.paymentEvents.paymentId, first.paymentId))).toHaveLength(1);
-    expect(await db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.aggregateId, order.id))).toHaveLength(0);
+    // Sprint 133: the first-time settlement above enqueues exactly one durable
+    // SalesInvoiceDraftRequested intent (see codSettlementInvoiceSprint133.test.ts for the full
+    // outbox-identity/dispatch/draft-creation proof); the coherent replay must add no second row.
+    expect(await db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.aggregateId, order.id))).toHaveLength(1);
   });
 
   it("fails closed on a divergent replay - a mismatched collectedAmount against an already-settled order is rejected, never auto-repaired", async () => {
@@ -163,9 +173,12 @@ describe("Sprint 132 COD settlement", () => {
     expect(movementsAfter).toBe(movementsBefore);
   });
 
-  it("does not enqueue any invoice-draft outbox event - invoice/accounting completion remains Sprint 133", async () => {
-    const order = await createCodOrder("no-outbox");
+  it("Sprint 133: a first-time settlement enqueues exactly one durable SalesInvoiceDraftRequested outbox intent, atomically with the settlement transaction", async () => {
+    const order = await createCodOrder("outbox-intent");
     await settle(order.id, order.totalAmount);
-    expect(await db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.aggregateId, order.id))).toHaveLength(0);
+    const rows = await db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.aggregateId, order.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ eventType: "sales_invoice.draft_requested", aggregateType: "Order", idempotencyKey: `sales-invoice-draft:${order.id}` });
+    expect(JSON.parse(rows[0].payload)).toEqual({ orderId: order.id });
   });
 });
