@@ -189,7 +189,13 @@ export async function stockAcceptanceUseCase(capability: AiIntakeApplyTransactio
               // undefined-to-null mapping in repositories/product-write/drizzle.ts).
               ...(input.priceEur !== undefined ? { priceEur: input.priceEur } : {}),
               status: ProductStatus.Draft,
-              stockQuantity: input.stockQuantity ?? 0,
+              // Sprint 138: an omitted warehouse quantity must still supply an explicit value
+              // downstream, matching the canonical Product/Inventory quantity default of 1 -
+              // never 0. Explicit (not omitted) so createProductWithInventoryInTransactionUseCase
+              // still initializes Inventory and the initial StockMovement exactly as before; the
+              // canonical stock() function remains the sole authority for the UniqueItem
+              // maximum-1 rule when a caller-supplied value is present.
+              stockQuantity: input.stockQuantity ?? 1,
               title: textFields.title,
               ...(textFields.description !== undefined ? { description: textFields.description } : {}),
               ...(textFields.keywords !== undefined ? { keywords: textFields.keywords } : {}),

@@ -125,10 +125,10 @@ describe("AI intake explicit Save as Draft canonical apply transaction (Sprint 9
       expect(result.product.keywords).toEqual(["stub", "keyword"]);
     });
 
-    it("stockQuantity omitted -> Inventory (Product.stockQuantity) is 0, one initial StockMovement exists", async () => {
+    it("stockQuantity omitted -> Product.stockQuantity is 1 (never 0), one initial StockMovement exists", async () => {
       const proposal = await readyIntake();
       const result = await saveAiIntakeAsDraft(db as any, intakeId, validRequest({ expectedProposalUpdatedAt: proposal.updatedAt }) as any, "admin-3");
-      expect(result.product.stockQuantity).toBe(0);
+      expect(result.product.stockQuantity).toBe(1);
       const movements = await db.select().from(stockMovements);
       expect(movements).toHaveLength(1);
       expect(movements[0].productId).toBe(result.product.id);
