@@ -1074,3 +1074,136 @@ describe("OrderItem image snapshot (Sprint 86)", () => {
     });
   });
 });
+
+/**
+ * Sprint 137 Required Fix Correction: the "canonical" pricingContext order path (used, in
+ * production, only by services/marketplaceSync.ts's marketplace-order-import feature, which calls
+ * createOrder without specifying pricingContext) used to safely fall back to a Product's raw
+ * priceEur, because priceEur was database-NOT-NULL before Sprint 137. Sprint 137 legitimately
+ * allows a Published Product to have priceEur:null.
+ *
+ * The canonical path deliberately never considers wooListingPriceEur - that override is
+ * Noctella-Web-storefront-specific, and "preserves canonical pricing for non-Noctella-Web internal
+ * orders" above (existing, pre-Sprint-137, unmodified) proves this is the established, intentional
+ * contract: a canonical order must keep using the raw base price even when a Woo override exists,
+ * never silently repricing across channels. An initial version of this correction incorrectly
+ * added a wooListingPriceEur fallback to the canonical path and broke that exact test - reverted.
+ *
+ * The only genuine gap was that a null raw priceEur was never guarded against before doing
+ * arithmetic. This block proves the corrected behavior: the canonical path now fails closed with
+ * an explicit, clear error instead of silently computing a null/zero-valued line. A Woo-only-priced
+ * Product (priceEur:null, valid wooListingPriceEur) reaching the canonical path still cannot
+ * produce a valid canonical order - by design, not by omission - since canonical intentionally has
+ * no channel-specific price authority to fall back to. Enabling that scenario to succeed would
+ * require a separate, explicitly-authorized architectural decision about what price a non-
+ * Noctella-Web canonical/marketplace-import order should use for a Woo-only-priced Product; that is
+ * out of scope for this Required Fix.
+ */
+describe("Sprint 137: canonical order pricing Product-price fallback authority", () => {
+  let db: ReturnType<typeof createTestDb>;
+  let categoryId: string;
+
+  const address = {
+    fullName: "Jane Collector",
+    line1: "1 Rue Noctella",
+    city: "Paris",
+    postalCode: "75001",
+    country: "FR",
+  };
+
+  beforeEach(async () => {
+    db = createTestDb();
+    const category = await createCategory(db, { name: "Canonical Pricing", displayOrder: 0, isActive: true });
+    categoryId = category.id;
+  });
+
+  async function seedProduct(sku: string, overrides: Record<string, unknown> = {}) {
+    return createProduct(db, {
+      sku,
+      title: "Canonical Pricing Test Product",
+      slug: `${sku.toLowerCase()}-slug`,
+      type: ProductType.UniqueItem,
+      status: ProductStatus.Published,
+      categoryId,
+      customsWarning: false,
+      isFeatured: false,
+      allowMakeOffer: false,
+      allowCashOnDelivery: false,
+      showInArchiveAfterSale: false,
+      stockQuantity: 1,
+      ...overrides,
+    });
+  }
+
+  async function seedPaidSession(providerReference: string, amount: number) {
+    return createPaymentSession(db, {
+      provider: PaymentProvider.Stripe,
+      providerReference,
+      status: PaymentStatus.Paid,
+      amount,
+      currency: "EUR",
+      idempotencyKey: `test:${providerReference}`,
+    });
+  }
+
+  function canonicalInput(productId: string, providerReference: string, amount: number, overrides: Record<string, unknown> = {}) {
+    return {
+      orderDraftId: `draft-${providerReference}`,
+      guestEmail: "jane@example.com",
+      status: OrderStatus.Processing,
+      paymentStatus: PaymentStatus.Paid,
+      paymentProvider: PaymentProvider.Stripe,
+      paymentReference: providerReference,
+      currency: "EUR" as const,
+      billingAddress: address,
+      shippingAddress: address,
+      subtotalAmount: amount,
+      totalAmount: amount,
+      items: [{ productId, quantity: 1 as const }],
+      ...overrides,
+    };
+  }
+
+  it("base price still resolves normally on the canonical path (unchanged existing behavior)", async () => {
+    const product = await seedProduct("SKU-CANON-BASE-ONLY", { priceEur: 100, wooListingPriceEur: 125 });
+    await seedPaidSession("canon-base-only", 100);
+    // Mirrors marketplaceSync.ts's exact call shape: no pricingContext -> defaults to "canonical".
+    // wooListingPriceEur (125) must be ignored here, exactly like the pre-existing "preserves
+    // canonical pricing for non-Noctella-Web internal orders" test above proves.
+    const order = await createOrder(db, canonicalInput(product.id, "canon-base-only", 100), { enqueueInvoiceDraft: false });
+    expect(order.items[0].unitPrice).toBe(100);
+  });
+
+  it("fails closed with a clear error (no arithmetic with null, no order persisted) for a Woo-only-priced Product on the canonical path", async () => {
+    const product = await seedProduct("SKU-CANON-WOO-ONLY", { wooListingPriceEur: 125 });
+    expect(product.priceEur).toBeNull();
+    await seedPaidSession("canon-woo-only", 125);
+    const before = await listOrders(db, orderListQuerySchema.parse({}));
+    // The canonical path has no channel-specific price authority to fall back to - it must fail
+    // closed with a clear, explicit error rather than silently using the Noctella-Web-only Woo
+    // override (which would be exactly the "silent repricing" this correction must never introduce)
+    // or computing a null/zero-valued line.
+    await expect(
+      createOrder(db, canonicalInput(product.id, "canon-woo-only", 125), { enqueueInvoiceDraft: false }),
+    ).rejects.toThrow("Product has no valid price");
+    const after = await listOrders(db, orderListQuerySchema.parse({}));
+    expect(after.data.length).toBe(before.data.length);
+  });
+
+  it("fails closed (no arithmetic with null, no order persisted) when a Product somehow has no valid price at all on the canonical path", async () => {
+    const product = await seedProduct("SKU-CANON-NO-PRICE", { status: ProductStatus.Draft });
+    // Bypasses the createProduct/updateProduct Published-price guard directly at the repository
+    // level, proving the Order use case itself defends against this state rather than merely
+    // trusting it can never occur - this deliberately-invalid setup is not a production gap; the
+    // service-layer guard (reviewed and confirmed elsewhere this Sprint) is what normally prevents
+    // a real Published Product from ever reaching this state.
+    await db.update(products).set({ status: ProductStatus.Published, priceEur: null, wooListingPriceEur: null }).where(eq(products.id, product.id));
+    await seedPaidSession("canon-no-price", 100);
+    const before = await listOrders(db, orderListQuerySchema.parse({}));
+    await expect(
+      createOrder(db, canonicalInput(product.id, "canon-no-price", 100), { enqueueInvoiceDraft: false }),
+    ).rejects.toThrow("Product has no valid price");
+    const after = await listOrders(db, orderListQuerySchema.parse({}));
+    expect(after.data.length).toBe(before.data.length);
+  });
+});

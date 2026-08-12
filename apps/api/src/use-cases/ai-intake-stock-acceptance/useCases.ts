@@ -43,7 +43,8 @@ function toIsoString(value: string | Date): string {
 export interface StockAcceptanceFieldInput {
   categoryId: string;
   type: ProductType;
-  priceEur: number;
+  /** Sprint 137: optional - the warehouse must not be required to enter a sales price. */
+  priceEur?: number;
   stockQuantity?: number;
   brand?: string;
   model?: string;
@@ -182,7 +183,11 @@ export async function stockAcceptanceUseCase(capability: AiIntakeApplyTransactio
               sku,
               categoryId: input.categoryId,
               type: input.type,
-              priceEur: input.priceEur,
+              // Sprint 137: never defaulted/invented - omitted entirely when the warehouse leaves
+              // it blank, so the canonical Product is created with priceEur: null (see
+              // createProductSchema's own now-nullable priceEur and normalize()'s
+              // undefined-to-null mapping in repositories/product-write/drizzle.ts).
+              ...(input.priceEur !== undefined ? { priceEur: input.priceEur } : {}),
               status: ProductStatus.Draft,
               stockQuantity: input.stockQuantity ?? 0,
               title: textFields.title,

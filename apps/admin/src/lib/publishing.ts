@@ -29,7 +29,8 @@ export function getChannelDraftTitle(product: Product, channel: PublishChannel):
   return product.wooProductName ?? product.title;
 }
 
-export function getChannelDraftPrice(product: Product, channel: PublishChannel): number {
+/** Sprint 137: nullable - a Draft/Approved Product may have no price yet on any channel. */
+export function getChannelDraftPrice(product: Product, channel: PublishChannel): number | null {
   if (channel === PublishChannel.Ebay) return product.ebayListingPriceEur ?? product.priceEur;
   if (channel === PublishChannel.Etsy) return product.etsyListingPriceEur ?? product.priceEur;
   return product.wooListingPriceEur ?? product.priceEur;

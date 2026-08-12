@@ -30,7 +30,9 @@ export class MockAiListingProvider implements AiListingProvider {
     const generatedConditionDescription =
       product.conditionDescription || (product.condition ? `Condition: ${product.condition}.` : undefined);
 
-    const suggestedEurPrice = product.priceEur;
+    // Sprint 137: priceEur may be null (unpriced Draft/Approved Product) - never suggest a
+    // fabricated price, simply omit the suggestion like every other optional AI Draft field.
+    const suggestedEurPrice = product.priceEur ?? undefined;
     const suggestedUsdPrice = product.priceUsd;
     const suggestedMinimumOfferPrice = product.minOfferPrice;
 

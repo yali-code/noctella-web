@@ -90,7 +90,10 @@ export const products = sqliteTable("products", {
   internalNotes: text("internal_notes"),
 
   // Pricing
-  priceEur: real("price_eur").notNull(),
+  // Sprint 137: nullable - a Draft/Approved Product may not yet have a sale price (warehouse
+  // Stock Acceptance never enters one). See db/migrate.ts's ensureProductPriceEurNullable for the
+  // existing-database reconciliation (SQLite cannot ALTER COLUMN to drop NOT NULL directly).
+  priceEur: real("price_eur"),
   priceUsd: real("price_usd"),
   minOfferPrice: real("min_offer_price"),
 

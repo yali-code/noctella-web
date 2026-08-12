@@ -219,7 +219,7 @@ export default function AiDraftReviewPage({ params }: { params: { id: string } }
           <Row label="SKU" value={product.sku} />
           <Row label="Title" value={product.title} />
           <Row label="Category" value={categories.find((c) => c.id === product.categoryId)?.name ?? "—"} />
-          <Row label="EUR Price" value={`€${product.priceEur.toFixed(2)}`} />
+          <Row label="EUR Price" value={product.priceEur != null ? `€${product.priceEur.toFixed(2)}` : "No price set"} />
           {product.priceUsd !== undefined && <Row label="USD Price" value={`$${product.priceUsd.toFixed(2)}`} />}
           <Row label="Condition" value={product.condition ?? "—"} />
           <Row label="Condition Description" value={product.conditionDescription ?? "—"} />

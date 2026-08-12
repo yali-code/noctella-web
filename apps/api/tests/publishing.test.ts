@@ -84,6 +84,82 @@ describe("publishing service", () => {
     expect(() => publishRequestSchema.parse({ channel: "amazon" })).toThrow();
   });
 
+  describe("Sprint 137: channel-aware effective price (wooListingPriceEur ?? priceEur)", () => {
+    function fullyValidNonPriceFields(overrides: Partial<Parameters<typeof createProduct>[1]> = {}) {
+      return base({
+        wooProductName: "Moon", wooShortDescription: "Short", wooLongDescription: "Long",
+        priceEur: undefined,
+        ...overrides,
+      });
+    }
+
+    it("Noctella Web publish fails when both wooListingPriceEur and priceEur are absent", async () => {
+      const created = await createProduct(db, fullyValidNonPriceFields());
+      const product = await seedPrimaryPhoto(created.id);
+      const validation = validatePublish(product, PublishChannel.NoctellaWeb);
+      expect(validation.valid).toBe(false);
+      const priceIssue = validation.errors.find((e) => e.type === "price_missing");
+      expect(priceIssue).toMatchObject({ type: "price_missing", severity: "error", field: "priceEur" });
+    });
+
+    it("Noctella Web publish succeeds with a valid base priceEur alone - no wooListingPriceEur override required", async () => {
+      const created = await createProduct(db, fullyValidNonPriceFields({ priceEur: 500 }));
+      const product = await seedPrimaryPhoto(created.id);
+      const validation = validatePublish(product, PublishChannel.NoctellaWeb);
+      expect(validation.valid).toBe(true);
+      expect(validation.errors.some((e) => e.type === "price_missing")).toBe(false);
+    });
+
+    it("Noctella Web publish succeeds with a valid wooListingPriceEur override while base priceEur is null", async () => {
+      const created = await createProduct(db, fullyValidNonPriceFields({ priceEur: undefined, wooListingPriceEur: 550 }));
+      const product = await seedPrimaryPhoto(created.id);
+      const validation = validatePublish(product, PublishChannel.NoctellaWeb);
+      expect(validation.valid).toBe(true);
+      expect(product.priceEur).toBeNull();
+    });
+
+    it("buildPublishPayload's price exactly follows wooListingPriceEur ?? priceEur when base priceEur is null", async () => {
+      const created = await createProduct(db, fullyValidNonPriceFields({ priceEur: undefined, wooListingPriceEur: 550 }));
+      const product = await seedPrimaryPhoto(created.id);
+      const preview = buildPublishPreview(product, PublishChannel.NoctellaWeb);
+      expect(preview.validation.valid).toBe(true);
+      expect(preview.payload?.priceEur).toBe(550);
+    });
+
+    it("eBay still independently requires its own ebayListingPriceEur even when base priceEur is valid (unchanged, channel-specific)", async () => {
+      const created = await createProduct(db, base({
+        ebayTitle: "Moon Watch", ebayDescription: "Rare watch", ebayCategory: "Watches",
+        priceEur: 500,
+      }));
+      const product = await seedPrimaryPhoto(created.id);
+      const validation = validatePublish(product, PublishChannel.Ebay);
+      expect(validation.valid).toBe(false);
+      expect(validation.errors.map((e) => e.field)).toContain("ebayListingPriceEur");
+    });
+
+    it("Etsy still independently requires its own etsyListingPriceEur even when base priceEur is valid (unchanged, channel-specific)", async () => {
+      const created = await createProduct(db, base({
+        etsyTitle: "Moon", etsyDescription: "Rare", etsyTags: ["watch"],
+        priceEur: 500,
+      }));
+      const product = await seedPrimaryPhoto(created.id);
+      const validation = validatePublish(product, PublishChannel.Etsy);
+      expect(validation.valid).toBe(false);
+      expect(validation.errors.map((e) => e.field)).toContain("etsyListingPriceEur");
+    });
+
+    it("publish still fails when the effective price is zero or negative (never accepted as a valid positive price)", async () => {
+      const created = await createProduct(db, fullyValidNonPriceFields({ priceEur: undefined, wooListingPriceEur: undefined }));
+      const product = await seedPrimaryPhoto(created.id);
+      // A Product's own priceEur/listing price fields can never actually be 0 or negative through
+      // any real create/update path (positive() validation) - this proves the gate itself treats a
+      // non-positive effective price as invalid regardless of how it might arise, without relying
+      // solely on upstream validation.
+      const zeroPriced = { ...product, priceEur: 0 };
+      expect(validatePublish(zeroPriced, PublishChannel.NoctellaWeb).valid).toBe(false);
+    });
+  });
+
   describe("Sprint 87: Primary product photo publish requirement", () => {
     function fullyValidInput(overrides: Partial<Parameters<typeof createProduct>[1]> = {}) {
       return base({

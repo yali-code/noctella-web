@@ -203,6 +203,40 @@ describe("AI Intake Stock Acceptance (Sprint 106)", () => {
     });
   });
 
+  describe("Sprint 137: Stock Acceptance without a sales price", () => {
+    it("succeeds with priceEur entirely omitted from the request", async () => {
+      const proposal = await readyIntake();
+      const { priceEur: _omitted, ...requestWithoutPrice } = validRequest({ expectedProposalUpdatedAt: proposal.updatedAt });
+      const result = await acceptAiIntakeIntoStock(db as any, intakeId, requestWithoutPrice as any, "admin-3");
+      expect(result.created).toBe(true);
+      expect(result.product.status).toBe(ProductStatus.Draft);
+      // Never a placeholder - exactly null, never 0, 0.01, or 1.
+      expect(result.product.priceEur).toBeNull();
+    });
+
+    it("still creates Inventory (one StockMovement) and still allocates a real sequential SKU when priceEur is omitted", async () => {
+      const proposal = await readyIntake();
+      const { priceEur: _omitted, ...requestWithoutPrice } = validRequest({ expectedProposalUpdatedAt: proposal.updatedAt });
+      const result = await acceptAiIntakeIntoStock(db as any, intakeId, requestWithoutPrice as any, "admin-3");
+      expect(result.product.sku).toBe("NOC-000001");
+      const movements = await db.select().from(stockMovements);
+      expect(movements).toHaveLength(1);
+      expect(movements[0].productId).toBe(result.product.id);
+    });
+
+    it("retrying an already-Applied unpriced intake is idempotent - no second Product, no second SKU allocated", async () => {
+      const proposal = await readyIntake();
+      const { priceEur: _omitted, ...requestWithoutPrice } = validRequest({ expectedProposalUpdatedAt: proposal.updatedAt });
+      const first = await acceptAiIntakeIntoStock(db as any, intakeId, requestWithoutPrice as any, "admin-3");
+      const second = await acceptAiIntakeIntoStock(db as any, intakeId, requestWithoutPrice as any, "admin-3");
+      expect(first.created).toBe(true);
+      expect(second.created).toBe(false);
+      expect(second.product.id).toBe(first.product.id);
+      expect(second.product.sku).toBe(first.product.sku);
+      expect(await db.select().from(products)).toHaveLength(1);
+    });
+  });
+
   describe("readiness / staleness", () => {
     it("rejects a Pending title (proposal not ready)", async () => {
       const generated = await generateIntakeProposal(db as any, intakeId, stubProvider());

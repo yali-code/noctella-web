@@ -5,6 +5,7 @@ import {
   PRODUCT_SHIPPING_PROFILE_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
+  ProductStatus,
   ProductType,
   WEIGHT_UNIT_VALUES,
 } from "@noctella/shared";
@@ -56,7 +57,15 @@ export const baseProductSchema = z.object({
   purchaseCurrency: z.enum(PRICE_CURRENCY_VALUES as [string, ...string[]]).optional(),
   internalNotes: z.string().optional(),
 
-  priceEur: z.number().positive("EUR price must be greater than 0"),
+  /**
+   * Sprint 137: optional/nullable - a Draft/Approved Product may not yet have a sale price (see
+   * Product.priceEur's own doc comment in @noctella/shared). When a value IS supplied it must
+   * still be a genuine positive EUR amount; createProductSchema's own superRefine below (and
+   * services/products.ts's updateProduct) separately enforce that a Published Product can never
+   * end up with no valid effective price - this field-level rule alone intentionally does not
+   * encode that status-dependent requirement.
+   */
+  priceEur: z.number().positive("EUR price must be greater than 0").nullable().optional(),
   priceUsd: z.number().positive("USD price must be greater than 0").optional(),
   minOfferPrice: z.number().min(0, "Minimum offer price cannot be negative").optional(),
 
@@ -109,6 +118,17 @@ export const baseProductSchema = z.object({
   wooListingStatus: z.enum(LISTING_STATUS_VALUES as [string, ...string[]]).optional(),
 });
 
+/**
+ * Sprint 137: a direct Product creation request must never be allowed to create a Published
+ * Product with no valid effective price - this is deliberately a narrow, base-priceEur-only
+ * safety net at the create boundary (the full channel-aware effective-price gate is
+ * services/publishing.ts's validatePublish, invoked by the real publish routes; this only stops
+ * an obviously-broken row from being created directly with status already set to Published).
+ */
+function hasValidPositivePrice(value: number | null | undefined): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 export const createProductSchema = baseProductSchema.superRefine((data, ctx) => {
   const primaryCount = (data.images ?? []).filter((img) => img.isPrimary).length;
   if (primaryCount > 1) {
@@ -123,6 +143,13 @@ export const createProductSchema = baseProductSchema.superRefine((data, ctx) => 
       code: "custom",
       path: ["stockQuantity"],
       message: "Unique Item stock quantity cannot exceed 1",
+    });
+  }
+  if (data.status === ProductStatus.Published && !hasValidPositivePrice(data.priceEur ?? undefined)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["priceEur"],
+      message: "A valid positive EUR price is required to create a Published product",
     });
   }
 });

@@ -9,6 +9,7 @@ import {
   type Category,
 } from "@noctella/shared";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { aiProductIntakesApi } from "@/lib/aiProductIntakes";
@@ -23,26 +24,6 @@ interface Props {
   onPhotosReload: () => Promise<AiIntakePhoto[]>;
 }
 
-/**
- * Sprint 99: immediate client-side check before Stock Acceptance - the backend remains
- * authoritative (this never replaces its validation, only avoids an unnecessary round trip for an
- * obviously invalid value). priceEur is required; stockQuantity is optional but, when provided,
- * must be a non-negative integer. Never coerces - an invalid value blocks submission with a
- * message shown through the component's existing error area, not silently rounded/clamped.
- */
-function validatePriceAndStockFields(priceEur: string, stockQuantity: string): string | null {
-  if (priceEur.trim() === "") return "Price (EUR) is required.";
-  const price = Number(priceEur);
-  if (!Number.isFinite(price) || price < 0) return "Price (EUR) must be a number greater than or equal to 0.";
-  if (stockQuantity.trim() !== "") {
-    const stock = Number(stockQuantity);
-    if (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 0) {
-      return "Stock quantity must be a whole number greater than or equal to 0.";
-    }
-  }
-  return null;
-}
-
 /** Empty-string form fields are sent as undefined, never as "" - mirrors the validation schema's optional().trim().min(1) contract. */
 function toOptionalField(value: string): string | undefined {
   const trimmed = value.trim();
@@ -50,29 +31,39 @@ function toOptionalField(value: string): string | undefined {
 }
 
 /**
- * Sprint 97/106: Stock Acceptance (canonical Product/Inventory write, SKU is
- * system-generated - never entered here) and Finalize (canonical ProductPhoto
- * write) - both explicit, human-confirmed, never automatic. The AI's Full
- * Product Analysis suggestions (proposal.suggestedX) pre-fill the optional
- * fields below exactly once each (only while the admin has not yet typed a
- * value of their own) so every value remains admin-reviewable/editable before
- * Stock Acceptance, never silently trusted. Primary selection always
- * initializes to the first ordered staged photo and is always sent explicitly
- * on Finalize - never relies on backend omission fallback.
+ * Sprint 137: warehouse-facing Stock Acceptance. Price is deliberately absent from this form
+ * entirely - the warehouse must never enter, and this component never sends, a sales price (see
+ * Product.priceEur's own nullable doc comment in @noctella/shared and
+ * validation/aiIntakeStockAcceptance.ts's now-optional priceEur). Category and Type remain the
+ * only required fields; Quantity/Brand/Model/Condition are shown as useful physical/factual
+ * fields; every Admin/marketplace-preparation field (manufacturer, country of origin, period,
+ * materials, condition description, SEO title, meta description) is tucked behind one collapsed
+ * "More details (optional)" disclosure so the warehouse operator's primary path stays short.
+ *
+ * Sprint 97/106 (unchanged): Stock Acceptance (canonical Product/Inventory write, SKU is
+ * system-generated - never entered here) and Finalize (canonical ProductPhoto write) remain two
+ * separate backend transactions - Sprint 137 does not merge them. What changes is orchestration:
+ * a successful Stock Acceptance now automatically chains a Finalize call (using the existing
+ * default-to-first-staged-photo behavior, since this simplified flow has no primary-photo
+ * picker) before navigating to the Stock Receipt/label route - the operator no longer sees a
+ * separate manual "Finalize Photos" step on the happy path. If Finalize fails after Stock
+ * Acceptance already succeeded, this never re-runs Stock Acceptance (no duplicate Product/SKU),
+ * never fabricates a failure of the already-successful accept, and exposes a minimal
+ * "Retry photo finalization" recovery action instead.
  */
 export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, onIntakeChanged, onPhotosReload }: Props) {
+  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryId, setCategoryId] = useState("");
   const [type, setType] = useState<string>(ProductType.UniqueItem);
-  const [priceEur, setPriceEur] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
+  const [condition, setCondition] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [countryOfOrigin, setCountryOfOrigin] = useState("");
   const [period, setPeriod] = useState("");
   const [materials, setMaterials] = useState("");
-  const [condition, setCondition] = useState("");
   const [conditionDescription, setConditionDescription] = useState("");
   const [seoTitle, setSeoTitle] = useState("");
   const [metaDescription, setMetaDescription] = useState("");
@@ -80,9 +71,11 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
-  const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  /** Sprint 137: the productId returned by a successful Stock Acceptance in THIS session - used
+   * to navigate to the label route without waiting for an intake reload round-trip. */
+  const [acceptedProductId, setAcceptedProductId] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -97,56 +90,60 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
   useEffect(() => {
     if (!proposal) return;
     setCategoryId((prev) => prev || proposal.suggestedCategoryId || "");
-    setPriceEur((prev) => (prev ? prev : proposal.suggestedPriceEur !== undefined ? String(proposal.suggestedPriceEur) : ""));
     setBrand((prev) => prev || proposal.suggestedBrand || "");
     setModel((prev) => prev || proposal.suggestedModel || "");
+    setCondition((prev) => prev || proposal.suggestedCondition || "");
     setManufacturer((prev) => prev || proposal.suggestedManufacturer || "");
     setCountryOfOrigin((prev) => prev || proposal.suggestedCountryOfOrigin || "");
     setPeriod((prev) => prev || proposal.suggestedPeriod || "");
     setMaterials((prev) => prev || proposal.suggestedMaterials || "");
-    setCondition((prev) => prev || proposal.suggestedCondition || "");
     setConditionDescription((prev) => prev || proposal.suggestedConditionDescription || "");
     setSeoTitle((prev) => prev || proposal.suggestedSeoTitle || "");
     setMetaDescription((prev) => prev || proposal.suggestedMetaDescription || "");
   }, [proposal]);
 
-  useEffect(() => {
-    if (photos.length === 0) {
-      setSelectedPhotoId(null);
-      return;
+  /** Sprint 137: reuses the existing finalize-photos contract unchanged - omitting
+   * primaryIntakePhotoId relies on its existing default-to-first-staged-photo behavior. */
+  async function runFinalize(productId: string) {
+    setFinalizing(true);
+    setFinalizeError(null);
+    try {
+      await aiProductIntakesApi.finalizePhotos(intakeId);
+      await onPhotosReload();
+      await onIntakeChanged();
+      router.push(`/products/${productId}/label`);
+    } catch (err) {
+      setFinalizeError(err instanceof ApiError ? err.message : "Failed to finalize photos");
+    } finally {
+      setFinalizing(false);
     }
-    setSelectedPhotoId((prev) => (prev && photos.some((p) => p.id === prev) ? prev : photos[0].id));
-  }, [photos]);
+  }
 
   async function handleAcceptIntoStock() {
     if (!proposal) return;
     setError(null);
-    const validationError = validatePriceAndStockFields(priceEur, stockQuantity);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
     setAccepting(true);
     try {
-      await aiProductIntakesApi.acceptIntoStock(intakeId, {
+      const product = await aiProductIntakesApi.acceptIntoStock(intakeId, {
         categoryId,
         type,
-        priceEur: Number(priceEur),
         stockQuantity: stockQuantity ? Number(stockQuantity) : undefined,
         brand: toOptionalField(brand),
         model: toOptionalField(model),
+        condition: toOptionalField(condition),
         manufacturer: toOptionalField(manufacturer),
         countryOfOrigin: toOptionalField(countryOfOrigin),
         period: toOptionalField(period),
         materials: toOptionalField(materials),
-        condition: toOptionalField(condition),
         conditionDescription: toOptionalField(conditionDescription),
         seoTitle: toOptionalField(seoTitle),
         metaDescription: toOptionalField(metaDescription),
         expectedProposalUpdatedAt: proposal.updatedAt,
       });
       setConfirmAccept(false);
+      setAcceptedProductId(product.id);
       await onIntakeChanged();
+      await runFinalize(product.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to accept into stock");
     } finally {
@@ -154,37 +151,32 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
     }
   }
 
-  async function handleFinalize() {
-    if (!selectedPhotoId) return;
-    setFinalizing(true);
-    setError(null);
-    try {
-      await aiProductIntakesApi.finalizePhotos(intakeId, selectedPhotoId);
-      setConfirmFinalize(false);
-      await onIntakeChanged();
-      await onPhotosReload();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to finalize photos");
-    } finally {
-      setFinalizing(false);
-    }
-  }
-
-  const canAccept = intake.status === AiProductIntakeStatus.Open;
-  const canFinalize = intake.status === AiProductIntakeStatus.Applied;
-  const showPrimarySection = canFinalize || intake.status === AiProductIntakeStatus.Finalized;
+  // Sprint 137: also hidden once this session has already accepted (acceptedProductId set) even if
+  // the intake prop's status hasn't caught up to "Applied" yet - see needsFinalizeRetry below for
+  // why that prop can lag behind local state immediately after a successful accept.
+  const canAccept = intake.status === AiProductIntakeStatus.Open && acceptedProductId === null;
+  // Sprint 137: Applied means Stock Acceptance already succeeded but Finalize has not completed -
+  // either the automatic chain above is still running (finalizing) or a prior attempt failed
+  // (finalizeError) or this page was reloaded after leaving that state. Never re-runs Stock
+  // Acceptance from here - only the Finalize step is retryable. Checks acceptedProductId (this
+  // session's own just-succeeded accept) in addition to the intake prop's own status, since the
+  // parent only re-fetches/re-renders with the fresh intake after `onIntakeChanged()` resolves -
+  // there is a real, brief window where Finalize has already failed locally but that prop update
+  // has not landed yet; without this, the recovery UI could fail to appear at exactly the moment
+  // it is needed.
+  const needsFinalizeRetry = intake.status === AiProductIntakeStatus.Applied || acceptedProductId !== null;
+  const retryProductId = acceptedProductId ?? intake.resultProductId ?? null;
 
   return (
     <div className="noctella-panel" style={{ padding: 20, marginBottom: 20 }}>
-      <h3 style={{ marginTop: 0 }}>Stock Acceptance and Finalize</h3>
+      <h3 style={{ marginTop: 0 }}>Stock Acceptance</h3>
       {error && <p style={{ color: "#c86a6a" }}>{error}</p>}
 
       {canAccept && (
         <div style={{ marginBottom: 20 }}>
-          <h4>Stock Acceptance</h4>
           {!proposal && <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>Generate and review a proposal first.</p>}
           <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>
-            The Product SKU and barcode are generated automatically. Review and edit the AI&apos;s suggestions below before accepting.
+            The Product SKU and barcode are generated automatically. No sales price is entered here - Admin assigns it later.
           </p>
           <div style={{ display: "grid", gap: 8, maxWidth: 360 }}>
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={inputStyle}>
@@ -202,41 +194,61 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
                 </option>
               ))}
             </select>
-            <input placeholder="Price (EUR)" value={priceEur} onChange={(e) => setPriceEur(e.target.value)} style={inputStyle} />
-            <input placeholder="Stock quantity (optional)" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} style={inputStyle} />
+            <input
+              placeholder={type === ProductType.UniqueItem ? "Quantity (1 - Unique Item)" : "Quantity"}
+              value={stockQuantity}
+              onChange={(e) => setStockQuantity(e.target.value)}
+              disabled={type === ProductType.UniqueItem}
+              style={inputStyle}
+            />
             <input placeholder="Brand (optional)" value={brand} onChange={(e) => setBrand(e.target.value)} style={inputStyle} />
             <input placeholder="Model (optional)" value={model} onChange={(e) => setModel(e.target.value)} style={inputStyle} />
-            <input placeholder="Manufacturer (optional)" value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} style={inputStyle} />
-            <input
-              placeholder="Country of origin (optional)"
-              value={countryOfOrigin}
-              onChange={(e) => setCountryOfOrigin(e.target.value)}
-              style={inputStyle}
-            />
-            <input placeholder="Period (optional)" value={period} onChange={(e) => setPeriod(e.target.value)} style={inputStyle} />
-            <input placeholder="Materials (optional)" value={materials} onChange={(e) => setMaterials(e.target.value)} style={inputStyle} />
             <input placeholder="Condition (optional)" value={condition} onChange={(e) => setCondition(e.target.value)} style={inputStyle} />
-            <input
-              placeholder="Condition description (optional)"
-              value={conditionDescription}
-              onChange={(e) => setConditionDescription(e.target.value)}
-              style={inputStyle}
-            />
-            <input placeholder="SEO title (optional)" value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} style={inputStyle} />
-            <input
-              placeholder="Meta description (optional)"
-              value={metaDescription}
-              onChange={(e) => setMetaDescription(e.target.value)}
-              style={inputStyle}
-            />
+
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--noctella-aged-bronze)" }}>More details (optional)</summary>
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                <input
+                  placeholder="Manufacturer (optional)"
+                  value={manufacturer}
+                  onChange={(e) => setManufacturer(e.target.value)}
+                  style={inputStyle}
+                />
+                <input
+                  placeholder="Country of origin (optional)"
+                  value={countryOfOrigin}
+                  onChange={(e) => setCountryOfOrigin(e.target.value)}
+                  style={inputStyle}
+                />
+                <input placeholder="Period (optional)" value={period} onChange={(e) => setPeriod(e.target.value)} style={inputStyle} />
+                <input placeholder="Materials (optional)" value={materials} onChange={(e) => setMaterials(e.target.value)} style={inputStyle} />
+                <input
+                  placeholder="Condition description (optional)"
+                  value={conditionDescription}
+                  onChange={(e) => setConditionDescription(e.target.value)}
+                  style={inputStyle}
+                />
+                <input placeholder="SEO title (optional)" value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} style={inputStyle} />
+                <input
+                  placeholder="Meta description (optional)"
+                  value={metaDescription}
+                  onChange={(e) => setMetaDescription(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            </details>
           </div>
           {confirmAccept ? (
             <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 12 }}>Create this Product in Stock?</p>
-              <button onClick={handleAcceptIntoStock} disabled={accepting || !proposal || !categoryId || !priceEur} style={primaryButtonStyle}>
-                {accepting ? "Accepting..." : "Confirm Stock Acceptance"}
+              <p style={{ fontSize: 12 }}>Accept this item into stock?</p>
+              <button
+                onClick={handleAcceptIntoStock}
+                disabled={accepting || finalizing || !proposal || !categoryId}
+                style={primaryButtonStyle}
+              >
+                {accepting ? "Accepting..." : finalizing ? "Finalizing photos..." : "Confirm Stock Acceptance"}
               </button>{" "}
-              <button onClick={() => setConfirmAccept(false)} style={secondaryButtonStyle}>
+              <button onClick={() => setConfirmAccept(false)} disabled={accepting || finalizing} style={secondaryButtonStyle}>
                 Cancel
               </button>
             </div>
@@ -248,40 +260,24 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
         </div>
       )}
 
-      {showPrimarySection && (
+      {needsFinalizeRetry && (
         <div>
-          <h4>Primary Photo and Finalize</h4>
-          {photos.length === 0 && <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>No staged photos to finalize.</p>}
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {photos.map((photo) => (
-              <label key={photo.id} style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
-                <input
-                  type="radio"
-                  name="primary-photo"
-                  checked={selectedPhotoId === photo.id}
-                  onChange={() => setSelectedPhotoId(photo.id)}
-                  disabled={!canFinalize}
-                />
-                {photo.originalFilename} {selectedPhotoId === photo.id ? "(Primary)" : ""}
-              </label>
-            ))}
-          </div>
-          {canFinalize &&
-            (confirmFinalize ? (
-              <div style={{ marginTop: 8 }}>
-                <p style={{ fontSize: 12 }}>Finalize photos using the selected Primary?</p>
-                <button onClick={handleFinalize} disabled={finalizing || !selectedPhotoId} style={primaryButtonStyle}>
-                  {finalizing ? "Finalizing..." : "Confirm Finalize"}
-                </button>{" "}
-                <button onClick={() => setConfirmFinalize(false)} style={secondaryButtonStyle}>
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setConfirmFinalize(true)} disabled={!selectedPhotoId} style={{ ...primaryButtonStyle, marginTop: 8 }}>
-                Finalize Photos
-              </button>
-            ))}
+          <h4>Finish Stock Acceptance</h4>
+          <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>
+            The Product was created, but canonical photos could not be finalized yet.
+          </p>
+          {finalizeError && <p style={{ color: "#c86a6a" }}>{finalizeError}</p>}
+          {photos.length === 0 ? (
+            <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>No staged photos to finalize.</p>
+          ) : (
+            <button
+              onClick={() => retryProductId && runFinalize(retryProductId)}
+              disabled={finalizing || !retryProductId}
+              style={primaryButtonStyle}
+            >
+              {finalizing ? "Finalizing..." : "Retry photo finalization"}
+            </button>
+          )}
         </div>
       )}
 
@@ -290,6 +286,14 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
           <Link href={`/products/${intake.resultProductId}`} style={{ color: "var(--noctella-ivory)" }}>
             View Product →
           </Link>
+          {intake.status === AiProductIntakeStatus.Finalized && (
+            <>
+              {" · "}
+              <Link href={`/products/${intake.resultProductId}/label`} style={{ color: "var(--noctella-ivory)" }}>
+                View Stock Label →
+              </Link>
+            </>
+          )}
         </p>
       )}
     </div>

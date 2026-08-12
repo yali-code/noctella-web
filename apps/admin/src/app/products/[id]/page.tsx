@@ -92,7 +92,7 @@ export default function ProductViewPage({ params }: { params: { id: string } }) 
           <Row label="Slug" value={product.slug} />
           <Row label="Type" value={product.type} />
           <Row label="Status" value={product.status} />
-          <Row label="EUR Price" value={`€${product.priceEur.toFixed(2)}`} />
+          <Row label="EUR Price" value={product.priceEur != null ? `€${product.priceEur.toFixed(2)}` : "No price set"} />
           {product.priceUsd && <Row label="USD Price" value={`$${product.priceUsd.toFixed(2)}`} />}
           <Row label="Stock Quantity" value={String(product.stockQuantity)} />
           {product.lotItemCount !== undefined && <Row label="Lot Item Count" value={String(product.lotItemCount)} />}

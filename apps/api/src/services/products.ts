@@ -348,6 +348,18 @@ export async function createProduct(
   input: CreateProductInput,
   erpMetadata?: Record<string, unknown>,
 ): Promise<ProductWithImages> {
+  // Sprint 137: createProductSchema's own superRefine only protects HTTP callers that actually go
+  // through `.parse()` (the real POST /api/products route) - a direct internal/test caller of this
+  // service function with an already-typed CreateProductInput bypasses that check entirely, since
+  // TypeScript types carry no runtime enforcement. Mirrors updateProduct's own guard below for the
+  // same reason: never create a Published Product with no valid effective price, checked here at
+  // the service layer regardless of caller.
+  if (input.status === ProductStatus.Published) {
+    const effectivePriceEur = input.wooListingPriceEur ?? input.priceEur;
+    if (effectivePriceEur == null || effectivePriceEur <= 0) {
+      throw new BadRequestError("A Published product must have a valid positive EUR price (base price or Noctella Web listing price)");
+    }
+  }
   await assertCategoryExists(db, input.categoryId);
   if (input.collectionId) await assertCollectionExists(db, input.collectionId);
   const driver = (process.env.DATABASE_DRIVER as "sqlite" | "postgres" | "supabase-postgres" | "test-memory") || "sqlite";
@@ -363,6 +375,22 @@ export async function updateProduct(
   erpMetadata?: Record<string, unknown>,
 ): Promise<ProductWithImages> {
   const existing = await getProductById(db, id);
+  // Sprint 137: a mutation must never leave a Published Product with no valid effective price -
+  // this is a defense-in-depth safety net at the generic update boundary (the full channel-aware
+  // gate for eBay/Etsy remains services/publishing.ts's validatePublish at actual publish time;
+  // this only guards the Noctella Web-authoritative "wooListingPriceEur ?? priceEur" formula
+  // against a direct product mutation, computed from the RESULTING state - existing values merged
+  // with whichever fields this specific patch actually touches, since priceEur/wooListingPriceEur
+  // may each be independently omitted (unchanged), set to a new value, or explicitly cleared).
+  const resultingStatus = input.status ?? existing.status;
+  if (resultingStatus === ProductStatus.Published) {
+    const resultingPriceEur = input.priceEur !== undefined ? input.priceEur : existing.priceEur;
+    const resultingWooListingPriceEur = input.wooListingPriceEur !== undefined ? input.wooListingPriceEur : existing.wooListingPriceEur;
+    const resultingEffectivePriceEur = resultingWooListingPriceEur ?? resultingPriceEur;
+    if (resultingEffectivePriceEur == null || resultingEffectivePriceEur <= 0) {
+      throw new BadRequestError("A Published product must retain a valid positive EUR price (base price or Noctella Web listing price)");
+    }
+  }
   if (input.categoryId !== undefined) await assertCategoryExists(db, input.categoryId);
   if (input.collectionId !== undefined) await assertCollectionExists(db, input.collectionId);
   const effectiveType = input.type ?? existing.type;

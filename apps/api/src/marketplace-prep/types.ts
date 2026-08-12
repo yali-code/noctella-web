@@ -38,8 +38,13 @@ export interface MarketplacePreparationProductContext {
   conditionDescription?: string;
   seoTitle?: string;
   metaDescription?: string;
-  /** Contextual only - never authoritative for any marketplace-specific price field. */
-  priceEur: number;
+  /**
+   * Contextual only - never authoritative for any marketplace-specific price field. Sprint 137:
+   * nullable - marketplace preparation may run on a Draft/Approved Product that has no sale price
+   * yet (Stock Acceptance never requires one); promptBuilder.ts omits this context line entirely
+   * when null, exactly like every other optional field above it.
+   */
+  priceEur: number | null;
 }
 
 export interface MarketplacePreparationPrompt {

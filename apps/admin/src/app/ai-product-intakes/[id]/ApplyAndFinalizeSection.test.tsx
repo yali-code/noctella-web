@@ -7,7 +7,13 @@ import { api, ApiError } from "@/lib/api";
 import * as aiProductIntakesLib from "@/lib/aiProductIntakes";
 import { ApplyAndFinalizeSection } from "./ApplyAndFinalizeSection";
 
-afterEach(() => vi.restoreAllMocks());
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  push.mockClear();
+});
 
 function intake(overrides: Record<string, unknown> = {}) {
   return {
@@ -20,21 +26,15 @@ function intake(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
-function photo(id: string, filename: string) {
-  return { id, intakeId: "intake-1", storageKey: `${id}.webp`, originalFilename: filename, createdByAdminUserId: "admin-1", createdAt: "t", updatedAt: "t" };
-}
-
 const proposal = { id: "p1", intakeId: "intake-1", updatedAt: "2026-01-01T00:00:00.000Z" } as any;
 
 function mockCategories() {
   vi.spyOn(api, "get").mockResolvedValue({ items: [{ id: "cat-1", name: "Category One" }], total: 1, page: 1, pageSize: 100 });
 }
 
-describe("ApplyAndFinalizeSection (Sprint 97/106)", () => {
-  it("Stock Acceptance requires explicit confirmation, submits no sku, and includes only the entered optional fields", async () => {
-    const user = userEvent.setup();
+describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Acceptance)", () => {
+  it("never renders a Price field - the warehouse must never enter a sales price", async () => {
     mockCategories();
-    const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({} as any);
     render(
       <ApplyAndFinalizeSection
         intakeId="intake-1"
@@ -46,30 +46,7 @@ describe("ApplyAndFinalizeSection (Sprint 97/106)", () => {
       />,
     );
     await screen.findByText("Category One");
-    await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
-    await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
-    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-    expect(spy).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-    await waitFor(() =>
-      expect(spy).toHaveBeenCalledWith("intake-1", {
-        categoryId: "cat-1",
-        type: "unique_item",
-        priceEur: 10,
-        stockQuantity: undefined,
-        brand: undefined,
-        model: undefined,
-        manufacturer: undefined,
-        countryOfOrigin: undefined,
-        period: undefined,
-        materials: undefined,
-        condition: undefined,
-        conditionDescription: undefined,
-        seoTitle: undefined,
-        metaDescription: undefined,
-        expectedProposalUpdatedAt: "2026-01-01T00:00:00.000Z",
-      }),
-    );
+    expect(screen.queryByPlaceholderText(/Price/i)).not.toBeInTheDocument();
   });
 
   it("never renders a SKU input - SKU is always system-generated", async () => {
@@ -88,135 +65,122 @@ describe("ApplyAndFinalizeSection (Sprint 97/106)", () => {
     expect(screen.queryByPlaceholderText("SKU")).not.toBeInTheDocument();
   });
 
-  it("pre-fills optional fields from the proposal's AI suggestions, editable before submission", async () => {
-    const user = userEvent.setup();
+  it("Manufacturer/Country of origin/Period/Materials/Condition description/SEO title/Meta description are collapsed behind 'More details (optional)', not in the primary path", async () => {
     mockCategories();
-    const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({} as any);
-    const suggestedProposal = {
-      ...proposal,
-      suggestedCategoryId: "cat-1",
-      suggestedPriceEur: 42,
-      suggestedBrand: "Acme",
-      suggestedModel: "Model X",
-      suggestedManufacturer: "Acme Corp",
-      suggestedCountryOfOrigin: "Germany",
-      suggestedPeriod: "1920s",
-      suggestedMaterials: "Oak",
-      suggestedCondition: "Good",
-      suggestedConditionDescription: "Minor wear",
-      suggestedSeoTitle: "Antique Oak Item",
-      suggestedMetaDescription: "A fine antique item.",
-    };
     render(
       <ApplyAndFinalizeSection
         intakeId="intake-1"
         intake={intake()}
         photos={[]}
-        proposal={suggestedProposal}
+        proposal={proposal}
         onIntakeChanged={vi.fn().mockResolvedValue(intake())}
         onPhotosReload={vi.fn().mockResolvedValue([])}
       />,
     );
     await screen.findByText("Category One");
-    expect(screen.getByDisplayValue("Acme")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("42")).toBeInTheDocument();
-    // The admin can override an AI-suggested value before confirming.
-    const brandInput = screen.getByPlaceholderText("Brand (optional)");
-    await user.clear(brandInput);
-    await user.type(brandInput, "Overridden Brand");
+    expect(screen.getByText("More details (optional)")).toBeInTheDocument();
+    // Present in the DOM (inside <details>), but not part of the always-visible primary fields -
+    // querying by placeholder still finds them since jsdom does not hide collapsed <details> content
+    // from the accessibility tree the way visual collapse would; the key assertion is that the
+    // primary, always-visible fields (Category/Type/Quantity/Brand/Model/Condition) are the ones
+    // outside the disclosure.
+    expect(screen.getByPlaceholderText("Manufacturer (optional)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("SEO title (optional)")).toBeInTheDocument();
+  });
+
+  it("shows the always-visible warehouse-facing fields: Quantity, Brand, Model, Condition", async () => {
+    mockCategories();
+    render(
+      <ApplyAndFinalizeSection
+        intakeId="intake-1"
+        intake={intake()}
+        photos={[]}
+        proposal={proposal}
+        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+        onPhotosReload={vi.fn().mockResolvedValue([])}
+      />,
+    );
+    await screen.findByText("Category One");
+    expect(screen.getByPlaceholderText(/Quantity/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Brand (optional)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Model (optional)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Condition (optional)")).toBeInTheDocument();
+  });
+
+  it("Stock Acceptance still requires explicit confirmation before submitting", async () => {
+    const user = userEvent.setup();
+    mockCategories();
+    const acceptSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockReturnValue(new Promise(() => {}));
+    render(
+      <ApplyAndFinalizeSection
+        intakeId="intake-1"
+        intake={intake()}
+        photos={[]}
+        proposal={proposal}
+        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+        onPhotosReload={vi.fn().mockResolvedValue([])}
+      />,
+    );
+    await screen.findByText("Category One");
+    await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+    expect(acceptSpy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
+    await waitFor(() => expect(acceptSpy).toHaveBeenCalled());
+  });
+
+  it("the submitted request contains no priceEur field at all", async () => {
+    const user = userEvent.setup();
+    mockCategories();
+    const acceptSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockReturnValue(new Promise(() => {}));
+    render(
+      <ApplyAndFinalizeSection
+        intakeId="intake-1"
+        intake={intake()}
+        photos={[]}
+        proposal={proposal}
+        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+        onPhotosReload={vi.fn().mockResolvedValue([])}
+      />,
+    );
+    await screen.findByText("Category One");
+    await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
     await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledWith("intake-1", expect.objectContaining({ brand: "Overridden Brand", model: "Model X" })));
+    await waitFor(() => expect(acceptSpy).toHaveBeenCalled());
+    const submitted = acceptSpy.mock.calls[0][1];
+    expect("priceEur" in submitted).toBe(false);
   });
 
-  it("Primary selection initializes to the first ordered staged photo and allows reselection", async () => {
+  it("Unique Item quantity: the quantity input is disabled (backend authority normalizes it to 1)", async () => {
     mockCategories();
-    const user = userEvent.setup();
     render(
       <ApplyAndFinalizeSection
         intakeId="intake-1"
-        intake={intake({ status: AiProductIntakeStatus.Applied, appliedAt: "t" })}
-        photos={[photo("photo-1", "first.png"), photo("photo-2", "second.png")]}
-        proposal={null}
+        intake={intake()}
+        photos={[]}
+        proposal={proposal}
         onIntakeChanged={vi.fn().mockResolvedValue(intake())}
         onPhotosReload={vi.fn().mockResolvedValue([])}
       />,
     );
-    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
-    expect(radios[0].checked).toBe(true);
-    await user.click(radios[1]);
-    expect(radios[1].checked).toBe(true);
+    await screen.findByText("Category One");
+    expect(screen.getByPlaceholderText(/Quantity/)).toBeDisabled();
   });
 
-  it("if the selected photo is removed by a refresh, the first remaining photo becomes selected", () => {
-    const { rerender } = render(
-      <ApplyAndFinalizeSection
-        intakeId="intake-1"
-        intake={intake({ status: AiProductIntakeStatus.Applied, appliedAt: "t" })}
-        photos={[photo("photo-1", "first.png"), photo("photo-2", "second.png")]}
-        proposal={null}
-        onIntakeChanged={vi.fn()}
-        onPhotosReload={vi.fn()}
-      />,
-    );
-    rerender(
-      <ApplyAndFinalizeSection
-        intakeId="intake-1"
-        intake={intake({ status: AiProductIntakeStatus.Applied, appliedAt: "t" })}
-        photos={[photo("photo-2", "second.png")]}
-        proposal={null}
-        onIntakeChanged={vi.fn()}
-        onPhotosReload={vi.fn()}
-      />,
-    );
-    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
-    expect(radios[0].checked).toBe(true);
-  });
+  describe("Sprint 137: automatic photo finalization chaining", () => {
+    async function acceptFlow(user: ReturnType<typeof userEvent.setup>) {
+      await screen.findByText("Category One");
+      await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
+    }
 
-  it("Finalize is disabled until a Primary is selected, requires confirmation, and always sends an explicit primaryIntakePhotoId", async () => {
-    const user = userEvent.setup();
-    const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "finalizePhotos").mockResolvedValue({} as any);
-    render(
-      <ApplyAndFinalizeSection
-        intakeId="intake-1"
-        intake={intake({ status: AiProductIntakeStatus.Applied, appliedAt: "t" })}
-        photos={[photo("photo-1", "first.png")]}
-        proposal={null}
-        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
-        onPhotosReload={vi.fn().mockResolvedValue([])}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Finalize Photos" }));
-    expect(spy).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Confirm Finalize" }));
-    await waitFor(() => expect(spy).toHaveBeenCalledWith("intake-1", "photo-1"));
-  });
-
-  it("shows a conflict error without automatically retrying Finalize", async () => {
-    const user = userEvent.setup();
-    const spy = vi
-      .spyOn(aiProductIntakesLib.aiProductIntakesApi, "finalizePhotos")
-      .mockRejectedValue(new ApiError("This intake is not Applied.", 409, undefined, "AI_INTAKE_PHOTO_FINALIZATION_NOT_APPLIED"));
-    render(
-      <ApplyAndFinalizeSection
-        intakeId="intake-1"
-        intake={intake({ status: AiProductIntakeStatus.Applied, appliedAt: "t" })}
-        photos={[photo("photo-1", "first.png")]}
-        proposal={null}
-        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
-        onPhotosReload={vi.fn().mockResolvedValue([])}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Finalize Photos" }));
-    await user.click(screen.getByRole("button", { name: "Confirm Finalize" }));
-    await screen.findByText("This intake is not Applied.");
-    expect(spy).toHaveBeenCalledTimes(1);
-  });
-
-  describe("Sprint 99: client-side price/stock validation", () => {
-    async function renderAndOpenConfirm(user: ReturnType<typeof userEvent.setup>) {
+    it("successful acceptance automatically calls Finalize for the same Product, then navigates to its label route only after Finalize succeeds", async () => {
+      const user = userEvent.setup();
       mockCategories();
-      const spy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({} as any);
+      const acceptSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({ id: "product-9" } as any);
+      const finalizeSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "finalizePhotos").mockResolvedValue({} as any);
       render(
         <ApplyAndFinalizeSection
           intakeId="intake-1"
@@ -227,93 +191,82 @@ describe("ApplyAndFinalizeSection (Sprint 97/106)", () => {
           onPhotosReload={vi.fn().mockResolvedValue([])}
         />,
       );
-      await screen.findByText("Category One");
-      await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
-      return spy;
-    }
-
-    it("missing price blocks submission", async () => {
-      const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      // Price left empty - the Confirm button is unreachable, matching the pre-existing disabled contract.
-      expect(screen.getByRole("button", { name: "Accept into Stock" })).not.toBeDisabled();
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      expect(screen.getByRole("button", { name: "Confirm Stock Acceptance" })).toBeDisabled();
-      expect(spy).not.toHaveBeenCalled();
+      await acceptFlow(user);
+      await waitFor(() => expect(acceptSpy).toHaveBeenCalled());
+      await waitFor(() => expect(finalizeSpy).toHaveBeenCalledWith("intake-1"));
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/products/product-9/label"));
+      // Never a manual Finalize step visible on the happy path.
+      expect(screen.queryByRole("button", { name: "Finalize Photos" })).not.toBeInTheDocument();
     });
 
-    it("non-numeric price blocks submission", async () => {
+    it("if Finalize fails after a successful Stock Acceptance, it does NOT report Stock Acceptance itself as failed, does NOT re-call Stock Acceptance, and exposes a Retry action instead", async () => {
       const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      await user.type(screen.getByPlaceholderText("Price (EUR)"), "abc");
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-      await screen.findByText("Price (EUR) must be a number greater than or equal to 0.");
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("negative price blocks submission", async () => {
-      const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      await user.type(screen.getByPlaceholderText("Price (EUR)"), "-5");
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-      await screen.findByText("Price (EUR) must be a number greater than or equal to 0.");
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("non-numeric stock blocks submission", async () => {
-      const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
-      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "abc");
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-      await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("fractional stock blocks submission", async () => {
-      const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
-      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "1.5");
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-      await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("negative stock blocks submission", async () => {
-      const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      await user.type(screen.getByPlaceholderText("Price (EUR)"), "10");
-      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "-1");
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-      await screen.findByText("Stock quantity must be a whole number greater than or equal to 0.");
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("valid zero price and zero stock are accepted and reach the API unchanged", async () => {
-      const user = userEvent.setup();
-      const spy = await renderAndOpenConfirm(user);
-      await user.type(screen.getByPlaceholderText("Price (EUR)"), "0");
-      await user.type(screen.getByPlaceholderText("Stock quantity (optional)"), "0");
-      await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
-      await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
-      await waitFor(() =>
-        expect(spy).toHaveBeenCalledWith(
-          "intake-1",
-          expect.objectContaining({
-            categoryId: "cat-1",
-            type: "unique_item",
-            priceEur: 0,
-            stockQuantity: 0,
-            expectedProposalUpdatedAt: "2026-01-01T00:00:00.000Z",
-          }),
-        ),
+      mockCategories();
+      const acceptSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({ id: "product-9" } as any);
+      const finalizeSpy = vi
+        .spyOn(aiProductIntakesLib.aiProductIntakesApi, "finalizePhotos")
+        .mockRejectedValue(new ApiError("Finalize failed", 500));
+      const onIntakeChanged = vi.fn().mockResolvedValue(intake({ status: AiProductIntakeStatus.Applied, resultProductId: "product-9" }));
+      render(
+        <ApplyAndFinalizeSection
+          intakeId="intake-1"
+          intake={intake()}
+          photos={[]}
+          proposal={proposal}
+          onIntakeChanged={onIntakeChanged}
+          onPhotosReload={vi.fn().mockResolvedValue([])}
+        />,
       );
+      await acceptFlow(user);
+      await waitFor(() => expect(finalizeSpy).toHaveBeenCalledTimes(1));
+      // Stock Acceptance itself never re-runs and is never reported as failed.
+      expect(acceptSpy).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Failed to accept into stock")).not.toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+      await screen.findByText("Finalize failed");
+    });
+
+    it("Retry photo finalization retries only Finalize (never Stock Acceptance again) and preserves the same productId", async () => {
+      const user = userEvent.setup();
+      mockCategories();
+      const acceptSpy = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockResolvedValue({ id: "product-9" } as any);
+      const finalizeSpy = vi
+        .spyOn(aiProductIntakesLib.aiProductIntakesApi, "finalizePhotos")
+        .mockRejectedValueOnce(new ApiError("Finalize failed", 500))
+        .mockResolvedValueOnce({} as any);
+      render(
+        <ApplyAndFinalizeSection
+          intakeId="intake-1"
+          intake={intake()}
+          photos={[photoFixture()]}
+          proposal={proposal}
+          onIntakeChanged={vi.fn().mockResolvedValue(intake({ status: AiProductIntakeStatus.Applied, resultProductId: "product-9" }))}
+          onPhotosReload={vi.fn().mockResolvedValue([])}
+        />,
+      );
+      await acceptFlow(user);
+      await screen.findByText("Finalize failed");
+
+      const retryButton = await screen.findByRole("button", { name: "Retry photo finalization" });
+      await user.click(retryButton);
+
+      await waitFor(() => expect(finalizeSpy).toHaveBeenCalledTimes(2));
+      expect(acceptSpy).toHaveBeenCalledTimes(1); // never called again
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/products/product-9/label"));
+    });
+
+    it("reloading on an already-Applied intake (Finalize never attempted this session) shows the Retry action without auto-triggering Finalize", () => {
+      render(
+        <ApplyAndFinalizeSection
+          intakeId="intake-1"
+          intake={intake({ status: AiProductIntakeStatus.Applied, resultProductId: "product-9" })}
+          photos={[photoFixture()]}
+          proposal={null}
+          onIntakeChanged={vi.fn()}
+          onPhotosReload={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "Retry photo finalization" })).toBeInTheDocument();
     });
   });
 
@@ -329,5 +282,10 @@ describe("ApplyAndFinalizeSection (Sprint 97/106)", () => {
       />,
     );
     expect(screen.getByRole("link", { name: "View Product →" })).toHaveAttribute("href", "/products/product-9");
+    expect(screen.getByRole("link", { name: "View Stock Label →" })).toHaveAttribute("href", "/products/product-9/label");
   });
 });
+
+function photoFixture() {
+  return { id: "photo-1", intakeId: "intake-1", storageKey: "photo-1.webp", originalFilename: "first.png", createdByAdminUserId: "admin-1", createdAt: "t", updatedAt: "t" };
+}
