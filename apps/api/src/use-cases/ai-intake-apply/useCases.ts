@@ -142,7 +142,10 @@ export async function applyAiIntakeUseCase(capability: AiIntakeApplyTransactionC
             type: input.type,
             priceEur: input.priceEur,
             status: ProductStatus.Draft,
-            stockQuantity: input.stockQuantity ?? 0,
+            // Sprint 138: mirrors the identical Stock Acceptance correction - an omitted quantity
+            // must still supply an explicit 1 (never 0) downstream, so canonical Product/Inventory
+            // creation initializes Inventory and the initial StockMovement exactly as before.
+            stockQuantity: input.stockQuantity ?? 1,
             title: productFields.title,
             ...(productFields.description !== undefined ? { description: productFields.description } : {}),
             ...(productFields.keywords !== undefined ? { keywords: productFields.keywords } : {}),

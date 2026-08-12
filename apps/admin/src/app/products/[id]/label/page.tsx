@@ -17,10 +17,27 @@ import type { Category, PaginatedResult, ProductDetail } from "@/lib/types";
  * identity. No second identifier is introduced or read (never the unrelated ERP Integration
  * product_erp_metadata.barcodeValue). Rendered as a real scannable Code 128 barcode via the one
  * new jsbarcode dependency, with the human-readable SKU also printed as plain text alongside it.
+ *
+ * Sprint 138: a short, display-only category code is derived from the already-fetched Category
+ * slug (see deriveCategoryCode) and shown next to the canonical SKU. It is never persisted, never
+ * part of Product identity, and never encoded into the barcode - the JsBarcode call below still
+ * receives exactly `product.sku`. It recalculates fresh on every load/reprint, so it always
+ * reflects the Product's current Category, and simply omits itself if no code can be derived.
  */
+function deriveCategoryCode(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  const segments = slug.toLowerCase().split("-").filter((s) => s.length > 0);
+  if (segments.length === 0) return null;
+  if (segments.length === 1) return segments[0].slice(0, 3).toUpperCase();
+  const [first, second] = segments;
+  if (first.length <= 4) return (first.slice(0, 1) + second.slice(0, 3)).toUpperCase();
+  return first.slice(0, 3).toUpperCase();
+}
+
 export default function ProductLabelPage({ params }: { params: { id: string } }) {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [categoryName, setCategoryName] = useState<string | null>(null);
+  const [categorySlug, setCategorySlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [barcodeReady, setBarcodeReady] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -34,7 +51,11 @@ export default function ProductLabelPage({ params }: { params: { id: string } })
         if (!loaded.categoryId) return;
         return api
           .get<PaginatedResult<Category>>("/api/categories?pageSize=100")
-          .then((res) => setCategoryName(res.items.find((c) => c.id === loaded.categoryId)?.name ?? null))
+          .then((res) => {
+            const category = res.items.find((c) => c.id === loaded.categoryId);
+            setCategoryName(category?.name ?? null);
+            setCategorySlug(category?.slug ?? null);
+          })
           .catch(() => {});
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load product"));
@@ -60,6 +81,8 @@ export default function ProductLabelPage({ params }: { params: { id: string } })
   if (!product) return <p style={{ color: "var(--noctella-aged-bronze)" }}>Loading...</p>;
 
   const quantityLabel = `${product.stockQuantity} item${product.stockQuantity === 1 ? "" : "s"}`;
+  const categoryCode = deriveCategoryCode(categorySlug);
+  const skuIdentifier = categoryCode ? `${categoryCode} · ${product.sku}` : product.sku;
 
   return (
     <div>
@@ -90,13 +113,13 @@ export default function ProductLabelPage({ params }: { params: { id: string } })
         className="noctella-panel noctella-label-print"
         style={{ padding: 20, maxWidth: 320, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
       >
+        <p style={{ margin: 0, fontSize: 14, fontFamily: "monospace", letterSpacing: 1 }}>{skuIdentifier}</p>
         <p style={{ margin: 0, fontSize: 16, fontWeight: 600, textAlign: "center" }}>{product.title}</p>
+        <svg ref={svgRef} role="img" aria-label={`Barcode for SKU ${product.sku}`} />
         <p style={{ margin: 0, fontSize: 12, color: "var(--noctella-aged-bronze)", textAlign: "center" }}>
           {quantityLabel}
           {categoryName ? ` · ${categoryName}` : ""}
         </p>
-        <svg ref={svgRef} role="img" aria-label={`Barcode for SKU ${product.sku}`} />
-        <p style={{ margin: 0, fontSize: 14, fontFamily: "monospace", letterSpacing: 1 }}>{product.sku}</p>
       </div>
 
       <div className="noctella-label-screen-only" style={{ marginTop: 16 }}>

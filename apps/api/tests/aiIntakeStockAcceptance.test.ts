@@ -179,10 +179,24 @@ describe("AI Intake Stock Acceptance (Sprint 106)", () => {
       expect(result.product.metaDescription).toBe("A fine antique item.");
     });
 
-    it("stockQuantity omitted -> Inventory (Product.stockQuantity) is 0, one initial StockMovement exists; UniqueItem stock behavior preserved", async () => {
+    it("stockQuantity omitted -> Product.stockQuantity is 1 (never 0), one initial StockMovement exists; UniqueItem stock behavior preserved", async () => {
       const proposal = await readyIntake();
       const result = await acceptAiIntakeIntoStock(db as any, intakeId, validRequest({ expectedProposalUpdatedAt: proposal.updatedAt }) as any, "admin-3");
-      expect(result.product.stockQuantity).toBe(0);
+      expect(result.product.stockQuantity).toBe(1);
+      const movements = await db.select().from(stockMovements);
+      expect(movements).toHaveLength(1);
+      expect(movements[0].productId).toBe(result.product.id);
+    });
+
+    it("Sprint 138: stockQuantity omitted for a non-UniqueItem type also defaults to 1, never 0", async () => {
+      const proposal = await readyIntake();
+      const result = await acceptAiIntakeIntoStock(
+        db as any,
+        intakeId,
+        validRequest({ expectedProposalUpdatedAt: proposal.updatedAt, type: ProductType.LotItem }) as any,
+        "admin-3",
+      );
+      expect(result.product.stockQuantity).toBe(1);
       const movements = await db.select().from(stockMovements);
       expect(movements).toHaveLength(1);
       expect(movements[0].productId).toBe(result.product.id);
