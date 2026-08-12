@@ -123,6 +123,36 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 135 — Production Readiness Gate
+
+### Architectural Decisions
+
+- Production and staging are separate, independent Render Blueprints (`render.production.yaml` vs. the existing `render.yaml`). Production is never auto-deployed on a `main` commit (`autoDeployTrigger: off` on every production service); staging's own `autoDeployTrigger: checksPass` is unchanged. Sprint 135 completing does not constitute production authorization — that remains a separate, explicit human decision, documented in `docs/deployment/render-production.md`.
+- `GET /ready` is a new, distinct, public, non-mutating business-readiness signal - separate from the existing `GET /health` process-liveness check, which is unchanged. `/ready` proves launch-critical *business* configuration (at least one active shipping method, public Stripe checkout disabled, mock payments disabled, Admin/Storefront origins configured), never process health. The response body exposes only booleans (`{status, checks: {...}}`) - never actual environment values, shipping-method labels/countries/profiles/rates, or database internals.
+- The Sprint 134 zero-row shipping bootstrap-compatibility behavior (`allMethods.length===0` → legacy free shipping) is deliberately unchanged - it remains the correct behavior for the resolver itself (preserving ~25+ pre-existing test fixtures and any not-yet-configured deployment). `/ready` is the new, separate production-authorization gate that prevents that legacy compatibility state from ever being mistaken for launch-ready: zero shipping methods, or active-method-count zero (all inactive), both report `shippingConfigured: false` and an overall `503`.
+- A narrow, route-specific rate limiter (`express-rate-limit`, new direct dependency of `apps/api`) protects only `POST /api/orders/cod` (5 requests per client per 10-minute window, in-memory store — no Redis/distributed store, consistent with the approved single-instance SQLite architecture). No other public route is rate-limited by this sprint. The existing Sprint 64B Admin-login rate limiter (durable, database-backed, by email and by IP) is unchanged and untouched.
+- `app.set("trust proxy", 1)` - trusts exactly one reverse-proxy hop (Render's own edge), never the full `X-Forwarded-For` chain (`true` would let a client forge its own apparent IP). This is what makes `req.ip` resolve to the real client IP for the new COD rate limiter under the approved Render topology.
+- The Admin Cash on Delivery settlement UI (`apps/admin/src/app/orders/[id]/page.tsx`) closes the one confirmed gap from Sprint 135's own supplemental Discovery: the `POST /orders/:id/settle-cod` backend (Sprint 132) was already correct and complete, but had no Admin web-application path to reach it. The new UI is visible only for a `cash_on_delivery` + `pending` order, submits an explicit, operator-visible `collectedAmount` (pre-filled with `Order.totalAmount` for convenience, never silently submitted), and reloads authoritative Order state from the server on success. The server's exact-cents equality check against `Order.totalAmount` remains the sole authority - no client-side monetary logic was added.
+- The supplemental Discovery's auth/session finding stands unchanged by this sprint: the real Admin session mechanism (database-backed opaque bearer tokens, `crypto.randomBytes`-generated, SHA-256-hashed for storage; scrypt-hashed passwords with per-record random salts) uses no configurable secret at all. `JWT_SECRET`/`SESSION_SECRET` in `.env.example` remain accurately-labeled dead Sprint-1 scaffolding; no auth-related documentation or startup-validation change was needed.
+
+### Dependencies Introduced or Changed
+
+- New direct dependency: `express-rate-limit` (`apps/api/package.json`), used only by `apps/api/src/middleware/codRateLimit.ts`.
+- New files: `apps/api/src/middleware/codRateLimit.ts`, `apps/api/src/use-cases/readiness/useCases.ts`, `apps/api/src/services/readiness.ts`, `render.production.yaml`, `docs/deployment/render-production.md`.
+- No schema or migration change. No change to the shipping resolver, COD settlement backend, invoice/outbox architecture, or Stripe integration code.
+
+### Technical Debt
+
+- None introduced. Two pre-existing test files (`codOrderSprint129.test.ts`, `codSettlementSprint132.test.ts`) were updated to send distinct synthetic `X-Forwarded-For` values per logical test scenario, so their own many existing HTTP calls to the now-rate-limited `POST /api/orders/cod` are correctly treated as independent clients - matching real distinct customer traffic, not a weakening of the limiter.
+
+### Deferred (explicitly out of scope)
+
+- Rate limiting on any route other than `POST /api/orders/cod` (login already has its own durable limiter). CAPTCHA/WAF, Redis/distributed rate-limit infrastructure, a generic observability platform, request-correlation framework, PostgreSQL/multi-instance cutover, invoice PDF generation, double-entry accounting, weight-based shipping, carrier live rates, Local Pickup fulfillment wiring - all unchanged from Sprint 134's own deferral list.
+
+### Entry Conditions
+
+- Actual production provisioning, DNS configuration, environment-variable entry, and go-live authorization all remain separate, explicit, human-operator actions - see `docs/deployment/render-production.md`'s ordered checklist. No future sprint should assume any of these occurred merely because this Ledger entry exists.
+
 ## Sprint 134 — Storefront Launch Hardening / Shipping Domain
 
 ### Architectural Decisions

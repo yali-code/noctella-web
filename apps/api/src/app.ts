@@ -36,6 +36,7 @@ import stockMovementsRouter from "./routes/stockMovements";
 import shipmentsRouter from "./routes/shipments";
 import returnsRouter from "./routes/returns";
 import { db } from "./db/client";
+import { getReadiness } from "./services/readiness";
 import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photoStorage";
 import { enqueueChannelStockSync, enqueueProductStockSync } from "./services/stockSync";
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
@@ -50,6 +51,7 @@ import { externalListings } from "./db/schema";
 import { createRequireAuth, requirePermission } from "./auth/permissions";
 import { requireAdminOriginForMutations } from "./auth/csrf";
 import { requireSchedulerAuth } from "./auth/machineAuth";
+import { parseConfiguredOrigins } from "./auth/originAllowlist";
 
 /**
  * Sprint 64B: split out of index.ts (which now only imports this and calls listen()) so the
@@ -58,6 +60,15 @@ import { requireSchedulerAuth } from "./auth/machineAuth";
  * (seeding lives in index.ts only).
  */
 const app = express();
+/**
+ * Sprint 135: trust exactly one reverse-proxy hop (Render's own edge), not the entire
+ * X-Forwarded-For chain (`true` would let a client forge its own apparent IP by prepending
+ * arbitrary values to that header). This is the narrow, correct setting for the approved
+ * single-reverse-proxy Render topology, and is what makes `req.ip` (consumed by the Sprint 135
+ * COD order-creation rate limiter below and by the existing Sprint 64B login rate limiter in
+ * services/adminAuth.ts) resolve to the real client IP instead of Render's own proxy address.
+ */
+app.set("trust proxy", 1);
 const requireAuth = createRequireAuth(db);
 
 /**
@@ -71,9 +82,9 @@ const requireAuth = createRequireAuth(db);
  * is correctly made public.
  */
 const allowedAppOrigins = [
-  ...(process.env.ADMIN_APP_ORIGIN ?? "").split(","),
-  ...(process.env.STOREFRONT_APP_ORIGIN ?? "").split(","),
-].map((s) => s.trim()).filter(Boolean);
+  ...parseConfiguredOrigins(process.env.ADMIN_APP_ORIGIN),
+  ...parseConfiguredOrigins(process.env.STOREFRONT_APP_ORIGIN),
+];
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
@@ -91,9 +102,25 @@ app.use(express.json());
 // PUBLIC: product photos back both the admin app and the public storefront.
 app.use(productPhotoStaticPath, express.static(productPhotoStaticRoot));
 
-// PUBLIC: readiness probe.
+// PUBLIC: process liveness only - proves the Node process is up and Express is accepting
+// connections. Does not check the database, migrations, or any business configuration.
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+/**
+ * Sprint 135: PUBLIC business-readiness signal, distinct from /health above. Answers "can this
+ * deployment safely serve real COD production traffic right now" - not process liveness. Never
+ * mutates state; never exposes actual environment values, shipping-method labels/countries/
+ * profiles/rates, or database internals - only booleans (see use-cases/readiness/useCases.ts).
+ */
+app.get("/ready", async (_req, res) => {
+  try {
+    const result = await getReadiness(db);
+    res.status(result.ready ? 200 : 503).json({ status: result.ready ? "ready" : "not_ready", checks: result.checks });
+  } catch {
+    res.status(503).json({ status: "not_ready", checks: null });
+  }
 });
 
 // PUBLIC: storefront guest-facing read endpoints.

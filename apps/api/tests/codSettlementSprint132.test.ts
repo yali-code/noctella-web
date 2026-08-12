@@ -44,10 +44,18 @@ function intent(orderDraftId: string, productIds: string[]) {
   return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, notes: "COD settlement", items: productIds.map((productId) => ({ productId, quantity: 1 })) };
 }
 
-/** Creates a real, server-authoritative Pending COD order through the existing public checkout route (Sprint 129) - never fabricated. */
+/**
+ * Creates a real, server-authoritative Pending COD order through the existing public checkout
+ * route (Sprint 129) - never fabricated. Sprint 135: each call uses a distinct synthetic
+ * X-Forwarded-For so this file's many calls to the now rate-limited POST /api/orders/cod (see
+ * middleware/codRateLimit.ts) are correctly treated as independent clients, matching real distinct
+ * customer traffic - never a way to weaken the limiter itself.
+ */
+let codOrderClientIpSequence = 0;
 async function createCodOrder(suffix: string, priceOverrides: Record<string, unknown> = {}) {
   const p = await product(suffix, priceOverrides);
-  const response = await request(app).post("/api/orders/cod").send(intent(`cod-settle-${suffix}`, [p.id]));
+  codOrderClientIpSequence += 1;
+  const response = await request(app).post("/api/orders/cod").set("X-Forwarded-For", `10.0.132.${codOrderClientIpSequence}`).send(intent(`cod-settle-${suffix}`, [p.id]));
   expect(response.status).toBe(201);
   return response.body;
 }

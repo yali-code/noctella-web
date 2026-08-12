@@ -32,11 +32,22 @@ function intent(orderDraftId: string, productIds: string[]) {
   return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, notes: "COD", items: productIds.map((productId) => ({ productId, quantity: 1 })) };
 }
 
+/**
+ * Sprint 135: each call sets a distinct synthetic X-Forwarded-For so this file's own many
+ * requests to the now rate-limited POST /api/orders/cod (see middleware/codRateLimit.ts) are
+ * correctly treated as independent clients, exactly as they would be under real, distinct
+ * customer traffic - never as a way to weaken or bypass the limiter itself (see
+ * codRateLimitSprint135.test.ts for the limiter's own dedicated, real-behavior tests).
+ */
+function postCod(clientIp: string, body: unknown) {
+  return request(app).post("/api/orders/cod").set("X-Forwarded-For", clientIp).send(body);
+}
+
 describe("Sprint 129 COD order flow", () => {
   it("creates a server-authoritative pending COD order atomically without fabricated financial artifacts", async () => {
     const p = await product("woo");
     const paymentEventsBefore = await db.select().from(schema.paymentEvents);
-    const response = await request(app).post("/api/orders/cod").send(intent("cod-draft-woo", [p.id]));
+    const response = await postCod("10.0.129.1", intent("cod-draft-woo", [p.id]));
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ status: OrderStatus.Pending, paymentStatus: PaymentStatus.Pending, paymentProvider: PaymentProvider.CashOnDelivery, currency: "EUR", subtotalAmount: 100, totalAmount: 100 });
     expect(response.body.paymentReference ?? null).toBeNull();
@@ -63,7 +74,7 @@ describe("Sprint 129 COD order flow", () => {
       jobs: (await db.select().from(schema.backgroundJobs)).length,
     };
     const body = { ...intent("cod-rollback", [p.id]), items: [{ productId: p.id, quantity: 1 }, { productId: p.id, quantity: 1 }] };
-    const response = await request(app).post("/api/orders/cod").send(body);
+    const response = await postCod("10.0.129.2", body);
     expect(response.status).not.toBe(201);
     expect(await db.select().from(schema.orders).where(eq(schema.orders.orderDraftId, "cod-rollback"))).toHaveLength(0);
     expect(await db.select().from(schema.orderItems)).toHaveLength(before.orderItems);
@@ -80,7 +91,7 @@ describe("Sprint 129 COD order flow", () => {
 
   it("uses canonical price and title fallbacks", async () => {
     const p = await product("fallback", { wooProductName: null, wooListingPriceEur: null, priceEur: 75 });
-    const response = await request(app).post("/api/orders/cod").send(intent("cod-draft-fallback", [p.id]));
+    const response = await postCod("10.0.129.3", intent("cod-draft-fallback", [p.id]));
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ subtotalAmount: 75, totalAmount: 75 });
     expect(response.body.items[0]).toMatchObject({ productTitle: "Canonical fallback", unitPrice: 75 });
@@ -88,8 +99,9 @@ describe("Sprint 129 COD order flow", () => {
 
   it("rejects browser monetary/payment authority at validation", async () => {
     const p = await product("authority");
-    for (const extra of [{ subtotalAmount: 1 }, { totalAmount: 1 }, { currency: "USD" }, { paymentStatus: "paid" }, { paymentProvider: "stripe" }, { paymentReference: "fake" }]) {
-      const response = await request(app).post("/api/orders/cod").send({ ...intent(`cod-authority-${Object.keys(extra)[0]}`, [p.id]), ...extra });
+    const authorityCases = [{ subtotalAmount: 1 }, { totalAmount: 1 }, { currency: "USD" }, { paymentStatus: "paid" }, { paymentProvider: "stripe" }, { paymentReference: "fake" }];
+    for (const [index, extra] of authorityCases.entries()) {
+      const response = await postCod(`10.0.129.${10 + index}`, { ...intent(`cod-authority-${Object.keys(extra)[0]}`, [p.id]), ...extra });
       expect(response.status).toBe(400);
     }
     expect((await db.select().from(schema.products).where(eq(schema.products.id, p.id)))[0].stockQuantity).toBe(1);
@@ -107,16 +119,16 @@ describe("Sprint 129 COD order flow", () => {
       intent("cod-mixed", [eligible.id, ineligible.id]),
       { ...intent("cod-quantity", [eligible.id]), items: [{ productId: eligible.id, quantity: 2 }] },
     ];
-    for (const [index, body] of cases.entries()) expect((await request(app).post("/api/orders/cod").send(body)).status).toBe(index === 0 ? 404 : 400);
+    for (const [index, body] of cases.entries()) expect((await postCod(`10.0.129.${20 + index}`, body)).status).toBe(index === 0 ? 404 : 400);
     expect((await db.select().from(schema.products).where(eq(schema.products.id, eligible.id)))[0].stockQuantity).toBe(1);
     expect(await db.select().from(schema.orders).where(eq(schema.orders.orderDraftId, "cod-mixed"))).toHaveLength(0);
   });
 
   it("replays by orderDraftId without duplicate order, decrement, movement, or sync", async () => {
     const p = await product("replay");
-    const first = await request(app).post("/api/orders/cod").send(intent("cod-replay", [p.id]));
+    const first = await postCod("10.0.129.30", intent("cod-replay", [p.id]));
     const jobsBefore = (await db.select().from(schema.backgroundJobs).where(eq(schema.backgroundJobs.productId, p.id))).length;
-    const replay = await request(app).post("/api/orders/cod").send(intent("cod-replay", [p.id]));
+    const replay = await postCod("10.0.129.30", intent("cod-replay", [p.id]));
     expect(replay.status).toBe(201);
     expect(replay.body.id).toBe(first.body.id);
     expect((await db.select().from(schema.products).where(eq(schema.products.id, p.id)))[0].stockQuantity).toBe(0);
@@ -126,7 +138,7 @@ describe("Sprint 129 COD order flow", () => {
 
   it("restores inventory once on cancellation and enqueues synchronization only after commit", async () => {
     const p = await product("cancel");
-    const created = await request(app).post("/api/orders/cod").send(intent("cod-cancel", [p.id]));
+    const created = await postCod("10.0.129.31", intent("cod-cancel", [p.id]));
     const { SqliteUnitOfWork } = await import("../src/services/unitOfWork");
     const { transitionOrderStatusUseCase } = await import("../src/use-cases/order/useCases");
     let stockAtSync = -1;
