@@ -1,0 +1,252 @@
+# Noctella ERP - Render Blueprint for the initial CONTROLLED PRODUCTION launch, COD-only.
+#
+# SPRINT 135: this artifact defines production infrastructure but does NOT deploy it. Applying
+# this Blueprint in the Render dashboard still requires an explicit operator action, and every
+# service below is configured with `autoDeployTrigger: off` (manual promotion only - see
+# docs/deployment/render-production.md). Production authorization is a separate, explicit human
+# decision that does not follow automatically from this file existing, from Sprint 135 merging, or
+# from a deploy button being available.
+#
+# This is a SEPARATE, DISTINCT set of services from the existing staging Blueprint (render.yaml) -
+# it does not modify, replace, or repurpose any staging service. Both can exist and be applied
+# independently; staging keeps its own auto-deploying `noctella-staging-*` services untouched.
+#
+# Scope: COD-only initial production launch. SQLite on a single persistent disk, exactly one API
+# instance (see docs/deployment/render-production.md for the full ordered pre-launch checklist).
+# Real Stripe checkout, PostgreSQL/Supabase, and horizontal scaling remain explicitly out of scope.
+#
+# No real secret values are set in this file. Every credential is either Render-generated
+# (generateValue: true, never appears in the repo or the Render dashboard's YAML view) or
+# operator-supplied (sync: false, entered manually in the Render dashboard - see the runbook).
+# Public (non-secret) origin/domain values are deliberately left `sync: false` too, since the real
+# production domain has not yet been decided in the repository - never invent a placeholder domain
+# here; an operator must enter the real value before go-live.
+
+services:
+  # --- A. API web service --------------------------------------------------------------------
+  - type: web
+    name: noctella-production-api
+    runtime: node
+    region: frankfurt
+    branch: main
+    plan: starter
+    # Sprint 135: manual promotion only - production must never auto-deploy merely because a
+    # commit lands on main (that remains staging's own, separate, already-approved behavior via
+    # render.yaml's autoDeployTrigger: checksPass). An operator explicitly triggers each
+    # production deploy from the Render dashboard/API after completing the go-live checklist.
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /health
+    disk:
+      name: noctella-production-data
+      mountPath: /var/data
+      sizeGB: 1
+    # Sprint 135: no domain declared here - an operator must add the real production domain(s) in
+    # the Render dashboard (or here, once decided) before go-live. Do not invent one.
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_DRIVER
+        value: sqlite
+      # Absolute path on the persistent disk mounted above - never a relative path (see
+      # .env.example's DATABASE_URL comment for why a relative path is dangerous).
+      - key: DATABASE_URL
+        value: /var/data/noctella.sqlite
+      - key: PRODUCT_PHOTO_DIR
+        value: /var/data/product-photos
+      # Operator-supplied once the real production domains are decided - see
+      # docs/deployment/render-production.md's pre-launch checklist.
+      - key: ADMIN_APP_ORIGIN
+        sync: false
+      - key: STOREFRONT_APP_ORIGIN
+        sync: false
+      - key: COOKIE_DOMAIN
+        sync: false
+      - key: ERP_CLIENT_VERSION
+        value: 0.1.0
+      # Sprint 135: COD-only launch requires this to remain false. Explicit (not merely omitted)
+      # so an operator inspecting this file sees the requirement directly, rather than relying on
+      # this variable's absence to be interpreted correctly. Never "true" until a real payment
+      # gateway is integrated and explicitly authorized for production.
+      - key: MOCK_PAYMENTS_ENABLED
+        value: "false"
+      # Sprint 134/135: deliberately NOT declared here. Its absence means
+      # stripePublicCheckoutEnabled() defaults to disabled (strict "true"-only check) - the
+      # correct, fail-closed state for this COD-only launch. Do not add this key with any value
+      # other than "false" until real Stripe checkout is explicitly authorized for production.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_SUCCESS_URL
+        sync: false
+      - key: STRIPE_CANCEL_URL
+        sync: false
+      # Sprint 135: left unset (safe Mock default, no network call, no API key required) rather
+      # than copying staging's "openai" choice - enabling a real AI provider in production is an
+      # explicit, separate operator decision, not implied by COD-only launch readiness.
+      - key: ERP_INTEGRATION_KEY
+        generateValue: true
+      - key: ERP_INTEGRATION_KEY_SALT
+        generateValue: true
+      - key: SCHEDULER_AUTH_TOKEN
+        generateValue: true
+      - key: MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_REDIRECT_URI
+        sync: false
+      - key: EBAY_WEBHOOK_SECRET
+        sync: false
+      - key: ETSY_CLIENT_ID
+        sync: false
+      - key: ETSY_REDIRECT_URI
+        sync: false
+      - key: ETSY_WEBHOOK_SECRET
+        sync: false
+      - key: AI_INTAKE_OPENAI_API_KEY
+        sync: false
+      # Off-disk SQLite database backup (Sprint 124) - required before go-live, see the runbook's
+      # backup-verification gate.
+      - key: DATABASE_BACKUP_S3_ENDPOINT
+        sync: false
+      - key: DATABASE_BACKUP_S3_REGION
+        sync: false
+      - key: DATABASE_BACKUP_S3_BUCKET
+        sync: false
+      - key: DATABASE_BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: DATABASE_BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: DATABASE_BACKUP_S3_PREFIX
+        value: database-backups
+      - key: DATABASE_BACKUP_S3_FORCE_PATH_STYLE
+        sync: false
+      # Off-disk canonical product-photo backup (Sprint 125).
+      - key: PRODUCT_PHOTO_BACKUP_S3_ENDPOINT
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_REGION
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_BUCKET
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: PRODUCT_PHOTO_BACKUP_S3_PREFIX
+        value: product-photo-backups
+      - key: PRODUCT_PHOTO_BACKUP_S3_FORCE_PATH_STYLE
+        sync: false
+
+  # --- B. Admin web service -------------------------------------------------------------------
+  - type: web
+    name: noctella-production-admin
+    runtime: node
+    region: frankfurt
+    branch: main
+    plan: starter
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/admin
+    startCommand: cd apps/admin && npx next start -p $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false
+      - key: ERP_CLIENT_VERSION
+        value: 0.1.0
+      - key: ERP_INTEGRATION_KEY
+        fromService:
+          name: noctella-production-api
+          type: web
+          envVarKey: ERP_INTEGRATION_KEY
+
+  # --- C. Storefront web service --------------------------------------------------------------
+  - type: web
+    name: noctella-production-storefront
+    runtime: node
+    region: frankfurt
+    branch: main
+    plan: starter
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/storefront
+    startCommand: cd apps/storefront && npx next start -p $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false
+      - key: STOREFRONT_SITE_URL
+        sync: false
+
+  # --- D. Background-job cron service -----------------------------------------------------------
+  - type: cron
+    name: noctella-production-background-jobs
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: off
+    schedule: "0 * * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runBackgroundJobs.js
+    envVars:
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-production-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-production-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN
+
+  # --- E. Database backup trigger ---------------------------------------------------------------
+  - type: cron
+    name: noctella-production-database-backup
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: off
+    schedule: "0 3 * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runDatabaseBackup.js
+    envVars:
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-production-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-production-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN
+
+  # --- F. Product-photo backup trigger ---------------------------------------------------------
+  - type: cron
+    name: noctella-production-product-photo-backup
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: off
+    schedule: "30 4 * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runProductPhotoBackup.js
+    envVars:
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-production-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-production-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN

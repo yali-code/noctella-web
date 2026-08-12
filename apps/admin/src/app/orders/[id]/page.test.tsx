@@ -190,6 +190,94 @@ describe("Order detail automatic-invoice outbox status and retry (Sprint 79 corr
   });
 });
 
+describe("Order detail Cash on Delivery settlement (Sprint 135)", () => {
+  const codPendingOrder = { ...baseOrder, paymentProvider: "cash_on_delivery", paymentStatus: "pending", totalAmount: 142.5 };
+
+  async function renderWithOrder(orderOverrides: any = {}) {
+    cleanup();
+    stubFetch();
+    vi.spyOn(ordersLib, "getOrder").mockResolvedValue({ ...baseOrder, ...orderOverrides });
+    vi.spyOn(shipmentsLib, "listShipments").mockResolvedValue([]);
+    render(<OrderDetailPage params={{ id: "order-1" }} />);
+    await screen.findByText("ORD-1");
+  }
+
+  it("1. is visible for an eligible Cash on Delivery + Pending order", async () => {
+    await renderWithOrder(codPendingOrder);
+    expect(screen.getByText("Settle Cash on Delivery")).toBeInTheDocument();
+  });
+
+  it("2. is absent for a non-COD order", async () => {
+    await renderWithOrder({ paymentProvider: "stripe", paymentStatus: "pending" });
+    expect(screen.queryByText("Settle Cash on Delivery")).not.toBeInTheDocument();
+  });
+
+  it("3. is absent for an already-Paid order", async () => {
+    await renderWithOrder({ paymentProvider: "cash_on_delivery", paymentStatus: "paid" });
+    expect(screen.queryByText("Settle Cash on Delivery")).not.toBeInTheDocument();
+  });
+
+  it("5. the amount input is pre-filled with the current authoritative Order.totalAmount", async () => {
+    await renderWithOrder(codPendingOrder);
+    expect(screen.getByDisplayValue("142.50")).toBeInTheDocument();
+  });
+
+  it("4. submits the entered collectedAmount to the existing settle-cod endpoint via settleCashOnDeliveryOrder", async () => {
+    const user = userEvent.setup();
+    await renderWithOrder(codPendingOrder);
+    const settleSpy = vi.spyOn(ordersLib, "settleCashOnDeliveryOrder").mockResolvedValue({ ...codPendingOrder, paymentStatus: "paid" });
+    const input = screen.getByDisplayValue("142.50");
+    await user.clear(input);
+    await user.type(input, "142.5");
+    await user.click(screen.getByText("Settle Cash on Delivery"));
+    await waitFor(() => expect(settleSpy).toHaveBeenCalledWith("order-1", 142.5));
+  });
+
+  it("6. a successful settlement reloads authoritative Order data - the action disappears once paymentStatus is Paid", async () => {
+    const user = userEvent.setup();
+    await renderWithOrder(codPendingOrder);
+    vi.spyOn(ordersLib, "settleCashOnDeliveryOrder").mockResolvedValue({ ...codPendingOrder, paymentStatus: "paid" });
+    await user.click(screen.getByText("Settle Cash on Delivery"));
+    await waitFor(() => expect(screen.queryByText("Settle Cash on Delivery")).not.toBeInTheDocument());
+    expect(screen.getByText("paid")).toBeInTheDocument();
+  });
+
+  it("7/8. a backend amount-mismatch error is displayed and never shown as a false success", async () => {
+    const user = userEvent.setup();
+    await renderWithOrder(codPendingOrder);
+    vi.spyOn(ordersLib, "settleCashOnDeliveryOrder").mockRejectedValue(new Error("Collected amount does not match order total"));
+    await user.click(screen.getByText("Settle Cash on Delivery"));
+    await waitFor(async () => {
+      const alerts = await screen.findAllByRole("alert");
+      expect(alerts.some((a) => a.textContent?.includes("Collected amount does not match order total"))).toBe(true);
+    });
+    // Still visible/pending - a failed request never silently hides the action or flips status.
+    expect(screen.getByText("Settle Cash on Delivery")).toBeInTheDocument();
+    expect(screen.getByText("pending")).toBeInTheDocument();
+  });
+
+  it("9. prevents a second concurrent submission while the request is in flight", async () => {
+    const user = userEvent.setup();
+    await renderWithOrder(codPendingOrder);
+    let resolveSettle!: (value: ordersLib.OrderWithItems) => void;
+    const settleSpy = vi.spyOn(ordersLib, "settleCashOnDeliveryOrder").mockReturnValue(new Promise<ordersLib.OrderWithItems>((resolve) => { resolveSettle = resolve; }));
+    const button = screen.getByText("Settle Cash on Delivery");
+    await user.click(button);
+    await user.click(button);
+    expect(settleSpy).toHaveBeenCalledTimes(1);
+    resolveSettle({ ...codPendingOrder, paymentStatus: "paid" });
+    await waitFor(() => expect(screen.queryByText("Settle Cash on Delivery")).not.toBeInTheDocument());
+  });
+
+  it("10. existing unrelated Order actions remain functional alongside the new settlement action", async () => {
+    await renderWithOrder(codPendingOrder);
+    // Order Status actions (existing, unrelated Sprint 40B behavior) still render correctly for
+    // this order's actual status ("processing", inherited from baseOrder) alongside the new section.
+    expect(screen.getByText("Cancel")).toBeInTheDocument();
+    expect(screen.getByText("Create Shipment")).toBeInTheDocument();
+  });
+});
+
 describe("Order Items image snapshot rendering (Sprint 86)", () => {
   it("resolves a relative OrderItem.productImageUrl against the configured API origin, not the raw stored value", async () => {
     stubFetch();

@@ -3,6 +3,7 @@ import { db } from "../db/client";
 import { createCashOnDeliveryOrder, createOrder, getShippingOptions } from "../services/orders";
 import { createCashOnDeliveryOrderSchema, createOrderSchema } from "../validation/order";
 import { shippingQuoteRequestSchema } from "../validation/shipping";
+import { codOrderRateLimit } from "../middleware/codRateLimit";
 import { handleRouteError } from "./errorHandler";
 
 /**
@@ -24,7 +25,8 @@ router.post("/shipping-options", async (req, res) => {
   }
 });
 
-router.post("/cod", async (req, res) => {
+/** Sprint 135: narrow, route-specific abuse guard - see middleware/codRateLimit.ts. Does not apply to /shipping-options or / above. */
+router.post("/cod", codOrderRateLimit, async (req, res) => {
   try {
     const input = createCashOnDeliveryOrderSchema.parse(req.body);
     res.status(201).json(await createCashOnDeliveryOrder(db, input));

@@ -1,6 +1,6 @@
 "use client";
 
-import { OrderStatus } from "@noctella/shared";
+import { OrderStatus, PaymentProvider, PaymentStatus } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   getOrder,
   getOrderInvoiceOutboxStatus,
   retryOrderInvoiceDraft,
+  settleCashOnDeliveryOrder,
   updateOrderStatus,
   type OrderInvoiceOutboxStatus,
   type OrderStatusAction,
@@ -51,6 +52,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
   const [invoiceRetryBusy, setInvoiceRetryBusy] = useState(false);
   const [invoiceRetryError, setInvoiceRetryError] = useState<string | null>(null);
 
+  const [codSettleAmount, setCodSettleAmount] = useState("");
+  const [codSettleBusy, setCodSettleBusy] = useState(false);
+  const [codSettleError, setCodSettleError] = useState<string | null>(null);
+
   const [shipmentActionBusyId, setShipmentActionBusyId] = useState<string | null>(null);
   const [shipmentActionError, setShipmentActionError] = useState<string | null>(null);
   const [createShipmentArmed, setCreateShipmentArmed] = useState(false);
@@ -80,6 +85,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     getOrder(params.id)
       .then((loaded) => {
         setOrder(loaded);
+        setCodSettleAmount(loaded.totalAmount.toFixed(2));
         loadShipments(loaded.id);
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
         fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
@@ -172,6 +178,32 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
     }
   }
 
+  /**
+   * Sprint 135: the server remains sole authority - it independently compares collectedAmount
+   * against the current Order.totalAmount with exact-cents equality (see settleCashOnDeliveryOrderUseCase);
+   * this handler never computes or asserts success itself, only reflects what the server returned.
+   * On success, the order is replaced with the server's own response (paymentStatus becomes Paid),
+   * which naturally hides this action below since it is only ever shown for a Pending COD order.
+   */
+  async function handleSettleCod() {
+    if (!order || codSettleBusy) return;
+    const amount = Number(codSettleAmount);
+    if (!Number.isFinite(amount)) {
+      setCodSettleError("Enter a valid collected amount");
+      return;
+    }
+    setCodSettleBusy(true);
+    setCodSettleError(null);
+    try {
+      const updated = await settleCashOnDeliveryOrder(order.id, amount);
+      setOrder(updated);
+    } catch (err) {
+      setCodSettleError(err instanceof Error ? err.message : "Failed to settle Cash on Delivery order");
+    } finally {
+      setCodSettleBusy(false);
+    }
+  }
+
   async function handleCompleteSale() {
     if (!order) return;
     setCompleteSaleBusy(true);
@@ -245,6 +277,27 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
           <Row label="Provider" value={formatPaymentProvider(order.paymentProvider)} />
           <Row label="Status" value={order.paymentStatus} />
           <Row label="Reference" value={order.paymentReference ?? "—"} />
+          {order.paymentProvider === PaymentProvider.CashOnDelivery && order.paymentStatus === PaymentStatus.Pending && (
+            <div style={{ marginTop: 12, borderTop: "1px solid rgba(122,106,79,0.3)", paddingTop: 12 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                <span style={{ color: "var(--noctella-aged-bronze)" }}>Collected Amount (EUR)</span>
+                <input
+                  style={inputStyle}
+                  value={codSettleAmount}
+                  disabled={codSettleBusy}
+                  onChange={(e) => setCodSettleAmount(e.target.value)}
+                />
+              </label>
+              <button disabled={codSettleBusy} onClick={handleSettleCod} style={buttonStyle}>
+                {codSettleBusy ? "Settling..." : "Settle Cash on Delivery"}
+              </button>
+              {codSettleError && (
+                <p role="alert" style={{ color: "#c86a6a" }}>
+                  {codSettleError}
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="noctella-panel" style={{ padding: 20 }}>

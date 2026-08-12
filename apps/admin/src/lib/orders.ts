@@ -131,3 +131,13 @@ export interface RetryInvoiceDraftResult {
 export function retryOrderInvoiceDraft(orderId: string): Promise<RetryInvoiceDraftResult> {
   return api.post<RetryInvoiceDraftResult>(`/api/orders/${orderId}/invoice-status/retry`, {});
 }
+
+/**
+ * Sprint 135: explicit, authoritative Admin action recording that Cash on Delivery funds were
+ * collected - calls the existing settle-cod endpoint (Sprint 132) unchanged. collectedAmount is
+ * an explicit value the operator sees and can edit, never inferred or silently submitted; the
+ * server remains the sole authority (exact-cents equality against Order.totalAmount).
+ */
+export function settleCashOnDeliveryOrder(orderId: string, collectedAmount: number): Promise<OrderWithItems> {
+  return api.post<OrderWithItems>(`/api/orders/${orderId}/settle-cod`, { collectedAmount });
+}
