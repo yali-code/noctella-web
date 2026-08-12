@@ -9,4 +9,8 @@ describe("adminMenuItems (Sprint 97)", () => {
   it("retains the existing AI Drafts entry unchanged", () => {
     expect(adminMenuItems).toContainEqual({ label: "AI Drafts", href: "/ai-drafts" });
   });
+
+  it("includes the Ready to Publish entry (Sprint 136)", () => {
+    expect(adminMenuItems).toContainEqual({ label: "Ready to Publish", href: "/ready-to-publish" });
+  });
 });
