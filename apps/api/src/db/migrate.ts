@@ -35,6 +35,136 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureProductSkuSequenceTable(sqlite);
   ensureMarketplacePreparationsTable(sqlite);
   ensureShippingMethodsTable(sqlite);
+  ensureProductPriceEurNullable(sqlite);
+}
+
+/**
+ * Sprint 137: relaxes products.price_eur from NOT NULL to nullable, so a warehouse-created
+ * Draft Product can exist without a sales price. SQLite has no ALTER TABLE ... ALTER COLUMN to
+ * drop a NOT NULL constraint from an existing column - schema.sql's own CREATE TABLE IF NOT
+ * EXISTS is a no-op on an already-existing products table, exactly like every other structural
+ * change in this file's history, so this uses SQLite's own documented safe table-rebuild
+ * procedure (https://www.sqlite.org/lang_altertable.html#otheralter): build a new table with the
+ * identical column list/order/defaults/constraints except price_eur's relaxed NOT NULL, copy
+ * every row across via `SELECT *` (safe because column order is unchanged), drop the old table,
+ * rename the new one in, then recreate the four indexes schema.sql itself declares on products.
+ * No column is added, removed, renamed, or reordered; no default changes; no existing value is
+ * modified - every row keeps its exact current price_eur (or any other column) value.
+ *
+ * Idempotent: checked via PRAGMA table_info before doing anything - a database that already has
+ * a nullable price_eur (fresh install via the updated schema.sql, or an already-migrated
+ * database) is left untouched, so this is safe to call unconditionally on every startup.
+ *
+ * foreign_keys must be toggled OFF before, and back ON after, the rebuild - other tables hold
+ * `FOREIGN KEY (product_id) REFERENCES products(id)`, and runtime.ts always enables
+ * `PRAGMA foreign_keys = ON` before ensureSchema runs, so dropping products mid-rebuild would
+ * otherwise violate referencing rows. SQLite documents that this PRAGMA only takes effect
+ * outside an active transaction, so it is toggled here, not inside the rebuild transaction
+ * itself. PRAGMA foreign_key_check runs immediately after commit as a defensive integrity
+ * verification before foreign_keys is turned back on.
+ */
+function ensureProductPriceEurNullable(sqlite: Database.Database): void {
+  const priceColumn = (sqlite.prepare("PRAGMA table_info(products)").all() as Array<{ name: string; notnull: number }>).find(
+    (row) => row.name === "price_eur",
+  );
+  if (!priceColumn || priceColumn.notnull === 0) return; // already nullable (fresh install or already migrated) - no-op
+
+  const wasForeignKeysOn = (sqlite.pragma("foreign_keys", { simple: true }) as number) === 1;
+  if (wasForeignKeysOn) sqlite.pragma("foreign_keys = OFF");
+  try {
+    sqlite.transaction(() => {
+      sqlite.exec(`
+CREATE TABLE products_price_eur_nullable_rebuild (
+  id TEXT PRIMARY KEY,
+  erp_reference_id TEXT,
+  sku TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  category_id TEXT,
+  collection_id TEXT,
+  brand TEXT,
+  model TEXT,
+  manufacturer TEXT,
+  country_of_origin TEXT,
+  period TEXT,
+  materials TEXT,
+  description TEXT,
+  product_story TEXT,
+  condition TEXT,
+  condition_description TEXT,
+  length_value REAL,
+  width_value REAL,
+  height_value REAL,
+  dimension_unit TEXT,
+  weight_value REAL,
+  weight_unit TEXT,
+  stock_quantity INTEGER NOT NULL DEFAULT 1,
+  lot_item_count INTEGER,
+  purchase_cost REAL,
+  purchase_currency TEXT,
+  internal_notes TEXT,
+  price_eur REAL,
+  price_usd REAL,
+  min_offer_price REAL,
+  video_url TEXT,
+  shipping_profile TEXT,
+  shipping_note TEXT,
+  customs_warning INTEGER NOT NULL DEFAULT 0,
+  seo_title TEXT,
+  meta_description TEXT,
+  keywords TEXT,
+  is_featured INTEGER NOT NULL DEFAULT 0,
+  allow_make_offer INTEGER NOT NULL DEFAULT 0,
+  allow_cash_on_delivery INTEGER NOT NULL DEFAULT 0,
+  show_in_archive_after_sale INTEGER NOT NULL DEFAULT 0,
+  ebay_title TEXT,
+  ebay_subtitle TEXT,
+  ebay_description TEXT,
+  ebay_condition_description TEXT,
+  ebay_category TEXT,
+  ebay_item_specifics TEXT,
+  ebay_listing_price_eur REAL,
+  ebay_listing_status TEXT,
+  etsy_title TEXT,
+  etsy_description TEXT,
+  etsy_tags TEXT,
+  etsy_materials TEXT,
+  etsy_style TEXT,
+  etsy_occasion TEXT,
+  etsy_listing_price_eur REAL,
+  etsy_listing_status TEXT,
+  woo_product_name TEXT,
+  woo_short_description TEXT,
+  woo_long_description TEXT,
+  woo_slug TEXT,
+  woo_seo_title TEXT,
+  woo_meta_description TEXT,
+  woo_focus_keyword TEXT,
+  woo_listing_price_eur REAL,
+  woo_listing_status TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  FOREIGN KEY (category_id) REFERENCES categories(id),
+  FOREIGN KEY (collection_id) REFERENCES collections(id)
+);
+INSERT INTO products_price_eur_nullable_rebuild SELECT * FROM products;
+DROP TABLE products;
+ALTER TABLE products_price_eur_nullable_rebuild RENAME TO products;
+CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+CREATE INDEX IF NOT EXISTS idx_products_type ON products(type);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_collection ON products(collection_id);`);
+    })();
+
+    const violations = sqlite.pragma("foreign_key_check(products)") as unknown[];
+    if (violations.length > 0) {
+      throw new Error(`Sprint 137 products.price_eur migration left ${violations.length} foreign key violation(s) - aborting.`);
+    }
+  } finally {
+    if (wasForeignKeysOn) sqlite.pragma("foreign_keys = ON");
+  }
 }
 
 /** Sprint 134: Admin-configurable checkout-time shipping methods - see schema.sqlite.ts's shippingMethods table doc comment. */

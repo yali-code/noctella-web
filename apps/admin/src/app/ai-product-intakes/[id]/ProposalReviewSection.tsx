@@ -174,40 +174,49 @@ export function ProposalReviewSection({ intakeId, intakeStatus, photos, proposal
             onReject={() => submitDecision("title", AiIntakeFieldDecision.Rejected)}
             onReset={() => submitDecision("title", AiIntakeFieldDecision.Pending)}
           />
-          <FieldReviewRow
-            label="Description"
-            field="description"
-            reviewed={proposal.description}
-            stale={stale}
-            canReview={isOpen}
-            busy={busyField === "description"}
-            editing={editingField === "description"}
-            editValue={editValue}
-            onEditValueChange={setEditValue}
-            onStartEdit={() => startEdit("description", proposal.description)}
-            onCancelEdit={() => setEditingField(null)}
-            onSubmitEdit={() => submitEdit("description")}
-            onAccept={() => submitDecision("description", AiIntakeFieldDecision.Accepted)}
-            onReject={() => submitDecision("description", AiIntakeFieldDecision.Rejected)}
-            onReset={() => submitDecision("description", AiIntakeFieldDecision.Pending)}
-          />
-          <FieldReviewRow
-            label="Keywords"
-            field="keywords"
-            reviewed={proposal.keywords}
-            stale={stale}
-            canReview={isOpen}
-            busy={busyField === "keywords"}
-            editing={editingField === "keywords"}
-            editValue={editValue}
-            onEditValueChange={setEditValue}
-            onStartEdit={() => startEdit("keywords", proposal.keywords)}
-            onCancelEdit={() => setEditingField(null)}
-            onSubmitEdit={() => submitEdit("keywords")}
-            onAccept={() => submitDecision("keywords", AiIntakeFieldDecision.Accepted)}
-            onReject={() => submitDecision("keywords", AiIntakeFieldDecision.Rejected)}
-            onReset={() => submitDecision("keywords", AiIntakeFieldDecision.Pending)}
-          />
+          {/* Sprint 137: Description/Keywords remain functionally optional and never block Stock
+              Acceptance (decideProductTextFieldsFromProposal only requires Title) - collapsed here
+              so the warehouse operator's primary path is Title only, matching the approved
+              simplified warehouse review. Admin can still expand and review/edit them later. */}
+          <details>
+            <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--noctella-aged-bronze)", marginBottom: 8 }}>
+              Description &amp; Keywords (optional)
+            </summary>
+            <FieldReviewRow
+              label="Description"
+              field="description"
+              reviewed={proposal.description}
+              stale={stale}
+              canReview={isOpen}
+              busy={busyField === "description"}
+              editing={editingField === "description"}
+              editValue={editValue}
+              onEditValueChange={setEditValue}
+              onStartEdit={() => startEdit("description", proposal.description)}
+              onCancelEdit={() => setEditingField(null)}
+              onSubmitEdit={() => submitEdit("description")}
+              onAccept={() => submitDecision("description", AiIntakeFieldDecision.Accepted)}
+              onReject={() => submitDecision("description", AiIntakeFieldDecision.Rejected)}
+              onReset={() => submitDecision("description", AiIntakeFieldDecision.Pending)}
+            />
+            <FieldReviewRow
+              label="Keywords"
+              field="keywords"
+              reviewed={proposal.keywords}
+              stale={stale}
+              canReview={isOpen}
+              busy={busyField === "keywords"}
+              editing={editingField === "keywords"}
+              editValue={editValue}
+              onEditValueChange={setEditValue}
+              onStartEdit={() => startEdit("keywords", proposal.keywords)}
+              onCancelEdit={() => setEditingField(null)}
+              onSubmitEdit={() => submitEdit("keywords")}
+              onAccept={() => submitDecision("keywords", AiIntakeFieldDecision.Accepted)}
+              onReject={() => submitDecision("keywords", AiIntakeFieldDecision.Rejected)}
+              onReset={() => submitDecision("keywords", AiIntakeFieldDecision.Pending)}
+            />
+          </details>
 
           {isOpen &&
             (confirmRegenerate ? (

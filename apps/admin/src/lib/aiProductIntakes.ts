@@ -36,7 +36,8 @@ export interface SaveAiIntakeAsDraftInput {
 export interface StockAcceptanceInput {
   categoryId: string;
   type: string;
-  priceEur: number;
+  /** Sprint 137: optional - the warehouse must never be required to enter a sales price. */
+  priceEur?: number;
   stockQuantity?: number;
   brand?: string;
   model?: string;

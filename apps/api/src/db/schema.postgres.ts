@@ -64,7 +64,8 @@ export const products = pgTable("products", {
   purchaseCost: numeric("purchase_cost", { precision: 18, scale: 6 }),
   purchaseCurrency: text("purchase_currency"),
   internalNotes: text("internal_notes"),
-  priceEur: numeric("price_eur", { precision: 18, scale: 6 }).notNull(),
+  // Sprint 137: nullable for parity with schema.sqlite.ts - see that file's doc comment.
+  priceEur: numeric("price_eur", { precision: 18, scale: 6 }),
   priceUsd: numeric("price_usd", { precision: 18, scale: 6 }),
   minOfferPrice: numeric("min_offer_price", { precision: 18, scale: 6 }),
   videoUrl: text("video_url"),

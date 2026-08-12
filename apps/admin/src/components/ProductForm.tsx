@@ -145,7 +145,9 @@ export function productToFormValues(product: ProductDetail): ProductFormValues {
     purchaseCost: product.purchaseCost?.toString(),
     purchaseCurrency: product.purchaseCurrency,
     internalNotes: product.internalNotes,
-    priceEur: product.priceEur.toString(),
+    // Sprint 137: priceEur may be null (Draft/Approved Product with no sale price yet) - render
+    // as a blank input, never crash, never fabricate a "0" that could be mistaken for a real price.
+    priceEur: product.priceEur?.toString() ?? "",
     priceUsd: product.priceUsd?.toString(),
     minOfferPrice: product.minOfferPrice?.toString(),
     imageUrl: primaryImage?.url,
@@ -189,8 +191,30 @@ export function productToFormValues(product: ProductDetail): ProductFormValues {
   };
 }
 
-function toApiPayload(values: ProductFormValues) {
+function toApiPayload(values: ProductFormValues, initialValues: ProductFormValues) {
   const num = (v?: string) => (v !== undefined && v !== "" ? Number(v) : undefined);
+  /**
+   * Sprint 137 Required Fix Correction: priceEur and wooListingPriceEur are the two sales-price
+   * fields that participate in the approved Noctella Web effective-price invariant
+   * (`wooListingPriceEur ?? priceEur`) and are the only ones this form must be able to explicitly
+   * clear. Comparing against the already-available `initialValues` prop (not a new touched/dirty
+   * flag) distinguishes:
+   *   - untouched (current === initial, including both blank) -> undefined (omit key, no-op)
+   *   - explicitly cleared (current is blank, differs from a non-blank initial) -> null
+   *   - a real value -> the number
+   * This also preserves current Create-mode semantics for free: initialValues.priceEur is always
+   * "" on a fresh create form, so a field the user never touches (or types into and blanks again)
+   * stays "untouched" and is omitted, exactly as before.
+   * eBay/Etsy listing-price overrides are NOT part of this invariant and are left on the
+   * pre-existing `num()` no-op-on-blank behavior (out of scope for this correction).
+   */
+  const salesPrice = (current?: string, initial?: string): number | null | undefined => {
+    const c = current ?? "";
+    const i = initial ?? "";
+    if (c === i) return undefined;
+    if (c === "") return null;
+    return Number(c);
+  };
   return {
     sku: values.sku,
     title: values.title,
@@ -220,7 +244,7 @@ function toApiPayload(values: ProductFormValues) {
     purchaseCost: num(values.purchaseCost),
     purchaseCurrency: values.purchaseCurrency || undefined,
     internalNotes: values.internalNotes || undefined,
-    priceEur: num(values.priceEur),
+    priceEur: salesPrice(values.priceEur, initialValues.priceEur),
     priceUsd: num(values.priceUsd),
     minOfferPrice: num(values.minOfferPrice),
     videoUrl: values.videoUrl || undefined,
@@ -261,7 +285,7 @@ function toApiPayload(values: ProductFormValues) {
     wooSeoTitle: values.wooSeoTitle || undefined,
     wooMetaDescription: values.wooMetaDescription || undefined,
     wooFocusKeyword: values.wooFocusKeyword || undefined,
-    wooListingPriceEur: num(values.wooListingPriceEur),
+    wooListingPriceEur: salesPrice(values.wooListingPriceEur, initialValues.wooListingPriceEur),
     wooListingStatus: values.wooListingStatus || undefined,
     images: values.imageUrl
       ? [{ url: values.imageUrl, altText: values.imageAltText || undefined, sortOrder: 0, isPrimary: true }]
@@ -313,7 +337,7 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
     setFieldErrors({});
     setVersionConflict(false);
     try {
-      await onSubmit(toApiPayload(values));
+      await onSubmit(toApiPayload(values, initialValues));
     } catch (err) {
       if (err instanceof ApiError) {
         // Sprint 88: a version conflict is shown separately and never clears `values` or
@@ -570,7 +594,7 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
 
       <Section title="Pricing">
         <Field label="EUR Price" error={fieldErrors.priceEur}>
-          <input style={inputStyle} value={values.priceEur} onChange={(e) => set("priceEur", e.target.value)} />
+          <input style={inputStyle} value={values.priceEur ?? ""} onChange={(e) => set("priceEur", e.target.value)} />
         </Field>
         <Field label="USD Price">
           <input style={inputStyle} value={values.priceUsd ?? ""} onChange={(e) => set("priceUsd", e.target.value)} />

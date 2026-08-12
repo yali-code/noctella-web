@@ -4,6 +4,8 @@ import { createTestDb } from "./testDb";
 import { createInventoryRepositoryBundleForDb } from "../src/repositories/inventory/factory";
 import { DuplicateSkuError, InsufficientStockError, StaleInventoryVersionError, StaleProductVersionError } from "../src/repositories/inventory";
 import { SqliteUnitOfWork } from "../src/services/unitOfWork";
+import { createProduct } from "../src/services/products";
+import { createCategory } from "../src/services/categories";
 function repo(){ const db=createTestDb(); return {db,r:createInventoryRepositoryBundleForDb(db,"sqlite")}; }
 const now=(n=1)=>`2026-01-0${n}T00:00:00.000Z`;
 async function seed(){ const x=repo(); const p=await x.r.products.create({id:"p1",sku:"SKU1",title:"T",slug:"t",type:ProductType.UniqueItem,status:ProductStatus.Draft,priceEur:10,stockQuantity:5,purchaseCurrency:"EUR",createdAt:now(),updatedAt:now()}); return {...x,p}; }
@@ -16,6 +18,20 @@ describe("Sprint 31A I1 inventory repository foundation",()=>{
  test("duplicate SKU behavior",async()=>{ const {r}=await seed(); await expect(r.products.create({id:"p2",sku:"SKU1",title:"T2",slug:"t2",type:"unique",status:"draft",priceEur:1,createdAt:now(),updatedAt:now()})).rejects.toBeInstanceOf(DuplicateSkuError); });
  test("list ordering",async()=>{ const {r}=await seed(); await r.products.create({id:"p2",sku:"AAA",title:"A",slug:"a",type:"unique",status:"draft",priceEur:1,createdAt:now(),updatedAt:now()}); expect((await r.products.list()).map(p=>p.sku)).toEqual(["AAA","SKU1"]); });
  test("nullable optional fields",async()=>{ const {p}=await seed(); expect(p.categoryId).toBeNull(); expect(p.marketplace.ebayTitle).toBeNull(); });
+ // Sprint 137 Required Fix Correction #3: a Draft/Approved Product created via the real
+ // services/products.ts::createProduct write path (the one Stock Acceptance actually uses) may
+ // genuinely have priceEur:null. Reading that same row back through this Inventory repository
+ // must preserve the null, never coerce it to 0 via Number(null).
+ test("priceEur null preservation: an unpriced Product reads back as priceEur === null, not 0",async()=>{
+   const { db, r } = repo();
+   const category = await createCategory(db, { name: "Sprint137InvNull", displayOrder: 0, isActive: true });
+   const product = await createProduct(db, { sku: "SKU-INV-NULL-1", title: "Unpriced", slug: "unpriced-inv-null-1", type: ProductType.UniqueItem, status: ProductStatus.Draft, categoryId: category.id, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false, stockQuantity: 1 });
+   expect(product.priceEur).toBeNull();
+   const record: any = await r.products.findById(product.id);
+   expect(record.priceEur).toBeNull();
+   expect(record.priceEur).not.toBe(0);
+ });
+ test("priceEur numeric preservation: a real priced Product still reads back as the exact number",async()=>{ const {p}=await seed(); expect(p.priceEur).toBe(10); expect(p.priceEur).not.toBeNull(); });
  test("update",async()=>{ const {r}=await seed(); expect((await r.products.update("p1",{title:"N",updatedAt:now(2)})).title).toBe("N"); });
  test("stale version",async()=>{ const {r}=await seed(); await expect(r.products.updateWithVersion("p1",{title:"N",updatedAt:now(2)},"stale")).rejects.toBeInstanceOf(StaleProductVersionError); });
  test("not found",async()=>expect((await seed()).r.products.findById("none")).resolves.toBeNull());

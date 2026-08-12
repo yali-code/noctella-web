@@ -1,6 +1,8 @@
 import type { ProductStatus, ProductType, StockMovementType } from "@noctella/shared";
 export type CurrencyCode="EUR";
-export type ProductDto=Readonly<{id:string;sku:string;title:string;slug:string;type:string;status:ProductStatus|string;stockQuantity:number;priceEur:number;purchaseCost:number|null;purchaseCurrency:CurrencyCode|null;categoryId:string|null;collectionId:string|null;createdAt:string;updatedAt:string;marketplace:Readonly<{ebayTitle?:string|null;etsyTitle?:string|null;wooProductName?:string|null}>}>;
+// Sprint 137 Required Fix Correction #3: priceEur nullable, mirroring ProductRecord (this DTO is a
+// direct 1:1 field mapping of ProductRecord - see application/inventory/useCases.ts's `product` mapper).
+export type ProductDto=Readonly<{id:string;sku:string;title:string;slug:string;type:string;status:ProductStatus|string;stockQuantity:number;priceEur:number|null;purchaseCost:number|null;purchaseCurrency:CurrencyCode|null;categoryId:string|null;collectionId:string|null;createdAt:string;updatedAt:string;marketplace:Readonly<{ebayTitle?:string|null;etsyTitle?:string|null;wooProductName?:string|null}>}>;
 export type InventoryDto=Readonly<{productId:string;locationId:string|null;quantity:number;updatedAt:string}>;
 export type StockMovementDto=Readonly<{id:string;productId:string;type:string;quantityDelta:number;stockBefore:number;stockAfter:number;orderId:string|null;orderItemId:string|null;note:string|null;idempotencyKey:string|null;createdAt:string;updatedAt:string}>;
 export type StockLocationDto=Readonly<{id:string;warehouseId:string;code:string;name:string;status:string;locationType:string;sortOrder:number;createdAt:string;updatedAt:string}>;

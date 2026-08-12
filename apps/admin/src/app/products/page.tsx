@@ -221,7 +221,7 @@ export default function ProductsPage() {
                 <td style={tdStyle}>{item.sku}</td>
                 <td style={tdStyle}>{item.type}</td>
                 <td style={tdStyle}>{categoryName(item.categoryId)}</td>
-                <td style={tdStyle}>€{item.priceEur.toFixed(2)}</td>
+                <td style={tdStyle}>{item.priceEur != null ? `€${item.priceEur.toFixed(2)}` : "No price set"}</td>
                 <td style={tdStyle}>{item.stockQuantity}</td>
                 <td style={tdStyle}>{item.status}</td>
                 <td style={tdStyle}>{new Date(item.updatedAt).toLocaleDateString()}</td>

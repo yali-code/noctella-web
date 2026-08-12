@@ -66,7 +66,17 @@ export function finalizeInternalOrderInTransaction(
     const p = products.find((x: any) => x.id === line.productId);
     if (!resolved && (!p || p.status !== ProductStatus.Published)) throw new BadRequestError("Orders can only include published products");
     if (!resolved && p.stockQuantity < line.quantity) throw new TerminalStockUnavailableError();
+    // Sprint 137 Required Fix: before priceEur became nullable this raw fallback was always safe.
+    // A legitimately Published Product may now have priceEur:null. The canonical path (used only
+    // by pricingContext !== "noctella_web" callers, i.e. marketplace-sync order import today) is
+    // deliberately channel-agnostic and must never fall back to wooListingPriceEur - that field is
+    // a Noctella-Web-storefront-specific override; applying it here would silently reprice a
+    // non-Noctella-Web order using a different channel's price authority (see "preserves canonical
+    // pricing for non-Noctella-Web internal orders" below, which proves this is the established,
+    // intentional contract, not an oversight). The only correction needed is to never let
+    // arithmetic run against a null price - fail closed with an explicit error instead.
     const resolvedLine=resolved?.lines.find(x=>x.product.id===line.productId); const unitPrice = resolvedLine?.unitPrice ?? p.priceEur;
+    if (unitPrice == null) throw new BadRequestError("Product has no valid price");
     subtotal += unitPrice * line.quantity;
     const productTitle = resolvedLine?.title ?? p.title;
     itemRows.push({ id: g.id(), orderId, productId: p.id, productSku: p.sku, productTitle, productSlug: p.slug, productType: p.type, productImageUrl: p.imageUrl, quantity: line.quantity, unitPrice, totalPrice: unitPrice * line.quantity, currency: "EUR", createdAt: now, updatedAt: now });

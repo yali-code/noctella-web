@@ -14,12 +14,18 @@ import { ProductType } from "@noctella/shared";
  * stockQuantity already work in the existing Save as Draft contract).
  * Strict so any unknown field (including a client-supplied sku) is rejected,
  * not silently stripped.
+ *
+ * Sprint 137: priceEur is now optional - the warehouse must not be required to enter a sales
+ * price during Stock Acceptance (see Product.priceEur's own nullable doc comment in
+ * @noctella/shared). When the caller does supply a value it must still be a genuine positive
+ * EUR amount - never 0 or negative, and this contract never invents/defaults one on the
+ * caller's behalf.
  */
 export const stockAcceptanceSchema = z
   .object({
     categoryId: z.string().trim().min(1, "categoryId is required"),
     type: z.nativeEnum(ProductType),
-    priceEur: z.number().min(0),
+    priceEur: z.number().positive("EUR price must be greater than 0").optional(),
     stockQuantity: z.number().int().min(0).optional(),
     brand: z.string().trim().min(1).optional(),
     model: z.string().trim().min(1).optional(),

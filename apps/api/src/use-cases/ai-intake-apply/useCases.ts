@@ -35,7 +35,9 @@ export interface ApplyAiIntakeInput {
   sku: string;
   categoryId: string;
   type: ProductType;
-  priceEur: number;
+  /** Sprint 137: optional/nullable, matching baseProductSchema's own priceEur - a Draft Product
+   * created via this "Save as Draft" path may likewise have no sale price yet. */
+  priceEur?: number | null;
   stockQuantity?: number;
   expectedProposalUpdatedAt: string;
   actorId: string;

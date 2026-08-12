@@ -103,6 +103,73 @@ describe("product service", () => {
     expect(archived.status).toBe(ProductStatus.Archived);
   });
 
+  describe("Sprint 137: priceEur nullability and Published-product price-mutation safety", () => {
+    it("creates a Draft Product with priceEur omitted entirely - priceEur is null, never a fabricated placeholder", async () => {
+      const { priceEur: _omitted, ...withoutPrice } = baseInput();
+      const product = await createProduct(db, withoutPrice as any);
+      expect(product.status).toBe(ProductStatus.Draft);
+      expect(product.priceEur).toBeNull();
+    });
+
+    it("rejects creating a Product with status Published and no valid price", async () => {
+      const { priceEur: _omitted, ...withoutPrice } = baseInput({ status: ProductStatus.Published });
+      await expect(createProduct(db, withoutPrice as any)).rejects.toThrow();
+    });
+
+    it("Admin can assign a real positive price to a previously unpriced Draft Product", async () => {
+      const { priceEur: _omitted, ...withoutPrice } = baseInput();
+      const product = await createProduct(db, withoutPrice as any);
+      const updated = await updateProduct(db, product.id, { priceEur: 899 });
+      expect(updated.priceEur).toBe(899);
+    });
+
+    it("Admin can explicitly clear a previously-entered price while the Product is still Draft", async () => {
+      const product = await createProduct(db, baseInput());
+      const updated = await updateProduct(db, product.id, { priceEur: null });
+      expect(updated.priceEur).toBeNull();
+    });
+
+    it("Admin can explicitly clear a previously-entered price while the Product is Approved", async () => {
+      const product = await createProduct(db, baseInput({ status: ProductStatus.Approved }));
+      const updated = await updateProduct(db, product.id, { priceEur: null });
+      expect(updated.priceEur).toBeNull();
+    });
+
+    it("rejects clearing the price on an already-Published Product with no channel override present", async () => {
+      const product = await createProduct(db, baseInput({ status: ProductStatus.Published }));
+      await expect(updateProduct(db, product.id, { priceEur: null })).rejects.toBeInstanceOf(BadRequestError);
+      const unchanged = await getProductById(db, product.id);
+      expect(unchanged.priceEur).toBe(1200);
+    });
+
+    it("allows clearing the base price on a Published Product when a valid wooListingPriceEur override remains", async () => {
+      const product = await createProduct(db, baseInput({ status: ProductStatus.Published, wooListingPriceEur: 999 }));
+      const updated = await updateProduct(db, product.id, { priceEur: null });
+      expect(updated.priceEur).toBeNull();
+      expect(updated.wooListingPriceEur).toBe(999);
+    });
+
+    it("rejects a single update that would leave a Published Product with no effective price at all (both priceEur and wooListingPriceEur cleared together)", async () => {
+      const product = await createProduct(db, baseInput({ status: ProductStatus.Published, wooListingPriceEur: 999 }));
+      await expect(updateProduct(db, product.id, { priceEur: null, wooListingPriceEur: null })).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    it("rejects directly setting status to Published in the same request that would leave no valid price", async () => {
+      const { priceEur: _omitted, ...withoutPrice } = baseInput();
+      const product = await createProduct(db, withoutPrice as any);
+      await expect(updateProduct(db, product.id, { status: ProductStatus.Published })).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    it("allows setting status to Published in the same request when a valid wooListingPriceEur override is supplied even though base priceEur is null", async () => {
+      const { priceEur: _omitted, ...withoutPrice } = baseInput();
+      const product = await createProduct(db, withoutPrice as any);
+      const updated = await updateProduct(db, product.id, { status: ProductStatus.Published, wooListingPriceEur: 799 });
+      expect(updated.status).toBe(ProductStatus.Published);
+      expect(updated.priceEur).toBeNull();
+      expect(updated.wooListingPriceEur).toBe(799);
+    });
+  });
+
   it("a partial update does not reset unrelated boolean flags to false", async () => {
     const product = await createProduct(db, baseInput({ showInArchiveAfterSale: true, isFeatured: true }));
     const updated = await updateProduct(db, product.id, { status: ProductStatus.Sold });
@@ -159,7 +226,9 @@ describe("product service", () => {
       const messages = result.error.issues.map((issue) => issue.path.join("."));
       expect(messages).toContain("sku");
       expect(messages).toContain("title");
-      expect(messages).toContain("priceEur");
+      // Sprint 137: priceEur is deliberately no longer unconditionally required by the base
+      // schema - a Draft/Approved Product may have no price yet (see the dedicated "Sprint 137:
+      // priceEur nullability" describe block above for the status-conditional requirement).
     }
   });
 

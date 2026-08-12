@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS products (
   purchase_cost REAL,
   purchase_currency TEXT,
   internal_notes TEXT,
-  price_eur REAL NOT NULL,
+  price_eur REAL,
   price_usd REAL,
   min_offer_price REAL,
   video_url TEXT,

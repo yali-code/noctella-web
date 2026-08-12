@@ -43,7 +43,7 @@ export class DeterministicMarketplacePreparationPromptBuilder implements Marketp
       context.conditionDescription ? `Condition description: ${context.conditionDescription}` : undefined,
       context.seoTitle ? `Existing SEO title: ${context.seoTitle}` : undefined,
       context.metaDescription ? `Existing meta description: ${context.metaDescription}` : undefined,
-      `Current EUR price (context only, never a marketplace-price instruction): €${context.priceEur.toFixed(2)}`,
+      context.priceEur != null ? `Current EUR price (context only, never a marketplace-price instruction): €${context.priceEur.toFixed(2)}` : undefined,
     ].filter((line): line is string => Boolean(line));
 
     return {

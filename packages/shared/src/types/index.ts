@@ -150,7 +150,13 @@ export interface Product extends Timestamps {
   internalNotes?: string;
 
   // Pricing
-  priceEur: number;
+  /**
+   * Sprint 137: nullable - a Product may exist physically in Stock (Draft) or be
+   * Admin-approved (Approved) before its sale price has been determined. Never null
+   * for a Published Product; publish validation is the sole authoritative gate that
+   * enforces this before any publish transition.
+   */
+  priceEur: number | null;
   priceUsd?: number;
   minOfferPrice?: number;
 

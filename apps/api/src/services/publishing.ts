@@ -16,6 +16,22 @@ function required(product: Product, fields: Array<[keyof Product, string]>, erro
   }
 }
 
+/**
+ * Sprint 137: the channel-aware effective price - must stay in exact agreement with
+ * buildPublishPayload's own per-channel `priceEur` line below, since validatePublish is the
+ * authoritative gate that decides whether that payload is ever allowed to be built/used. Reusing
+ * this same precedence here (rather than the old unconditional base-priceEur check) is the
+ * precise, minimum correction required once Product.priceEur became nullable: a Product whose
+ * base priceEur is null but whose channel-specific listing price is set must still be publishable
+ * on that channel, exactly as "wooListingPriceEur ?? priceEur" (and the eBay/Etsy equivalents)
+ * already promise.
+ */
+function effectivePriceEur(product: Product, channel: PublishChannel): number | null {
+  if (channel === PublishChannel.Ebay) return product.ebayListingPriceEur ?? product.priceEur ?? null;
+  if (channel === PublishChannel.Etsy) return product.etsyListingPriceEur ?? product.priceEur ?? null;
+  return product.wooListingPriceEur ?? product.priceEur ?? null;
+}
+
 function channelStatus(product: Product, channel: PublishChannel): ListingStatus {
   if (channel === PublishChannel.Ebay) return product.ebayListingStatus ?? ListingStatus.Draft;
   if (channel === PublishChannel.Etsy) return product.etsyListingStatus ?? ListingStatus.Draft;
@@ -41,7 +57,8 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
 
   if (product.status === ProductStatus.Archived) errors.push(issue("invalid_listing_status", "error", "Archived products cannot be published", "status"));
   if (product.stockQuantity < 1) errors.push(issue("inventory_unavailable", "error", "Product must have stock available", "stockQuantity"));
-  if (product.priceEur <= 0) errors.push(issue("price_missing", "error", "Base EUR price must be greater than 0", "priceEur"));
+  const effectivePrice = effectivePriceEur(product, channel);
+  if (effectivePrice == null || effectivePrice <= 0) errors.push(issue("price_missing", "error", "A valid positive EUR price is required before publishing", "priceEur"));
   if (!hasEligiblePrimaryPhoto(product.photos)) errors.push(issue("primary_product_photo_required", "error", "A Primary product photo is required before publishing.", "photos"));
   if (blank(product.conditionDescription)) warnings.push(issue("content_warning", "warning", "Condition description is recommended", "conditionDescription"));
 
@@ -50,20 +67,37 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
   } else if (channel === PublishChannel.Etsy) {
     required(product, [["etsyTitle", "Etsy title"], ["etsyDescription", "Etsy description"], ["etsyTags", "Etsy tags"], ["etsyListingPriceEur", "Etsy listing price"]], errors);
   } else {
-    required(product, [["wooProductName", "Noctella Web product name"], ["wooShortDescription", "Noctella Web short description"], ["wooLongDescription", "Noctella Web long description"], ["wooListingPriceEur", "Noctella Web listing price"]], errors);
+    // Sprint 137: wooListingPriceEur is deliberately NOT in this required list - it is an
+    // optional per-channel override, not an independent requirement. The effectivePriceEur
+    // check above already enforces "wooListingPriceEur ?? priceEur" is a valid positive amount,
+    // which correctly accepts a valid base priceEur alone when no Noctella Web-specific
+    // override has been set. eBay/Etsy intentionally keep their own separate, unchanged
+    // required-listing-price checks below/above - this relaxation is Noctella Web-specific only.
+    required(product, [["wooProductName", "Noctella Web product name"], ["wooShortDescription", "Noctella Web short description"], ["wooLongDescription", "Noctella Web long description"]], errors);
   }
 
   return { productId: product.id, channel, valid: errors.length === 0, errors, warnings };
 }
 
+/**
+ * Sprint 137: buildPublishPayload is only ever called after validatePublish has already
+ * confirmed `effectivePriceEur(product, channel)` is a valid positive number - once from
+ * buildPublishPreview (gated by `validation.valid`), once from executePublish
+ * (marketplacePublishing.ts, which throws BadRequestError on an invalid validation result before
+ * ever reaching this call). The non-null assertion below trusts that already-enforced invariant
+ * rather than re-deriving a fallback value here, matching PublishPayload.priceEur's own
+ * intentionally-still-required (never nullable) type - a resolved payload must always carry a
+ * real price.
+ */
 export function buildPublishPayload(product: Product, images: ProductImage[], channel: PublishChannel): PublishPayload {
+  const priceEur = effectivePriceEur(product, channel)!;
   if (channel === PublishChannel.Ebay) {
-    return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.ebayTitle ?? product.title, description: product.ebayDescription ?? product.description ?? "", priceEur: product.ebayListingPriceEur ?? product.priceEur, category: product.ebayCategory, images, metadata: { subtitle: product.ebaySubtitle, itemSpecifics: product.ebayItemSpecifics, conditionDescription: product.ebayConditionDescription } };
+    return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.ebayTitle ?? product.title, description: product.ebayDescription ?? product.description ?? "", priceEur, category: product.ebayCategory, images, metadata: { subtitle: product.ebaySubtitle, itemSpecifics: product.ebayItemSpecifics, conditionDescription: product.ebayConditionDescription } };
   }
   if (channel === PublishChannel.Etsy) {
-    return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.etsyTitle ?? product.title, description: product.etsyDescription ?? product.description ?? "", priceEur: product.etsyListingPriceEur ?? product.priceEur, images, metadata: { tags: product.etsyTags, materials: product.etsyMaterials, style: product.etsyStyle, occasion: product.etsyOccasion } };
+    return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.etsyTitle ?? product.title, description: product.etsyDescription ?? product.description ?? "", priceEur, images, metadata: { tags: product.etsyTags, materials: product.etsyMaterials, style: product.etsyStyle, occasion: product.etsyOccasion } };
   }
-  return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.wooProductName ?? product.title, description: product.wooLongDescription ?? product.description ?? "", priceEur: product.wooListingPriceEur ?? product.priceEur, images, metadata: { shortDescription: product.wooShortDescription, slug: product.wooSlug, seoTitle: product.wooSeoTitle, metaDescription: product.wooMetaDescription, focusKeyword: product.wooFocusKeyword } };
+  return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.wooProductName ?? product.title, description: product.wooLongDescription ?? product.description ?? "", priceEur, images, metadata: { shortDescription: product.wooShortDescription, slug: product.wooSlug, seoTitle: product.wooSeoTitle, metaDescription: product.wooMetaDescription, focusKeyword: product.wooFocusKeyword } };
 }
 
 export function buildPublishPreview(product: Product & { images: ProductImage[] }, channel: PublishChannel): PublishPreview {
