@@ -16,6 +16,15 @@ disk, exactly one API instance, public Stripe checkout disabled. This is a separ
 of services from the existing staging Blueprint (`render.yaml`, `docs/deployment/render-staging.md`)
 — neither environment modifies or depends on the other.
 
+This boundary applies identically to every later sprint that only touches this documentation
+(including Sprint 143's runbook reconciliation) — merging documentation changes never advances the
+system toward go-live by itself. The required sequence remains: this runbook's documentation is
+merged → the operator's local `main` is synchronized → every item in the ordered checklist and the
+pre-authorization data-preparation checklist below is executed and independently confirmed → the
+user gives a **separate, explicit** production authorization decision → controlled production
+provisioning/deployment proceeds → the post-deploy production smoke checklist is executed. No step
+in that sequence is implied or skipped by an earlier one.
+
 ## Ordered pre-launch requirements
 
 Every item below must be independently confirmed before requesting production authorization.
@@ -85,7 +94,51 @@ operator works through.
     `noctella-production-database-backup` manually one final time, independent of its schedule),
     as a point-in-time safety net separate from the daily schedule.
 
-## Go-live smoke checklist
+## Optional AI / marketplace-preparation provider configuration
+
+None of the variables below are required for the controlled Noctella-Web COD-only launch. Each
+already defaults to a safe, no-network, no-API-key local Mock provider when unset — these are
+intentionally not part of the ordered checklist above, since operator entry is never mandatory.
+
+- **`MARKETPLACE_PREP_PROVIDER`** (optional) — selects the eBay/Etsy/Noctella Web marketplace
+  listing-preparation AI provider (Sprint 107). Unset or empty uses the safe local Mock provider
+  (no network call). Setting it to `openai` requires the existing `AI_INTAKE_OPENAI_API_KEY` and
+  `AI_INTAKE_OPENAI_MODEL` below — no separate secret is introduced. Not required for a
+  Noctella-Web-only COD launch.
+- **`SALES_ENRICHMENT_PROVIDER`** (optional) — selects the automatic Marketing Tags / price
+  initialization AI provider (Sprint 140). Same safe-default model as `MARKETPLACE_PREP_PROVIDER`
+  above. AI sales enrichment is best-effort by design — a Product can be accepted into stock,
+  priced, and published without it ever succeeding. Not required for core COD launch.
+- **`AI_INTAKE_OPENAI_MODEL`** (optional) — only relevant once any of the above (or the existing
+  AI Intake) provider selector is explicitly set to `openai`; unused otherwise. Current code
+  defines no default value for this variable — it must be supplied whenever `openai` is selected,
+  and only then.
+
+## Pre-authorization warehouse and publishing data preparation
+
+Complete this as part of preparing real launch catalog data, before requesting production
+authorization — distinct from the post-deploy smoke checklist below, which is executed against
+live production domains after traffic could actually flow.
+
+- [ ] Authenticated Admin login succeeds.
+- [ ] Stock Acceptance completes successfully for a real intake.
+- [ ] Initial Inventory / StockMovement is created with a non-zero accepted quantity (Sprint 138 —
+      an omitted quantity defaults to `1`, never `0`).
+- [ ] Sequential SKU is assigned to the accepted Product.
+- [ ] The Code128 Product label/barcode renders correctly and can be reprinted.
+- [ ] The Product enters Pending Publish when appropriate under the current provenance /
+      publish-evidence semantics (Sprint 139/142).
+- [ ] Product price and/or publishing preparation can be completed using current Admin behavior
+      (manual price entry and/or AI price initialization; Marketing Tags optional).
+- [ ] Noctella Web can be selected in the unified publishing UI (`/products/[id]/publishing`).
+- [ ] "Publish Selected" succeeds for Noctella Web.
+- [ ] The Product becomes storefront-visible only after the Noctella Web publish succeeds — never
+      merely because eBay and/or Etsy were also selected, and never before any channel succeeds.
+
+eBay publishing, Etsy publishing, successful AI enrichment, and Stripe activation are **not**
+required to complete this checklist or to authorize a Noctella-Web-only COD launch.
+
+## Post-deploy production smoke checklist
 
 Execute this only after every item above is confirmed and the user has explicitly authorized the
 cutover. Run every step against the real production domains, never `localhost` or an unrelated
@@ -117,6 +170,59 @@ cutover. Run every step against the real production domains, never `localhost` o
 
 This checklist is deliberately **not executed by this Discovery/Implementation task** — there is
 no production deployment, DNS change, or live environment mutation performed by Sprint 135 itself.
+
+## Go-live failure response: rollback vs. restore
+
+If a critical go-live smoke check fails, stop or avoid directing customer traffic to the affected
+service before diagnosing further. Do not blindly rerun destructive operations. Determine whether
+the failure is an **application/configuration** problem or a **database/data** problem before
+choosing a response — they require different actions.
+
+### Application rollback (release or configuration failure)
+
+- Stop or avoid customer traffic to the affected service.
+- If the failure is isolated to the application release or its configuration (not the data), use
+  Render's own supported prior-successful-deploy rollback/redeploy mechanism for the affected
+  service from the Render dashboard. This repository defines no separate rollback command or
+  script — it relies entirely on Render's own platform capability.
+- Do not restore the database merely for an application-only or configuration-only issue.
+- After rollback: re-run `GET /health`, then `GET /ready`, then the required post-deploy smoke
+  checks above before resuming traffic.
+
+### Database restore (data/migration failure)
+
+The repository provides backup and **verification** tooling only — `npm run db:restore-verify`
+and `npm run photos:recovery-verify` confirm a given backup object's integrity (byte size,
+checksum); neither of these, nor any other script in this repository, writes to
+`/var/data/noctella.sqlite` or automatically applies a backup to a running deployment. Do not
+describe or treat either as a one-command live restore.
+
+If an actual data-level restore is genuinely required:
+
+1. Identify the correct pre-cutover database backup object (from the daily
+   `noctella-production-database-backup` cron's history, or the manual pre-cutover backup taken
+   per step 23 above).
+2. Verify that object's integrity using `npm run db:restore-verify` (with the object key) before
+   using it for anything.
+3. Stop or quiesce the API service so no further writes occur against the live database.
+4. Preserve or separately retain the current (failed/suspect) `/var/data/noctella.sqlite` file
+   before replacing it, when operationally safe to do so.
+5. Replace the SQLite file on the persistent disk with the verified backup. This apply/copy-back
+   step is **manual and operator-executed**, using the approved S3-compatible storage access and
+   Render's own persistent-disk shell access — no repository script performs this step
+   automatically.
+6. Restart/redeploy the API service once the data file is in place.
+7. Re-run `GET /health`, then `GET /ready`.
+8. Re-run the required post-deploy production smoke checks above.
+9. Do not resume customer traffic until the recovery is verified end-to-end.
+
+### Photo restore
+
+Use the same honesty boundary as database restore: `npm run photos:recovery-verify` confirms a
+backed-up product-photo object's integrity only. Live copy-back of product photos into
+`PRODUCT_PHOTO_DIR` is likewise manual and operator-executed, using the same S3-compatible storage
+access and Render persistent-disk procedure — no automated restore command exists in this
+repository for product photos either.
 
 ## Explicit non-goals and risks
 

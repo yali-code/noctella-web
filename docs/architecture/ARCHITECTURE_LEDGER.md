@@ -123,6 +123,77 @@ npm run repo:parity -w apps/api
 
 ## Reusable Sprint Template
 
+## Sprint 142 — Publication State / Pending Publish Alignment
+
+### Architectural Decisions
+
+- Pending Publish now additionally excludes any Product with historical `PublishJobStatus.Succeeded` evidence, not merely a `Product.status` check — `Product.status` alone cannot represent "published to eBay/Etsy," since neither channel ever writes it.
+- Authority is derived from the existing `publish_jobs` table via a correlated `NOT EXISTS` predicate in `repositories/product-read/drizzle.ts` — no new persisted publication-state field or table was introduced.
+- `ProductStatus.Published` remains exclusively Noctella-Web-specific storefront-live semantics — unchanged by this sprint.
+- Failed, RetryPending, and Processing PublishJob history alone does not exclude a Product from Pending Publish — only a genuine historical `Succeeded` row does.
+
+### Entry Conditions
+
+- No future sprint should assume a separate persisted publication-state authority exists; the existing `publish_jobs` evidence remains canonical for "has this Product ever been published to a given channel."
+
+## Sprint 141 — Unified Channel Selection and Publishing
+
+### Architectural Decisions
+
+- A new batch orchestration (`executePublishBatch`) delegates every selected channel to the existing, unmodified per-channel `executePublish` — never a second publishing implementation.
+- Execution is sequential and attempt-all: one selected channel's outcome never prevents a later selected channel from being attempted, and no cross-channel transaction exists.
+- Each channel's outcome (succeeded/failed/skipped) is independent and reported per channel — never collapsed into a single global result.
+- `ProductStatus` semantics are unchanged: eBay/Etsy success still never writes `Product.status`; only Noctella Web publication does.
+
+## Sprint 140 — Automatic AI Sales Preparation and Marketing Tags
+
+### Architectural Decisions
+
+- A transactional `AiSalesPreparationRequested` Outbox intent is persisted inside the same Stock Acceptance transaction that creates the Product/Inventory row — never a separate, unguarded write.
+- Post-commit AI sales preparation dispatch is best-effort; the existing hourly background-job sweep remains the durable recovery mechanism — no new cron was introduced.
+- Marketing Tags were introduced as normalized Product-related data (`marketing_tags`/`product_marketing_tags`), a distinct concept from Category, Collection, and SEO keywords.
+- Initial price may be populated from the existing AI Intake proposal's suggested price only when the Product has no price yet — never a new AI provider call made solely for pricing.
+- AI sales enrichment (Marketing Tags / price initialization) is best-effort and is not a core COD-launch dependency — its provider defaults to a safe local Mock (no network call, no API key) when unconfigured.
+
+### Dependencies Introduced or Changed
+
+- New tables: `marketing_tags`, `product_marketing_tags`. New provider-selection variable `SALES_ENRICHMENT_PROVIDER` (optional, defaults to Mock).
+
+## Sprint 139 — Pending Publish Queue
+
+### Architectural Decisions
+
+- Pending Publish became a genuine Stock-Acceptance-provenance-based operational queue, not a plain `Product.status === "approved"` filter.
+- `ai_product_intakes.appliedAt IS NOT NULL`, joined via the unique `resultProductId` relation, is the acceptance-provenance authority.
+- This sprint did not yet exclude Products with historical channel-publish evidence from the queue — that gap was identified and closed later by Sprint 142.
+
+## Sprint 138 — Warehouse Smoke Hardening
+
+### Architectural Decisions
+
+- An omitted warehouse-intake quantity now defaults to `1` rather than `0`, so Stock Acceptance and AI Intake Apply never silently create an accepted, unsellable zero-stock Product.
+
+## Sprint 137 — Warehouse Intake & Barcode Workflow
+
+### Architectural Decisions
+
+- `Product.priceEur` became nullable, so Stock Acceptance may create a Product/Inventory row before a price is known.
+- Sequential SKU remains the canonical Product identifier; the Code128 barcode payload remains the Product SKU itself.
+- The warehouse label workflow (barcode rendering/reprint) reached its current architecture.
+- Noctella Web publication (`validatePublish`) remains the point at which a valid storefront price is actually required — a nullable base price does not bypass that gate.
+- Order-side price handling fails closed (`BadRequestError("Product has no valid price")`) rather than coercing a missing price to zero.
+
+### Dependencies Introduced or Changed
+
+- `products.price_eur` migrated to nullable (additive, idempotent, applied automatically via `ensureSchema()` — no manual migration step).
+
+## Sprint 136 — Ready to Publish Operational Queue
+
+### Architectural Decisions
+
+- A Ready to Publish operational queue was introduced as an Admin-only operational surface — no backend/schema authority was created by this sprint.
+- Its initial membership semantics (`Product.status === "approved"`) were later superseded by Sprint 139's Stock-Acceptance-provenance model; the operational route/page itself remained.
+
 ## Sprint 135 — Production Readiness Gate
 
 ### Architectural Decisions
