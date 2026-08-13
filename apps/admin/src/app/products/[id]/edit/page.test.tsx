@@ -25,10 +25,16 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
  * ProductForm also fetches /api/categories and /api/collections on mount - a blanket
  * mockResolvedValue on api.get would resolve those with the Product object too, and
  * `res.items` being undefined then crashes the categories.map() render. Route by path instead.
+ *
+ * Sprint 144: EditProductPage now supplies `productId` to ProductForm, which mounts the Marketing
+ * Tags section and calls marketingTagsApi.list() (GET .../marketing-tags) - that endpoint returns
+ * a bare `MarketingTag[]`, not a `{ items: [] }` paginated envelope, so it must be routed
+ * separately from the categories/collections fallback below.
  */
 function mockGetForProduct(product: any) {
   return vi.spyOn(apiLib.api, "get").mockImplementation(async (path: string) => {
     if (path === `/api/products/${product.id}`) return product;
+    if (path === `/api/products/${product.id}/marketing-tags`) return [];
     return { items: [] };
   });
 }

@@ -37,6 +37,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       <ProductForm
         initialValues={initialValues}
         submitLabel="Save Changes"
+        productId={params.id}
         onSubmit={async (payload) => {
           const updated = await api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt });
           setExpectedUpdatedAt(updated.updatedAt);

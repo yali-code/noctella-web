@@ -4,9 +4,10 @@
 // explicit user click - without disturbing the existing ordinary ApiError.details field-error
 // behavior. Follows the jsdom/testing-library conventions established by app/offers/page.test.tsx.
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "@/lib/api";
+import * as marketingTagsLib from "@/lib/marketingTags";
 import { ProductForm, emptyProductForm, productToFormValues } from "./ProductForm";
 
 afterEach(() => vi.restoreAllMocks());
@@ -260,5 +261,221 @@ describe("ProductForm — Sprint 88 version-conflict handling", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("Title is required")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reload Latest Product" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Sprint 144: Canonical Product Edit foundation - `productId` is the explicit edit-mode signal
+ * (supplied only by products/[id]/edit/page.tsx, never by products/new/page.tsx). Proves: SKU is
+ * locked to read-only only when editing an existing Product; the Marketing Tags section mounts
+ * (and calls the Marketing Tags API) only in that same mode.
+ */
+describe("ProductForm — Sprint 144: SKU immutability on an existing Product", () => {
+  it("SKU remains a plain editable input in create mode (no productId)", async () => {
+    const user = userEvent.setup();
+    render(<ProductForm initialValues={emptyProductForm} submitLabel="Create" onSubmit={vi.fn()} />);
+    const skuInput = screen.getByLabelText("SKU") as HTMLInputElement;
+    expect(skuInput).not.toBeDisabled();
+    await user.type(skuInput, "SKU-NEW");
+    expect(skuInput.value).toBe("SKU-NEW");
+  });
+
+  it("SKU is rendered read-only and disabled when editing an existing Product (productId supplied)", () => {
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+      />,
+    );
+    const skuInput = screen.getByLabelText("SKU") as HTMLInputElement;
+    expect(skuInput).toBeDisabled();
+    expect(skuInput.value).toBe("SKU-1");
+  });
+
+  it("an unchanged (disabled) SKU is still submitted unchanged - no accidental value loss", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={onSubmit}
+        productId="p1"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].sku).toBe("SKU-1");
+  });
+});
+
+describe("ProductForm — Sprint 144: ProductStatus.Published protection", () => {
+  it("Published is never offered as a selectable Status option (Draft/Approved product)", () => {
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct({ status: "draft" }))}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+      />,
+    );
+    // Scoped to the Status combobox itself - eBay/Etsy/Web Listing Status selects also have a
+    // "draft" option (ListingStatus.Draft), so an unscoped query would be ambiguous.
+    const statusSelect = screen.getByRole("combobox", { name: "Status" });
+    expect(within(statusSelect).queryByRole("option", { name: "published" })).not.toBeInTheDocument();
+    // Draft/Approved remain freely selectable - unaffected by the Published exclusion.
+    expect(within(statusSelect).getByRole("option", { name: "draft" })).toBeInTheDocument();
+    expect(within(statusSelect).getByRole("option", { name: "approved" })).toBeInTheDocument();
+  });
+
+  it("an already-Published Product renders Status as a locked, read-only display - no dropdown, no way to change it here", () => {
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct({ status: "published" }))}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+      />,
+    );
+    expect(screen.queryByRole("combobox", { name: "Status" })).not.toBeInTheDocument();
+    const statusInput = screen.getByLabelText("Status") as HTMLInputElement;
+    expect(statusInput).toBeDisabled();
+    expect(statusInput.value).toBe("published");
+  });
+
+  it("saving a Published Product with an unrelated field change preserves status: 'published' unchanged on the wire", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct({ status: "published" }))}
+        submitLabel="Save Changes"
+        onSubmit={onSubmit}
+        productId="p1"
+      />,
+    );
+    await user.clear(screen.getByLabelText("Brand"));
+    await user.type(screen.getByLabelText("Brand"), "Acme");
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].status).toBe("published");
+  });
+});
+
+describe("ProductForm — Sprint 144: Marketing Tags inside canonical Edit", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("create mode (no productId) never renders the Marketing Tags section and never calls the Marketing Tags API", () => {
+    const listSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "list");
+    render(<ProductForm initialValues={emptyProductForm} submitLabel="Create" onSubmit={vi.fn()} />);
+    expect(screen.queryByText("Marketing Tags")).not.toBeInTheDocument();
+    expect(listSpy).not.toHaveBeenCalled();
+  });
+
+  it("edit mode loads and lists the Product's existing Marketing Tags", async () => {
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([
+      { id: "tag-1", key: "christmas", label: "Christmas", createdAt: "t", updatedAt: "t" } as any,
+    ]);
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+      />,
+    );
+    expect(await screen.findByText("Christmas")).toBeInTheDocument();
+  });
+
+  it("adding a Marketing Tag calls the existing add API and does not submit/save the Product form", async () => {
+    const user = userEvent.setup();
+    const addSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "add").mockResolvedValue({
+      id: "tag-2",
+      key: "fathers-day",
+      label: "Father's Day",
+      createdAt: "t",
+      updatedAt: "t",
+    } as any);
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={onSubmit}
+        productId="p1"
+      />,
+    );
+    await screen.findByText("No Marketing Tags yet.");
+    await user.type(screen.getByPlaceholderText("e.g. Father's Day"), "Father's Day");
+    await user.click(screen.getByRole("button", { name: "Add Tag" }));
+    await waitFor(() => expect(addSpy).toHaveBeenCalledWith("p1", "Father's Day"));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("removing a Marketing Tag calls the existing remove API and does not submit/save the Product form", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([
+      { id: "tag-1", key: "christmas", label: "Christmas", createdAt: "t", updatedAt: "t" } as any,
+    ]);
+    const removeSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "remove").mockResolvedValue(undefined as any);
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={onSubmit}
+        productId="p1"
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Remove Christmas" }));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith("p1", "tag-1"));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("adding a Marketing Tag does not reset the Product form's own unsaved field values", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "add").mockResolvedValue({
+      id: "tag-3",
+      key: "vintage",
+      label: "Vintage",
+      createdAt: "t",
+      updatedAt: "t",
+    } as any);
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+      />,
+    );
+    await screen.findByText("No Marketing Tags yet.");
+    await user.clear(screen.getByLabelText("Brand"));
+    await user.type(screen.getByLabelText("Brand"), "Acme");
+    await user.type(screen.getByPlaceholderText("e.g. Father's Day"), "Vintage");
+    await user.click(screen.getByRole("button", { name: "Add Tag" }));
+    await waitFor(() => expect(marketingTagsLib.marketingTagsApi.add).toHaveBeenCalled());
+    expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Acme");
+  });
+
+  it("a Marketing Tag load failure is shown locally and does not corrupt or block the rest of the Product form", async () => {
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockRejectedValue(
+      new ApiError("Failed to load Marketing Tags", 500),
+    );
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+      />,
+    );
+    expect(await screen.findByText("Failed to load Marketing Tags")).toBeInTheDocument();
+    expect(screen.getByLabelText("Brand")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Changes" })).not.toBeDisabled();
   });
 });
