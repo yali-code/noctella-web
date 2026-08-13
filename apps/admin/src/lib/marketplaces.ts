@@ -1,4 +1,4 @@
-import { PublishChannel, PublishJobStatus, type ExternalListing, type MarketplaceConnection, type PublishExecutionResult, type PublishJob } from "@noctella/shared";
+import { PublishChannel, PublishJobStatus, type ExternalListing, type MarketplaceConnection, type PublishExecutionResult, type PublishJob, type UnifiedPublishResult } from "@noctella/shared";
 import { api } from "./api";
 export const MARKETPLACE_CHANNELS = [PublishChannel.Ebay, PublishChannel.Etsy];
 export function safeError(value?: string) { return value ? value.replace(/[A-Za-z0-9+/=_-]{6,}/g, "[redacted]") : ""; }
@@ -11,6 +11,9 @@ export const marketplaceApi = {
   refresh: (channel: PublishChannel) => api.post<MarketplaceConnection>(`/api/marketplaces/${channel}/refresh`, {}),
   disconnect: (channel: PublishChannel) => api.delete<MarketplaceConnection | null>(`/api/marketplaces/${channel}/disconnect`),
   executePublish: (productId: string, channel: PublishChannel) => api.post<PublishExecutionResult>(`/api/products/${productId}/publish/execute`, { channel }),
+  // Sprint 141: unified/batch publish - one request, one result per selected channel. No
+  // idempotency key is ever sent (the batch endpoint has none - see validation/publishing.ts).
+  executePublishBatch: (productId: string, channels: PublishChannel[]) => api.post<UnifiedPublishResult>(`/api/products/${productId}/publish/execute-batch`, { channels }),
   listJobs: () => api.get<PublishJob[]>("/api/publish-jobs"),
   getJob: (id: string) => api.get<{ job: PublishJob; attempts: unknown[] }>(`/api/publish-jobs/${id}`),
   retry: (id: string) => api.post<PublishExecutionResult>(`/api/publish-jobs/${id}/retry`, {}),

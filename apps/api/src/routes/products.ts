@@ -8,8 +8,8 @@ import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
 import { handleRouteError } from "./errorHandler";
 import { getPublishPreview, getPublishValidation } from "../services/publishing";
-import { executePublish, listExternalListings, endExternalListing } from "../services/marketplacePublishing";
-import { publishRequestSchema } from "../validation/publishing";
+import { executePublish, executePublishBatch, listExternalListings, endExternalListing } from "../services/marketplacePublishing";
+import { publishRequestSchema, executePublishBatchRequestSchema } from "../validation/publishing";
 import { approveMarketplacePreparation, generateMarketplacePreparation, getCurrentMarketplacePreparation } from "../services/marketplacePreparation";
 import { approveMarketplacePreparationSchema, generateMarketplacePreparationSchema, getMarketplacePreparationQuerySchema } from "../validation/marketplacePreparation";
 import { addProductMarketingTag, listProductMarketingTags, removeProductMarketingTag } from "../services/marketingTags";
@@ -75,6 +75,17 @@ router.post("/:id/publish/execute", requirePermission("products.publish"), async
   try {
     const input = publishRequestSchema.parse(req.body);
     res.json(await executePublish(db, req.params.id, input.channel, req.body?.idempotencyKey));
+  } catch (err) { handleRouteError(err, res); }
+});
+
+// Sprint 141: unified/batch publish - thin orchestration only, delegates every selected channel to
+// the existing, unmodified executePublish above (never a second publishing implementation). Same
+// permission as the rest of this file's publish surface. No batch-level idempotency key is
+// accepted - executePublishBatchRequestSchema's .strict() rejects one outright.
+router.post("/:id/publish/execute-batch", requirePermission("products.publish"), async (req, res) => {
+  try {
+    const input = executePublishBatchRequestSchema.parse(req.body);
+    res.json(await executePublishBatch(db, req.params.id, input.channels));
   } catch (err) { handleRouteError(err, res); }
 });
 

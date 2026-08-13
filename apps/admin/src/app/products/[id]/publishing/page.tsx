@@ -1,6 +1,6 @@
 "use client";
 
-import { PublishChannel, type ExternalListing, type MarketingTag, type MarketplaceConnection, type MarketplacePreparation, type PublishJob, type PublishPreview } from "@noctella/shared";
+import { PublishChannel, type ExternalListing, type MarketingTag, type MarketplaceConnection, type MarketplacePreparation, type PublishJob, type PublishPreview, type UnifiedPublishChannelResult } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
@@ -58,6 +58,13 @@ function suggestionValue(preparation: MarketplacePreparation, key: string): stri
   return "";
 }
 
+/** Sprint 141: truthful per-channel outcome text for the unified publish result list. */
+function unifiedOutcomeText(item: UnifiedPublishChannelResult): string {
+  if (item.outcome === "succeeded") return "Published";
+  if (item.outcome === "skipped") return "Already published";
+  return `Failed: ${item.error?.message ?? "Unknown error"}`;
+}
+
 export default function ProductPublishingPage({ params }: { params: { id: string } }) {
   const [channel, setChannel] = useState<PublishChannel>(PublishChannel.Ebay);
   const [preview, setPreview] = useState<PublishPreview | null>(null);
@@ -94,10 +101,29 @@ export default function ProductPublishingPage({ params }: { params: { id: string
   const [newTagLabel, setNewTagLabel] = useState("");
   const [addingTag, setAddingTag] = useState(false);
 
+  // Sprint 141: unified channel selection & publish - page-global, transient client state only
+  // (never persisted, never a Product column), fully independent of the `channel` dropdown state
+  // above so switching the dropdown never clears it during the current page session. `connections`
+  // reuses the exact same listConnections() call `load()` already makes - no new connection API.
+  const [connections, setConnections] = useState<MarketplaceConnection[]>([]);
+  const [selectedChannels, setSelectedChannels] = useState<Set<PublishChannel>>(new Set());
+  const [publishingSelected, setPublishingSelected] = useState(false);
+  const [unifiedResults, setUnifiedResults] = useState<UnifiedPublishChannelResult[] | null>(null);
+  const [unifiedError, setUnifiedError] = useState<string | null>(null);
+
   const load = () => {
     setError(null);
     publishingApi.getPreview(params.id, channel).then(setPreview).catch((err) => setError(err.message ?? "Failed to load publishing preview"));
-    marketplaceApi.listConnections().then((items) => setConnection(items.find((c) => c.channel === channel) ?? null)).catch(() => setConnection(null));
+    marketplaceApi
+      .listConnections()
+      .then((items) => {
+        setConnections(items);
+        setConnection(items.find((c) => c.channel === channel) ?? null);
+      })
+      .catch(() => {
+        setConnections([]);
+        setConnection(null);
+      });
     marketplaceApi.listJobs().then((items) => setJobs(items.filter((j) => j.productId === params.id && j.channel === channel))).catch(() => setJobs([]));
     marketplaceApi.externalListings(params.id).then(setListings).catch(() => setListings([]));
   };
@@ -247,6 +273,36 @@ export default function ProductPublishingPage({ params }: { params: { id: string
     }
   }
 
+  function toggleChannel(target: PublishChannel) {
+    setSelectedChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(target)) next.delete(target);
+      else next.add(target);
+      return next;
+    });
+  }
+
+  /**
+   * Sprint 141: one batch request for every selected channel - never three separate calls to the
+   * old single-channel endpoint. Delegates entirely to the existing authoritative executePublish
+   * via the new backend batch endpoint; this handler only submits the selection and renders the
+   * truthful per-channel results it gets back. No idempotency key is ever sent.
+   */
+  async function handlePublishSelected() {
+    if (selectedChannels.size === 0) return;
+    setPublishingSelected(true);
+    setUnifiedError(null);
+    try {
+      const response = await marketplaceApi.executePublishBatch(params.id, Array.from(selectedChannels));
+      setUnifiedResults(response.results);
+      load(); // a selected channel's publish may have changed durable state (Product.status, ExternalListings, PublishJobs)
+    } catch (err) {
+      setUnifiedError(err instanceof ApiError ? err.message : "Failed to publish selected channels");
+    } finally {
+      setPublishingSelected(false);
+    }
+  }
+
   return (
     <div>
       <Link href={`/products/${params.id}`} style={{ color: "var(--noctella-bright-star-gold)" }}>← Back to product</Link>
@@ -259,6 +315,52 @@ export default function ProductPublishingPage({ params }: { params: { id: string
         {ADMIN_PUBLISH_CHANNELS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
       </select>
       {error && <p style={{ color: "#c86a6a" }}>{safeError(error)}</p>}
+
+      {/* Sprint 141: unified channel selection & publish - page-global, independent of the channel
+          dropdown above (which continues to drive Preview/Prepare/Regenerate/Approve/Connection for
+          one channel at a time). Delegates every selected channel to the existing, unmodified
+          Execute Publish authority via one batch request - never a second publishing implementation. */}
+      <section className="noctella-panel" style={{ padding: 20, marginBottom: 16 }}>
+        <h2>Publish to Multiple Channels</h2>
+        {/* Rendered raw, not through safeError - matching preparationError/priceError/tagsError's
+            own established convention on this page: this is our own typed products.publish JSON
+            response error, never a raw marketplace OAuth/connection error. safeError's blunt
+            6-plus-character redaction would otherwise mangle ordinary words in a plain message. */}
+        {unifiedError && <p style={{ color: "#c86a6a" }}>{unifiedError}</p>}
+        <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
+          {ADMIN_PUBLISH_CHANNELS.map((item) => {
+            const channelConnection = connections.find((c) => c.channel === item.value);
+            // UX guidance only - the backend's own connection check inside executePublish remains
+            // sole authority; this never disables the checkbox, only hints at a likely outcome.
+            const disconnected = requiresMarketplaceConnection(item.value) && channelConnection?.status !== "connected";
+            // The "(disconnected)" hint is rendered as a sibling OUTSIDE <label>, deliberately -
+            // inside it, the hint text would be folded into the checkbox's own accessible name
+            // (e.g. "eBay(disconnected)"), which is neither correct a11y nor a stable name to
+            // target from the checkbox itself.
+            return (
+              <span key={item.value} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input type="checkbox" checked={selectedChannels.has(item.value)} onChange={() => toggleChannel(item.value)} />
+                  {item.label}
+                </label>
+                {disconnected && <span style={{ fontSize: 11, color: "var(--noctella-aged-bronze)" }}>(disconnected)</span>}
+              </span>
+            );
+          })}
+        </div>
+        <button onClick={handlePublishSelected} disabled={publishingSelected || selectedChannels.size === 0}>
+          {publishingSelected ? "Publishing..." : "Publish Selected"}
+        </button>
+        {unifiedResults && (
+          <ul style={{ marginTop: 12 }}>
+            {unifiedResults.map((item) => (
+              <li key={item.channel}>
+                {channelLabel(item.channel)} — {unifiedOutcomeText(item)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginBottom: 16 }}>
         <h2>Marketplace Preparation</h2>

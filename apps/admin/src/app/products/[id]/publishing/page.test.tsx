@@ -352,3 +352,134 @@ describe("ProductPublishingPage - Marketing Tags (Sprint 140)", () => {
     expect(screen.queryByRole("button", { name: /replace/i })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Sprint 141: unified channel selection & publish - page-global, transient checkbox state,
+ * independent of the existing channel dropdown above (which continues to drive Preview/Prepare
+ * with AI/Regenerate with AI/Approve/Connection for one channel at a time). Delegates every
+ * selected channel to the existing, unmodified Execute Publish authority via one new batch
+ * request - never a second publishing implementation.
+ */
+describe("ProductPublishingPage - Unified Channel Selection & Publish (Sprint 141)", () => {
+  it("renders a checkbox for each of the three publish channels and a disabled Publish Selected button when none are selected", async () => {
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    expect(await screen.findByRole("checkbox", { name: "Noctella Web" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "eBay" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Etsy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish Selected" })).toBeDisabled();
+  });
+
+  it("selecting one channel enables Publish Selected; multiple channels can be selected together", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    const web = await screen.findByRole("checkbox", { name: "Noctella Web" });
+    const ebay = screen.getByRole("checkbox", { name: "eBay" });
+    await user.click(web);
+    expect(screen.getByRole("button", { name: "Publish Selected" })).not.toBeDisabled();
+    await user.click(ebay);
+    expect(web).toBeChecked();
+    expect(ebay).toBeChecked();
+  });
+
+  it("changing the existing channel dropdown does not clear the unified checkbox selection", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    const web = await screen.findByRole("checkbox", { name: "Noctella Web" });
+    await user.click(web);
+    expect(web).toBeChecked();
+    await user.selectOptions(screen.getByRole("combobox"), "noctella_web");
+    expect(screen.getByRole("checkbox", { name: "Noctella Web" })).toBeChecked();
+  });
+
+  it("Publish Selected sends exactly the selected channels in one batch request, with no idempotency key, and renders truthful per-channel results", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    const batchSpy = vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({
+      productId: "product-1",
+      results: [
+        { channel: PublishChannel.NoctellaWeb, outcome: "succeeded", result: {} as any },
+        { channel: PublishChannel.Ebay, outcome: "failed", error: { message: "Marketplace connection is not connected" } },
+      ],
+    } as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await user.click(await screen.findByRole("checkbox", { name: "Noctella Web" }));
+    await user.click(screen.getByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+    await waitFor(() => expect(batchSpy).toHaveBeenCalledWith("product-1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay]));
+    expect(batchSpy.mock.calls[0]).toHaveLength(2); // exactly (productId, channels) - no idempotency-key argument
+    // Partial truth: Web's success remains visible alongside eBay's failure - never collapsed into one global message.
+    expect(await screen.findByText(/Noctella Web — Published/)).toBeInTheDocument();
+    expect(screen.getByText(/eBay — Failed: Marketplace connection is not connected/)).toBeInTheDocument();
+  });
+
+  it("renders a skipped/already-published result distinctly from success and failure", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({
+      productId: "product-1",
+      results: [{ channel: PublishChannel.Ebay, outcome: "skipped", error: { message: "An active listing already exists for this product on this channel" } }],
+    } as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await user.click(await screen.findByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+    expect(await screen.findByText(/eBay — Already published/)).toBeInTheDocument();
+  });
+
+  it("shows a request-level error without crashing, using the existing safe error rendering convention", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockRejectedValue(new ApiError("Failed to publish selected channels", 500));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await user.click(await screen.findByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+    await screen.findByText("Failed to publish selected channels");
+  });
+
+  it("does not introduce SKU, Inventory, or Product status editing controls", async () => {
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await screen.findByRole("button", { name: "Publish Selected" });
+    expect(screen.queryByLabelText(/sku/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/stock quantity/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^status$/i)).not.toBeInTheDocument();
+  });
+
+  it("existing dropdown-driven Prepare with AI remains channel-local and unaffected by the unified selection", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    const generateSpy = vi.spyOn(publishingLib.marketplacePreparationApi, "generate").mockResolvedValue({
+      id: "prep-1", productId: "product-1", channel: PublishChannel.Ebay, status: "pending",
+      baseProductUpdatedAt: "t", providerName: "mock", promptVersion: "v1", generatedAt: "t", createdAt: "t", updatedAt: "t",
+    } as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await user.click(await screen.findByRole("checkbox", { name: "Noctella Web" })); // unified selection touched first
+    await user.click(screen.getByRole("button", { name: "Prepare with AI" }));
+    await waitFor(() => expect(generateSpy).toHaveBeenCalledWith("product-1", PublishChannel.Ebay)); // dropdown default channel, unaffected by checkbox state
+  });
+
+  it("Price editor and Marketing Tags editor remain functional alongside the new unified selection", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product({ priceEur: 42 })) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    expect(await screen.findByDisplayValue("42")).toBeInTheDocument(); // Price editor still loads
+    await user.click(await screen.findByRole("checkbox", { name: "Noctella Web" }));
+    expect(screen.getByDisplayValue("42")).toBeInTheDocument(); // untouched by the unified selection
+    expect(screen.getByRole("button", { name: "Add Tag" })).toBeInTheDocument(); // Marketing Tags editor still present
+  });
+});
