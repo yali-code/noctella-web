@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, like, or, sql } from "drizzle-orm";
-import { ProductStatus } from "@noctella/shared";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, like, notExists, or, sql } from "drizzle-orm";
+import { ProductStatus, PublishJobStatus } from "@noctella/shared";
 import type { ProductBreakdownDimension, ProductReadListQuery, ProductReadRepositoryBundle } from "./types";
 
 const MAX_PAGE_SIZE = 100;
@@ -10,7 +10,7 @@ const searchTerm = (s?: string) => s?.trim().replace(/[%_]/g, "\\$&");
 const PENDING_PUBLISH_STATUSES: string[] = [ProductStatus.Draft, ProductStatus.Approved];
 
 export function createDrizzleProductReadRepositories(db: any, schema: any, dialect: "sqlite" | "postgres"): ProductReadRepositoryBundle {
-  const { products, categories, collections, productPhotos, productImages, aiProductIntakes } = schema;
+  const { products, categories, collections, productPhotos, productImages, aiProductIntakes, publishJobs } = schema;
   const contains = (col: any, value: string) => dialect === "postgres" ? ilike(col, `%${value}%`) : like(sql`lower(${col})`, `%${value.toLowerCase()}%`);
   const numericFields = ["lengthValue","widthValue","heightValue","weightValue","purchaseCost","priceEur","priceUsd","minOfferPrice","ebayListingPriceEur","etsyListingPriceEur","wooListingPriceEur"];
   const mapProduct = (row: any) => { if (!row) return row; const copy = { ...row }; for (const key of numericFields) if (copy[key] != null) copy[key] = Number(copy[key]); return copy; };
@@ -36,9 +36,33 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
    * never produce more than one row per Product. status is restricted to Draft/Approved (never
    * Published/Archived/Sold/Reserved/Returned) - the same eligibility used by both the queue list
    * and its count, so the two can never disagree.
+   *
+   * Sprint 142: Pending Publish now additionally means "never yet successfully published to ANY
+   * supported channel" - not merely "not yet Noctella-Web-published" (Product.status alone cannot
+   * represent this, since eBay/Etsy success never touches it - see Sprint 141 Discovery/Architecture
+   * Review). The correlated `notExists` subquery below is the uniform, already-durable evidence for
+   * that: a Succeeded PublishJob exists regardless of channel (including Noctella Web, which has no
+   * ExternalListing at all). A correlated NOT EXISTS is required rather than a join, since
+   * publish_jobs.product_id has no per-product uniqueness (unlike ai_product_intakes.resultProductId
+   * above) - a Product can have multiple historical publish_jobs rows, and a plain join against it
+   * would multiply/duplicate the outer Product row. Only Succeeded excludes: Failed/RetryPending/
+   * Processing publish_jobs rows never count as "published", so the Product correctly remains
+   * eligible. A later ended/inactive ExternalListing does not undo a historical Succeeded
+   * publish_jobs row - "ever published" is a permanent fact once true, deliberately distinct from
+   * "currently has an active external listing" (relisting/delisting is a separate, out-of-scope
+   * concern - see Sprint 142 Architecture Review).
    */
   const pendingPublishWhere = (q: ProductReadListQuery = {}) => {
-    const filters: any[] = [inArray(products.status, PENDING_PUBLISH_STATUSES), isNotNull(aiProductIntakes.appliedAt)];
+    const filters: any[] = [
+      inArray(products.status, PENDING_PUBLISH_STATUSES),
+      isNotNull(aiProductIntakes.appliedAt),
+      notExists(
+        db
+          .select({ id: publishJobs.id })
+          .from(publishJobs)
+          .where(and(eq(publishJobs.productId, products.id), eq(publishJobs.status, PublishJobStatus.Succeeded))),
+      ),
+    ];
     if (q.search) { const s = searchTerm(q.search); if (s) filters.push(or(contains(products.title, s), contains(products.sku, s))); }
     if (q.categoryId) filters.push(eq(products.categoryId, q.categoryId));
     return and(...filters);
