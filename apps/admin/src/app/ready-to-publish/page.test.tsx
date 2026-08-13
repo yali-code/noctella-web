@@ -39,12 +39,13 @@ function mockLoads(result: Record<string, unknown> = { items: [item()], total: 1
  * Sprint 139: Pending Publish - replaces Sprint 136's Ready to Publish suite. The previous suite
  * exercised an inline Publish button and per-row publishingIds/itemsRef concurrency state that no
  * longer exist on this page - membership and the row action both changed per the approved Sprint
- * 139 contract (Stock Acceptance provenance eligibility; a single navigation-only "Edit / Publish"
- * link, never an in-page mutation). Covers the required Phase 6 contract points that are
- * observable from this page: title, requires GET /api/products/pending-publish (never the old
- * status=approved endpoint), DD.MM.YYYY Stock Accepted rendering derived from stockAcceptedAt
- * (never createdAt), the Edit / Publish link target, no duplicate rows, no mutation on
- * load/render, and the empty state.
+ * 139 contract (Stock Acceptance provenance eligibility; a single navigation-only row action link,
+ * never an in-page mutation). Covers the required Phase 6 contract points that are observable from
+ * this page: title, requires GET /api/products/pending-publish (never the old status=approved
+ * endpoint), DD.MM.YYYY Stock Accepted rendering derived from stockAcceptedAt (never createdAt),
+ * the row action's link target (Sprint 144: /products/:id/edit, labeled "Edit Product" - was
+ * "Edit / Publish" -> /publishing until Sprint 144 moved editing to the canonical Edit route), no
+ * duplicate rows, no mutation on load/render, and the empty state.
  */
 describe("Pending Publish page (Sprint 139)", () => {
   it("renders the Pending Publish title", async () => {
@@ -90,14 +91,14 @@ describe("Pending Publish page (Sprint 139)", () => {
     expect(screen.getAllByRole("row")).toHaveLength(3);
   });
 
-  it("Edit / Publish links to the existing Product publishing route for that Product, and only that", async () => {
+  it("Sprint 144: Edit Product links to the canonical Product Edit route for that Product, and only that", async () => {
     mockLoads();
     render(<ReadyToPublishPage />);
     await screen.findByText("Konica EU Mini");
-    expect(screen.getByRole("link", { name: "Edit / Publish" })).toHaveAttribute("href", "/products/product-1/publishing");
+    expect(screen.getByRole("link", { name: "Edit Product" })).toHaveAttribute("href", "/products/product-1/edit");
   });
 
-  it("Edit / Publish is a plain navigation link - no button, no publish call, no mutation from this page", async () => {
+  it("Edit Product is a plain navigation link - no button, no publish call, no mutation from this page", async () => {
     mockLoads();
     render(<ReadyToPublishPage />);
     await screen.findByText("Konica EU Mini");
@@ -234,13 +235,13 @@ describe("Pending Publish page - Category filter (Sprint 139 Required Fix #1)", 
     expect(screen.queryByText("SKU")).not.toBeInTheDocument();
   });
 
-  it("7. the single Edit / Publish action is unchanged", async () => {
+  it("7. Sprint 144: the single row action is unchanged in shape (still exactly one navigation link), now targeting canonical Edit", async () => {
     mockLoads();
     render(<ReadyToPublishPage />);
     await screen.findByText("Konica EU Mini");
-    expect(screen.getByRole("link", { name: "Edit / Publish" })).toHaveAttribute("href", "/products/product-1/publishing");
+    expect(screen.getByRole("link", { name: "Edit Product" })).toHaveAttribute("href", "/products/product-1/edit");
     expect(screen.queryByRole("link", { name: "Preview" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Edit / Publish" })).not.toBeInTheDocument();
   });
 
   it("8. no in-page Publish mutation was restored alongside the Category filter", async () => {

@@ -7,6 +7,7 @@ import {
   PRODUCT_SHIPPING_PROFILE_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
+  ProductStatus,
   ProductType,
   WEIGHT_UNIT_VALUES,
   type Category,
@@ -15,6 +16,7 @@ import {
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
+import { MarketingTagsSection } from "./MarketingTagsSection";
 
 export interface ProductFormValues {
   sku: string;
@@ -304,9 +306,19 @@ interface ProductFormProps {
    * reliable behavior for the current Client Component structure).
    */
   onVersionConflictReload?: () => void;
+  /**
+   * Sprint 144: the canonical Product Edit foundation. Supplied only by
+   * products/[id]/edit/page.tsx (an existing Product); products/new/page.tsx never supplies it.
+   * Its presence, not the current `values.status`, is what this form treats as "editing an
+   * existing Product" - it gates two things: locking the SKU field to read-only (SKU is
+   * system-generated and must never be retyped once a Product exists), and mounting the
+   * Marketing Tags section (which requires a real Product id and must never be mounted, nor call
+   * the Marketing Tags API, for a Product that does not exist yet).
+   */
+  productId?: string;
 }
 
-export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionConflictReload }: ProductFormProps) {
+export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionConflictReload, productId }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues);
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -381,7 +393,22 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
           <input style={inputStyle} value={values.title} onChange={(e) => set("title", e.target.value)} />
         </Field>
         <Field label="SKU" error={fieldErrors.sku}>
-          <input style={inputStyle} value={values.sku} onChange={(e) => set("sku", e.target.value)} />
+          {/* Sprint 144: SKU is system-generated (sequential NOC-000001 format) and is also the
+              barcode payload itself - once a Product exists (productId supplied), it must never be
+              manually retyped here. `title` carries the explanation as a tooltip rather than a
+              second text node inside the <label>, which would otherwise be folded into this
+              field's accessible name by getByLabelText/assistive tech. */}
+          {productId ? (
+            <input
+              style={{ ...inputStyle, opacity: 0.7, cursor: "not-allowed" }}
+              value={values.sku}
+              disabled
+              readOnly
+              title="SKU is system-generated and cannot be changed."
+            />
+          ) : (
+            <input style={inputStyle} value={values.sku} onChange={(e) => set("sku", e.target.value)} />
+          )}
         </Field>
         <Field label="Slug (optional, derived from title if blank)">
           <input style={inputStyle} value={values.slug ?? ""} onChange={(e) => set("slug", e.target.value)} />
@@ -396,13 +423,32 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
           </select>
         </Field>
         <Field label="Status" error={fieldErrors.status}>
-          <select style={inputStyle} value={values.status} onChange={(e) => set("status", e.target.value)}>
-            {PRODUCT_STATUS_VALUES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          {/* Sprint 144: Published means a successful Noctella Web storefront publication - it must
+              never be fabricated or downgraded by a generic Product edit. When the current status
+              is already Published, this form preserves it unchanged (locked, read-only); only the
+              authoritative publish workflow may set or change it. `title` carries the explanation
+              as a tooltip rather than a second text node inside the <label>, which would otherwise
+              be folded into this field's accessible name by getByLabelText/assistive tech. */}
+          {values.status === ProductStatus.Published ? (
+            <input
+              style={{ ...inputStyle, opacity: 0.7, cursor: "not-allowed" }}
+              value={values.status}
+              disabled
+              readOnly
+              title="Published reflects a successful Noctella Web publication and is managed by the publish workflow."
+            />
+          ) : (
+            <select style={inputStyle} value={values.status} onChange={(e) => set("status", e.target.value)}>
+              {/* Sprint 144: Published is deliberately excluded here - it must never be selectable
+                  as an ordinary generic status transition from this form; it is only ever produced
+                  by the authoritative publish workflow (executePublish). */}
+              {PRODUCT_STATUS_VALUES.filter((s) => s !== ProductStatus.Published).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
         <Field label="Category" error={fieldErrors.categoryId}>
           <select
@@ -873,10 +919,24 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
         </Field>
       </Section>
 
+      {/* Sprint 144: Marketing Tags reuse the existing Sprint 140 API unchanged, only in edit mode
+          (productId known) - create mode never mounts this section, so it never calls the
+          Marketing Tags API for a Product that does not exist yet. Distinct from the per-channel
+          Etsy tags edited above. */}
+      {productId && (
+        <Section title="Marketing Tags">
+          <MarketingTagsSection productId={productId} />
+        </Section>
+      )}
+
       <Section title="AI Drafts">
+        {/* Sprint 144 Discovery correction: AI-assisted listing generation is implemented (AI
+            Product Intake, AI Drafts, and Marketplace Preparation) - it is managed from those
+            dedicated screens and from the Publishing page for this Product, not from this form.
+            Sprint 145 will investigate consolidating that review experience into canonical Edit. */}
         <p style={{ margin: 0, fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
-          AI-assisted listing generation is not implemented yet. Draft review will appear here in a
-          future sprint.
+          AI-assisted listing drafts and marketplace preparation for this Product are managed from
+          AI Product Intake, AI Drafts, and the Publishing page.
         </p>
       </Section>
 

@@ -27,9 +27,16 @@ function formatStockAccepted(iso: string): string {
  * Preview/Edit/Publish actions); the route (/ready-to-publish) is unchanged, but membership,
  * columns, and the row action are replaced to match the approved Sprint 139 contract: membership
  * now comes from GET /api/products/pending-publish (Stock Acceptance provenance, not a status
- * filter - see repositories/product-read/drizzle.ts's listPendingPublish), and the single "Edit /
- * Publish" action is pure navigation to the existing publishing page - this page itself never
- * mutates a Product or triggers a publish.
+ * filter - see repositories/product-read/drizzle.ts's listPendingPublish). This page itself never
+ * mutates a Product or triggers a publish - the row action is pure navigation only.
+ *
+ * Sprint 144: the row action now targets the canonical Product Edit workspace
+ * (/products/:id/edit) instead of the Publishing page, per the approved Sprint 144 "one canonical
+ * Edit destination" direction - Publish itself is not implemented inside Edit yet (Sprint 146), so
+ * the label was corrected to "Edit Product" (matching the identical action already offered from
+ * the Product Detail page) rather than leave the previous "Edit / Publish" label now that this
+ * link no longer leads anywhere publish-related. The Pending Publish backend predicate, Stock
+ * Acceptance provenance, and Sprint 142 publication-evidence semantics are all unchanged.
  *
  * Required Fix #1: the Category filter dropdown (a filter control, not a table column) was
  * unintentionally dropped from the original Sprint 139 pass - restored here with the exact same
@@ -138,8 +145,8 @@ export default function ReadyToPublishPage() {
                 <td style={tdStyle}>{item.title}</td>
                 <td style={tdStyle}>{formatStockAccepted(item.stockAcceptedAt)}</td>
                 <td style={tdStyle}>
-                  <Link href={`/products/${item.id}/publishing`} style={{ color: "var(--noctella-bright-star-gold)" }}>
-                    Edit / Publish
+                  <Link href={`/products/${item.id}/edit`} style={{ color: "var(--noctella-bright-star-gold)" }}>
+                    Edit Product
                   </Link>
                 </td>
               </tr>
