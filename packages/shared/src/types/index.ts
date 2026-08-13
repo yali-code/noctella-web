@@ -570,6 +570,17 @@ export interface MarketplacePreparation extends Timestamps {
 }
 
 
+/**
+ * Sprint 140: the normalized Product Marketing Tag taxonomy - distinct from Product Category,
+ * Collections, SEO keywords, and Etsy listing tags. `key` is the canonicalized machine key
+ * (e.g. "fathers-day"); `label` is the admin-facing friendly text (e.g. "Father's Day").
+ */
+export interface MarketingTag extends Timestamps {
+  id: ID;
+  key: string;
+  label: string;
+}
+
 export interface MarketplaceWebhookEvent extends Timestamps { id: ID; channel: PublishChannel; externalEventId: string; eventType: string; status: string; signatureValid: boolean; payloadSnapshot: unknown; attemptCount: number; lastError?: string; receivedAt: string; processedAt?: string; }
 export interface MarketplaceOrder extends Timestamps { id: ID; channel: PublishChannel; externalOrderId: string; externalOrderNumber?: string; marketplaceConnectionId: ID; internalOrderId?: ID; status: string; currency: string; subtotal: number; shipping: number; tax: number; total: number; buyerEmail?: string; buyerName?: string; shippingAddressSnapshot?: unknown; billingAddressSnapshot?: unknown; rawPayloadSnapshot: unknown; orderedAt: string; importedAt: string; }
 export interface MarketplaceOrderItem { id: ID; marketplaceOrderId: ID; externalOrderItemId?: string; externalListingId?: string; productId?: ID; sku?: string; titleSnapshot: string; quantity: number; unitPrice: number; lineTotal: number; createdAt: string; }

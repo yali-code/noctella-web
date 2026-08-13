@@ -42,6 +42,7 @@ import { enqueueChannelStockSync, enqueueProductStockSync } from "./services/sto
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
+import { dispatchDueAiSalesPreparationOutboxEvents } from "./services/aiSalesPreparationOutbox";
 import { runAiIntakeCleanupForScheduler, MAX_CLEANUP_BATCH_SIZE } from "./services/aiIntakeCleanup";
 import { runDatabaseBackup } from "./services/databaseBackup";
 import { runProductPhotoBackup } from "./services/productPhotoBackup";
@@ -161,6 +162,10 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     // dispatch attempt in services/orders.ts is only a best-effort responsiveness optimization;
     // this scheduled sweep is what actually guarantees eventual delivery (retries, dead-lettering).
     const salesInvoiceOutboxResults = await dispatchDueSalesInvoiceOutboxEvents(db, workerId, batchSize);
+    // Sprint 140: same reuse for the durable AI Sales Preparation outbox - the post-commit dispatch
+    // attempt in services/aiIntakeStockAcceptance.ts is only a best-effort responsiveness optimization;
+    // this scheduled sweep is what actually guarantees eventual delivery (retries, dead-lettering).
+    const aiSalesPreparationOutboxResults = await dispatchDueAiSalesPreparationOutboxEvents(db, workerId, batchSize);
     // Sprint 96: same reuse for AI intake staged-photo retention cleanup and orphan-file recovery -
     // never a second scheduler endpoint/cron. Cleanup has its own approved batch-size ceiling (500),
     // applied only to this call; the other three domains' own batchSize behavior above is unchanged.
@@ -170,6 +175,7 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
       processed,
       photoOutboxProcessed: photoOutboxResults.length,
       salesInvoiceOutboxProcessed: salesInvoiceOutboxResults.length,
+      aiSalesPreparationOutboxProcessed: aiSalesPreparationOutboxResults.length,
       aiIntakeCleanup,
     });
   } catch (e) {

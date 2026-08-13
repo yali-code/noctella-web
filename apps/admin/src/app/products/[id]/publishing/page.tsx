@@ -1,11 +1,13 @@
 "use client";
 
-import { PublishChannel, type ExternalListing, type MarketplaceConnection, type MarketplacePreparation, type PublishJob, type PublishPreview } from "@noctella/shared";
+import { PublishChannel, type ExternalListing, type MarketingTag, type MarketplaceConnection, type MarketplacePreparation, type PublishJob, type PublishPreview } from "@noctella/shared";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import type { ProductDetail } from "@/lib/types";
 import { ADMIN_PUBLISH_CHANNELS, channelLabel, marketplacePreparationApi, payloadSummary, publishingApi, requiresMarketplaceConnection } from "@/lib/publishing";
 import { canRetry, externalListingLink, marketplaceApi, safeError } from "@/lib/marketplaces";
+import { marketingTagsApi } from "@/lib/marketingTags";
 
 /**
  * Sprint 107: which of Marketplace Preparation's twelve possible suggestion
@@ -74,6 +76,24 @@ export default function ProductPublishingPage({ params }: { params: { id: string
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
 
+  // Sprint 140: canonical price editor state - deliberately channel-agnostic (no per-channel AI
+  // pricing authority), independent of the Marketplace Preparation Approve action above. Reuses
+  // the existing PUT /api/products/:id endpoint with a minimal partial body, preserving optimistic
+  // concurrency via expectedUpdatedAt exactly like Product Edit already does.
+  const [product, setProduct] = useState<ProductDetail | null>(null);
+  const [priceInput, setPriceInput] = useState("");
+  const [priceExpectedUpdatedAt, setPriceExpectedUpdatedAt] = useState<string | null>(null);
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  // Sprint 140: Product Marketing Tags - a distinct concept from this page's existing per-channel
+  // Marketplace Preparation content, loaded/edited independently via the explicit GET/POST/DELETE
+  // Marketing Tags endpoints (no replace-all call).
+  const [tags, setTags] = useState<MarketingTag[]>([]);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [newTagLabel, setNewTagLabel] = useState("");
+  const [addingTag, setAddingTag] = useState(false);
+
   const load = () => {
     setError(null);
     publishingApi.getPreview(params.id, channel).then(setPreview).catch((err) => setError(err.message ?? "Failed to load publishing preview"));
@@ -102,8 +122,32 @@ export default function ProductPublishingPage({ params }: { params: { id: string
       .finally(() => setPreparationChecked(true));
   };
 
+  // Sprint 140: fetches the canonical Product directly (never through the per-channel
+  // Marketplace Preparation state above) - the source for the price editor's current value and
+  // its expectedUpdatedAt version token.
+  const loadProduct = () => {
+    api
+      .get<ProductDetail>(`/api/products/${params.id}`)
+      .then((loaded) => {
+        setProduct(loaded);
+        setPriceInput(loaded.priceEur != null ? String(loaded.priceEur) : "");
+        setPriceExpectedUpdatedAt(loaded.updatedAt);
+      })
+      .catch((err) => setPriceError(err instanceof ApiError ? err.message : "Failed to load Product price"));
+  };
+
+  const loadTags = () => {
+    setTagsError(null);
+    marketingTagsApi
+      .list(params.id)
+      .then(setTags)
+      .catch((err) => setTagsError(err instanceof ApiError ? err.message : "Failed to load Marketing Tags"));
+  };
+
   useEffect(load, [params.id, channel]);
   useEffect(loadPreparation, [params.id, channel]);
+  useEffect(loadProduct, [params.id]);
+  useEffect(loadTags, [params.id]);
 
   const connectionRequired = requiresMarketplaceConnection(channel);
   const connected = connection?.status === "connected";
@@ -146,6 +190,60 @@ export default function ProductPublishingPage({ params }: { params: { id: string
       setPreparationError(err instanceof ApiError ? err.message : "Failed to approve marketplace preparation");
     } finally {
       setApproving(false);
+    }
+  }
+
+  /**
+   * Sprint 140: an independent, narrow action - deliberately not coupled to Marketplace
+   * Preparation Approve above. Sends only the minimum partial body (priceEur + the existing
+   * expectedUpdatedAt version token), preserving optimistic concurrency exactly like Product Edit
+   * already does. An empty input clears the canonical price back to null, matching the existing
+   * server-side contract (a Draft/Approved Product may have no price) rather than inventing a
+   * client-only rule against it.
+   */
+  async function handleSavePrice() {
+    setSavingPrice(true);
+    setPriceError(null);
+    try {
+      const trimmed = priceInput.trim();
+      const priceEur = trimmed === "" ? null : Number(trimmed);
+      const updated = await api.put<ProductDetail>(`/api/products/${params.id}`, { priceEur, expectedUpdatedAt: priceExpectedUpdatedAt });
+      setProduct(updated);
+      setPriceInput(updated.priceEur != null ? String(updated.priceEur) : "");
+      // Sprint 140: the version token must be refreshed after every successful save, never
+      // silently discarded - the next edit must compare against the Product's now-current
+      // updatedAt, not the stale value this save was itself validated against.
+      setPriceExpectedUpdatedAt(updated.updatedAt);
+    } catch (err) {
+      setPriceError(err instanceof ApiError ? err.message : "Failed to save price");
+    } finally {
+      setSavingPrice(false);
+    }
+  }
+
+  async function handleAddTag() {
+    const label = newTagLabel.trim();
+    if (!label) return;
+    setAddingTag(true);
+    setTagsError(null);
+    try {
+      await marketingTagsApi.add(params.id, label);
+      setNewTagLabel("");
+      loadTags();
+    } catch (err) {
+      setTagsError(err instanceof ApiError ? err.message : "Failed to add Marketing Tag");
+    } finally {
+      setAddingTag(false);
+    }
+  }
+
+  async function handleRemoveTag(tagId: string) {
+    setTagsError(null);
+    try {
+      await marketingTagsApi.remove(params.id, tagId);
+      loadTags();
+    } catch (err) {
+      setTagsError(err instanceof ApiError ? err.message : "Failed to remove Marketing Tag");
     }
   }
 
@@ -207,6 +305,56 @@ export default function ProductPublishingPage({ params }: { params: { id: string
             )}
           </>
         )}
+      </section>
+
+      {/* Sprint 140: channel-agnostic - a single canonical price, never a per-channel AI pricing
+          authority. Independent of Marketplace Preparation Approve above; saving here never
+          touches eBay/Etsy/Web listing-specific price overrides. */}
+      <section className="noctella-panel" style={{ padding: 20, marginBottom: 16 }}>
+        <h2>Price</h2>
+        {priceError && <p style={{ color: "#c86a6a" }}>{priceError}</p>}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="No price set"
+            value={priceInput}
+            onChange={(event) => setPriceInput(event.target.value)}
+            style={{ maxWidth: 160 }}
+          />
+          <button onClick={handleSavePrice} disabled={savingPrice || !product}>
+            {savingPrice ? "Saving..." : "Save Price"}
+          </button>
+        </div>
+      </section>
+
+      {/* Sprint 140: Product Marketing Tags - distinct from Product Category, SEO keywords, and
+          the per-channel Etsy tags edited above. Explicit add/remove only. */}
+      <section className="noctella-panel" style={{ padding: 20, marginBottom: 16 }}>
+        <h2>Marketing Tags</h2>
+        {tagsError && <p style={{ color: "#c86a6a" }}>{tagsError}</p>}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {tags.length === 0 && <p style={{ margin: 0, color: "var(--noctella-aged-bronze)" }}>No Marketing Tags yet.</p>}
+          {tags.map((tag) => (
+            <span key={tag.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", border: "1px solid var(--noctella-antique-gold)", borderRadius: 999 }}>
+              {tag.label}
+              <button onClick={() => handleRemoveTag(tag.id)} aria-label={`Remove ${tag.label}`} style={{ border: "none", background: "none", cursor: "pointer" }}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <input
+            placeholder="e.g. Father's Day"
+            value={newTagLabel}
+            onChange={(event) => setNewTagLabel(event.target.value)}
+          />
+          <button onClick={handleAddTag} disabled={addingTag || !newTagLabel.trim()}>
+            {addingTag ? "Adding..." : "Add Tag"}
+          </button>
+        </div>
       </section>
 
       <section className="noctella-panel" style={{ padding: 20, marginBottom: 16 }}><h2>Connection</h2>{connectionRequired ? <><p>Status: {connection?.status ?? "disconnected"}</p><p>Expiry: {connection?.tokenExpiresAt ?? "—"}</p></> : <p>Direct channel — no external connection required.</p>}</section>

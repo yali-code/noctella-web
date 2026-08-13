@@ -4,8 +4,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PublishChannel } from "@noctella/shared";
 import { ApiError } from "@/lib/api";
+import * as apiLib from "@/lib/api";
 import * as publishingLib from "@/lib/publishing";
 import * as marketplacesLib from "@/lib/marketplaces";
+import * as marketingTagsLib from "@/lib/marketingTags";
 import ProductPublishingPage from "./page";
 
 afterEach(() => vi.restoreAllMocks());
@@ -28,6 +30,23 @@ function preparation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** Sprint 140: minimal ProductDetail fixture - only priceEur/updatedAt are actually read by this page's new price editor. */
+function product(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "product-1",
+    sku: "NOC-000001",
+    title: "Test Product",
+    status: "draft",
+    priceEur: null,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    photos: [],
+    images: [],
+    marketplaceReadiness: {},
+    ...overrides,
+  };
+}
+
 function mockBaseLoads() {
   vi.spyOn(publishingLib.publishingApi, "getPreview").mockResolvedValue({
     productId: "product-1",
@@ -37,6 +56,14 @@ function mockBaseLoads() {
   vi.spyOn(marketplacesLib.marketplaceApi, "listConnections").mockResolvedValue([]);
   vi.spyOn(marketplacesLib.marketplaceApi, "listJobs").mockResolvedValue([]);
   vi.spyOn(marketplacesLib.marketplaceApi, "externalListings").mockResolvedValue([]);
+  // Sprint 140: the page's new direct Product fetch (price editor) and Marketing Tags list -
+  // every pre-existing test in this file exercises the Marketplace Preparation section only, so a
+  // safe, unasserted default (no price, no tags) keeps them unaffected by this addition.
+  vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+    if (path === "/api/products/product-1") return Promise.resolve(product()) as any;
+    return Promise.reject(new Error(`Unexpected path: ${path}`));
+  });
+  vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
 }
 
 describe("ProductPublishingPage - Marketplace Preparation (Sprint 107)", () => {
@@ -125,6 +152,11 @@ describe("ProductPublishingPage - Marketplace Preparation (Sprint 107)", () => {
     vi.spyOn(marketplacesLib.marketplaceApi, "listJobs").mockResolvedValue([]);
     vi.spyOn(marketplacesLib.marketplaceApi, "externalListings").mockResolvedValue([]);
     vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product()) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
     render(<ProductPublishingPage params={{ id: "product-1" }} />);
     const executeButton = await screen.findByRole("button", { name: "Execute Publish" });
     expect(executeButton).not.toBeDisabled();
@@ -145,6 +177,11 @@ describe("ProductPublishingPage - Marketplace Preparation (Sprint 107)", () => {
     vi.spyOn(marketplacesLib.marketplaceApi, "listJobs").mockResolvedValue([]);
     vi.spyOn(marketplacesLib.marketplaceApi, "externalListings").mockResolvedValue([]);
     vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product()) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
     render(<ProductPublishingPage params={{ id: "product-1" }} />);
 
     // Sprint 112: the Edit Product link renders unconditionally, before any async load even
@@ -155,5 +192,163 @@ describe("ProductPublishingPage - Marketplace Preparation (Sprint 107)", () => {
     const link = screen.getByRole("link", { name: "Edit Product" });
     expect(link).toHaveAttribute("href", "/products/product-1/edit");
     expect(screen.queryByRole("button", { name: "Execute Publish" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Sprint 140: canonical price editor - deliberately channel-agnostic, independent of Marketplace
+ * Preparation Approve above, reusing the existing PUT /api/products/:id endpoint with a minimal
+ * partial body and optimistic concurrency.
+ */
+describe("ProductPublishingPage - Price (Sprint 140)", () => {
+  it("displays the current canonical price", async () => {
+    mockBaseLoads();
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product({ priceEur: 149.99 })) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    expect(await screen.findByDisplayValue("149.99")).toBeInTheDocument();
+  });
+
+  it("Save Price sends priceEur and the current expectedUpdatedAt through the existing PUT path", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product({ priceEur: null, updatedAt: "2026-02-01T00:00:00.000Z" })) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    const putSpy = vi.spyOn(apiLib.api, "put").mockResolvedValue(product({ priceEur: 250, updatedAt: "2026-02-02T00:00:00.000Z" }) as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    const priceInput = await screen.findByPlaceholderText("No price set");
+    await user.type(priceInput, "250");
+    await user.click(screen.getByRole("button", { name: "Save Price" }));
+    await waitFor(() =>
+      expect(putSpy).toHaveBeenCalledWith("/api/products/product-1", { priceEur: 250, expectedUpdatedAt: "2026-02-01T00:00:00.000Z" }),
+    );
+  });
+
+  it("clearing the price input and saving sends priceEur: null (preserves the existing clear-to-null contract)", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product({ priceEur: 100 })) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    const putSpy = vi.spyOn(apiLib.api, "put").mockResolvedValue(product({ priceEur: null }) as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    const priceInput = await screen.findByDisplayValue("100");
+    await user.clear(priceInput);
+    await user.click(screen.getByRole("button", { name: "Save Price" }));
+    await waitFor(() => expect(putSpy).toHaveBeenCalledWith("/api/products/product-1", expect.objectContaining({ priceEur: null })));
+  });
+
+  it("refreshes the version token after a successful save, so the next save uses the new updatedAt", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(apiLib.api, "get").mockImplementation((path: string) => {
+      if (path === "/api/products/product-1") return Promise.resolve(product({ priceEur: null, updatedAt: "2026-02-01T00:00:00.000Z" })) as any;
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    const putSpy = vi.spyOn(apiLib.api, "put").mockResolvedValue(product({ priceEur: 80, updatedAt: "2026-02-05T00:00:00.000Z" }) as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    const priceInput = await screen.findByPlaceholderText("No price set");
+    await user.type(priceInput, "80");
+    await user.click(screen.getByRole("button", { name: "Save Price" }));
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+
+    await user.clear(await screen.findByDisplayValue("80"));
+    await user.type(screen.getByPlaceholderText("No price set"), "90");
+    await user.click(screen.getByRole("button", { name: "Save Price" }));
+    await waitFor(() =>
+      expect(putSpy).toHaveBeenLastCalledWith("/api/products/product-1", { priceEur: 90, expectedUpdatedAt: "2026-02-05T00:00:00.000Z" }),
+    );
+  });
+
+  it("shows a save error without crashing (e.g. a stale version conflict)", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    vi.spyOn(apiLib.api, "put").mockRejectedValue(new ApiError("This product changed since you loaded it.", 409));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    const priceInput = await screen.findByPlaceholderText("No price set");
+    await user.type(priceInput, "10");
+    await user.click(screen.getByRole("button", { name: "Save Price" }));
+    await screen.findByText("This product changed since you loaded it.");
+  });
+
+  it("does not introduce SKU, Inventory quantity, or status editing controls", async () => {
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await screen.findByRole("button", { name: "Save Price" });
+    expect(screen.queryByDisplayValue("NOC-000001")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/sku/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/stock quantity/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Sprint 140: Product Marketing Tags - a distinct concept from Product Category, SEO keywords,
+ * and the per-channel Etsy tags edited above. Explicit add/remove only, no replace-all.
+ */
+describe("ProductPublishingPage - Marketing Tags (Sprint 140)", () => {
+  it("lists the Product's current Marketing Tags", async () => {
+    mockBaseLoads();
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([
+      { id: "tag-1", key: "fathers-day", label: "Father's Day", createdAt: "t", updatedAt: "t" },
+    ] as any);
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    expect(await screen.findByText("Father's Day")).toBeInTheDocument();
+  });
+
+  it("renders an empty state when no tags exist yet", async () => {
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    expect(await screen.findByText("No Marketing Tags yet.")).toBeInTheDocument();
+  });
+
+  it("Add Tag calls the explicit add endpoint with the typed label and reloads the list", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    const addSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "add").mockResolvedValue({ id: "tag-1", key: "christmas", label: "Christmas", createdAt: "t", updatedAt: "t" } as any);
+    const listSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await screen.findByText("No Marketing Tags yet.");
+    const input = screen.getByPlaceholderText("e.g. Father's Day");
+    await user.type(input, "Christmas");
+    await user.click(screen.getByRole("button", { name: "Add Tag" }));
+    await waitFor(() => expect(addSpy).toHaveBeenCalledWith("product-1", "Christmas"));
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(2)); // initial load + reload after add
+  });
+
+  it("Remove Tag calls the explicit remove endpoint for exactly that relation", async () => {
+    const user = userEvent.setup();
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([
+      { id: "tag-1", key: "fathers-day", label: "Father's Day", createdAt: "t", updatedAt: "t" },
+    ] as any);
+    const removeSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "remove").mockResolvedValue(undefined as any);
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await screen.findByText("Father's Day");
+    await user.click(screen.getByRole("button", { name: "Remove Father's Day" }));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith("product-1", "tag-1"));
+  });
+
+  it("no replace-all/bulk-save action exists for Marketing Tags", async () => {
+    mockBaseLoads();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Not found", 404));
+    render(<ProductPublishingPage params={{ id: "product-1" }} />);
+    await screen.findByText("No Marketing Tags yet.");
+    expect(screen.queryByRole("button", { name: /save tags/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /replace/i })).not.toBeInTheDocument();
   });
 });

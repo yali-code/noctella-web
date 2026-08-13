@@ -6,6 +6,7 @@ import { AiIntakeApplyResultStateInvalidError, NotFoundError } from "./errors";
 import { createAiIntakeApplyTransactionCapabilityForDb, type AiIntakeApplyTransactionDriver } from "./aiIntakeApplyTransactionCapabilityForDb";
 import { stockAcceptanceUseCase } from "../use-cases/ai-intake-stock-acceptance/useCases";
 import type { StockAcceptanceInput as StockAcceptanceRequestInput } from "../validation/aiIntakeStockAcceptance";
+import { dispatchDueAiSalesPreparationOutboxEvents } from "./aiSalesPreparationOutbox";
 
 export interface StockAcceptanceServiceResult {
   /** false for the idempotent already-Applied retry - no new canonical write was performed, no SKU allocated. */
@@ -55,6 +56,19 @@ export async function acceptAiIntakeIntoStock(
 
   try {
     const product = await getProductById(db, result.productId);
+    // Sprint 140: immediate best-effort dispatch of the durable AiSalesPreparationRequested
+    // Outbox event the transaction above just committed - mirrors services/orders.ts's proven
+    // dispatchDueSalesInvoiceOutboxEvents(db,"post-commit",1).catch(()=>undefined) pattern
+    // exactly. Strictly after the transaction has committed (this line runs only once
+    // getProductById has already succeeded), and strictly best-effort: a failure here (provider
+    // error, transient issue) is swallowed and never propagates - it must never affect this
+    // already-successful Stock Acceptance response. Scoped to the newly-created path only; an
+    // idempotent already-Applied retry inserted no new event this call, so there is nothing new
+    // to dispatch immediately - the existing hourly sweep remains the recovery mechanism for any
+    // event this attempt misses.
+    if (result.created) {
+      await dispatchDueAiSalesPreparationOutboxEvents(db, "post-commit", 1).catch(() => undefined);
+    }
     return { created: result.created, product };
   } catch (err) {
     // Mirrors saveAiIntakeAsDraft's identical Sprint 94 correction exactly - narrowly translated

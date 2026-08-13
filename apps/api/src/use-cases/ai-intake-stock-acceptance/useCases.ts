@@ -14,6 +14,7 @@ import { createProductSchema, type CreateProductInput } from "../../validation/p
 import { createProductWithInventoryInTransactionUseCase } from "../product-write/useCases";
 import { allocateNextProductSkuInTransaction, categoryExistsInTransaction } from "../../repositories/product-write/drizzle";
 import type { AiIntakeApplyTransactionCapability } from "../../services/aiIntakeApplyTransactionCapabilityForDb";
+import { enqueueAiSalesPreparationInTransaction } from "../../services/aiSalesPreparationOutbox";
 
 const CONFIRMED_DECISIONS: ReadonlySet<string> = new Set(["accepted", "edited"]);
 const chain = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>): U | Promise<U> => (value instanceof Promise ? value.then(next) : next(value));
@@ -144,6 +145,14 @@ function decideProductTextFieldsFromProposal(proposal: Record<string, any>): Pro
  * Idempotency: an already-Applied intake returns its existing resultProductId
  * with no new write and no new SKU allocation - identical guarantee to
  * applyAiIntakeUseCase.
+ *
+ * Sprint 140: the transaction now also inserts one durable AiSalesPreparationRequested Outbox
+ * event (see services/aiSalesPreparationOutbox.ts's enqueueAiSalesPreparationInTransaction),
+ * atomically alongside Product/Inventory/SKU/intake-Applied - never a separate post-commit
+ * insert. This is still a plain row insert, not an AI/provider/network call, so the "no external
+ * call inside this transaction" invariant above remains unchanged. The already-Applied
+ * short-circuit above means a retried call for an already-Applied intake never re-reaches this
+ * insert, so it can never enqueue a duplicate event for the same Product.
  */
 export async function stockAcceptanceUseCase(capability: AiIntakeApplyTransactionCapability, input: StockAcceptanceInput): Promise<StockAcceptanceResult> {
   return capability.runWithLockedIntake(input.intakeId, (ctx) => {
@@ -219,19 +228,32 @@ export async function stockAcceptanceUseCase(capability: AiIntakeApplyTransactio
 
             return chain(createProductWithInventoryInTransactionUseCase(repositories, inventoryCtx, candidate), (createResult) => {
               const now = new Date().toISOString();
+              // Sprint 140: durable AiSalesPreparationRequested Outbox intent, inserted atomically inside
+              // this SAME locked transaction via the already-exposed ctx.tx/ctx.schema/ctx.execution - never
+              // a separate post-commit insert (that would leave a crash-between-commit-and-insert gap). No
+              // external AI/provider/network call occurs here; this is a plain, cheap row insert, executed
+              // synchronously for SQLite (matching runWithLockedIntake's hard synchronous-callback
+              // requirement) or awaited for Postgres. If this insert fails, the whole transaction - including
+              // the just-created Product/Inventory/SKU and the pending intake-Applied write below - rolls
+              // back, exactly as required: Stock Acceptance must never commit without its durable AI Sales
+              // preparation intent.
               return chain(
-                ctx.applyIntake({
-                  resultProductId: createResult.id,
-                  appliedAt: now,
-                  appliedByAdminUserId: input.actorId,
-                  updatedAt: now,
-                }),
-                (finalizeResult) => {
-                  // Defensive only - the intake row is already locked for the whole transaction, so
-                  // this should never fail given the checks above already passed.
-                  if (!finalizeResult.updated) throw new AiIntakeApplyResultStateInvalidError();
-                  return { created: true, productId: createResult.id };
-                },
+                enqueueAiSalesPreparationInTransaction(ctx.tx, ctx.schema, ctx.execution, { productId: createResult.id, intakeId: input.intakeId }),
+                () =>
+                  chain(
+                    ctx.applyIntake({
+                      resultProductId: createResult.id,
+                      appliedAt: now,
+                      appliedByAdminUserId: input.actorId,
+                      updatedAt: now,
+                    }),
+                    (finalizeResult) => {
+                      // Defensive only - the intake row is already locked for the whole transaction, so
+                      // this should never fail given the checks above already passed.
+                      if (!finalizeResult.updated) throw new AiIntakeApplyResultStateInvalidError();
+                      return { created: true, productId: createResult.id };
+                    },
+                  ),
               );
             });
           });
