@@ -38,4 +38,18 @@ describe("admin marketplace helpers", () => {
       expect.stringContaining("/api/products/p1/external-listings"),
     ]));
   });
+
+  /**
+   * Sprint 141: unified/batch publish - one request to the new batch endpoint, sending exactly the
+   * selected channels and nothing else (no idempotencyKey field - the batch endpoint has none).
+   */
+  it("sends exactly the selected channels to the unified batch endpoint, with no idempotency key", async () => {
+    fetchMock.mockImplementation((url: string) => json({ url }));
+    await marketplaceApi.executePublishBatch("p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay]);
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("/publish/execute-batch"));
+    expect(call).toBeDefined();
+    expect(String(call![0])).toContain("/api/products/p1/publish/execute-batch");
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body).toEqual({ channels: [PublishChannel.NoctellaWeb, PublishChannel.Ebay] });
+  });
 });

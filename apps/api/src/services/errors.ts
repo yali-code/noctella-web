@@ -33,6 +33,23 @@ export class ProductVersionConflictError extends ConflictError {
   }
 }
 
+/**
+ * Sprint 141 Formal Validation Fix: thrown ONLY by executePublish's duplicate-active-listing guard
+ * (marketplacePublishing.ts) - a non-terminal ExternalListing already exists for this Product on
+ * this channel. Extends ConflictError so existing generic `instanceof ConflictError` handling (and
+ * routes/errorHandler.ts's existing 409 mapping) still recognizes it unchanged; the dedicated
+ * subclass exists so executePublishBatch can narrowly map ONLY this exact condition to its
+ * non-destructive "skipped"/already-published outcome, without also catching an unrelated
+ * ConflictError (e.g. ProductVersionConflictError, which also extends ConflictError) that reaches
+ * the same catch boundary.
+ */
+export class DuplicateActiveListingError extends ConflictError {
+  constructor(message = "An active listing already exists for this product on this channel") {
+    super(message);
+    this.name = "DuplicateActiveListingError";
+  }
+}
+
 export class BadRequestError extends Error {
   constructor(message: string) {
     super(message);

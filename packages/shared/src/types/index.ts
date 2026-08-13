@@ -536,6 +536,28 @@ export interface ExternalListing { id: ID; productId: ID; channel: PublishChanne
 export interface PublishExecutionResult { job: PublishJob; externalListing?: ExternalListing; attempts?: PublishAttempt[]; error?: MarketplaceApiError; }
 
 /**
+ * Sprint 141: one outcome entry per channel selected in a unified/batch publish request - never a
+ * single global boolean, so a partial success (e.g. Web succeeded, Etsy failed) is always
+ * representable truthfully. `result` carries the real PublishExecutionResult for "succeeded" and
+ * for a "failed" outcome that actually reached a PublishJob (e.g. RetryPending/Failed after an
+ * adapter error); it is absent for a "failed" outcome that never reached one (e.g. validation/
+ * connection failure) and for the "skipped" (duplicate-active-listing / already-published) outcome,
+ * which instead carries only `error` for display.
+ */
+export interface UnifiedPublishChannelResult {
+  channel: PublishChannel;
+  outcome: "succeeded" | "failed" | "skipped";
+  result?: PublishExecutionResult;
+  error?: { code?: string; message: string };
+}
+
+/** Sprint 141: the unified/batch publish response - one entry per selected channel, in request order. */
+export interface UnifiedPublishResult {
+  productId: ID;
+  results: UnifiedPublishChannelResult[];
+}
+
+/**
  * Sprint 107: the in-flight, unapproved AI marketplace-preparation proposal
  * - one per (productId, channel). Never the destination of approved content
  * itself; approval copies admin-reviewed values onto the existing Product

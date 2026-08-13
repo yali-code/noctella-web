@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { and, desc, eq, SQL } from "drizzle-orm";
-import { MarketplaceConnectionStatus, ProductStatus, PublishChannel, PublishJobStatus, PUBLISH_CHANNEL_VALUES, type ExternalListing, type MarketplaceConnection, type PublishAttempt, type PublishExecutionResult, type PublishJob } from "@noctella/shared";
+import { MarketplaceConnectionStatus, ProductStatus, PublishChannel, PublishJobStatus, PUBLISH_CHANNEL_VALUES, type ExternalListing, type MarketplaceConnection, type PublishAttempt, type PublishExecutionResult, type PublishJob, type UnifiedPublishChannelResult, type UnifiedPublishResult } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { externalListings, marketplaceConnections, publishAttempts, publishJobs } from "../db/schema";
-import { BadRequestError, ConflictError, NotFoundError } from "./errors";
+import { BadRequestError, ConflictError, DuplicateActiveListingError, NotFoundError } from "./errors";
 import { getProductById, updateProduct } from "./products";
 import { buildPublishPayload, validatePublish } from "./publishing";
 import { decryptCredential, encryptCredential } from "./credentialEncryption";
@@ -131,10 +131,92 @@ async function executeNoctellaWebPublish(db: DbClient, productId: string, produc
 }
 export async function executePublish(db: DbClient, productId: string, channel: PublishChannel, key?: string, adapter?: MarketplaceAdapter): Promise<PublishExecutionResult> { assertKnownPublishChannel(channel); const product = await getProductById(db, productId); const validation = validatePublish(product, channel); if (!validation.valid) throw new BadRequestError("Publish validation failed"); if (channel === PublishChannel.NoctellaWeb) return executeNoctellaWebPublish(db, productId, product, channel, key); const connection = await active(db, channel); const payload = buildPublishPayload(product, product.images, channel); const idem = key ?? `${productId}:${channel}:${crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`; const [existing] = await db.select().from(publishJobs).where(eq(publishJobs.idempotencyKey, idem)); if (existing) return { job: job(existing), externalListing: existing.externalListingId ? (await listExternalListings(db, productId)).find((l) => l.externalListingId === existing.externalListingId) : undefined };
   const sameChannelListings = await db.select().from(externalListings).where(and(eq(externalListings.productId, productId), eq(externalListings.channel, channel)));
-  if (sameChannelListings.some((l) => !isTerminalListingStatus(l.externalStatus))) throw new ConflictError("An active listing already exists for this product on this channel");
+  if (sameChannelListings.some((l) => !isTerminalListingStatus(l.externalStatus))) throw new DuplicateActiveListingError();
   const jid = id("job"); await db.insert(publishJobs).values({ id: jid, productId, channel, status: PublishJobStatus.Processing, idempotencyKey: idem, payloadSnapshot: JSON.stringify(payload), attemptCount: 0, createdAt: now(), updatedAt: now() });
   try { const result = await getAdapter(channel, adapter).createListing(decryptCredential(connection.encryptedAccessToken!), payload); await db.insert(publishAttempts).values({ id: id("att"), publishJobId: jid, attemptNumber: 1, requestSnapshot: JSON.stringify(payload), responseSnapshot: JSON.stringify(result.raw ?? result), createdAt: now() }); const lid = id("ext"); await db.insert(externalListings).values({ id: lid, productId, channel, connectionId: connection.id, externalListingId: result.externalListingId, externalListingUrl: result.externalListingUrl, externalStatus: result.externalStatus, payloadSnapshot: JSON.stringify(payload), publishedAt: now(), updatedAt: now() }).onConflictDoNothing(); await db.update(publishJobs).set({ status: PublishJobStatus.Succeeded, externalListingId: result.externalListingId, externalListingUrl: result.externalListingUrl, attemptCount: 1, completedAt: now(), updatedAt: now() }).where(eq(publishJobs.id, jid)); } catch(e) { const err = getAdapter(channel, adapter).normalizeError(e); await db.insert(publishAttempts).values({ id: id("att"), publishJobId: jid, attemptNumber: 1, requestSnapshot: JSON.stringify(payload), errorCode: err.code, errorMessage: err.message, createdAt: now() }); await db.update(publishJobs).set({ status: err.retryable ? PublishJobStatus.RetryPending : PublishJobStatus.Failed, attemptCount: 1, lastError: err.message, updatedAt: now() }).where(eq(publishJobs.id, jid)); }
   const [r] = await db.select().from(publishJobs).where(eq(publishJobs.id, jid)); return { job: job(r) }; }
+/**
+ * Sprint 141: thin, additive orchestration around the existing authoritative executePublish above -
+ * never a second publishing implementation. Attempts every selected channel, in the caller's given
+ * order, strictly SEQUENTIALLY (no Promise.all, no cross-channel transaction - external marketplace
+ * calls are not atomically reversible, and only 3 PublishChannel values ever exist, so throughput is
+ * not a concern). One channel's outcome never affects whether a later selected channel is attempted,
+ * and never rolls back an earlier channel's already-committed result - each channel keeps executing
+ * through its own existing transaction/persistence exactly as executePublish already provides.
+ * Duplicate channel values in the input are deduplicated (first occurrence kept, stable order),
+ * never rejected - a harmless repeated selection should not fail the whole request.
+ *
+ * Classification is deliberately NOT a plain try/catch: executePublish itself never throws for an
+ * adapter/provider failure (that is caught internally and persisted as a PublishJob already in
+ * RetryPending/Failed status - see executePublish's own eBay/Etsy catch block above), so a resolved
+ * call must be classified by its actual PublishJob.status, never assumed "succeeded" merely because
+ * it did not throw.
+ *
+ * Sprint 141 Formal Validation Fix: the catch branch below is deliberately NOT a bare
+ * `instanceof ConflictError` check. executePublish's reachable call graph can throw MORE than one
+ * ConflictError subtype - specifically, the Noctella Web branch's updateProduct call (inside
+ * executeNoctellaWebPublish) can throw ProductVersionConflictError (also a ConflictError subclass)
+ * under a genuine concurrent Product write. Only the dedicated DuplicateActiveListingError (thrown
+ * exclusively by the duplicate-active-listing guard above) maps to the non-destructive "skipped"
+ * outcome; every other recognized domain error (including ProductVersionConflictError) maps to
+ * "failed" - a genuine version conflict must never be reported to the Admin as "already published".
+ *
+ * No batch-level idempotency key exists or is accepted - each channel always uses executePublish's
+ * own existing default per-channel key (`key` is passed through as undefined here), preserving the
+ * existing per-channel idempotency/duplicate-active-listing protection unchanged.
+ */
+export async function executePublishBatch(db: DbClient, productId: string, channels: PublishChannel[], adapter?: MarketplaceAdapter): Promise<UnifiedPublishResult> {
+  // A missing Product is a whole-request failure (404), never a per-channel outcome - checked once,
+  // up front, and deliberately left OUTSIDE the per-channel try/catch below so NotFoundError
+  // propagates to the route unchanged, exactly like every other Product-scoped route in this file.
+  await getProductById(db, productId);
+
+  const seen = new Set<PublishChannel>();
+  const ordered: PublishChannel[] = [];
+  for (const channel of channels) {
+    if (seen.has(channel)) continue;
+    seen.add(channel);
+    ordered.push(channel);
+  }
+
+  const results: UnifiedPublishChannelResult[] = [];
+  for (const channel of ordered) {
+    try {
+      const result = await executePublish(db, productId, channel, undefined, adapter);
+      if (result.job.status === PublishJobStatus.Succeeded) {
+        results.push({ channel, outcome: "succeeded", result });
+      } else {
+        // Sprint 141: reached without throwing (e.g. an adapter/provider failure executePublish
+        // already caught internally) - the PublishJob's own status (RetryPending/Failed) is the
+        // truth, never "succeeded" merely because the call resolved.
+        results.push({ channel, outcome: "failed", result, error: { message: result.job.lastError ?? "Publish attempt did not succeed" } });
+      }
+    } catch (err) {
+      if (err instanceof DuplicateActiveListingError) {
+        // The exact, narrow duplicate-active-listing condition only - never any other ConflictError.
+        results.push({ channel, outcome: "skipped", error: { message: err.message } });
+      } else if (err instanceof BadRequestError || err instanceof ConflictError || err instanceof NotFoundError) {
+        // Sprint 141 Formal Validation Fix: these are the established domain/service error classes
+        // whose message is already intentionally exposed to the client by the existing
+        // routes/errorHandler.ts handleRouteError contract elsewhere in this codebase (every one of
+        // BadRequestError/ConflictError/NotFoundError renders err.message verbatim there) - safe to
+        // expose here too, by that same existing contract. ProductVersionConflictError (a
+        // ConflictError subclass) is correctly included in this branch, never the "skipped" one above.
+        results.push({ channel, outcome: "failed", error: { message: err.message } });
+      } else {
+        // Sprint 141 Formal Validation Fix: an unrecognized exception (a raw DB/driver error, an
+        // unexpected runtime exception, or a non-Error thrown value) never reaches
+        // routes/errorHandler.ts's own sanitization boundary from here - this catch is entirely
+        // internal to executePublishBatch, which never re-throws. A fixed safe fallback is used
+        // instead of the raw message, mirroring handleRouteError's own final fallback ("Internal
+        // server error") for exactly the same class of unrecognized failure.
+        results.push({ channel, outcome: "failed", error: { message: "Publish failed" } });
+      }
+    }
+  }
+
+  return { productId, results };
+}
 export async function listExternalListings(db: DbClient, productId: string) { return (await db.select().from(externalListings).where(eq(externalListings.productId, productId))).map(listing); }
 export async function listPublishJobs(db: DbClient, filters: { channel?: PublishChannel; status?: PublishJobStatus; limit?: number; offset?: number } = {}) { const clauses: SQL[] = []; if (filters.channel) clauses.push(eq(publishJobs.channel, filters.channel)); if (filters.status) clauses.push(eq(publishJobs.status, filters.status)); const q = db.select().from(publishJobs).where(clauses.length ? and(...clauses) : undefined).orderBy(desc(publishJobs.createdAt)).limit(Math.min(filters.limit ?? 50, 100)).offset(filters.offset ?? 0); return (await q).map(job); }
 export async function getPublishJob(db: DbClient, idv: string) { const [r] = await db.select().from(publishJobs).where(eq(publishJobs.id, idv)); if (!r) throw new NotFoundError("Publish job not found"); const atts = await db.select().from(publishAttempts).where(eq(publishAttempts.publishJobId, idv)); return { job: job(r), attempts: atts.map(attempt) }; }
