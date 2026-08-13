@@ -332,6 +332,21 @@ export async function listProducts(db: DbClient, query: ProductListQuery, contex
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
+/**
+ * Sprint 139: the Pending Publish operational queue - genuinely Stock-Accepted Products (Draft or
+ * Approved) that have not yet reached a terminal published/archived state, never "all Draft
+ * Products". Membership authority lives entirely in the repository's listPendingPublish/
+ * countPendingPublish join against ai_product_intakes - this function only orchestrates the two
+ * calls, mirroring listProducts' own shape exactly so the Admin queue page can reuse the same
+ * PaginatedResult contract it already consumes.
+ */
+export async function listPendingPublishQueue(db: DbClient, query: ProductListQuery, context?: ProductReadServiceContext) {
+  context ??= createProductReadServiceContextForDb(db);
+  const items = await context.repositories.products.listPendingPublish(query);
+  const total = await context.repositories.products.countPendingPublish(query);
+  return { items, total, page: query.page, pageSize: query.pageSize };
+}
+
 export async function getProductById(db: DbClient, id: string, context?: ProductReadServiceContext): Promise<ProductWithImages> {
   context ??= createProductReadServiceContextForDb(db);
   const row = await context.repositories.products.getById(id);

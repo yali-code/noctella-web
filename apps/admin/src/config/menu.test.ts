@@ -10,7 +10,7 @@ describe("adminMenuItems (Sprint 97)", () => {
     expect(adminMenuItems).toContainEqual({ label: "AI Drafts", href: "/ai-drafts" });
   });
 
-  it("includes the Ready to Publish entry (Sprint 136)", () => {
-    expect(adminMenuItems).toContainEqual({ label: "Ready to Publish", href: "/ready-to-publish" });
+  it("includes the Pending Publish entry at the existing /ready-to-publish route (Sprint 139: relabeled from Ready to Publish - route unchanged)", () => {
+    expect(adminMenuItems).toContainEqual({ label: "Pending Publish", href: "/ready-to-publish" });
   });
 });
