@@ -847,3 +847,24 @@ export const marketplacePreparations = pgTable("marketplace_preparations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [uniqueIndex("idx_marketplace_preparations_product_channel").on(table.productId, table.channel)]);
+
+/**
+ * Sprint 140: the normalized Product Marketing Tag taxonomy - a distinct concept from Product
+ * Category, Collections, SEO keywords, and Etsy listing tags. `key` is the canonicalized machine
+ * key (see services/marketingTags.ts's canonicalizeMarketingTagKey - deliberately NOT the shared
+ * validation/common.ts slugify()); `label` is the admin-facing friendly text. No FK constraint on
+ * product_marketing_tags, matching this schema's established convention.
+ */
+export const marketingTags = pgTable("marketing_tags", {
+  id: text("id").primaryKey().notNull(),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [uniqueIndex("idx_marketing_tags_key_unique").on(table.key)]);
+export const productMarketingTags = pgTable("product_marketing_tags", {
+  id: text("id").primaryKey().notNull(),
+  productId: text("product_id").notNull(),
+  marketingTagId: text("marketing_tag_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [uniqueIndex("idx_product_marketing_tags_unique").on(table.productId, table.marketingTagId)]);

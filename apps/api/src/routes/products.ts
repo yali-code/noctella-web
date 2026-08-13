@@ -12,6 +12,8 @@ import { executePublish, listExternalListings, endExternalListing } from "../ser
 import { publishRequestSchema } from "../validation/publishing";
 import { approveMarketplacePreparation, generateMarketplacePreparation, getCurrentMarketplacePreparation } from "../services/marketplacePreparation";
 import { approveMarketplacePreparationSchema, generateMarketplacePreparationSchema, getMarketplacePreparationQuerySchema } from "../validation/marketplacePreparation";
+import { addProductMarketingTag, listProductMarketingTags, removeProductMarketingTag } from "../services/marketingTags";
+import { addProductMarketingTagSchema } from "../validation/marketingTags";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -115,6 +117,38 @@ router.post("/:id/marketplace-preparation/approve", requirePermission("products.
   try {
     const input = approveMarketplacePreparationSchema.parse(req.body ?? {});
     res.json(await approveMarketplacePreparation(db, req.params.id, input, req.adminUser!.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+// Sprint 140: Product-scoped Marketing Tags - a distinct concept from Product Category, SEO
+// keywords, Collections, and Etsy listing tags (see Sprint 139/140 Discovery). Explicit
+// GET/POST/DELETE only - no replace-all endpoint, matching the approved Admin-wins ownership
+// model (explicit add/remove is safer than a bulk replace that could silently drop tags an Admin
+// did not intend to touch). GET reuses the existing view permission; POST/DELETE reuse the
+// existing Product-edit permission, matching every other Product-mutating route in this file.
+router.get("/:id/marketing-tags", requirePermission("products.view"), async (req, res) => {
+  try {
+    res.json(await listProductMarketingTags(db, req.params.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.post("/:id/marketing-tags", requirePermission("products.edit"), async (req, res) => {
+  try {
+    const input = addProductMarketingTagSchema.parse(req.body ?? {});
+    res.status(201).json(await addProductMarketingTag(db, req.params.id, input.label));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.delete("/:id/marketing-tags/:tagId", requirePermission("products.edit"), async (req, res) => {
+  try {
+    await removeProductMarketingTag(db, req.params.id, req.params.tagId);
+    res.status(204).end();
   } catch (err) {
     handleRouteError(err, res);
   }

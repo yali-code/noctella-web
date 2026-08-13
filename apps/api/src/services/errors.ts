@@ -491,3 +491,35 @@ export class MarketplacePreparationProviderInvalidResponseError extends Error {
     this.name = "MarketplacePreparationProviderInvalidResponseError";
   }
 }
+
+/** Sprint 140: mirrors MarketplacePreparationProviderConfigurationError exactly - scoped to the Sales Enrichment (Marketing Tags) provider. */
+export class SalesEnrichmentProviderConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SalesEnrichmentProviderConfigurationError";
+  }
+}
+
+/** Sprint 140: mirrors MarketplacePreparationProviderAuthenticationError exactly - never surfaces the API key or the provider's raw response body. */
+export class SalesEnrichmentProviderAuthenticationError extends Error {
+  constructor(message = "The AI provider rejected the request as unauthenticated.") {
+    super(message);
+    this.name = "SalesEnrichmentProviderAuthenticationError";
+  }
+}
+
+/** Sprint 140: mirrors MarketplacePreparationProviderUnavailableError exactly - network-level failure, timeout, rate limit (429), or any provider-side 5xx. */
+export class SalesEnrichmentProviderUnavailableError extends Error {
+  constructor(message = "The AI provider is temporarily unavailable. Try again later.") {
+    super(message);
+    this.name = "SalesEnrichmentProviderUnavailableError";
+  }
+}
+
+/** Sprint 140: mirrors MarketplacePreparationProviderInvalidResponseError exactly - the raw model/response body is never surfaced. */
+export class SalesEnrichmentProviderInvalidResponseError extends Error {
+  constructor(message = "The AI provider returned an unusable response.") {
+    super(message);
+    this.name = "SalesEnrichmentProviderInvalidResponseError";
+  }
+}

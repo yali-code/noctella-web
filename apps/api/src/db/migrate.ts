@@ -36,6 +36,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketplacePreparationsTable(sqlite);
   ensureShippingMethodsTable(sqlite);
   ensureProductPriceEurNullable(sqlite);
+  ensureMarketingTagsTables(sqlite);
 }
 
 /**
@@ -234,6 +235,26 @@ CREATE TABLE IF NOT EXISTS marketplace_preparations (
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_preparations_product_channel ON marketplace_preparations(product_id, channel);
+`);
+}
+
+/**
+ * Sprint 140: the normalized Product Marketing Tag taxonomy - additive only, mirrors
+ * ensureMarketplacePreparationsTable's exact idempotent-CREATE-TABLE pattern. No FK constraint on
+ * product_marketing_tags, matching this schema's established convention.
+ */
+function ensureMarketingTagsTables(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS marketing_tags (
+  id TEXT PRIMARY KEY, key TEXT NOT NULL, label TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_marketing_tags_key_unique ON marketing_tags(key);
+CREATE TABLE IF NOT EXISTS product_marketing_tags (
+  id TEXT PRIMARY KEY, product_id TEXT NOT NULL, marketing_tag_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_marketing_tags_unique ON product_marketing_tags(product_id, marketing_tag_id);
 `);
 }
 
