@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
-import { archiveProduct, createProduct, deleteProductPhoto, getProductById, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
+import { archiveProduct, createProduct, deleteProductPhoto, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
 import { createProductSchema, productListQuerySchema, updateProductRequestSchema } from "../validation/product";
 import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
@@ -26,6 +26,21 @@ router.get("/", requirePermission("products.view"), async (req, res) => {
   }
 });
 
+/**
+ * Sprint 139: Pending Publish queue - a dedicated read path rather than an overload of the
+ * generic status filter above, since eligibility here is a join against ai_product_intakes
+ * provenance, not a plain Product column predicate. Registered before "/:id" below so
+ * "pending-publish" is never captured as an :id param.
+ */
+router.get("/pending-publish", requirePermission("products.view"), async (req, res) => {
+  try {
+    const query = productListQuerySchema.parse(req.query);
+    const result = await listPendingPublishQueue(db, query);
+    res.json(result);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.get("/:id/publish", requirePermission("products.publish"), async (req, res) => {
   try {

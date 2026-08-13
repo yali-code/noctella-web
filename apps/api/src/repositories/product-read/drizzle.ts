@@ -1,13 +1,16 @@
-import { and, asc, desc, eq, gt, ilike, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, like, or, sql } from "drizzle-orm";
+import { ProductStatus } from "@noctella/shared";
 import type { ProductBreakdownDimension, ProductReadListQuery, ProductReadRepositoryBundle } from "./types";
 
 const MAX_PAGE_SIZE = 100;
 const pageSize = (q: ProductReadListQuery = {}) => Math.min(Math.max(Number(q.pageSize ?? q.limit ?? 25), 1), MAX_PAGE_SIZE);
 const offset = (q: ProductReadListQuery = {}) => q.offset ?? ((Math.max(Number(q.page ?? 1), 1) - 1) * pageSize(q));
 const searchTerm = (s?: string) => s?.trim().replace(/[%_]/g, "\\$&");
+/** Sprint 139: Pending Publish is a Draft-or-Approved-and-not-yet-terminal operational view - never a persisted status. */
+const PENDING_PUBLISH_STATUSES: string[] = [ProductStatus.Draft, ProductStatus.Approved];
 
 export function createDrizzleProductReadRepositories(db: any, schema: any, dialect: "sqlite" | "postgres"): ProductReadRepositoryBundle {
-  const { products, categories, collections, productPhotos, productImages } = schema;
+  const { products, categories, collections, productPhotos, productImages, aiProductIntakes } = schema;
   const contains = (col: any, value: string) => dialect === "postgres" ? ilike(col, `%${value}%`) : like(sql`lower(${col})`, `%${value.toLowerCase()}%`);
   const numericFields = ["lengthValue","widthValue","heightValue","weightValue","purchaseCost","priceEur","priceUsd","minOfferPrice","ebayListingPriceEur","etsyListingPriceEur","wooListingPriceEur"];
   const mapProduct = (row: any) => { if (!row) return row; const copy = { ...row }; for (const key of numericFields) if (copy[key] != null) copy[key] = Number(copy[key]); return copy; };
@@ -24,6 +27,21 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     if (q.categorySlug) { const c = await categoriesRepo.getBySlug(q.categorySlug); filters.push(eq(products.categoryId, c?.id ?? "__no_match__")); }
     if (q.collectionSlug) { const c = await collectionsRepo.getBySlug(q.collectionSlug); filters.push(eq(products.collectionId, c?.id ?? "__no_match__")); }
     return filters.length ? and(...filters) : undefined;
+  };
+  /**
+   * Sprint 139: Pending Publish eligibility - genuinely Stock-Accepted Products, not merely
+   * arbitrary Drafts. Provenance is an inner join against ai_product_intakes on
+   * resultProductId = products.id with a non-null appliedAt (the discovered authoritative Stock
+   * Accepted timestamp source); ai_product_intakes.resultProductId is unique, so this join can
+   * never produce more than one row per Product. status is restricted to Draft/Approved (never
+   * Published/Archived/Sold/Reserved/Returned) - the same eligibility used by both the queue list
+   * and its count, so the two can never disagree.
+   */
+  const pendingPublishWhere = (q: ProductReadListQuery = {}) => {
+    const filters: any[] = [inArray(products.status, PENDING_PUBLISH_STATUSES), isNotNull(aiProductIntakes.appliedAt)];
+    if (q.search) { const s = searchTerm(q.search); if (s) filters.push(or(contains(products.title, s), contains(products.sku, s))); }
+    if (q.categoryId) filters.push(eq(products.categoryId, q.categoryId));
+    return and(...filters);
   };
   const breakdownColumns: Record<ProductBreakdownDimension, any> = { category: products.categoryId, brand: products.brand, condition: products.condition, workflowStatus: products.status };
   const order = (q: ProductReadListQuery = {}) => {
@@ -51,6 +69,19 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     listPublished: async (q: ProductReadListQuery = {}) => productsRepo.list({ ...q, published: true }),
     getAvailabilityProjection: async (productId: string) => { const p = await productsRepo.getById(productId); return p ? { productId, physicalStock: p.stockQuantity, reservedStock: 0, reservedStockSupported: false, availableStock: p.stockQuantity, availableQuantity: p.stockQuantity } : undefined; },
     getWorkspaceReadProjection: async (productId: string) => productsRepo.getById(productId),
+    listPendingPublish: async (q: ProductReadListQuery = {}) => db
+      .select({ id: products.id, title: products.title, stockAcceptedAt: aiProductIntakes.appliedAt })
+      .from(products)
+      .innerJoin(aiProductIntakes, eq(aiProductIntakes.resultProductId, products.id))
+      .where(pendingPublishWhere(q))
+      .orderBy(desc(aiProductIntakes.appliedAt), asc(products.id))
+      .limit(pageSize(q))
+      .offset(offset(q)),
+    countPendingPublish: async (q: ProductReadListQuery = {}) => Number((await db
+      .select({ total: sql<number>`count(*)` })
+      .from(products)
+      .innerJoin(aiProductIntakes, eq(aiProductIntakes.resultProductId, products.id))
+      .where(pendingPublishWhere(q)))[0]?.total ?? 0),
   };
   const categoriesRepo = {
     getById: async (id: string) => (await db.select().from(categories).where(eq(categories.id, id)).limit(1))[0],

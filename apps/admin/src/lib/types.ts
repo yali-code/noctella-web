@@ -19,6 +19,17 @@ export interface ProductListItem extends Product {
   primaryImageUrl?: string;
 }
 
+/**
+ * Sprint 139: the Pending Publish queue's minimal row - deliberately not a ProductListItem.
+ * stockAcceptedAt is the authoritative Warehouse Stock Acceptance timestamp
+ * (ai_product_intakes.appliedAt), never Product createdAt/updatedAt.
+ */
+export interface PendingPublishItem {
+  id: string;
+  title: string;
+  stockAcceptedAt: string;
+}
+
 export interface ProductDetail extends Product {
   photos: ProductPhoto[];
   images: ProductImage[];
