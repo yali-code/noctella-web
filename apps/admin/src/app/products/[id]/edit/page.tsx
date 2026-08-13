@@ -38,12 +38,18 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         initialValues={initialValues}
         submitLabel="Save Changes"
         productId={params.id}
+        productUpdatedAt={expectedUpdatedAt ?? undefined}
         onSubmit={async (payload) => {
           const updated = await api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt });
           setExpectedUpdatedAt(updated.updatedAt);
           router.push(`/products/${params.id}`);
         }}
         onVersionConflictReload={() => window.location.reload()}
+        // Sprint 145: a successful inline Marketplace Preparation Approve (inside ProductForm)
+        // mutates the canonical Product outside this page's own onSubmit flow - the version token
+        // this page owns (Sprint 88) must advance to match, or the next Save Changes would be
+        // incorrectly rejected as a version conflict.
+        onProductVersionAdvanced={(updatedAt) => setExpectedUpdatedAt(updatedAt)}
       />
     </div>
   );

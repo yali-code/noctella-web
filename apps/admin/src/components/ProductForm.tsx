@@ -7,15 +7,18 @@ import {
   PRODUCT_SHIPPING_PROFILE_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
+  PublishChannel,
   ProductStatus,
   ProductType,
   WEIGHT_UNIT_VALUES,
   type Category,
   type Collection,
+  type Product,
 } from "@noctella/shared";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
+import { AiChannelSuggestionsSection } from "./AiChannelSuggestionsSection";
 import { MarketingTagsSection } from "./MarketingTagsSection";
 
 export interface ProductFormValues {
@@ -316,9 +319,44 @@ interface ProductFormProps {
    * the Marketing Tags API, for a Product that does not exist yet).
    */
   productId?: string;
+  /**
+   * Sprint 145: the current canonical Product version, mirroring EditProductPage's own existing
+   * Sprint 88 `expectedUpdatedAt` - used only as the client-side staleness hint for the new AI
+   * Suggestions sections below (never as an alternative concurrency mechanism; the approve
+   * endpoint's own server-side freshness checks remain sole authority).
+   */
+  productUpdatedAt?: string;
+  /**
+   * Sprint 145: fired only after a successful inline Marketplace Preparation Approve, with the
+   * exact updatedAt the approve endpoint returned. EditProductPage uses this to advance its own
+   * `expectedUpdatedAt` so a later Save Changes is never rejected as a false version conflict.
+   */
+  onProductVersionAdvanced?: (updatedAt: string) => void;
 }
 
-export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionConflictReload, productId }: ProductFormProps) {
+/** Sprint 145: exactly the ProductFormValues keys each channel's Marketplace Preparation Approve is allowed to have written - mirrors mapApprovedFieldsToProductValues (use-cases/marketplace-preparation/useCases.ts) exactly, never Core/SKU/stock/price/status/other-channel fields. */
+const AI_CHANNEL_FIELD_KEYS: Record<PublishChannel, Array<keyof ProductFormValues>> = {
+  [PublishChannel.Ebay]: ["ebayTitle", "ebayDescription", "ebayConditionDescription", "ebayItemSpecifics"],
+  [PublishChannel.Etsy]: ["etsyTitle", "etsyDescription", "etsyTags", "etsyMaterials", "etsyStyle", "etsyOccasion"],
+  [PublishChannel.NoctellaWeb]: ["wooProductName", "wooLongDescription", "wooShortDescription", "wooSeoTitle", "wooMetaDescription", "wooFocusKeyword"],
+};
+
+/** Maps a channel's owned ProductFormValues keys onto the corresponding field of the returned canonical Product (etsyTags is an array on Product, a comma-joined string in ProductFormValues - matches productToFormValues's own convention exactly). */
+function readAiChannelFieldFromProduct(product: Product, key: keyof ProductFormValues): string | undefined {
+  if (key === "etsyTags") return product.etsyTags?.join(", ") ?? "";
+  const value = (product as unknown as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : (value ?? "") as string;
+}
+
+export function ProductForm({
+  initialValues,
+  submitLabel,
+  onSubmit,
+  onVersionConflictReload,
+  productId,
+  productUpdatedAt,
+  onProductVersionAdvanced,
+}: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues);
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -326,6 +364,29 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
   const [formError, setFormError] = useState<string | null>(null);
   const [versionConflict, setVersionConflict] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Sprint 145: mirrors `values`'s own "initialize once from props" convention - advanced only by
+  // handleAiSuggestionsApplied below, never by re-reading the productUpdatedAt prop after mount
+  // (EditProductPage never re-renders ProductForm with a new prop value while it stays mounted).
+  const [currentProductUpdatedAt, setCurrentProductUpdatedAt] = useState(productUpdatedAt);
+
+  /**
+   * Sprint 145: the ONLY place a Marketplace Preparation Approve result is allowed to touch
+   * `values` - merges exclusively the approved channel's own known field keys from the endpoint's
+   * returned Product, leaving every other field (including any unsaved manual edit anywhere else
+   * in this form) completely untouched. Also advances the local staleness baseline and notifies
+   * EditProductPage so the next Save Changes uses the fresh version token.
+   */
+  function handleAiSuggestionsApplied(channel: PublishChannel, product: Product) {
+    setValues((prev) => {
+      const next = { ...prev };
+      for (const key of AI_CHANNEL_FIELD_KEYS[channel]) {
+        (next as Record<string, unknown>)[key] = readAiChannelFieldFromProduct(product, key);
+      }
+      return next;
+    });
+    setCurrentProductUpdatedAt(product.updatedAt);
+    onProductVersionAdvanced?.(product.updatedAt);
+  }
 
   useEffect(() => {
     api
@@ -794,6 +855,17 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
             ))}
           </select>
         </Field>
+        {/* Sprint 145: inline Marketplace Preparation AI assistance - only in edit mode (productId
+            known); create mode never mounts this, so it never calls the Marketplace Preparation
+            API for a Product that does not exist yet. */}
+        {productId && (
+          <AiChannelSuggestionsSection
+            productId={productId}
+            channel={PublishChannel.Ebay}
+            productUpdatedAt={currentProductUpdatedAt}
+            onApplied={handleAiSuggestionsApplied}
+          />
+        )}
       </Section>
 
       <Section title="Etsy (optional — not published or synced yet)">
@@ -848,6 +920,14 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
             ))}
           </select>
         </Field>
+        {productId && (
+          <AiChannelSuggestionsSection
+            productId={productId}
+            channel={PublishChannel.Etsy}
+            productUpdatedAt={currentProductUpdatedAt}
+            onApplied={handleAiSuggestionsApplied}
+          />
+        )}
       </Section>
 
       <Section title="WooCommerce (optional — not published or synced yet)">
@@ -917,6 +997,14 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
             ))}
           </select>
         </Field>
+        {productId && (
+          <AiChannelSuggestionsSection
+            productId={productId}
+            channel={PublishChannel.NoctellaWeb}
+            productUpdatedAt={currentProductUpdatedAt}
+            onApplied={handleAiSuggestionsApplied}
+          />
+        )}
       </Section>
 
       {/* Sprint 144: Marketing Tags reuse the existing Sprint 140 API unchanged, only in edit mode
@@ -930,13 +1018,12 @@ export function ProductForm({ initialValues, submitLabel, onSubmit, onVersionCon
       )}
 
       <Section title="AI Drafts">
-        {/* Sprint 144 Discovery correction: AI-assisted listing generation is implemented (AI
-            Product Intake, AI Drafts, and Marketplace Preparation) - it is managed from those
-            dedicated screens and from the Publishing page for this Product, not from this form.
-            Sprint 145 will investigate consolidating that review experience into canonical Edit. */}
+        {/* Sprint 145 correction: Marketplace Preparation AI Suggestions are now available directly
+            in the eBay/Etsy/Noctella Web sections above. AI Product Intake (Product creation) and
+            the separate AI Drafts review screen remain their own dedicated surfaces. */}
         <p style={{ margin: 0, fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
-          AI-assisted listing drafts and marketplace preparation for this Product are managed from
-          AI Product Intake, AI Drafts, and the Publishing page.
+          AI Suggestions for eBay, Etsy, and Noctella Web are available directly in their sections
+          above. AI Product Intake and AI Drafts remain separate screens.
         </p>
       </Section>
 
