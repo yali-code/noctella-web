@@ -510,4 +510,35 @@ describe("AiSalesPreparationHandler - channel auto-generation (Sprint 140)", () 
 
     updateProductSpy.mockRestore();
   });
+
+  /**
+   * Sprint 145 ordering fix: price initialization (a genuine Product write, since it applies to a
+   * still-null price) now runs BEFORE automatic per-channel generation. Proves the fix directly -
+   * each freshly generated proposal's baseProductUpdatedAt equals the POST-price-write
+   * Product.updatedAt, never the pre-price one, so a proposal is never born already-stale against
+   * the very Product it was just generated for.
+   */
+  it("Sprint 145: automatically generated Marketplace Preparation proposals use the Product version AFTER AI price initialization, never a pre-price stale version", async () => {
+    const intake = await createIntake(db as any, "admin-1");
+    const generated = await generateIntakeProposal(db as any, intake.id, stubProvider({ suggestedPriceEur: 123 }));
+    await updateProposalFieldReview(db as any, intake.id, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
+
+    const beforeProduct = await getProductById(db as any, productId);
+    expect(beforeProduct.priceEur).toBeNull();
+
+    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
+    await handler.handle(event({ payload: { productId, intakeId: intake.id } }));
+
+    const afterProduct = await getProductById(db as any, productId);
+    expect(afterProduct.priceEur).toBe(123); // price initialization genuinely applied
+    expect(afterProduct.updatedAt).not.toBe(beforeProduct.updatedAt); // Product genuinely advanced
+
+    const repo = createDrizzleMarketplacePreparationRepository(db as any);
+    for (const channel of [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy]) {
+      const row = await repo.findByProductIdAndChannel(productId, channel);
+      expect(row).not.toBeNull();
+      // The core ordering proof: baseProductUpdatedAt reflects the POST-price version.
+      expect(row!.baseProductUpdatedAt).toBe(afterProduct.updatedAt);
+    }
+  });
 });

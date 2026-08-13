@@ -3,14 +3,27 @@
 // preserved, no automatic reload/resubmit occurs, and the reload callback fires only on an
 // explicit user click - without disturbing the existing ordinary ApiError.details field-error
 // behavior. Follows the jsdom/testing-library conventions established by app/offers/page.test.tsx.
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "@/lib/api";
 import * as marketingTagsLib from "@/lib/marketingTags";
+import * as publishingLib from "@/lib/publishing";
 import { ProductForm, emptyProductForm, productToFormValues } from "./ProductForm";
 
 afterEach(() => vi.restoreAllMocks());
+
+/**
+ * Sprint 145: every productId-bearing render now also mounts three AiChannelSuggestionsSection
+ * instances (eBay/Etsy/Web), each of which calls marketplacePreparationApi.get on mount. Defaults
+ * every test in this file to the deterministic NONE state (404) so pre-existing Sprint 144 tests
+ * (SKU lock, Published protection, Marketing Tags) never make a real, unmocked network call -
+ * mirrors publishing/page.test.tsx's own established default-mock convention for exactly this
+ * reason. Individual Sprint 145 tests below override this per-test as needed.
+ */
+beforeEach(() => {
+  vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Marketplace preparation not found", 404));
+});
 
 function baseValues() {
   return { ...emptyProductForm, sku: "SKU-1", title: "Original Title", priceEur: "100", categoryId: "cat-1" };
@@ -477,5 +490,141 @@ describe("ProductForm — Sprint 144: Marketing Tags inside canonical Edit", () 
     expect(await screen.findByText("Failed to load Marketing Tags")).toBeInTheDocument();
     expect(screen.getByLabelText("Brand")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Changes" })).not.toBeDisabled();
+  });
+});
+
+/**
+ * Sprint 145: AI Suggestions integration - the NONE/PENDING+FRESH/PENDING+STALE/APPLIED state
+ * machine and error surfacing themselves are covered in AiChannelSuggestionsSection.test.tsx;
+ * these tests cover exactly what only ProductForm itself owns - create-mode absence, the narrow
+ * channel-scoped field merge, unsaved-edit preservation, and version-token advancement.
+ */
+describe("ProductForm — Sprint 145: AI Suggestions integration", () => {
+  it("create mode never mounts AI Suggestions and never calls marketplacePreparationApi", () => {
+    const getSpy = vi.spyOn(publishingLib.marketplacePreparationApi, "get");
+    render(<ProductForm initialValues={emptyProductForm} submitLabel="Create" onSubmit={vi.fn()} />);
+    expect(screen.queryByText("AI Suggestions")).not.toBeInTheDocument();
+    expect(getSpy).not.toHaveBeenCalled();
+  });
+
+  it("Accept on Etsy merges only Etsy-owned fields, preserves an unrelated unsaved Brand edit and eBay's own untouched Title, advances the version token, and a later Save reflects both", async () => {
+    const user = userEvent.setup();
+    // eBay/Web stay at the default NONE (404) mock from the file-level beforeEach; only Etsy resolves a fresh proposal.
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockImplementation(async (_productId: string, channel: any) => {
+      if (channel === "etsy") {
+        return {
+          id: "prep-1",
+          productId: "p1",
+          channel: "etsy",
+          status: "pending",
+          baseProductUpdatedAt: "t",
+          suggestedTitle: "AI Etsy Title",
+          suggestedDescription: "AI Etsy Description",
+          suggestedTags: ["vintage"],
+          providerName: "mock",
+          promptVersion: "v1",
+          generatedAt: "t",
+          createdAt: "t",
+          updatedAt: "t",
+        } as any;
+      }
+      throw new ApiError("Not found", 404);
+    });
+    const returnedProduct = baseProduct({
+      updatedAt: "2026-02-01T00:00:00.000Z",
+      etsyTitle: "AI Etsy Title",
+      etsyDescription: "AI Etsy Description",
+      etsyTags: ["vintage"],
+    });
+    const approveSpy = vi.spyOn(publishingLib.marketplacePreparationApi, "approve").mockResolvedValue(returnedProduct as any);
+    const onProductVersionAdvanced = vi.fn();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={onSubmit}
+        productId="p1"
+        productUpdatedAt="t"
+        onProductVersionAdvanced={onProductVersionAdvanced}
+      />,
+    );
+
+    // A manual, unsaved edit elsewhere in the form - must survive the Etsy Accept below.
+    await user.clear(screen.getByLabelText("Brand"));
+    await user.type(screen.getByLabelText("Brand"), "Acme");
+
+    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await waitFor(() => expect(approveSpy).toHaveBeenCalledWith("p1", {
+      channel: "etsy",
+      expectedProposalUpdatedAt: "t",
+      title: "AI Etsy Title",
+      description: "AI Etsy Description",
+      tags: ["vintage"],
+    }));
+    await waitFor(() => expect(onProductVersionAdvanced).toHaveBeenCalledWith("2026-02-01T00:00:00.000Z"));
+
+    // Etsy fields now reflect the AI-accepted values.
+    expect((screen.getByLabelText("Tags (comma-separated)") as HTMLInputElement).value).toBe("vintage");
+    // The unrelated manual Brand edit was never discarded by the Approve/merge.
+    expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Acme");
+    // eBay's own Title field (index 1: Core, eBay, Etsy each render a "Title" label) stays untouched.
+    expect((screen.getAllByLabelText("Title")[1] as HTMLInputElement).value).toBe("");
+
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.etsyTitle).toBe("AI Etsy Title");
+    expect(payload.brand).toBe("Acme");
+  });
+
+  it("a version-conflict Approve failure surfaces its own local error, never calls onProductVersionAdvanced, and leaves Marketing Tags and other fields unaffected", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockImplementation(async (_productId: string, channel: any) => {
+      if (channel === "ebay") {
+        return {
+          id: "prep-ebay",
+          productId: "p1",
+          channel: "ebay",
+          status: "pending",
+          baseProductUpdatedAt: "t",
+          suggestedTitle: "AI Ebay Title",
+          providerName: "mock",
+          promptVersion: "v1",
+          generatedAt: "t",
+          createdAt: "t",
+          updatedAt: "t",
+        } as any;
+      }
+      throw new ApiError("Not found", 404);
+    });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "approve").mockRejectedValue(
+      new ApiError("This marketplace preparation changed since you loaded it. Reload it and try again.", 409, undefined, "MARKETPLACE_PREPARATION_VERSION_CONFLICT"),
+    );
+    vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([
+      { id: "tag-1", key: "vintage", label: "Vintage", createdAt: "t", updatedAt: "t" } as any,
+    ]);
+    const onProductVersionAdvanced = vi.fn();
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+        onProductVersionAdvanced={onProductVersionAdvanced}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    expect(await screen.findByText(/changed since you loaded it/)).toBeInTheDocument();
+    expect(onProductVersionAdvanced).not.toHaveBeenCalled();
+
+    // Marketing Tags (a fully independent section) is unaffected by the failed Accept.
+    expect(await screen.findByText("Vintage")).toBeInTheDocument();
+    // eBay's own Title field was never touched by the failed Accept.
+    expect((screen.getAllByLabelText("Title")[1] as HTMLInputElement).value).toBe("");
   });
 });

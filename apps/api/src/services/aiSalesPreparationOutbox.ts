@@ -141,6 +141,19 @@ export class AiSalesPreparationHandler implements OutboxHandler {
     const repository = createDrizzleMarketplacePreparationRepository(this.db);
     const failedChannels: PublishChannel[] = [];
 
+    /**
+     * Sprint 145 ordering fix: price initialization is a Product write (it advances
+     * Product.updatedAt when it applies). It must run BEFORE per-channel generation below - each
+     * generateMarketplacePreparation call reads the canonical Product fresh and stamps the
+     * resulting proposal's baseProductUpdatedAt with whatever Product.updatedAt it saw at that
+     * moment. Running price initialization first (previously it ran last) means an automatically
+     * generated proposal's baseProductUpdatedAt already reflects any price write this same event
+     * makes, instead of a pre-price value that would leave the just-generated proposal already
+     * stale the instant this event finishes. Still fully best-effort/independent: a price-init
+     * failure here never affects channel generation or this event's success below.
+     */
+    await tryInitializePriceFromAiIntake(this.db, productId, intakeId).catch(() => undefined);
+
     for (const channel of AUTOMATIC_CHANNELS) {
       const existing = await repository.findByProductIdAndChannel(productId, channel);
       if (existing) continue; // "pending" or "applied" - already prepared/human-reviewed, never auto-regenerated
@@ -151,8 +164,9 @@ export class AiSalesPreparationHandler implements OutboxHandler {
       }
     }
 
-    // Best-effort Product-level enrichment - independent failure domain, never affects success below.
-    await tryInitializePriceFromAiIntake(this.db, productId, intakeId).catch(() => undefined);
+    // Best-effort Marketing Tags enrichment - a separate join table, never touches
+    // Product.updatedAt, so its ordering relative to channel generation above is immaterial.
+    // Independent failure domain, never affects success below.
     await tryInitializeMarketingTags(this.db, productId).catch(() => undefined);
 
     if (failedChannels.length > 0) {
