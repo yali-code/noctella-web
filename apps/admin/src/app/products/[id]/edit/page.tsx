@@ -48,8 +48,15 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         // Sprint 145: a successful inline Marketplace Preparation Approve (inside ProductForm)
         // mutates the canonical Product outside this page's own onSubmit flow - the version token
         // this page owns (Sprint 88) must advance to match, or the next Save Changes would be
-        // incorrectly rejected as a version conflict.
+        // incorrectly rejected as a version conflict. Sprint 146: a successful Save-before-Publish
+        // (see onSaveForPublish below) advances it through this exact same callback.
         onProductVersionAdvanced={(updatedAt) => setExpectedUpdatedAt(updatedAt)}
+        // Sprint 146: the narrow Save-before-Publish path PublishActions uses (via ProductForm's
+        // own saveForPublish) - the exact same PUT endpoint and expectedUpdatedAt contract as
+        // onSubmit above, but never navigates away and returns the updated Product so ProductForm
+        // can refresh its own visible values/persisted baseline. This page's own expectedUpdatedAt
+        // is advanced by ProductForm calling onProductVersionAdvanced above, not duplicated here.
+        onSaveForPublish={(payload) => api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt })}
       />
     </div>
   );

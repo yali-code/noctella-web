@@ -20,6 +20,7 @@ import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
 import { AiChannelSuggestionsSection } from "./AiChannelSuggestionsSection";
 import { MarketingTagsSection } from "./MarketingTagsSection";
+import { PublishActions } from "./PublishActions";
 
 export interface ProductFormValues {
   sku: string;
@@ -332,6 +333,15 @@ interface ProductFormProps {
    * `expectedUpdatedAt` so a later Save Changes is never rejected as a false version conflict.
    */
   onProductVersionAdvanced?: (updatedAt: string) => void;
+  /**
+   * Sprint 146: performs the existing Product PUT without EditProductPage's generic Save Changes
+   * navigation - supplied only by products/[id]/edit/page.tsx, used exclusively by the internal
+   * Save-before-Publish sequence (see saveForPublish below, and PublishActions). Returns the
+   * canonical updated Product on success; throws the same ApiError shape onSubmit already throws
+   * (including PRODUCT_VERSION_CONFLICT) on failure - reuses the exact same PUT endpoint and
+   * version-token contract as onSubmit, never a second Product-save endpoint.
+   */
+  onSaveForPublish?: (payload: ReturnType<typeof toApiPayload>) => Promise<ProductDetail>;
 }
 
 /** Sprint 145: exactly the ProductFormValues keys each channel's Marketplace Preparation Approve is allowed to have written - mirrors mapApprovedFieldsToProductValues (use-cases/marketplace-preparation/useCases.ts) exactly, never Core/SKU/stock/price/status/other-channel fields. */
@@ -348,6 +358,15 @@ function readAiChannelFieldFromProduct(product: Product, key: keyof ProductFormV
   return typeof value === "string" ? value : (value ?? "") as string;
 }
 
+/** Sprint 146: a plain key-by-key comparison over every ProductFormValues field - a flat object of primitives, no nested/deep comparison needed. The sole basis for `isDirty` below. */
+function valuesEqual(a: ProductFormValues, b: ProductFormValues): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof ProductFormValues>;
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
 export function ProductForm({
   initialValues,
   submitLabel,
@@ -356,6 +375,7 @@ export function ProductForm({
   productId,
   productUpdatedAt,
   onProductVersionAdvanced,
+  onSaveForPublish,
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -368,22 +388,96 @@ export function ProductForm({
   // handleAiSuggestionsApplied below, never by re-reading the productUpdatedAt prop after mount
   // (EditProductPage never re-renders ProductForm with a new prop value while it stays mounted).
   const [currentProductUpdatedAt, setCurrentProductUpdatedAt] = useState(productUpdatedAt);
+  /**
+   * Sprint 146: the last-known-PERSISTED Product form values - distinct from `initialValues` (the
+   * fixed original page-open snapshot, no longer used for payload diffing) and from `values` (the
+   * currently visible, possibly-unsaved form state). Initialized from `initialValues` so
+   * first-ever behavior is byte-for-byte unchanged; advanced by a successful generic Save, a
+   * successful Save-for-Publish, and (scoped to only the approved channel's own field keys) a
+   * successful AI Suggestions Approve. `values` vs this baseline is PublishActions' sole dirty
+   * signal - it must never be compared against the original page-open snapshot, since that would
+   * make an already-saved edit look permanently "dirty" for the rest of the session.
+   */
+  const [persistedBaseline, setPersistedBaseline] = useState<ProductFormValues>(initialValues);
+  const isDirty = !valuesEqual(values, persistedBaseline);
 
   /**
-   * Sprint 145: the ONLY place a Marketplace Preparation Approve result is allowed to touch
+   * Sprint 145/146: the ONLY place a Marketplace Preparation Approve result is allowed to touch
    * `values` - merges exclusively the approved channel's own known field keys from the endpoint's
    * returned Product, leaving every other field (including any unsaved manual edit anywhere else
-   * in this form) completely untouched. Also advances the local staleness baseline and notifies
-   * EditProductPage so the next Save Changes uses the fresh version token.
+   * in this form) completely untouched. Sprint 146: the SAME channel-scoped keys are also merged
+   * into `persistedBaseline` - AI Approve already persisted these exact fields server-side, so they
+   * must never register as locally dirty (which would otherwise trigger an unnecessary generic
+   * Save before Publish); any unrelated field the admin had already edited remains dirty in
+   * `values` because `persistedBaseline` for THAT field is left untouched by this merge. Also
+   * advances the local staleness baseline and notifies EditProductPage so the next Save Changes
+   * uses the fresh version token.
    */
   function handleAiSuggestionsApplied(channel: PublishChannel, product: Product) {
-    setValues((prev) => {
-      const next = { ...prev };
-      for (const key of AI_CHANNEL_FIELD_KEYS[channel]) {
-        (next as Record<string, unknown>)[key] = readAiChannelFieldFromProduct(product, key);
+    const channelFields: Partial<ProductFormValues> = {};
+    for (const key of AI_CHANNEL_FIELD_KEYS[channel]) {
+      (channelFields as Record<string, unknown>)[key] = readAiChannelFieldFromProduct(product, key);
+    }
+    setValues((prev) => ({ ...prev, ...channelFields }));
+    setPersistedBaseline((prev) => ({ ...prev, ...channelFields }));
+    setCurrentProductUpdatedAt(product.updatedAt);
+    onProductVersionAdvanced?.(product.updatedAt);
+  }
+
+  /**
+   * Sprint 146: performs the existing Product PUT without EditProductPage's generic Save Changes
+   * navigation - used exclusively by PublishActions' Save-before-Publish sequence. Builds the same
+   * payload shape handleSubmit builds, against the CURRENT persisted baseline (preserving the
+   * Sprint 137 nullable-sales-price clearing semantics unchanged), and reuses the exact same
+   * error/version-conflict handling as handleSubmit - a conflict here shows the identical existing
+   * UI (including the explicit Reload Latest Product action), never a second, parallel error
+   * surface. On success, refreshes visible values/persisted baseline/version state exactly like a
+   * successful AI Approve does, just for the whole payload rather than one channel's fields.
+   */
+  async function saveForPublish(): Promise<{ ok: true; updatedAt: string } | { ok: false }> {
+    if (!onSaveForPublish) return { ok: false };
+    setFormError(null);
+    setFieldErrors({});
+    setVersionConflict(false);
+    try {
+      const updated = await onSaveForPublish(toApiPayload(values, persistedBaseline));
+      const refreshed = productToFormValues(updated);
+      setValues(refreshed);
+      setPersistedBaseline(refreshed);
+      setCurrentProductUpdatedAt(updated.updatedAt);
+      onProductVersionAdvanced?.(updated.updatedAt);
+      return { ok: true, updatedAt: updated.updatedAt };
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "PRODUCT_VERSION_CONFLICT") {
+          setVersionConflict(true);
+        } else {
+          setFormError(err.message);
+          if (err.details) {
+            const mapped: Record<string, string> = {};
+            for (const d of err.details) mapped[d.path] = d.message;
+            setFieldErrors(mapped);
+          }
+        }
+      } else {
+        setFormError("Something went wrong. Please try again.");
       }
-      return next;
-    });
+      return { ok: false };
+    }
+  }
+
+  /**
+   * Sprint 146: applies the canonical Product returned by PublishActions' post-publish re-fetch
+   * (called after EVERY successful executePublishBatch HTTP response, including partial success).
+   * Unlike the AI-approve merge (scoped to one channel) or Save-for-Publish (payload-derived),
+   * this fully replaces visible values and the persisted baseline with the server's own current
+   * truth - publication can change fields this form never itself submits (Product.status via
+   * Noctella Web, per-channel listingStatus), which only a fresh GET can reveal accurately.
+   */
+  function applyRefreshedProduct(product: ProductDetail) {
+    const refreshed = productToFormValues(product);
+    setValues(refreshed);
+    setPersistedBaseline(refreshed);
     setCurrentProductUpdatedAt(product.updatedAt);
     onProductVersionAdvanced?.(product.updatedAt);
   }
@@ -410,7 +504,7 @@ export function ProductForm({
     setFieldErrors({});
     setVersionConflict(false);
     try {
-      await onSubmit(toApiPayload(values, initialValues));
+      await onSubmit(toApiPayload(values, persistedBaseline));
     } catch (err) {
       if (err instanceof ApiError) {
         // Sprint 88: a version conflict is shown separately and never clears `values` or
@@ -1026,6 +1120,22 @@ export function ProductForm({
           above. AI Product Intake and AI Drafts remain separate screens.
         </p>
       </Section>
+
+      {/* Sprint 146: composed inside the canonical form (never a second <form>) - every button
+          inside PublishActions is type="button", so it can never trigger this form's own submit.
+          Edit mode only (productId known); Publish never applies to a Product that does not exist
+          yet. */}
+      {productId && (
+        <Section title="Publish">
+          <PublishActions
+            productId={productId}
+            isDirty={isDirty}
+            currentProductUpdatedAt={currentProductUpdatedAt}
+            saveForPublish={saveForPublish}
+            onProductRefreshed={applyRefreshedProduct}
+          />
+        </Section>
+      )}
 
       <button
         type="submit"

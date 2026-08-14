@@ -13,7 +13,11 @@ export const marketplaceApi = {
   executePublish: (productId: string, channel: PublishChannel) => api.post<PublishExecutionResult>(`/api/products/${productId}/publish/execute`, { channel }),
   // Sprint 141: unified/batch publish - one request, one result per selected channel. No
   // idempotency key is ever sent (the batch endpoint has none - see validation/publishing.ts).
-  executePublishBatch: (productId: string, channels: PublishChannel[]) => api.post<UnifiedPublishResult>(`/api/products/${productId}/publish/execute-batch`, { channels }),
+  // Sprint 146: expectedUpdatedAt is now required by the batch endpoint - the exact canonical
+  // Product version the caller believes is current, checked server-side before any channel is
+  // attempted (see services/marketplacePublishing.ts's executePublishBatch).
+  executePublishBatch: (productId: string, channels: PublishChannel[], expectedUpdatedAt: string) =>
+    api.post<UnifiedPublishResult>(`/api/products/${productId}/publish/execute-batch`, { channels, expectedUpdatedAt }),
   listJobs: () => api.get<PublishJob[]>("/api/publish-jobs"),
   getJob: (id: string) => api.get<{ job: PublishJob; attempts: unknown[] }>(`/api/publish-jobs/${id}`),
   retry: (id: string) => api.post<PublishExecutionResult>(`/api/publish-jobs/${id}/retry`, {}),

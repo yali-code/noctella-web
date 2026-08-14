@@ -3,7 +3,7 @@ import { and, desc, eq, SQL } from "drizzle-orm";
 import { MarketplaceConnectionStatus, ProductStatus, PublishChannel, PublishJobStatus, PUBLISH_CHANNEL_VALUES, type ExternalListing, type MarketplaceConnection, type PublishAttempt, type PublishExecutionResult, type PublishJob, type UnifiedPublishChannelResult, type UnifiedPublishResult } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { externalListings, marketplaceConnections, publishAttempts, publishJobs } from "../db/schema";
-import { BadRequestError, ConflictError, DuplicateActiveListingError, NotFoundError } from "./errors";
+import { BadRequestError, ConflictError, DuplicateActiveListingError, NotFoundError, ProductVersionConflictError } from "./errors";
 import { getProductById, updateProduct } from "./products";
 import { buildPublishPayload, validatePublish } from "./publishing";
 import { decryptCredential, encryptCredential } from "./credentialEncryption";
@@ -164,12 +164,27 @@ export async function executePublish(db: DbClient, productId: string, channel: P
  * No batch-level idempotency key exists or is accepted - each channel always uses executePublish's
  * own existing default per-channel key (`key` is passed through as undefined here), preserving the
  * existing per-channel idempotency/duplicate-active-listing protection unchanged.
+ *
+ * Sprint 146: `expectedUpdatedAt` is now a required whole-batch precondition, checked once, up
+ * front, before any selected channel is attempted - reuses the existing Sprint 88
+ * ProductVersionConflictError (never a second versioning mechanism). This closes the gap where the
+ * canonical Product Edit workspace's Save-before-Publish flow could otherwise publish a Product
+ * whose fields the admin no longer believes are current (e.g. a concurrent edit landed between the
+ * admin's last Save and clicking Publish Selected). A stale token blocks the ENTIRE batch - zero
+ * adapter invocation, zero PublishJob/PublishAttempt/ExternalListing rows, no Product mutation -
+ * never a per-channel "failed" result reached only after an earlier channel already published.
  */
-export async function executePublishBatch(db: DbClient, productId: string, channels: PublishChannel[], adapter?: MarketplaceAdapter): Promise<UnifiedPublishResult> {
+export async function executePublishBatch(db: DbClient, productId: string, channels: PublishChannel[], expectedUpdatedAt: string, adapter?: MarketplaceAdapter): Promise<UnifiedPublishResult> {
   // A missing Product is a whole-request failure (404), never a per-channel outcome - checked once,
   // up front, and deliberately left OUTSIDE the per-channel try/catch below so NotFoundError
   // propagates to the route unchanged, exactly like every other Product-scoped route in this file.
-  await getProductById(db, productId);
+  const product = await getProductById(db, productId);
+
+  // Sprint 146: the whole-batch version gate - deliberately BEFORE any channel loop iteration, so a
+  // stale token can never let an earlier selected channel commit before the conflict is detected.
+  if (product.updatedAt !== expectedUpdatedAt) {
+    throw new ProductVersionConflictError(productId, expectedUpdatedAt, product.updatedAt);
+  }
 
   const seen = new Set<PublishChannel>();
   const ordered: PublishChannel[] = [];

@@ -85,7 +85,9 @@ router.post("/:id/publish/execute", requirePermission("products.publish"), async
 router.post("/:id/publish/execute-batch", requirePermission("products.publish"), async (req, res) => {
   try {
     const input = executePublishBatchRequestSchema.parse(req.body);
-    res.json(await executePublishBatch(db, req.params.id, input.channels));
+    // Sprint 146: expectedUpdatedAt is forwarded unchanged - executePublishBatch itself performs
+    // the upfront whole-batch Product version comparison before attempting any channel.
+    res.json(await executePublishBatch(db, req.params.id, input.channels, input.expectedUpdatedAt));
   } catch (err) { handleRouteError(err, res); }
 });
 
