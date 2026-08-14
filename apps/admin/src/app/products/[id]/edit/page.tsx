@@ -42,7 +42,11 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         onSubmit={async (payload) => {
           const updated = await api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt });
           setExpectedUpdatedAt(updated.updatedAt);
-          router.push(`/products/${params.id}`);
+          // Sprint 147: a successful generic Save now returns the admin to the Pending Publish
+          // queue rather than the Product Detail page - the just-saved Product may or may not be
+          // eligible there depending on Stock Acceptance provenance/status/publish-evidence
+          // (unchanged Sprint 142 predicate), which is expected and not corrected for here.
+          router.push("/ready-to-publish");
         }}
         onVersionConflictReload={() => window.location.reload()}
         // Sprint 145: a successful inline Marketplace Preparation Approve (inside ProductForm)
@@ -57,6 +61,11 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         // can refresh its own visible values/persisted baseline. This page's own expectedUpdatedAt
         // is advanced by ProductForm calling onProductVersionAdvanced above, not duplicated here.
         onSaveForPublish={(payload) => api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt })}
+        // Sprint 147: fired by PublishActions (via ProductForm) only after a resolved
+        // executePublishBatch response has already completed the canonical Product refetch -
+        // regardless of per-channel outcome. EditProductPage is the sole navigation owner
+        // (Option B); PublishActions/ProductForm own no router logic themselves.
+        onPublishComplete={() => router.push("/products")}
       />
     </div>
   );

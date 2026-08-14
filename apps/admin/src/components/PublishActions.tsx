@@ -29,6 +29,16 @@ interface PublishActionsProps {
    * applyRefreshedProduct).
    */
   onProductRefreshed: (product: ProductDetail) => void;
+  /**
+   * Sprint 147: fired only after a resolved (HTTP-success) executePublishBatch response has
+   * already completed the canonical Product refetch and onProductRefreshed application above -
+   * regardless of the resolved batch's per-channel outcomes (succeeded/failed/skipped/partial).
+   * Never fired for a request-level rejection (PRODUCT_VERSION_CONFLICT, validation, auth,
+   * network, or any other thrown error) or for a failed/aborted Save-before-Publish. This
+   * component deliberately owns no navigation itself (Sprint 147 Option B) - EditProductPage
+   * supplies this callback and performs the actual `router.push`.
+   */
+  onPublishComplete?: () => void;
 }
 
 /** Sprint 146: duplicated locally (not imported) from products/[id]/publishing/page.tsx's own unifiedOutcomeText - that file is explicitly required to remain unchanged as a legacy Operations/History surface, and it does not export this helper. */
@@ -46,7 +56,7 @@ function outcomeText(item: UnifiedPublishChannelResult): string {
  * per-channel publish preview/validation read - never a new endpoint, never a second publishing
  * implementation.
  */
-export function PublishActions({ productId, isDirty, currentProductUpdatedAt, saveForPublish, onProductRefreshed }: PublishActionsProps) {
+export function PublishActions({ productId, isDirty, currentProductUpdatedAt, saveForPublish, onProductRefreshed, onPublishComplete }: PublishActionsProps) {
   const [connections, setConnections] = useState<MarketplaceConnection[]>([]);
   const [previews, setPreviews] = useState<Partial<Record<PublishChannel, PublishPreview>>>({});
   const [selectedChannels, setSelectedChannels] = useState<Set<PublishChannel>>(new Set());
@@ -88,6 +98,14 @@ export function PublishActions({ productId, isDirty, currentProductUpdatedAt, sa
    * redundant PUT - the current version token is used directly. After every successful HTTP
    * response (including partial success), the canonical Product is re-fetched and fed back into
    * ProductForm, and previews are refreshed against the now-current persisted state.
+   *
+   * Sprint 147: onPublishComplete fires as the LAST step, strictly after executePublishBatch has
+   * resolved (never on a request-level rejection - PRODUCT_VERSION_CONFLICT, validation, auth,
+   * network, or any other thrown error, all handled by the existing catch block below, which never
+   * reaches this call) and strictly after the existing canonical Product refetch/onProductRefreshed
+   * has already applied - regardless of what the resolved batch's per-channel outcomes actually
+   * are. It never fires from the Save-before-Publish abort path above (`return` on `!saved.ok`
+   * exits this function before executePublishBatch is ever called).
    */
   async function handlePublishSelected() {
     if (selectedChannels.size === 0) return;
@@ -112,6 +130,11 @@ export function PublishActions({ productId, isDirty, currentProductUpdatedAt, sa
       const refreshed = await api.get<ProductDetail>(`/api/products/${productId}`);
       onProductRefreshed(refreshed);
       loadPreviews();
+      // Sprint 147: the publish attempt is now fully complete (batch resolved, canonical Product
+      // refreshed and applied) - regardless of succeeded/failed/skipped/partial per-channel
+      // content. Navigation itself is EditProductPage's responsibility; this component only
+      // reports completion.
+      onPublishComplete?.();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to publish selected channels");
     } finally {
