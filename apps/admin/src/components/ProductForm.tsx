@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
 import { AiChannelSuggestionsSection } from "./AiChannelSuggestionsSection";
+import { CanonicalProductAiSuggestionsSection } from "./CanonicalProductAiSuggestionsSection";
 import { MarketingTagsSection } from "./MarketingTagsSection";
 import { PublishActions } from "./PublishActions";
 
@@ -368,6 +369,20 @@ function readAiChannelFieldFromProduct(product: Product, key: keyof ProductFormV
   return typeof value === "string" ? value : (value ?? "") as string;
 }
 
+/**
+ * Sprint 148: reads one canonical Product Details/Physical Information field off the returned
+ * Product for ProductForm's own scoped merge - mirrors readAiChannelFieldFromProduct's exact
+ * convention (numeric fields become their string form, matching productToFormValues's own
+ * `?.toString()` convention; null/undefined becomes ""). Only ever called for the specific field
+ * keys the admin explicitly selected in CanonicalProductAiSuggestionsSection's Accept request -
+ * never a blind full-proposal merge.
+ */
+function readCanonicalFieldFromProduct(product: Product, key: keyof ProductFormValues): string {
+  const value = (product as unknown as Record<string, unknown>)[key];
+  if (value === null || value === undefined) return "";
+  return typeof value === "number" ? value.toString() : String(value);
+}
+
 /** Sprint 146: a plain key-by-key comparison over every ProductFormValues field - a flat object of primitives, no nested/deep comparison needed. The sole basis for `isDirty` below. */
 function valuesEqual(a: ProductFormValues, b: ProductFormValues): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof ProductFormValues>;
@@ -433,6 +448,37 @@ export function ProductForm({
     setPersistedBaseline((prev) => ({ ...prev, ...channelFields }));
     setCurrentProductUpdatedAt(product.updatedAt);
     onProductVersionAdvanced?.(product.updatedAt);
+  }
+
+  // Sprint 148: bumped after a successful canonical AI Accept that included at least one Marketing
+  // Tag - forces MarketingTagsSection's own independent load() to re-run, without coupling
+  // Marketing Tags into ProductFormValues at all.
+  const [marketingTagsRefreshSignal, setMarketingTagsRefreshSignal] = useState(0);
+
+  /**
+   * Sprint 148: the ONLY place a canonical AI proposal Accept result is allowed to touch `values`
+   * - merges exclusively the admin-SELECTED field keys (never the full suggested set, never every
+   * canonical field) from the endpoint's returned Product, leaving every other field (including
+   * any unsaved manual edit anywhere else in this form, and any canonical field the admin did not
+   * select) completely untouched. Mirrors handleAiSuggestionsApplied's exact scoped-merge
+   * principle: the same selected keys are also merged into `persistedBaseline`, since Accept
+   * already persisted exactly those fields server-side, so they must never register as locally
+   * dirty. Marketing Tags are never part of `values`/`persistedBaseline` - a successful tag
+   * addition instead bumps marketingTagsRefreshSignal so MarketingTagsSection reloads its own,
+   * entirely separate state.
+   */
+  function handleCanonicalAiSuggestionsApplied(selectedProductFields: string[], marketingTagsChanged: boolean, product: Product) {
+    const fields: Partial<ProductFormValues> = {};
+    for (const key of selectedProductFields) {
+      (fields as Record<string, unknown>)[key] = readCanonicalFieldFromProduct(product, key as keyof ProductFormValues);
+    }
+    if (Object.keys(fields).length > 0) {
+      setValues((prev) => ({ ...prev, ...fields }));
+      setPersistedBaseline((prev) => ({ ...prev, ...fields }));
+    }
+    setCurrentProductUpdatedAt(product.updatedAt);
+    onProductVersionAdvanced?.(product.updatedAt);
+    if (marketingTagsChanged) setMarketingTagsRefreshSignal((n) => n + 1);
   }
 
   /**
@@ -749,6 +795,22 @@ export function ProductForm({
           </select>
         </Field>
       </Section>
+
+      {/* Sprint 148: the canonical (non-channel) AI Suggestions panel - Product Details, Physical
+          Information, and Marketing Tags in one review surface, placed after Physical Information
+          and before the eBay/Etsy/Noctella Web sections (Architecture Review item B). Edit mode
+          only (productId known); create mode never mounts this, so it never calls the canonical
+          AI proposal API for a Product that does not exist yet. */}
+      {productId && (
+        <Section title="AI Product Suggestions">
+          <CanonicalProductAiSuggestionsSection
+            productId={productId}
+            values={values}
+            productUpdatedAt={currentProductUpdatedAt}
+            onApplied={handleCanonicalAiSuggestionsApplied}
+          />
+        </Section>
+      )}
 
       <Section title="Inventory">
         <Field
@@ -1118,17 +1180,20 @@ export function ProductForm({
           Etsy tags edited above. */}
       {productId && (
         <Section title="Marketing Tags">
-          <MarketingTagsSection productId={productId} />
+          <MarketingTagsSection productId={productId} refreshSignal={marketingTagsRefreshSignal} />
         </Section>
       )}
 
       <Section title="AI Drafts">
         {/* Sprint 145 correction: Marketplace Preparation AI Suggestions are now available directly
-            in the eBay/Etsy/Noctella Web sections above. AI Product Intake (Product creation) and
-            the separate AI Drafts review screen remain their own dedicated surfaces. */}
+            in the eBay/Etsy/Noctella Web sections above. Sprint 148: canonical Product Details/
+            Physical Information/Marketing Tags AI Suggestions are now available directly in the
+            "AI Product Suggestions" section above. AI Product Intake (Product creation) and the
+            separate AI Drafts review screen remain their own dedicated surfaces. */}
         <p style={{ margin: 0, fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
-          AI Suggestions for eBay, Etsy, and Noctella Web are available directly in their sections
-          above. AI Product Intake and AI Drafts remain separate screens.
+          AI Suggestions for canonical Product fields are available in the AI Product Suggestions
+          section above; AI Suggestions for eBay, Etsy, and Noctella Web are available directly in
+          their sections above. AI Product Intake and AI Drafts remain separate screens.
         </p>
       </Section>
 

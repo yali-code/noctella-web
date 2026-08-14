@@ -7,6 +7,14 @@ import { marketingTagsApi } from "@/lib/marketingTags";
 
 interface MarketingTagsSectionProps {
   productId: string;
+  /**
+   * Sprint 148: an opaque, ever-incrementing token ProductForm bumps after a successful canonical
+   * AI Accept that included at least one Marketing Tag - this component's own load() re-runs
+   * whenever this value changes, so newly-added tags (applied server-side by the canonical Accept
+   * endpoint, not by this component) become visible without a full page reload. Deliberately not
+   * coupled into ProductFormValues - this component's tag list remains entirely its own state.
+   */
+  refreshSignal?: number;
 }
 
 /**
@@ -24,7 +32,7 @@ interface MarketingTagsSectionProps {
  * Rendered only when a productId is known (see ProductForm) - create mode never mounts this
  * component and therefore never calls the Marketing Tags API for a Product that does not exist yet.
  */
-export function MarketingTagsSection({ productId }: MarketingTagsSectionProps) {
+export function MarketingTagsSection({ productId, refreshSignal }: MarketingTagsSectionProps) {
   const [tags, setTags] = useState<MarketingTag[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState("");
@@ -38,7 +46,7 @@ export function MarketingTagsSection({ productId }: MarketingTagsSectionProps) {
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load Marketing Tags"));
   };
 
-  useEffect(load, [productId]);
+  useEffect(load, [productId, refreshSignal]);
 
   async function handleAdd() {
     const label = newLabel.trim();

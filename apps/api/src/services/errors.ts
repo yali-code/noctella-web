@@ -540,3 +540,85 @@ export class SalesEnrichmentProviderInvalidResponseError extends Error {
     this.name = "SalesEnrichmentProviderInvalidResponseError";
   }
 }
+
+/**
+ * Sprint 148: thrown when a second canonical Product AI proposal generate request for the same
+ * productId arrives while an earlier attempt is still in flight - see
+ * use-cases/canonical-product-proposal/generationGuard.ts. Mirrors
+ * MarketplacePreparationGenerationInProgressError's exact shape.
+ */
+export class CanonicalProductProposalGenerationInProgressError extends ConflictError {
+  constructor(message = "A canonical product AI proposal is already being generated for this product. Wait for it to complete, then try again.") {
+    super(message);
+    this.name = "CanonicalProductProposalGenerationInProgressError";
+  }
+}
+
+/**
+ * Sprint 148: thrown when an Accept request's expectedProposalUpdatedAt no longer matches the
+ * canonical_product_ai_proposals row's current updatedAt - the proposal was regenerated (or
+ * otherwise changed) since the admin loaded it. Mirrors MarketplacePreparationVersionConflictError
+ * exactly.
+ */
+export class CanonicalProductProposalVersionConflictError extends ConflictError {
+  constructor(message = "This canonical product AI proposal changed since you loaded it. Reload it and try again.") {
+    super(message);
+    this.name = "CanonicalProductProposalVersionConflictError";
+  }
+}
+
+/**
+ * Sprint 148: thrown when Accept is attempted on a canonical product AI proposal that is not
+ * currently Pending (already Applied, or never generated) - requires a fresh generate before it
+ * can be accepted again.
+ */
+export class CanonicalProductProposalNotPendingError extends ConflictError {
+  constructor(message = "Only a Pending canonical product AI proposal can be accepted. Regenerate it first.") {
+    super(message);
+    this.name = "CanonicalProductProposalNotPendingError";
+  }
+}
+
+/**
+ * Sprint 148: thrown when an Accept request selects no Product field and no Marketing Tag -
+ * there is nothing for Accept to do. A BadRequestError (400), not a ConflictError - this is a
+ * client request-shape problem, not a concurrency conflict.
+ */
+export class CanonicalProductProposalNoSelectionError extends BadRequestError {
+  constructor(message = "Select at least one suggested field or Marketing Tag to accept.") {
+    super(message);
+    this.name = "CanonicalProductProposalNoSelectionError";
+  }
+}
+
+/** Sprint 148: mirrors MarketplacePreparationProviderConfigurationError exactly - scoped to the canonical Product AI provider. */
+export class CanonicalProductProposalProviderConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CanonicalProductProposalProviderConfigurationError";
+  }
+}
+
+/** Sprint 148: mirrors MarketplacePreparationProviderAuthenticationError exactly - never surfaces the API key or the provider's raw response body. */
+export class CanonicalProductProposalProviderAuthenticationError extends Error {
+  constructor(message = "The AI provider rejected the request as unauthenticated.") {
+    super(message);
+    this.name = "CanonicalProductProposalProviderAuthenticationError";
+  }
+}
+
+/** Sprint 148: mirrors MarketplacePreparationProviderUnavailableError exactly - network-level failure, timeout, rate limit (429), or any provider-side 5xx. */
+export class CanonicalProductProposalProviderUnavailableError extends Error {
+  constructor(message = "The AI provider is temporarily unavailable. Try again later.") {
+    super(message);
+    this.name = "CanonicalProductProposalProviderUnavailableError";
+  }
+}
+
+/** Sprint 148: mirrors MarketplacePreparationProviderInvalidResponseError exactly - the raw model/response body is never surfaced. */
+export class CanonicalProductProposalProviderInvalidResponseError extends Error {
+  constructor(message = "The AI provider returned an unusable response.") {
+    super(message);
+    this.name = "CanonicalProductProposalProviderInvalidResponseError";
+  }
+}

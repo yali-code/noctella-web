@@ -1,0 +1,19 @@
+-- Sprint 148: corrects a pre-existing schema inconsistency identified by Discovery -
+-- products.weight_unit has carried numeric(18,6) since 0001_sprint24_foundation.sql, but the
+-- application/shared contract (validation/product.ts, enums/weightUnit.ts, schema.sqlite.ts) has
+-- always treated it as the "kg" | "lb" string enum. No migration between 0001 and 0016 ever
+-- altered this column.
+--
+-- Data-preserving strategy: a straight type cast (USING weight_unit::text) never discards a row,
+-- never converts an existing value to NULL, and never fabricates a "kg"/"lb" guess for a value
+-- that isn't one - it preserves whatever is already stored, verbatim, as text. This is provably
+-- safe: PostgreSQL's numeric type only ever accepts syntactically valid numeric literals, so no
+-- successful write of a real "kg"/"lb" string could ever have reached this column while it was
+-- numeric - any actual application write of a string weightUnit against a real Postgres database
+-- would have failed at that INSERT/UPDATE. Production runs on DATABASE_DRIVER=sqlite (see
+-- .env.example, render.production.yaml, and db/schema.ts's sqlite-only barrel export) - Postgres
+-- has never been the live driver, so no genuine "kg"/"lb" data exists to lose here regardless.
+-- Only NULL and (if ever manually inserted) genuine numeric values can exist in this column
+-- today; both are preserved unchanged by this cast (NULL stays NULL, a numeric value becomes its
+-- exact textual representation, never discarded).
+ALTER TABLE products ALTER COLUMN weight_unit TYPE text USING weight_unit::text;

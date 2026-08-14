@@ -58,7 +58,12 @@ export const products = pgTable("products", {
   heightValue: numeric("height_value", { precision: 18, scale: 6 }),
   dimensionUnit: text("dimension_unit"),
   weightValue: numeric("weight_value", { precision: 18, scale: 6 }),
-  weightUnit: numeric("weight_unit", { precision: 18, scale: 6 }),
+  // Sprint 148: corrected from numeric(18,6) to text - weightUnit has always carried the
+  // application/shared "kg"|"lb" string enum contract (see enums/weightUnit.ts), matching
+  // schema.sqlite.ts's own weight_unit text column exactly. See
+  // db/postgres-migrations/0017_sprint148_weightunit_text_correction.sql for the forward,
+  // data-preserving migration - this declaration is the target shape that migration produces.
+  weightUnit: text("weight_unit"),
   stockQuantity: integer("stock_quantity").notNull().default(1),
   lotItemCount: integer("lot_item_count"),
   purchaseCost: numeric("purchase_cost", { precision: 18, scale: 6 }),
@@ -847,6 +852,42 @@ export const marketplacePreparations = pgTable("marketplace_preparations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [uniqueIndex("idx_marketplace_preparations_product_channel").on(table.productId, table.channel)]);
+
+/**
+ * Sprint 148: mirrors schema.sqlite.ts's canonicalProductAiProposals exactly - the isolated,
+ * non-channel-scoped canonical Product AI proposal, one row per product_id. See that file for
+ * the full rationale.
+ */
+export const canonicalProductAiProposals = pgTable("canonical_product_ai_proposals", {
+  id: text("id").primaryKey().notNull(),
+  productId: text("product_id").notNull(),
+  status: text("status").notNull().default("pending"),
+  baseProductUpdatedAt: timestamp("base_product_updated_at", { withTimezone: true }).notNull(),
+  suggestedBrand: text("suggested_brand"),
+  suggestedModel: text("suggested_model"),
+  suggestedManufacturer: text("suggested_manufacturer"),
+  suggestedCountryOfOrigin: text("suggested_country_of_origin"),
+  suggestedPeriod: text("suggested_period"),
+  suggestedMaterials: text("suggested_materials"),
+  suggestedDescription: text("suggested_description"),
+  suggestedProductStory: text("suggested_product_story"),
+  suggestedCondition: text("suggested_condition"),
+  suggestedConditionDescription: text("suggested_condition_description"),
+  suggestedLengthValue: numeric("suggested_length_value", { precision: 18, scale: 6 }),
+  suggestedWidthValue: numeric("suggested_width_value", { precision: 18, scale: 6 }),
+  suggestedHeightValue: numeric("suggested_height_value", { precision: 18, scale: 6 }),
+  suggestedDimensionUnit: text("suggested_dimension_unit"),
+  suggestedWeightValue: numeric("suggested_weight_value", { precision: 18, scale: 6 }),
+  suggestedWeightUnit: text("suggested_weight_unit"),
+  suggestedMarketingTags: text("suggested_marketing_tags"),
+  providerName: text("provider_name").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  appliedByAdminUserId: text("applied_by_admin_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [uniqueIndex("idx_canonical_product_ai_proposals_product").on(table.productId)]);
 
 /**
  * Sprint 140: the normalized Product Marketing Tag taxonomy - a distinct concept from Product
