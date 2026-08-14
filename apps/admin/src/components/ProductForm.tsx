@@ -342,6 +342,16 @@ interface ProductFormProps {
    * version-token contract as onSubmit, never a second Product-save endpoint.
    */
   onSaveForPublish?: (payload: ReturnType<typeof toApiPayload>) => Promise<ProductDetail>;
+  /**
+   * Sprint 147: fired by PublishActions only after a resolved (HTTP-success) executePublishBatch
+   * response has already completed the existing canonical Product refetch and onProductRefreshed
+   * application - regardless of the resolved batch's per-channel outcomes (succeeded/failed/
+   * skipped/partial). ProductForm forwards this mechanically to PublishActions; it owns no
+   * navigation itself. EditProductPage is the sole navigation owner (Sprint 147 Option B) - this
+   * callback is deliberately distinct from onProductVersionAdvanced/onProductRefreshed/
+   * onSaveForPublish/onSubmit, none of which are a "publish attempt just completed" signal.
+   */
+  onPublishComplete?: () => void;
 }
 
 /** Sprint 145: exactly the ProductFormValues keys each channel's Marketplace Preparation Approve is allowed to have written - mirrors mapApprovedFieldsToProductValues (use-cases/marketplace-preparation/useCases.ts) exactly, never Core/SKU/stock/price/status/other-channel fields. */
@@ -376,6 +386,7 @@ export function ProductForm({
   productUpdatedAt,
   onProductVersionAdvanced,
   onSaveForPublish,
+  onPublishComplete,
 }: ProductFormProps) {
   const [values, setValues] = useState<ProductFormValues>(initialValues);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -1024,7 +1035,7 @@ export function ProductForm({
         )}
       </Section>
 
-      <Section title="WooCommerce (optional — not published or synced yet)">
+      <Section title="Noctella Web (optional — not published or synced yet)">
         <Field label="Product Name">
           <input
             style={inputStyle}
@@ -1133,6 +1144,7 @@ export function ProductForm({
             currentProductUpdatedAt={currentProductUpdatedAt}
             saveForPublish={saveForPublish}
             onProductRefreshed={applyRefreshedProduct}
+            onPublishComplete={onPublishComplete}
           />
         </Section>
       )}

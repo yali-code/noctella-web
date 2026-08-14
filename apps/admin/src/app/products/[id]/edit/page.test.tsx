@@ -4,11 +4,16 @@
 // PUT, replaced with the successful response's updatedAt (enabling a second save with the fresh
 // token), left unchanged on a version conflict (no router.push in that case), and that the
 // explicit reload action performs only the approved reload.
+// Sprint 147: a successful generic Save now navigates to /ready-to-publish (was /products/:id);
+// Save-before-Publish (a separate onSaveForPublish callback) never navigates at all. A resolved
+// Publish Selected batch - regardless of per-channel outcome - navigates to /products only after
+// the existing canonical Product refetch; a request-level batch rejection never navigates.
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "@/lib/api";
 import * as apiLib from "@/lib/api";
+import * as marketplacesLib from "@/lib/marketplaces";
 import EditProductPage from "./page";
 
 afterEach(() => {
@@ -90,7 +95,8 @@ describe("EditProductPage — Sprint 88 version-token ownership", () => {
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
     expect(putSpy).toHaveBeenNthCalledWith(1, "/api/products/p1", expect.objectContaining({ expectedUpdatedAt: "2026-01-01T00:00:00.000Z" }));
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/products/p1"));
+    // Sprint 147: a successful generic Save now returns to the Pending Publish queue, not Product Detail.
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/ready-to-publish"));
 
     // Second save (component stays mounted) must use the token from the first successful response.
     await user.click(screen.getByRole("button", { name: "Save Changes" }));
@@ -143,5 +149,88 @@ describe("EditProductPage — Sprint 88 version-token ownership", () => {
 
     await user.click(reloadButton);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("Sprint 147: an ordinary (non-conflict) Save failure does not navigate", async () => {
+    const user = userEvent.setup();
+    const product = baseProduct();
+    mockGetForProduct(product);
+    vi.spyOn(apiLib.api, "put").mockRejectedValue(new ApiError("Validation failed", 400, [{ path: "title", message: "Title is required" }]));
+
+    render(<EditProductPage params={{ id: "p1" }} />);
+    await screen.findByDisplayValue("Original Title");
+
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await screen.findByText("Title is required");
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Sprint 147: end-to-end proof that the full EditProductPage -> ProductForm -> PublishActions
+ * composition is wired correctly - the onPublishComplete callback (supplied only here, at
+ * EditProductPage) actually reaches PublishActions and actually triggers router.push("/products")
+ * at the right moment, regardless of the resolved batch's per-channel outcome, and never fires on
+ * a request-level rejection. Component-level state-machine/call-order proofs for PublishActions
+ * itself (in isolation, with mock props) live in PublishActions.test.tsx; this file only proves
+ * the real composition/callback wiring end-to-end.
+ */
+describe("EditProductPage — Sprint 147: Publish Selected navigation (end-to-end)", () => {
+  it("a resolved batch (Noctella Web succeeded) navigates to /products only after the canonical Product refetch", async () => {
+    const user = userEvent.setup();
+    const product = baseProduct();
+    const getSpy = mockGetForProduct(product);
+    const batchSpy = vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({
+      productId: "p1",
+      results: [{ channel: "noctella_web", outcome: "succeeded", result: {} as any }],
+    } as any);
+
+    render(<EditProductPage params={{ id: "p1" }} />);
+    await screen.findByDisplayValue("Original Title");
+
+    await user.click(screen.getByRole("checkbox", { name: "Noctella Web" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+
+    await waitFor(() => expect(batchSpy).toHaveBeenCalled());
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/products"));
+    // The canonical Product refetch (a second GET for the same Product) happened before navigation.
+    const productGetCalls = getSpy.mock.calls.filter(([path]) => path === "/api/products/p1");
+    expect(productGetCalls.length).toBeGreaterThanOrEqual(2); // initial page load + post-publish refetch
+  });
+
+  it("a completed batch where all selected channels return normal failed results still navigates to /products", async () => {
+    const user = userEvent.setup();
+    const product = baseProduct();
+    mockGetForProduct(product);
+    vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({
+      productId: "p1",
+      results: [{ channel: "ebay", outcome: "failed", error: { message: "Marketplace connection is not connected" } }],
+    } as any);
+
+    render(<EditProductPage params={{ id: "p1" }} />);
+    await screen.findByDisplayValue("Original Title");
+
+    await user.click(screen.getByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/products"));
+  });
+
+  it("a request-level executePublishBatch rejection (e.g. PRODUCT_VERSION_CONFLICT) never navigates - stays on Edit with the error visible", async () => {
+    const user = userEvent.setup();
+    const product = baseProduct();
+    mockGetForProduct(product);
+    vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockRejectedValue(
+      new ApiError("This product changed after you opened it. Reload the latest version before saving again.", 409, undefined, "PRODUCT_VERSION_CONFLICT"),
+    );
+
+    render(<EditProductPage params={{ id: "p1" }} />);
+    await screen.findByDisplayValue("Original Title");
+
+    await user.click(screen.getByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+
+    await screen.findByText("This product changed after you opened it. Reload the latest version before saving again.");
+    expect(push).not.toHaveBeenCalled();
   });
 });

@@ -97,9 +97,9 @@ describe("Sprint 137: ProductForm with a null priceEur (unpriced Draft/Approved 
 });
 
 describe("Sprint 137 Required Fix Correction: explicit sales-price clear via ProductForm submit payload", () => {
-  // "Listing Price (EUR)" is used identically by the eBay, Etsy, and WooCommerce sections (in that
-  // render order); only the WooCommerce one (index 2) participates in the approved Noctella Web
-  // effective-price invariant, so tests targeting it disambiguate via getAllByLabelText.
+  // "Listing Price (EUR)" is used identically by the eBay, Etsy, and Noctella Web (woo*-backed)
+  // sections (in that render order); only the Noctella Web one (index 2) participates in the
+  // approved effective-price invariant, so tests targeting it disambiguate via getAllByLabelText.
   function wooListingPriceInput(): HTMLInputElement {
     return screen.getAllByLabelText("Listing Price (EUR)")[2] as HTMLInputElement;
   }
@@ -832,5 +832,22 @@ describe("ProductForm — Sprint 146: canonical publishing integration", () => {
     // Status remains the ordinary editable dropdown, still showing draft - never silently promoted to Published.
     const statusSelect = await screen.findByRole("combobox", { name: "Status" });
     expect((statusSelect as HTMLSelectElement).value).toBe("draft");
+  });
+});
+
+/**
+ * Sprint 147: visible label polish only - the persisted woo* fields/schema/API contract are
+ * completely unchanged (see the unaffected Sprint 137/145/146 tests above, which still exercise
+ * the exact same fields under their exact same names); only the Section title text changed.
+ */
+describe("ProductForm — Sprint 147: Noctella Web section label", () => {
+  it("the visible section title is 'Noctella Web (optional — not published or synced yet)'", () => {
+    render(<ProductForm initialValues={emptyProductForm} submitLabel="Create" onSubmit={vi.fn()} />);
+    expect(screen.getByText("Noctella Web (optional — not published or synced yet)")).toBeInTheDocument();
+  });
+
+  it("the old 'WooCommerce (optional — not published or synced yet)' title is gone", () => {
+    render(<ProductForm initialValues={emptyProductForm} submitLabel="Create" onSubmit={vi.fn()} />);
+    expect(screen.queryByText("WooCommerce (optional — not published or synced yet)")).not.toBeInTheDocument();
   });
 });
