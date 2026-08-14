@@ -37,6 +37,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureShippingMethodsTable(sqlite);
   ensureProductPriceEurNullable(sqlite);
   ensureMarketingTagsTables(sqlite);
+  ensureCanonicalProductAiProposalsTable(sqlite);
 }
 
 /**
@@ -255,6 +256,30 @@ CREATE TABLE IF NOT EXISTS product_marketing_tags (
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_product_marketing_tags_unique ON product_marketing_tags(product_id, marketing_tag_id);
+`);
+}
+
+/**
+ * Sprint 148: the isolated, non-channel-scoped canonical Product AI proposal table - see
+ * schema.sqlite.ts's canonicalProductAiProposals for the full rationale. A new, narrowly-scoped
+ * table (one row per product_id), mirrors ensureMarketplacePreparationsTable's exact idempotent
+ * pattern. Postgres-side equivalent: db/postgres-migrations/0018_sprint148_canonical_product_ai_proposals.sql.
+ */
+function ensureCanonicalProductAiProposalsTable(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS canonical_product_ai_proposals (
+  id TEXT PRIMARY KEY, product_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+  base_product_updated_at TEXT NOT NULL,
+  suggested_brand TEXT, suggested_model TEXT, suggested_manufacturer TEXT, suggested_country_of_origin TEXT,
+  suggested_period TEXT, suggested_materials TEXT, suggested_description TEXT, suggested_product_story TEXT,
+  suggested_condition TEXT, suggested_condition_description TEXT,
+  suggested_length_value REAL, suggested_width_value REAL, suggested_height_value REAL, suggested_dimension_unit TEXT,
+  suggested_weight_value REAL, suggested_weight_unit TEXT, suggested_marketing_tags TEXT,
+  provider_name TEXT NOT NULL, prompt_version TEXT NOT NULL, generated_at TEXT NOT NULL,
+  applied_at TEXT, applied_by_admin_user_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_canonical_product_ai_proposals_product ON canonical_product_ai_proposals(product_id);
 `);
 }
 

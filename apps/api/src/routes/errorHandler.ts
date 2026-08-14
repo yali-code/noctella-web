@@ -28,6 +28,8 @@ import {
   AiIntakeProposalSuggestionUnavailableError,
   AiIntakeProposalVersionConflictError,
   BadRequestError,
+  CanonicalProductProposalNotPendingError,
+  CanonicalProductProposalVersionConflictError,
   ConflictError,
   MarketplacePreparationNotPendingError,
   MarketplacePreparationVersionConflictError,
@@ -175,6 +177,16 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof MarketplacePreparationNotPendingError) {
     res.status(409).json({ error: err.message, code: "MARKETPLACE_PREPARATION_NOT_PENDING" });
+    return;
+  }
+  // Sprint 148: checked before the generic ConflictError branch below, for the same
+  // subclass-ordering reason as every conflict subclass above.
+  if (err instanceof CanonicalProductProposalVersionConflictError) {
+    res.status(409).json({ error: err.message, code: "CANONICAL_PRODUCT_PROPOSAL_VERSION_CONFLICT" });
+    return;
+  }
+  if (err instanceof CanonicalProductProposalNotPendingError) {
+    res.status(409).json({ error: err.message, code: "CANONICAL_PRODUCT_PROPOSAL_NOT_PENDING" });
     return;
   }
   if (err instanceof ConflictError) {

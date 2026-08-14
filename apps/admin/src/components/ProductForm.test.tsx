@@ -11,21 +11,25 @@ import * as apiLib from "@/lib/api";
 import * as marketingTagsLib from "@/lib/marketingTags";
 import * as publishingLib from "@/lib/publishing";
 import * as marketplacesLib from "@/lib/marketplaces";
+import * as canonicalProductProposalsLib from "@/lib/canonicalProductProposals";
 import { ProductForm, emptyProductForm, productToFormValues } from "./ProductForm";
 
 afterEach(() => vi.restoreAllMocks());
 
 /**
- * Sprint 145/146: every productId-bearing render now also mounts three AiChannelSuggestionsSection
- * instances (eBay/Etsy/Web) and one PublishActions instance, each of which calls its own read API
- * on mount (marketplacePreparationApi.get / publishingApi.getPreview / marketplaceApi.
- * listConnections). Defaults every test in this file to safe, deterministic responses so
- * pre-existing tests (SKU lock, Published protection, Marketing Tags) never make a real, unmocked
- * network call - mirrors publishing/page.test.tsx's own established default-mock convention for
- * exactly this reason. Individual tests below override any of these per-test as needed.
+ * Sprint 145/146/148: every productId-bearing render now also mounts three AiChannelSuggestionsSection
+ * instances (eBay/Etsy/Web), one CanonicalProductAiSuggestionsSection instance, and one
+ * PublishActions instance, each of which calls its own read API on mount
+ * (marketplacePreparationApi.get / canonicalProductProposalApi.get / publishingApi.getPreview /
+ * marketplaceApi.listConnections). Defaults every test in this file to safe, deterministic
+ * responses so pre-existing tests (SKU lock, Published protection, Marketing Tags) never make a
+ * real, unmocked network call - mirrors publishing/page.test.tsx's own established default-mock
+ * convention for exactly this reason. Individual tests below override any of these per-test as
+ * needed.
  */
 beforeEach(() => {
   vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Marketplace preparation not found", 404));
+  vi.spyOn(canonicalProductProposalsLib.canonicalProductProposalApi, "get").mockRejectedValue(new ApiError("Canonical product AI proposal not found", 404));
   vi.spyOn(publishingLib.publishingApi, "getPreview").mockRejectedValue(new Error("not mocked in this test"));
   vi.spyOn(marketplacesLib.marketplaceApi, "listConnections").mockResolvedValue([]);
 });
@@ -631,6 +635,121 @@ describe("ProductForm — Sprint 145: AI Suggestions integration", () => {
     expect(await screen.findByText("Vintage")).toBeInTheDocument();
     // eBay's own Title field was never touched by the failed Accept.
     expect((screen.getAllByLabelText("Title")[1] as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("ProductForm — Sprint 148: canonical AI Suggestions integration", () => {
+  it("create mode never mounts the canonical AI Suggestions panel and never calls canonicalProductProposalApi", () => {
+    const getSpy = vi.spyOn(canonicalProductProposalsLib.canonicalProductProposalApi, "get");
+    render(<ProductForm initialValues={emptyProductForm} submitLabel="Create" onSubmit={vi.fn()} />);
+    expect(screen.queryByText("AI Product Suggestions")).not.toBeInTheDocument();
+    expect(getSpy).not.toHaveBeenCalled();
+  });
+
+  it("Accept merges only the selected fields, preserves an unrelated unsaved edit and an unselected suggested field, advances the version token, refreshes Marketing Tags, and a later Save reflects the merged value", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(canonicalProductProposalsLib.canonicalProductProposalApi, "get").mockResolvedValue({
+      id: "cpp-1",
+      productId: "p1",
+      status: "pending",
+      baseProductUpdatedAt: "t",
+      suggestedBrand: "Omega",
+      suggestedModel: "Speedmaster",
+      suggestedMarketingTags: ["Father's Day"],
+      providerName: "mock",
+      promptVersion: "v1",
+      generatedAt: "t",
+      createdAt: "t",
+      updatedAt: "t",
+    } as any);
+    const returnedProduct = baseProduct({ updatedAt: "2026-03-01T00:00:00.000Z", brand: "Omega" });
+    const acceptSpy = vi.spyOn(canonicalProductProposalsLib.canonicalProductProposalApi, "accept").mockResolvedValue(returnedProduct as any);
+    const listTagsSpy = vi.spyOn(marketingTagsLib.marketingTagsApi, "list").mockResolvedValue([]);
+    const onProductVersionAdvanced = vi.fn();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={onSubmit}
+        productId="p1"
+        productUpdatedAt="t"
+        onProductVersionAdvanced={onProductVersionAdvanced}
+      />,
+    );
+
+    // An unrelated, unsaved manual edit elsewhere in the form - must survive the Accept below.
+    await user.clear(screen.getByLabelText("Manufacturer"));
+    await user.type(screen.getByLabelText("Manufacturer"), "Acme Co");
+
+    await screen.findByText("Omega");
+    // Brand was blank -> pre-selected by default. Model was also blank -> pre-selected too;
+    // deselect it explicitly so only Brand is accepted. Marketing Tags are additive-only, so
+    // every suggested tag is already pre-selected by default - "Father's Day" needs no click.
+    await user.click(screen.getByRole("checkbox", { name: /Model/ }));
+    await user.click(screen.getByRole("button", { name: "Accept AI Suggestions" }));
+
+    await waitFor(() =>
+      expect(acceptSpy).toHaveBeenCalledWith("p1", {
+        expectedProposalUpdatedAt: "t",
+        selectedProductFields: ["brand"],
+        selectedMarketingTags: ["Father's Day"],
+      }),
+    );
+    await waitFor(() => expect(onProductVersionAdvanced).toHaveBeenCalledWith("2026-03-01T00:00:00.000Z"));
+    await waitFor(() => expect(listTagsSpy.mock.calls.length).toBeGreaterThanOrEqual(2)); // initial mount + post-Accept refresh signal
+
+    // Brand now reflects the accepted suggestion.
+    expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Omega");
+    // Model was suggested but explicitly deselected - never applied.
+    expect((screen.getByLabelText("Model") as HTMLInputElement).value).toBe("");
+    // The unrelated manual Manufacturer edit was never discarded by the merge.
+    expect((screen.getByLabelText("Manufacturer") as HTMLInputElement).value).toBe("Acme Co");
+
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.brand).toBe("Omega");
+    expect(payload.manufacturer).toBe("Acme Co");
+  });
+
+  it("a version-conflict Accept failure surfaces its own local error and never calls onProductVersionAdvanced", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(canonicalProductProposalsLib.canonicalProductProposalApi, "get").mockResolvedValue({
+      id: "cpp-1",
+      productId: "p1",
+      status: "pending",
+      baseProductUpdatedAt: "t",
+      suggestedBrand: "Omega",
+      providerName: "mock",
+      promptVersion: "v1",
+      generatedAt: "t",
+      createdAt: "t",
+      updatedAt: "t",
+    } as any);
+    vi.spyOn(canonicalProductProposalsLib.canonicalProductProposalApi, "accept").mockRejectedValue(
+      new ApiError("This canonical product AI proposal changed since you loaded it. Reload it and try again.", 409, undefined, "CANONICAL_PRODUCT_PROPOSAL_VERSION_CONFLICT"),
+    );
+    const onProductVersionAdvanced = vi.fn();
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+        onProductVersionAdvanced={onProductVersionAdvanced}
+      />,
+    );
+
+    await screen.findByText("Omega");
+    await user.click(screen.getByRole("button", { name: "Accept AI Suggestions" }));
+    expect(await screen.findByText(/changed since you loaded it/)).toBeInTheDocument();
+    expect(onProductVersionAdvanced).not.toHaveBeenCalled();
+    // Brand was never applied - the failed Accept never touched the form.
+    expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("");
   });
 });
 

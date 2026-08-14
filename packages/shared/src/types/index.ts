@@ -7,6 +7,7 @@ import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
 import { PublishChannel } from "../enums/publishChannel";
 import { MarketplacePreparationStatus } from "../enums/marketplacePreparationStatus";
+import { CanonicalProductProposalStatus } from "../enums/canonicalProductProposalStatus";
 import { AiDraftStatus } from "../enums/aiDraftStatus";
 import { AiProductIntakeStatus } from "../enums/aiProductIntakeStatus";
 import { AiIntakeFieldDecision } from "../enums/aiIntakeFieldDecision";
@@ -601,6 +602,81 @@ export interface MarketingTag extends Timestamps {
   id: ID;
   key: string;
   label: string;
+}
+
+/**
+ * Sprint 148: the canonical (non-channel-scoped) fields a canonical Product AI proposal may
+ * suggest a value for - Product Details, Physical Information, and Marketing Tags. Kept as `const`
+ * tuples (not enums) so both the API's Zod allowlist and the Admin panel's rendering list read
+ * from the exact same source, mirroring how DIMENSION_UNIT_VALUES/WEIGHT_UNIT_VALUES already do
+ * this for their own enums. Deliberately excludes SKU, barcode, status, stock, purchase cost,
+ * internal notes, category, collection, shipping, marketplace-channel, and publication fields -
+ * see Sprint 148 Architecture Review's approved Product Details/Physical Information ownership.
+ */
+export const CANONICAL_PRODUCT_DETAIL_FIELD_KEYS = [
+  "brand",
+  "model",
+  "manufacturer",
+  "countryOfOrigin",
+  "period",
+  "materials",
+  "description",
+  "productStory",
+  "condition",
+  "conditionDescription",
+] as const;
+export type CanonicalProductDetailFieldKey = (typeof CANONICAL_PRODUCT_DETAIL_FIELD_KEYS)[number];
+
+export const CANONICAL_PHYSICAL_FIELD_KEYS = ["lengthValue", "widthValue", "heightValue", "dimensionUnit", "weightValue", "weightUnit"] as const;
+export type CanonicalPhysicalFieldKey = (typeof CANONICAL_PHYSICAL_FIELD_KEYS)[number];
+
+export const CANONICAL_PRODUCT_PROPOSAL_FIELD_KEYS = [...CANONICAL_PRODUCT_DETAIL_FIELD_KEYS, ...CANONICAL_PHYSICAL_FIELD_KEYS] as const;
+export type CanonicalProductProposalFieldKey = (typeof CANONICAL_PRODUCT_PROPOSAL_FIELD_KEYS)[number];
+
+/**
+ * Sprint 148: the isolated, non-channel-scoped canonical Product AI proposal - one row per
+ * productId (never per channel; see Architecture Review Option B). Deliberately a separate
+ * table/type from MarketplacePreparation above - never overloads PublishChannel, never reuses
+ * marketplace_preparations. Generate never mutates Product/Marketing Tags; Accept is the only
+ * mutation action, and only for the fields the admin explicitly selects (see
+ * use-cases/canonical-product-proposal/useCases.ts). baseProductUpdatedAt is the Product-version
+ * staleness baseline (mirrors MarketplacePreparation's own field exactly); this record's own
+ * `updatedAt` (via Timestamps) is the proposal-freshness token Accept must be given back
+ * (expectedProposalUpdatedAt), exactly mirroring approveMarketplacePreparation's
+ * expectedProposalUpdatedAt contract. No confidence/evidence/provenance field exists here by
+ * design (Architecture Review Decision: unsupported physical fields are simply omitted from the
+ * proposal, never persisted with a confidence/estimate marker).
+ */
+export interface CanonicalProductProposal extends Timestamps {
+  id: ID;
+  productId: ID;
+  status: CanonicalProductProposalStatus;
+  baseProductUpdatedAt: string;
+  // Product Details
+  suggestedBrand?: string;
+  suggestedModel?: string;
+  suggestedManufacturer?: string;
+  suggestedCountryOfOrigin?: string;
+  suggestedPeriod?: string;
+  suggestedMaterials?: string;
+  suggestedDescription?: string;
+  suggestedProductStory?: string;
+  suggestedCondition?: string;
+  suggestedConditionDescription?: string;
+  // Physical Information - present only when explicit visible measurement evidence supported it.
+  suggestedLengthValue?: number;
+  suggestedWidthValue?: number;
+  suggestedHeightValue?: number;
+  suggestedDimensionUnit?: string;
+  suggestedWeightValue?: number;
+  suggestedWeightUnit?: string;
+  // Marketing Tags - reviewable suggestions only; Accept is additive-only (see services/marketingTags.ts).
+  suggestedMarketingTags?: string[];
+  providerName: string;
+  promptVersion: string;
+  generatedAt: string;
+  appliedAt?: string;
+  appliedByAdminUserId?: string;
 }
 
 export interface MarketplaceWebhookEvent extends Timestamps { id: ID; channel: PublishChannel; externalEventId: string; eventType: string; status: string; signatureValid: boolean; payloadSnapshot: unknown; attemptCount: number; lastError?: string; receivedAt: string; processedAt?: string; }

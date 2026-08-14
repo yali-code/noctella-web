@@ -14,6 +14,8 @@ import { approveMarketplacePreparation, generateMarketplacePreparation, getCurre
 import { approveMarketplacePreparationSchema, generateMarketplacePreparationSchema, getMarketplacePreparationQuerySchema } from "../validation/marketplacePreparation";
 import { addProductMarketingTag, listProductMarketingTags, removeProductMarketingTag } from "../services/marketingTags";
 import { addProductMarketingTagSchema } from "../validation/marketingTags";
+import { acceptCanonicalProductProposal, generateCanonicalProductProposal, getCurrentCanonicalProductProposal } from "../services/canonicalProductProposal";
+import { acceptCanonicalProductProposalSchema, generateCanonicalProductProposalSchema } from "../validation/canonicalProductProposal";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -162,6 +164,50 @@ router.delete("/:id/marketing-tags/:tagId", requirePermission("products.edit"), 
   try {
     await removeProductMarketingTag(db, req.params.id, req.params.tagId);
     res.status(204).end();
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+// Sprint 148: Canonical Product & Physical AI Suggestions - a dedicated, isolated proposal flow
+// (never overloads PublishChannel, never reuses marketplace_preparations - see Sprint 148
+// Architecture Review Option B). Generate/regenerate never mutates Product or Marketing Tags;
+// Accept is the only mutation action, gated by an explicit selected-field allowlist (never "apply
+// every suggested field") and Product/proposal optimistic concurrency. Reuses the existing
+// products.edit/products.view permissions - Product Details/Physical Information/Marketing Tags
+// are edited via products.edit everywhere else in this file (the generic PUT below, and the
+// Marketing Tags routes above), so this is not publish-journey-scoped like Marketplace
+// Preparation is.
+router.post("/:id/canonical-ai-proposal", requirePermission("products.edit"), async (req, res) => {
+  try {
+    generateCanonicalProductProposalSchema.parse(req.body ?? {});
+    res.json(await generateCanonicalProductProposal(db, req.params.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.get("/:id/canonical-ai-proposal", requirePermission("products.view"), async (req, res) => {
+  try {
+    res.json(await getCurrentCanonicalProductProposal(db, req.params.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+// Actor identity always comes from req.adminUser.id, never the request body - mirrors every other
+// approval endpoint in this codebase (Stock Acceptance, AI Draft approve, Marketplace Preparation approve).
+router.post("/:id/canonical-ai-proposal/accept", requirePermission("products.edit"), async (req: AuthedRequest, res) => {
+  try {
+    const input = acceptCanonicalProductProposalSchema.parse(req.body ?? {});
+    res.json(
+      await acceptCanonicalProductProposal(
+        db,
+        req.params.id,
+        { expectedProposalUpdatedAt: input.expectedProposalUpdatedAt, selectedProductFields: input.selectedProductFields, selectedMarketingTags: input.selectedMarketingTags },
+        req.adminUser!.id,
+      ),
+    );
   } catch (err) {
     handleRouteError(err, res);
   }

@@ -764,3 +764,52 @@ export const marketplacePreparations = sqliteTable(
   },
   (table) => [uniqueIndex("idx_marketplace_preparations_product_channel").on(table.productId, table.channel)],
 );
+
+/**
+ * Sprint 148: the isolated, non-channel-scoped canonical Product AI proposal - one row per
+ * product_id (never per channel; see Sprint 148 Architecture Review Option B - deliberately NOT
+ * marketplace_preparations with a fake channel). Never the destination of approved content
+ * itself; Accept copies admin-SELECTED suggested values onto the existing Product columns
+ * (brand, model, ..., weightUnit) and additively onto Marketing Tags - never a bulk/blind
+ * overwrite. base_product_updated_at is the Product-version staleness baseline (mirrors
+ * marketplace_preparations exactly); this row's own updated_at is the proposal-freshness token
+ * Accept must be given back. No confidence/evidence/provenance column exists here by design.
+ */
+export const canonicalProductAiProposals = sqliteTable(
+  "canonical_product_ai_proposals",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    baseProductUpdatedAt: text("base_product_updated_at").notNull(),
+    suggestedBrand: text("suggested_brand"),
+    suggestedModel: text("suggested_model"),
+    suggestedManufacturer: text("suggested_manufacturer"),
+    suggestedCountryOfOrigin: text("suggested_country_of_origin"),
+    suggestedPeriod: text("suggested_period"),
+    suggestedMaterials: text("suggested_materials"),
+    suggestedDescription: text("suggested_description"),
+    suggestedProductStory: text("suggested_product_story"),
+    suggestedCondition: text("suggested_condition"),
+    suggestedConditionDescription: text("suggested_condition_description"),
+    suggestedLengthValue: real("suggested_length_value"),
+    suggestedWidthValue: real("suggested_width_value"),
+    suggestedHeightValue: real("suggested_height_value"),
+    suggestedDimensionUnit: text("suggested_dimension_unit"),
+    suggestedWeightValue: real("suggested_weight_value"),
+    suggestedWeightUnit: text("suggested_weight_unit"),
+    suggestedMarketingTags: text("suggested_marketing_tags"), // JSON-encoded string[]
+    providerName: text("provider_name").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    generatedAt: text("generated_at").notNull(),
+    appliedAt: text("applied_at"),
+    appliedByAdminUserId: text("applied_by_admin_user_id"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [uniqueIndex("idx_canonical_product_ai_proposals_product").on(table.productId)],
+);
