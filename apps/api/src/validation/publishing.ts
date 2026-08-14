@@ -18,10 +18,19 @@ export type PublishRequestInput = z.infer<typeof publishRequestSchema>;
  * unique idempotencyKey constraint). At least one channel is required; duplicate channel values are
  * accepted here and deduplicated in services/marketplacePublishing.ts's executePublishBatch, not
  * rejected - a harmless repeated selection should not fail the whole request.
+ *
+ * Sprint 146: `expectedUpdatedAt` is now a required field, mirroring the existing Sprint 88
+ * Product-update version-token contract (validation/product.ts's own required expectedUpdatedAt on
+ * updateProductRequestSchema). This narrows the concurrency gap the canonical Edit workspace's
+ * Save-before-Publish flow depends on: executePublishBatch compares this value against the
+ * canonical Product's current updatedAt before attempting any selected channel (see
+ * services/marketplacePublishing.ts), reusing the existing ProductVersionConflictError - never a
+ * second versioning mechanism. `.strict()` still rejects any other unrecognized field.
  */
 export const executePublishBatchRequestSchema = z
   .object({
     channels: z.array(publishChannelSchema).min(1, "At least one channel is required"),
+    expectedUpdatedAt: z.string().min(1, "expectedUpdatedAt is required"),
   })
   .strict();
 

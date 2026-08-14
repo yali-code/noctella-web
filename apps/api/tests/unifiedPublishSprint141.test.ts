@@ -7,6 +7,14 @@
 // injected-MarketplaceAdapter pattern already established in marketplacePublishing.test.ts; a
 // separate route-level describe block proves the HTTP-layer permission/request-validation contract
 // via supertest against the real app, mirroring marketplacePreparationRouteSprint107.test.ts.
+//
+// Sprint 146: executePublishBatch now requires an `expectedUpdatedAt` argument (mirrors the
+// existing `{channels, expectedUpdatedAt}` request contract) and performs an upfront whole-batch
+// Product version precondition, reusing the existing Sprint 88 ProductVersionConflictError,
+// checked before any channel is attempted. Every existing call site below is updated to pass the
+// real current Product version (captured via `currentVersion`, a thin getProductById wrapper) -
+// this is a mechanical, required update to every test in this file, since executePublishBatch's
+// contract itself changed; no existing assertion's intent was altered.
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import Database from "better-sqlite3";
@@ -17,6 +25,7 @@ import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
 import { createOAuthState } from "../src/services/oauthState";
 import { completeConnect, executePublish, executePublishBatch, listExternalListings } from "../src/services/marketplacePublishing";
+import { getProductById } from "../src/services/products";
 import { DuplicateActiveListingError, ProductVersionConflictError } from "../src/services/errors";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 
@@ -26,6 +35,11 @@ function db() { const sqlite = new Database(":memory:"); ensureSchema(sqlite); r
 function future() { return new Date(Date.now() + 100_000).toISOString(); }
 function past() { return new Date(Date.now() - 100_000).toISOString(); }
 function signedState(channel: PublishChannel) { return createOAuthState(channel, "Default", 60_000); }
+
+/** Sprint 146: the exact current Product.updatedAt - every executePublishBatch call site below must supply this (or a deliberately stale value) as its new required expectedUpdatedAt argument. */
+async function currentVersion(database: TestDb, productId: string) {
+  return (await getProductById(database as any, productId)).updatedAt;
+}
 
 function makeAdapter(overrides: Partial<MarketplaceAdapter> = {}) {
   let createCalls = 0;
@@ -86,7 +100,7 @@ describe("executePublishBatch - multi-channel success and ordering", () => {
     await connect(database, PublishChannel.Etsy, adapter);
     await publishableProduct(database);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy], await currentVersion(database, "p1"), adapter);
     expect(batch.productId).toBe("p1");
     expect(batch.results.map((r) => r.channel)).toEqual([PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy]);
     expect(batch.results.every((r) => r.outcome === "succeeded")).toBe(true);
@@ -110,7 +124,7 @@ describe("executePublishBatch - multi-channel success and ordering", () => {
     await connect(database, PublishChannel.Etsy, adapter);
     await publishableProduct(database);
 
-    await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Etsy], adapter);
+    await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Etsy], await currentVersion(database, "p1"), adapter);
     expect(maxActiveCount).toBe(1); // the second channel's adapter call never overlapped the first's
   });
 });
@@ -122,7 +136,7 @@ describe("executePublishBatch - partial failure and no cross-channel rollback", 
     // eBay deliberately never connected.
     await publishableProduct(database);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy], await currentVersion(database, "p1"), adapter);
     expect(batch.results).toHaveLength(3);
     expect(batch.results[0]).toMatchObject({ channel: PublishChannel.NoctellaWeb, outcome: "succeeded" });
     expect(batch.results[1].channel).toBe(PublishChannel.Ebay);
@@ -142,7 +156,7 @@ describe("executePublishBatch - partial failure and no cross-channel rollback", 
     const etsyAdapter = await connect(database, PublishChannel.Etsy);
     await publishableProduct(database);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Etsy], etsyAdapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Etsy], await currentVersion(database, "p1"), etsyAdapter);
     expect(batch.results[0]).toMatchObject({ channel: PublishChannel.Ebay, outcome: "failed" });
     expect(batch.results[0].error?.message).toMatch(/expired/);
     expect(batch.results[1]).toMatchObject({ channel: PublishChannel.Etsy, outcome: "succeeded" });
@@ -153,7 +167,7 @@ describe("executePublishBatch - partial failure and no cross-channel rollback", 
     const adapter = await connect(database, PublishChannel.Etsy);
     await publishableProduct(database, "p1", { ebayTitle: null, ebayDescription: null, ebayCategory: null, ebayListingPriceEur: null }); // eBay invalid, Etsy still valid
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Etsy], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Etsy], await currentVersion(database, "p1"), adapter);
     expect(batch.results[0]).toMatchObject({ channel: PublishChannel.Ebay, outcome: "failed" });
     expect(batch.results[0].error?.message).toMatch(/validation/i);
     expect(batch.results[1]).toMatchObject({ channel: PublishChannel.Etsy, outcome: "succeeded" });
@@ -171,7 +185,7 @@ describe("executePublishBatch - non-throwing PublishJob failure is never mislabe
     await connect(database, PublishChannel.Ebay, failing);
     await publishableProduct(database);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], failing);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], await currentVersion(database, "p1"), failing);
     expect(batch.results).toHaveLength(1);
     expect(batch.results[0].outcome).toBe("failed"); // never "succeeded" merely because executePublish resolved
     expect(batch.results[0].result?.job.status).toBe(PublishJobStatus.RetryPending);
@@ -184,7 +198,7 @@ describe("executePublishBatch - non-throwing PublishJob failure is never mislabe
     await connect(database, PublishChannel.Etsy, failing);
     await publishableProduct(database);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Etsy], failing);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Etsy], await currentVersion(database, "p1"), failing);
     expect(batch.results[0].outcome).toBe("failed");
     expect(batch.results[0].result?.job.status).toBe(PublishJobStatus.Failed);
   });
@@ -198,7 +212,7 @@ describe("executePublishBatch - already-published (duplicate-active-listing) map
     await executePublish(database, "p1", PublishChannel.Ebay, "first-manual-publish", adapter); // already published once, outside the batch
 
     const before = await listExternalListings(database, "p1");
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], await currentVersion(database, "p1"), adapter);
     expect(batch.results[0]).toMatchObject({ channel: PublishChannel.Ebay, outcome: "skipped" });
     expect(adapter.createCalls()).toBe(1); // the batch attempt never reached the adapter a second time
     expect(await listExternalListings(database, "p1")).toEqual(before); // no duplicate listing created
@@ -208,7 +222,7 @@ describe("executePublishBatch - already-published (duplicate-active-listing) map
     const database = db();
     await publishableProduct(database);
     // eBay never connected - a BadRequestError, not the duplicate-active-listing ConflictError.
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], makeAdapter());
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], await currentVersion(database, "p1"), makeAdapter());
     expect(batch.results[0].outcome).toBe("failed"); // never "skipped" - only the genuine duplicate-active-listing condition maps to skipped
   });
 
@@ -237,15 +251,21 @@ describe("executePublishBatch - unrelated ConflictError (Sprint 141 Formal Valid
     const database = db();
     const adapter = await connect(database, PublishChannel.Ebay);
     await publishableProduct(database, "p1");
+    const version = await currentVersion(database, "p1");
     const productsModule = await import("../src/services/products");
     const conflict = new ProductVersionConflictError("p1", "stale-expected-value", "actual-current-value");
     // Deterministic interception at the exact seam executeNoctellaWebPublish calls
     // (updateProduct(db, productId, {status: Published}) - see marketplacePublishing.ts) -
     // reproduces the real error TYPE a genuine concurrent Product write would cause between
-    // updateProductWithInventoryUseCase's internal read and its conditional write.
+    // updateProductWithInventoryUseCase's internal read and its conditional write. This is
+    // deliberately DIFFERENT from the Sprint 146 upfront whole-batch version gate (which compares
+    // the batch's own expectedUpdatedAt argument before any channel begins) - this test's version
+    // argument matches the real current Product, so the upfront gate passes cleanly, and the
+    // conflict this test proves is the pre-existing PER-CHANNEL one raised deeper inside
+    // executeNoctellaWebPublish's own write, still reachable and still correctly classified.
     const updateProductSpy = vi.spyOn(productsModule, "updateProduct").mockRejectedValueOnce(conflict);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay], version, adapter);
     expect(updateProductSpy).toHaveBeenCalled();
 
     expect(batch.results[0].channel).toBe(PublishChannel.NoctellaWeb);
@@ -277,11 +297,12 @@ describe("executePublishBatch - unknown exception safety (Sprint 141 Formal Vali
     const database = db();
     const adapter = await connect(database, PublishChannel.Ebay);
     await publishableProduct(database, "p1");
+    const version = await currentVersion(database, "p1");
     const productsModule = await import("../src/services/products");
     const sentinel = new Error("SECRET_INTERNAL_SENTINEL_141 database diagnostics");
     const updateProductSpy = vi.spyOn(productsModule, "updateProduct").mockRejectedValueOnce(sentinel);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay], version, adapter);
 
     expect(batch.results[0].channel).toBe(PublishChannel.NoctellaWeb);
     expect(batch.results[0].outcome).toBe("failed");
@@ -299,7 +320,7 @@ describe("executePublishBatch - unknown exception safety (Sprint 141 Formal Vali
     const database = db();
     await publishableProduct(database);
     // eBay never connected - a recognized BadRequestError, its real message must still be exposed.
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], makeAdapter());
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], await currentVersion(database, "p1"), makeAdapter());
     expect(batch.results[0].outcome).toBe("failed");
     expect(batch.results[0].error?.message).toMatch(/not connected/);
     expect(batch.results[0].error?.message).not.toBe("Publish failed");
@@ -311,8 +332,9 @@ describe("executePublishBatch - idempotent replay and duplicate-channel request 
     const database = db();
     const adapter = await connect(database, PublishChannel.Ebay);
     await publishableProduct(database);
+    const version = await currentVersion(database, "p1");
 
-    const first = await executePublishBatch(database, "p1", [PublishChannel.Ebay], adapter);
+    const first = await executePublishBatch(database, "p1", [PublishChannel.Ebay], version, adapter);
     expect(first.results[0].outcome).toBe("succeeded");
     expect(adapter.createCalls()).toBe(1);
 
@@ -320,8 +342,10 @@ describe("executePublishBatch - idempotent replay and duplicate-channel request 
     // default per-channel key from the SAME unchanged payload - it matches the first call's key
     // exactly, hitting the existing idempotency-key short-circuit (returns the same existing
     // Succeeded PublishJob) rather than the duplicate-active-listing guard. Preserves the existing
-    // successful/idempotent behavior unmodified, per the locked architecture.
-    const second = await executePublishBatch(database, "p1", [PublishChannel.Ebay], adapter);
+    // successful/idempotent behavior unmodified, per the locked architecture. eBay/Etsy publication
+    // never touches Product.updatedAt (only Noctella Web does), so the same `version` captured
+    // before the first call remains the genuine current value for the second call too.
+    const second = await executePublishBatch(database, "p1", [PublishChannel.Ebay], version, adapter);
     expect(second.results[0].outcome).toBe("succeeded");
     expect(second.results[0].result?.job.id).toBe(first.results[0].result?.job.id);
     expect(adapter.createCalls()).toBe(1); // the adapter was never invoked a second time
@@ -333,9 +357,64 @@ describe("executePublishBatch - idempotent replay and duplicate-channel request 
     const adapter = await connect(database, PublishChannel.Ebay);
     await publishableProduct(database);
 
-    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Ebay, PublishChannel.Ebay], adapter);
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay, PublishChannel.Ebay, PublishChannel.Ebay], await currentVersion(database, "p1"), adapter);
     expect(batch.results).toHaveLength(1);
     expect(adapter.createCalls()).toBe(1);
+  });
+});
+
+/**
+ * Sprint 146: the upfront whole-batch Product version precondition - reuses the existing Sprint 88
+ * ProductVersionConflictError, checked once (via a fresh getProductById + a plain updatedAt
+ * comparison) before any selected channel is attempted. This narrows the exact concurrency gap
+ * Sprint 146's architecture identified: without this gate, a stale client could publish a channel
+ * using Product field values the admin no longer believes are current.
+ */
+describe("executePublishBatch - Sprint 146 upfront Product version gate", () => {
+  it("a stale expectedUpdatedAt throws the existing ProductVersionConflictError before any channel begins - zero adapter calls, zero new PublishJob/PublishAttempt/ExternalListing rows, no Product mutation", async () => {
+    const database = db();
+    const adapter = await connect(database, PublishChannel.Ebay);
+    await connect(database, PublishChannel.Etsy, adapter);
+    await publishableProduct(database);
+    const before = await getProductById(database as any, "p1");
+
+    await expect(
+      executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy], "stale-version-token-not-the-real-value", adapter),
+    ).rejects.toBeInstanceOf(ProductVersionConflictError);
+
+    expect(adapter.createCalls()).toBe(0); // zero adapter invocation
+    expect(await database.select().from(schema.publishJobs)).toHaveLength(0); // zero new PublishJob
+    expect(await database.select().from(schema.publishAttempts)).toHaveLength(0); // zero new PublishAttempt
+    expect(await listExternalListings(database, "p1")).toHaveLength(0); // zero new ExternalListing
+
+    const after = await getProductById(database as any, "p1");
+    expect(after.status).toBe(before.status); // no Product publication mutation (still not Published)
+    expect(after.updatedAt).toBe(before.updatedAt); // the Product row itself was never written to
+  });
+
+  it("a matching expectedUpdatedAt (the actual current Product version) permits normal batch execution to proceed exactly as before", async () => {
+    const database = db();
+    const adapter = await connect(database, PublishChannel.Ebay);
+    await publishableProduct(database);
+
+    const batch = await executePublishBatch(database, "p1", [PublishChannel.Ebay], await currentVersion(database, "p1"), adapter);
+    expect(batch.results[0].outcome).toBe("succeeded");
+  });
+
+  it("the version gate is checked before channel iteration even when an earlier channel in the list would otherwise have succeeded", async () => {
+    const database = db();
+    const adapter = await connect(database, PublishChannel.Ebay);
+    await connect(database, PublishChannel.Etsy, adapter);
+    await publishableProduct(database);
+
+    // Web would be attempted first per request order and would normally succeed - the stale
+    // version must block the ENTIRE batch before Web (or any channel) is ever attempted.
+    await expect(
+      executePublishBatch(database, "p1", [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy], "stale-version-token", adapter),
+    ).rejects.toBeInstanceOf(ProductVersionConflictError);
+
+    const [productRow] = await database.select().from(schema.products).where(eq(schema.products.id, "p1"));
+    expect(productRow.status).not.toBe("published"); // Web's would-be-successful publication never ran
   });
 });
 
@@ -381,6 +460,12 @@ describe("POST /api/products/:id/publish/execute-batch - permission and request 
     return product.id;
   }
 
+  /** Sprint 146: the exact current Product.updatedAt via the real service, for route-level requests that must supply the new required expectedUpdatedAt field. */
+  async function currentUpdatedAtFor(productId: string): Promise<string> {
+    const productsModule = await import("../src/services/products");
+    return (await productsModule.getProductById(appDb, productId)).updatedAt;
+  }
+
   beforeAll(async () => {
     const appModule = await import("../src/app");
     app = appModule.default;
@@ -398,43 +483,63 @@ describe("POST /api/products/:id/publish/execute-batch - permission and request 
 
   it("rejects an unauthenticated request with 401", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).send({ channels: ["noctella_web"] });
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).send({ channels: ["noctella_web"], expectedUpdatedAt: await currentUpdatedAtFor(productId) });
     expect(res.status).toBe(401);
   });
 
   it("rejects a request from an admin without products.publish with 403", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", noPermissionCookie).send({ channels: ["noctella_web"] });
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", noPermissionCookie).send({ channels: ["noctella_web"], expectedUpdatedAt: await currentUpdatedAtFor(productId) });
     expect(res.status).toBe(403);
   });
 
   it("rejects an empty channels array with 400", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: [] });
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: [], expectedUpdatedAt: await currentUpdatedAtFor(productId) });
     expect(res.status).toBe(400);
   });
 
   it("rejects a missing channels field with 400", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({});
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ expectedUpdatedAt: await currentUpdatedAtFor(productId) });
     expect(res.status).toBe(400);
   });
 
   it("rejects an invalid PublishChannel value with 400", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["amazon"] });
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["amazon"], expectedUpdatedAt: await currentUpdatedAtFor(productId) });
     expect(res.status).toBe(400);
   });
 
-  it("rejects a client-supplied idempotencyKey - no batch-level idempotency key exists", async () => {
+  it("rejects a client-supplied idempotencyKey - no batch-level idempotency key exists (unknown field rejected by .strict())", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web"], idempotencyKey: "shared-across-channels" });
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web"], expectedUpdatedAt: await currentUpdatedAtFor(productId), idempotencyKey: "shared-across-channels" });
     expect(res.status).toBe(400);
   });
 
-  it("accepts a valid request with products.publish, returns one result per selected channel, and deduplicates a repeated channel value", async () => {
+  // Sprint 146: expectedUpdatedAt is now a required part of the canonical batch request contract.
+  it("Sprint 146: rejects a missing expectedUpdatedAt with 400", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web", "noctella_web"] });
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web"] });
+    expect(res.status).toBe(400);
+  });
+
+  it("Sprint 146: rejects an empty-string expectedUpdatedAt with 400", async () => {
+    const productId = await createTestProduct();
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web"], expectedUpdatedAt: "" });
+    expect(res.status).toBe(400);
+  });
+
+  it("Sprint 146: a stale expectedUpdatedAt is rejected with the existing 409 PRODUCT_VERSION_CONFLICT boundary, before any channel is attempted", async () => {
+    const productId = await createTestProduct();
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web"], expectedUpdatedAt: "definitely-not-the-real-current-value" });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("PRODUCT_VERSION_CONFLICT");
+  });
+
+  it("accepts a valid request with products.publish and a matching expectedUpdatedAt, returns one result per selected channel, and deduplicates a repeated channel value", async () => {
+    const productId = await createTestProduct();
+    const res = await request(app).post(`/api/products/${productId}/publish/execute-batch`).set("Cookie", ownerCookie).send({ channels: ["noctella_web", "noctella_web"], expectedUpdatedAt: await currentUpdatedAtFor(productId) });
     expect(res.status).toBe(200);
     expect(res.body.productId).toBe(productId);
     expect(res.body.results).toHaveLength(1);
@@ -443,14 +548,14 @@ describe("POST /api/products/:id/publish/execute-batch - permission and request 
   });
 
   it("returns 404 for a nonexistent product", async () => {
-    const res = await request(app).post("/api/products/does-not-exist/publish/execute-batch").set("Cookie", ownerCookie).send({ channels: ["noctella_web"] });
+    const res = await request(app).post("/api/products/does-not-exist/publish/execute-batch").set("Cookie", ownerCookie).send({ channels: ["noctella_web"], expectedUpdatedAt: "irrelevant-product-does-not-exist" });
     expect(res.status).toBe(404);
   });
 
   it("existing single-channel POST /:id/publish/execute remains independently reachable and unaffected", async () => {
     const productId = await createTestProduct();
     const res = await request(app).post(`/api/products/${productId}/publish/execute`).set("Cookie", ownerCookie).send({ channel: "noctella_web" });
-    expect(res.status).toBe(400); // validation failure (no price/photo) - proves the OLD route is still wired and still delegates to the same validatePublish, unmodified by Sprint 141
+    expect(res.status).toBe(400); // validation failure (no price/photo) - proves the OLD route is still wired and still delegates to the same validatePublish, unmodified by Sprint 141/146
     expect(res.body.error).toMatch(/validation/i);
   });
 });

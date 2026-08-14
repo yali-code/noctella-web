@@ -7,22 +7,27 @@ import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "@/lib/api";
+import * as apiLib from "@/lib/api";
 import * as marketingTagsLib from "@/lib/marketingTags";
 import * as publishingLib from "@/lib/publishing";
+import * as marketplacesLib from "@/lib/marketplaces";
 import { ProductForm, emptyProductForm, productToFormValues } from "./ProductForm";
 
 afterEach(() => vi.restoreAllMocks());
 
 /**
- * Sprint 145: every productId-bearing render now also mounts three AiChannelSuggestionsSection
- * instances (eBay/Etsy/Web), each of which calls marketplacePreparationApi.get on mount. Defaults
- * every test in this file to the deterministic NONE state (404) so pre-existing Sprint 144 tests
- * (SKU lock, Published protection, Marketing Tags) never make a real, unmocked network call -
- * mirrors publishing/page.test.tsx's own established default-mock convention for exactly this
- * reason. Individual Sprint 145 tests below override this per-test as needed.
+ * Sprint 145/146: every productId-bearing render now also mounts three AiChannelSuggestionsSection
+ * instances (eBay/Etsy/Web) and one PublishActions instance, each of which calls its own read API
+ * on mount (marketplacePreparationApi.get / publishingApi.getPreview / marketplaceApi.
+ * listConnections). Defaults every test in this file to safe, deterministic responses so
+ * pre-existing tests (SKU lock, Published protection, Marketing Tags) never make a real, unmocked
+ * network call - mirrors publishing/page.test.tsx's own established default-mock convention for
+ * exactly this reason. Individual tests below override any of these per-test as needed.
  */
 beforeEach(() => {
   vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockRejectedValue(new ApiError("Marketplace preparation not found", 404));
+  vi.spyOn(publishingLib.publishingApi, "getPreview").mockRejectedValue(new Error("not mocked in this test"));
+  vi.spyOn(marketplacesLib.marketplaceApi, "listConnections").mockResolvedValue([]);
 });
 
 function baseValues() {
@@ -626,5 +631,206 @@ describe("ProductForm — Sprint 145: AI Suggestions integration", () => {
     expect(await screen.findByText("Vintage")).toBeInTheDocument();
     // eBay's own Title field was never touched by the failed Accept.
     expect((screen.getAllByLabelText("Title")[1] as HTMLInputElement).value).toBe("");
+  });
+});
+
+/**
+ * Sprint 146: canonical publishing integration - PublishActions' own channel-selection/result/
+ * connection/preview behavior is covered in isolation in PublishActions.test.tsx (its
+ * saveForPublish/onProductRefreshed props are passed in directly as mocks there); these tests
+ * cover exactly what only ProductForm itself owns end-to-end - the persisted-baseline/dirty
+ * signal PublishActions consumes, the real Save-before-Publish wiring through
+ * onSaveForPublish, the AI-Approve-advances-baseline rule, and the post-publish canonical
+ * refresh's effect on the visible form (including the Published-status display).
+ */
+/**
+ * Sprint 146: routes api.get by path so categories/collections/marketing-tags never receive an
+ * unrelated response shape (e.g. the returned Product) - a blanket mockResolvedValue would crash
+ * categories.map(), exactly the footgun this file's own top comment already documents for the
+ * Marketing Tags addition. `productResponse` answers any GET for the Product itself, which is what
+ * PublishActions' post-publish refetch (GET /api/products/p1) needs.
+ */
+function mockProductFormGets(productResponse: unknown) {
+  return vi.spyOn(apiLib.api, "get").mockImplementation(async (path: string) => {
+    if (path === "/api/products/p1") return productResponse;
+    if (path === "/api/products/p1/marketing-tags") return [];
+    return { items: [] };
+  });
+}
+
+describe("ProductForm — Sprint 146: canonical publishing integration", () => {
+  it("no Save as Draft action exists anywhere in the canonical form", () => {
+    render(
+      <ProductForm initialValues={productToFormValues(baseProduct())} submitLabel="Save Changes" onSubmit={vi.fn()} productId="p1" productUpdatedAt="t" />,
+    );
+    expect(screen.queryByRole("button", { name: /save as draft/i })).not.toBeInTheDocument();
+  });
+
+  it("AI-only Accept (no other unsaved edits): the form is clean afterward, so Publish Selected never triggers a redundant generic Product PUT", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockImplementation(async (_id: string, channel: any) => {
+      if (channel === "etsy") {
+        return {
+          id: "prep-1", productId: "p1", channel: "etsy", status: "pending", baseProductUpdatedAt: "t",
+          suggestedTitle: "AI Etsy Title", providerName: "mock", promptVersion: "v1", generatedAt: "t", createdAt: "t", updatedAt: "t",
+        } as any;
+      }
+      throw new ApiError("Not found", 404);
+    });
+    const approvedProduct = baseProduct({ updatedAt: "2026-02-01T00:00:00.000Z", etsyTitle: "AI Etsy Title" });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "approve").mockResolvedValue(approvedProduct as any);
+    const onSaveForPublish = vi.fn();
+    const executeBatchSpy = vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({ productId: "p1", results: [] } as any);
+    mockProductFormGets(approvedProduct);
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+        onSaveForPublish={onSaveForPublish}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await waitFor(() => expect(publishingLib.marketplacePreparationApi.approve).toHaveBeenCalled());
+
+    await user.click(screen.getByRole("checkbox", { name: "Etsy" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+    await waitFor(() => expect(executeBatchSpy).toHaveBeenCalledWith("p1", ["etsy"], "2026-02-01T00:00:00.000Z"));
+    expect(onSaveForPublish).not.toHaveBeenCalled(); // no redundant Save - the AI Approve already persisted this field
+  });
+
+  it("AI Accept while an unrelated manual edit (Brand) is already dirty: the unrelated edit remains dirty, and Publish Selected performs a Save carrying it", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockImplementation(async (_id: string, channel: any) => {
+      if (channel === "ebay") {
+        return {
+          id: "prep-ebay", productId: "p1", channel: "ebay", status: "pending", baseProductUpdatedAt: "t",
+          suggestedTitle: "AI Ebay Title", providerName: "mock", promptVersion: "v1", generatedAt: "t", createdAt: "t", updatedAt: "t",
+        } as any;
+      }
+      throw new ApiError("Not found", 404);
+    });
+    const approvedProduct = baseProduct({ updatedAt: "2026-02-01T00:00:00.000Z", ebayTitle: "AI Ebay Title" });
+    vi.spyOn(publishingLib.marketplacePreparationApi, "approve").mockResolvedValue(approvedProduct as any);
+    const savedProduct = baseProduct({ updatedAt: "2026-02-02T00:00:00.000Z", ebayTitle: "AI Ebay Title", brand: "Acme" });
+    const onSaveForPublish = vi.fn().mockResolvedValue(savedProduct);
+    const executeBatchSpy = vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({ productId: "p1", results: [] } as any);
+    mockProductFormGets(savedProduct);
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+        onSaveForPublish={onSaveForPublish}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Brand"));
+    await user.type(screen.getByLabelText("Brand"), "Acme");
+    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await waitFor(() => expect(publishingLib.marketplacePreparationApi.approve).toHaveBeenCalled());
+
+    await user.click(screen.getByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+    await waitFor(() => expect(onSaveForPublish).toHaveBeenCalledTimes(1));
+    expect(onSaveForPublish.mock.calls[0][0]).toMatchObject({ brand: "Acme" });
+    await waitFor(() => expect(executeBatchSpy).toHaveBeenCalledWith("p1", ["ebay"], "2026-02-02T00:00:00.000Z"));
+  });
+
+  it("a PRODUCT_VERSION_CONFLICT during Save-before-Publish preserves local unsaved values, offers Reload Latest Product, and never calls executePublishBatch", async () => {
+    const user = userEvent.setup();
+    const onSaveForPublish = vi.fn().mockRejectedValue(
+      new ApiError("This product changed after you opened it. Reload the latest version before saving again.", 409, undefined, "PRODUCT_VERSION_CONFLICT"),
+    );
+    const executeBatchSpy = vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch");
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct())}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+        onSaveForPublish={onSaveForPublish}
+        onVersionConflictReload={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Brand"));
+    await user.type(screen.getByLabelText("Brand"), "Unsaved Brand");
+    await user.click(await screen.findByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+
+    expect(await screen.findByText(/no local changes were written/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload Latest Product" })).toBeInTheDocument();
+    expect((screen.getByLabelText("Brand") as HTMLInputElement).value).toBe("Unsaved Brand");
+    expect(executeBatchSpy).not.toHaveBeenCalled();
+  });
+
+  it("Noctella Web success in the post-publish refresh locks the visible Status field to Published and advances the shared version token", async () => {
+    const user = userEvent.setup();
+    const onProductVersionAdvanced = vi.fn();
+    vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({
+      productId: "p1",
+      results: [{ channel: "noctella_web", outcome: "succeeded", result: {} as any }],
+    } as any);
+    const refreshedProduct = baseProduct({ status: "published", updatedAt: "2026-03-01T00:00:00.000Z" });
+    mockProductFormGets(refreshedProduct);
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct({ status: "draft" }))}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+        onProductVersionAdvanced={onProductVersionAdvanced}
+      />,
+    );
+
+    await user.click(await screen.findByRole("checkbox", { name: "Noctella Web" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+
+    await waitFor(() => expect(onProductVersionAdvanced).toHaveBeenCalledWith("2026-03-01T00:00:00.000Z"));
+    // The Status field is now the locked, read-only Published display - never an editable dropdown.
+    expect(screen.queryByRole("combobox", { name: "Status" })).not.toBeInTheDocument();
+    const statusInput = await screen.findByLabelText("Status");
+    expect(statusInput).toBeDisabled();
+    expect((statusInput as HTMLInputElement).value).toBe("published");
+  });
+
+  it("an eBay-only publish (Noctella Web not selected) never fabricates Published in the refreshed form", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(marketplacesLib.marketplaceApi, "executePublishBatch").mockResolvedValue({
+      productId: "p1",
+      results: [{ channel: "ebay", outcome: "succeeded", result: {} as any }],
+    } as any);
+    const refreshedProduct = baseProduct({ status: "draft", updatedAt: "2026-03-02T00:00:00.000Z" });
+    mockProductFormGets(refreshedProduct);
+
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct({ status: "draft" }))}
+        submitLabel="Save Changes"
+        onSubmit={vi.fn()}
+        productId="p1"
+        productUpdatedAt="t"
+      />,
+    );
+
+    await user.click(await screen.findByRole("checkbox", { name: "eBay" }));
+    await user.click(screen.getByRole("button", { name: "Publish Selected" }));
+
+    await waitFor(() => expect(apiLib.api.get).toHaveBeenCalledWith("/api/products/p1"));
+    // Status remains the ordinary editable dropdown, still showing draft - never silently promoted to Published.
+    const statusSelect = await screen.findByRole("combobox", { name: "Status" });
+    expect((statusSelect as HTMLSelectElement).value).toBe("draft");
   });
 });

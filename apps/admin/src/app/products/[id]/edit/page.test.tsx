@@ -30,11 +30,21 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
  * Tags section and calls marketingTagsApi.list() (GET .../marketing-tags) - that endpoint returns
  * a bare `MarketingTag[]`, not a `{ items: [] }` paginated envelope, so it must be routed
  * separately from the categories/collections fallback below.
+ *
+ * Sprint 146: ProductForm also mounts PublishActions, which calls publishingApi.getPreview (GET
+ * .../publish?channel=X) and marketplaceApi.listConnections (GET /api/marketplaces/connections) -
+ * neither returns a `{ items: [] }` paginated envelope either (a PublishPreview object and a bare
+ * MarketplaceConnection[] respectively), so both must be routed to safe, minimally-valid defaults
+ * too, or PublishActions' own render would throw reading `.validation.valid` off `{ items: [] }`.
  */
 function mockGetForProduct(product: any) {
   return vi.spyOn(apiLib.api, "get").mockImplementation(async (path: string) => {
     if (path === `/api/products/${product.id}`) return product;
     if (path === `/api/products/${product.id}/marketing-tags`) return [];
+    if (path.startsWith(`/api/products/${product.id}/publish?channel=`)) {
+      return { productId: product.id, channel: "ebay", validation: { productId: product.id, channel: "ebay", valid: false, errors: [], warnings: [] } };
+    }
+    if (path === "/api/marketplaces/connections") return [];
     return { items: [] };
   });
 }
