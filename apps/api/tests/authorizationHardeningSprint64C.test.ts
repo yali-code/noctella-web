@@ -11,6 +11,8 @@ import { AdminRole, ProductStatus, ProductType, ROLE_PERMISSIONS, type Permissio
 import { hasPermission, requirePermission, type AuthedRequest } from "../src/auth/permissions";
 import { createCategory } from "../src/services/categories";
 import { createProduct } from "../src/services/products";
+import { eq } from "drizzle-orm";
+import * as schema from "../src/db/schema";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString("base64");
@@ -413,4 +415,11 @@ describe("role-permission matrix (Sprint 64C)", () => {
     const forbidden = await request(app).get("/api/orders").set("Cookie", cookie);
     expect(forbidden.status).toBe(403);
   });
+});
+
+describe("Sprint 149 lifecycle HTTP input isolation",()=>{
+  it.each(["actorAdminUserId","expectedUpdatedAt","connectionId","channel","channels","allowPaused","bypassPause","lifecycleBypass","stockQuantity","price","title"])("strictly rejects Relist field %s",async(field)=>{const res=await request(app).post("/api/products/missing/lifecycle/relist").set("Cookie",roleCookies.get(AdminRole.Owner)!).send({idempotencyKey:"relist-http-key",[field]:field==="channels"?[]:"controlled"});expect(res.status).toBe(400);});
+  it.each(["actorAdminUserId","expectedUpdatedAt","stockQuantity","channel","allowPaused"])("strictly rejects Pause field %s",async(field)=>{const res=await request(app).post("/api/products/missing/lifecycle/pause").set("Cookie",roleCookies.get(AdminRole.Owner)!).send({idempotencyKey:"pause-http-key",[field]:"controlled"});expect(res.status).toBe(400);});
+  it("does not allow Retry request-body controls to influence lifecycle dispatch",async()=>{const res=await request(app).post("/api/products/missing/lifecycle/missing/retry").set("Cookie",roleCookies.get(AdminRole.Owner)!).send({connectionId:"alternate",channel:"etsy",allowPaused:true,actorAdminUserId:"forged",title:"forged"});expect(res.status).toBe(404);});
+  it("cannot expose the internal pause bypass through ordinary publish HTTP input",async()=>{const category=await createCategory(db,{name:`Paused publish ${crypto.randomUUID()}`,displayOrder:0,isActive:true}),product=await createProduct(db,{sku:`PAUSED-${crypto.randomUUID()}`,title:"Paused",type:ProductType.UniqueItem,status:ProductStatus.Draft,categoryId:category.id,stockQuantity:1,priceEur:10,customsWarning:false,isFeatured:false,allowMakeOffer:false,allowCashOnDelivery:false,showInArchiveAfterSale:false});await db.update(schema.products).set({salePausedAt:new Date().toISOString()}).where(eq(schema.products.id,product.id));for(const field of ["allowPaused","bypassPause","lifecycleBypass","exactConnectionId"]){const res=await request(app).post(`/api/products/${product.id}/publish/execute`).set("Cookie",roleCookies.get(AdminRole.Owner)!).send({channel:"ebay",[field]:true});expect(res.status).not.toBe(200);expect(res.body?.error).toMatch(/Paused Product/);}});
 });
