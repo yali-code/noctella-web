@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
-import { archiveProduct, createProduct, deleteProductPhoto, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
+import { archiveProduct, createProduct, deleteProductPhoto, getProductArchiveSafety, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
 import { createProductSchema, productListQuerySchema, updateProductRequestSchema } from "../validation/product";
 import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
@@ -27,6 +27,7 @@ router.get("/:id/lifecycle", requirePermission("products.publish"), async (req,r
 router.post("/:id/lifecycle/pause", requirePermission("products.publish"), async (req:AuthedRequest,res)=>{try{const input=pauseLifecycleSchema.parse(req.body??{});res.json(await pauseProduct(db,{productId:req.params.id,actorAdminUserId:req.adminUser!.id,...input}));}catch(error){handleRouteError(error,res);}});
 router.post("/:id/lifecycle/relist", requirePermission("products.publish"), async (req:AuthedRequest,res)=>{try{const input=pauseLifecycleSchema.parse(req.body??{});res.json(await relistProduct(db,{productId:req.params.id,actorAdminUserId:req.adminUser!.id,...input}));}catch(error){handleRouteError(error,res);}});
 router.post("/:id/lifecycle/:operationId/retry", requirePermission("products.publish"), async (req,res)=>{try{res.json(await retryLifecycleOperation(db,req.params.id,req.params.operationId));}catch(error){handleRouteError(error,res);}});
+router.get("/:id/archive-safety", requirePermission("products.edit"), async (req,res)=>{try{res.json(await getProductArchiveSafety(db,req.params.id));}catch(error){handleRouteError(error,res);}});
 
 router.get("/", requirePermission("products.view"), async (req, res) => {
   try {

@@ -542,6 +542,7 @@ export type ProductLifecycleTargetStatus = "pending" | "processing" | "succeeded
 export interface ProductLifecycleTarget { key: string; channel: PublishChannel; kind: "local" | "external"; internalListingId?: ID; externalListingId?: string; connectionId?: ID; previousExternalStatus?: string; status: ProductLifecycleTargetStatus; processingStartedAt?: string; error?: string; retryable?: boolean; replacementExternalListingId?: string; }
 export interface ProductLifecycleOperation extends Timestamps { id: ID; productId: ID; action: ProductLifecycleAction; status: ProductLifecycleOperationStatus; reason?: string; previousProductStatus: ProductStatus; targetSnapshot: ProductLifecycleTarget[]; targetResults: ProductLifecycleTarget[]; actorAdminUserId: ID; idempotencyKey: string; completedAt?: string; }
 export interface ProductLifecycleResult { operation: ProductLifecycleOperation; productUpdatedAtBefore: string; productUpdatedAtAfter: string; }
+export interface ProductArchiveSafety { canArchive: boolean; reason?: string; }
 export interface PublishExecutionResult { job: PublishJob; externalListing?: ExternalListing; attempts?: PublishAttempt[]; error?: MarketplaceApiError; }
 
 /**
