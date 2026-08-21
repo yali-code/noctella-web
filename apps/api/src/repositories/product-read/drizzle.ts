@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, like, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, like, notExists, or, sql } from "drizzle-orm";
 import { ProductStatus, PublishJobStatus } from "@noctella/shared";
 import type { ProductBreakdownDimension, ProductReadListQuery, ProductReadRepositoryBundle } from "./types";
 
@@ -21,7 +21,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     if (q.type) filters.push(eq(products.type, q.type));
     if (q.categoryId) filters.push(eq(products.categoryId, q.categoryId));
     if (q.collectionId) filters.push(eq(products.collectionId, q.collectionId));
-    if (q.published) filters.push(eq(products.status, "published"));
+    if (q.published) filters.push(eq(products.status, "published"),isNull(products.salePausedAt));
     if (q.isFeatured !== undefined) filters.push(eq(products.isFeatured, q.isFeatured));
     if (q.updatedSince) filters.push(gt(products.updatedAt, dialect === "postgres" ? new Date(q.updatedSince) : q.updatedSince));
     if (q.categorySlug) { const c = await categoriesRepo.getBySlug(q.categorySlug); filters.push(eq(products.categoryId, c?.id ?? "__no_match__")); }

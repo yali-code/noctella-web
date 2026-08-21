@@ -1,9 +1,11 @@
 import { OfferStatus, OrderStatus, ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import * as schema from "../src/db/schema";
 import { createCategory } from "../src/services/categories";
 import { createProduct, getProductById } from "../src/services/products";
 import { acceptOffer, createDraftOrderFromOffer, createOffer, listOffers, rejectOffer } from "../src/services/offers";
-import { BadRequestError, NotFoundError } from "../src/services/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../src/services/errors";
 import { createOfferSchema } from "../src/validation/offer";
 import { createTestDb } from "./testDb";
 
@@ -55,6 +57,8 @@ describe("offer service", () => {
     expect(offer.status).toBe(OfferStatus.Pending);
     expect(offer.offeredAmount).toBe(900);
   });
+
+  it("blocks new and pre-existing offer sales after Pause without deleting history or mutating inventory",async()=>{const product=await createProduct(db,baseProductInput()),before={product:await getProductById(db,product.id),movements:(await db.select().from(schema.stockMovements)).length,reservations:(await db.select().from(schema.stockReservations)).length},pending=await createOffer(db,baseOfferInput(product.id));await db.update(schema.products).set({salePausedAt:new Date().toISOString()}).where(eq(schema.products.id,product.id));await expect(createOffer(db,baseOfferInput(product.id))).rejects.toBeInstanceOf(BadRequestError);await expect(acceptOffer(db,pending.id)).rejects.toBeInstanceOf(BadRequestError);expect((await listOffers(db)).map(o=>o.id)).toContain(pending.id);await db.update(schema.products).set({salePausedAt:null}).where(eq(schema.products.id,product.id));await acceptOffer(db,pending.id);await db.update(schema.products).set({salePausedAt:new Date().toISOString()}).where(eq(schema.products.id,product.id));await expect(createDraftOrderFromOffer(db,pending.id)).rejects.toBeInstanceOf(ConflictError);const after=await getProductById(db,product.id);expect(after.stockQuantity).toBe(before.product.stockQuantity);expect(after.sku).toBe(before.product.sku);expect(after.purchaseCost).toBe(before.product.purchaseCost);expect(await db.select().from(schema.stockMovements)).toHaveLength(before.movements);expect(await db.select().from(schema.stockReservations)).toHaveLength(before.reservations);expect(await db.select().from(schema.orders)).toHaveLength(0);});
 
   it("rejects an offer on a non-Published product", async () => {
     const product = await createProduct(db, baseProductInput({ status: ProductStatus.Draft }));

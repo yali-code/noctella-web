@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, like, or, sql } from "drizzle-orm";
 import { ProductStatus, ProductType } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { categories, collections, productImages, productPhotos, products } from "../db/schema";
@@ -154,6 +154,7 @@ export async function listRelatedProducts(
     .where(
       and(
         eq(products.status, ProductStatus.Published),
+        isNull(products.salePausedAt),
         eq(products.categoryId, categoryId),
         sql`${products.id} != ${productId}`,
       ),

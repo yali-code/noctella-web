@@ -6,6 +6,7 @@ import { createProduct, getProductById, updateProduct } from "../src/services/pr
 import { listStockMovements } from "../src/services/stockMovements";
 import {
   createOrder,
+  createCashOnDeliveryOrder,
   updateOrderStatus,
   formatOrderNumber,
   getOrderById,
@@ -116,6 +117,8 @@ describe("order service", () => {
     await expect(getOrderById(db, order.id)).resolves.toMatchObject({ id: order.id });
     await expect(getOrderByOrderNumber(db, order.orderNumber)).resolves.toMatchObject({ id: order.id });
   });
+
+  it("rechecks Pause inside Noctella Web order creation and preserves historical orders and inventory",async()=>{const historical=await createOrder(db,createOrderSchema.parse(baseOrderInput()),{pricingContext:"noctella_web"});const blocked=await createProduct(db,{sku:"SKU-PAUSED-ORDER",title:"Paused order item",type:ProductType.UniqueItem,status:ProductStatus.Published,categoryId,customsWarning:false,isFeatured:false,allowMakeOffer:false,allowCashOnDelivery:true,showInArchiveAfterSale:false,priceEur:500,stockQuantity:1});await seedPayment(db,PaymentProvider.Stripe,"paused-paid",PaymentStatus.Paid,500);await db.update(products).set({salePausedAt:new Date().toISOString()}).where(eq(products.id,blocked.id));const before={product:await getProductById(db,blocked.id),orders:(await db.select().from(sqliteSchema.orders)).length,movements:(await db.select().from(sqliteSchema.stockMovements)).length,reservations:(await db.select().from(sqliteSchema.stockReservations)).length};const input=createOrderSchema.parse(baseOrderInput({orderDraftId:"paused-draft",paymentReference:"paused-paid",subtotalAmount:500,totalAmount:500,items:[{productId:blocked.id,quantity:1}]}));await expect(createOrder(db,input,{pricingContext:"noctella_web"})).rejects.toBeInstanceOf(ConflictError);await expect(createCashOnDeliveryOrder(db,{orderDraftId:"paused-cod",guestEmail:"buyer@example.com",billingAddress:address,shippingAddress:address,items:[{productId:blocked.id,quantity:1}]})).rejects.toBeInstanceOf(ConflictError);expect(await db.select().from(sqliteSchema.orders)).toHaveLength(before.orders);await expect(getOrderById(db,historical.id)).resolves.toMatchObject({id:historical.id});const after=await getProductById(db,blocked.id);expect(after.stockQuantity).toBe(before.product.stockQuantity);expect(after.sku).toBe(before.product.sku);expect(after.purchaseCost).toBe(before.product.purchaseCost);expect(await db.select().from(sqliteSchema.stockMovements)).toHaveLength(before.movements);expect(await db.select().from(sqliteSchema.stockReservations)).toHaveLength(before.reservations);});
 
   it("includes paymentProvider identically in both the list projection and the detail projection", async () => {
     const created = await createOrder(db, createOrderSchema.parse(baseOrderInput()));
