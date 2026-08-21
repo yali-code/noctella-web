@@ -17,7 +17,7 @@ import { addProductMarketingTagSchema } from "../validation/marketingTags";
 import { acceptCanonicalProductProposal, generateCanonicalProductProposal, getCurrentCanonicalProductProposal } from "../services/canonicalProductProposal";
 import { acceptCanonicalProductProposalSchema, generateCanonicalProductProposalSchema } from "../validation/canonicalProductProposal";
 import { z } from "zod";
-import { getProductLifecycleState, pauseProduct, retryPauseOperation } from "../services/productLifecycle";
+import { getProductLifecycleState, pauseProduct, relistProduct, retryLifecycleOperation } from "../services/productLifecycle";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -25,7 +25,8 @@ const pauseLifecycleSchema = z.object({ idempotencyKey: z.string().min(8).max(20
 
 router.get("/:id/lifecycle", requirePermission("products.publish"), async (req,res)=>{try{res.json(await getProductLifecycleState(db,req.params.id));}catch(error){handleRouteError(error,res);}});
 router.post("/:id/lifecycle/pause", requirePermission("products.publish"), async (req:AuthedRequest,res)=>{try{const input=pauseLifecycleSchema.parse(req.body??{});res.json(await pauseProduct(db,{productId:req.params.id,actorAdminUserId:req.adminUser!.id,...input}));}catch(error){handleRouteError(error,res);}});
-router.post("/:id/lifecycle/:operationId/retry", requirePermission("products.publish"), async (req,res)=>{try{res.json(await retryPauseOperation(db,req.params.id,req.params.operationId));}catch(error){handleRouteError(error,res);}});
+router.post("/:id/lifecycle/relist", requirePermission("products.publish"), async (req:AuthedRequest,res)=>{try{const input=pauseLifecycleSchema.parse(req.body??{});res.json(await relistProduct(db,{productId:req.params.id,actorAdminUserId:req.adminUser!.id,...input}));}catch(error){handleRouteError(error,res);}});
+router.post("/:id/lifecycle/:operationId/retry", requirePermission("products.publish"), async (req,res)=>{try{res.json(await retryLifecycleOperation(db,req.params.id,req.params.operationId));}catch(error){handleRouteError(error,res);}});
 
 router.get("/", requirePermission("products.view"), async (req, res) => {
   try {

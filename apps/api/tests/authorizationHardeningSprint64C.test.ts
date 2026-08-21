@@ -286,6 +286,7 @@ const REPRESENTATIVE_ROUTES: { router: string; method: "get" | "post"; path: str
   { router: "products.ts", method: "get", path: "/api/products", permission: "products.view" },
   { router: "products.ts", method: "get", path: "/api/products/missing/lifecycle", permission: "products.publish" },
   { router: "products.ts", method: "post", path: "/api/products/missing/lifecycle/pause", permission: "products.publish" },
+  { router: "products.ts", method: "post", path: "/api/products/missing/lifecycle/relist", permission: "products.publish" },
   { router: "products.ts", method: "post", path: "/api/products/missing/lifecycle/missing/retry", permission: "products.publish" },
   { router: "orders.ts", method: "get", path: "/api/orders", permission: "orders.view" },
   { router: "shipments.ts", method: "get", path: "/api/shipments", permission: "orders.view" },
