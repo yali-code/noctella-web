@@ -282,8 +282,11 @@ describe("guest offer submission regression fix (Sprint 65)", () => {
 // 3. Router authorization wiring - representative route per permission-protected router
 //    Also doubles as the 401 vs 403 vs success HTTP-status matrix.
 // ---------------------------------------------------------------------------
-const REPRESENTATIVE_ROUTES: { router: string; method: "get"; path: string; permission: Permission }[] = [
+const REPRESENTATIVE_ROUTES: { router: string; method: "get" | "post"; path: string; permission: Permission }[] = [
   { router: "products.ts", method: "get", path: "/api/products", permission: "products.view" },
+  { router: "products.ts", method: "get", path: "/api/products/missing/lifecycle", permission: "products.publish" },
+  { router: "products.ts", method: "post", path: "/api/products/missing/lifecycle/pause", permission: "products.publish" },
+  { router: "products.ts", method: "post", path: "/api/products/missing/lifecycle/missing/retry", permission: "products.publish" },
   { router: "orders.ts", method: "get", path: "/api/orders", permission: "orders.view" },
   { router: "shipments.ts", method: "get", path: "/api/shipments", permission: "orders.view" },
   { router: "returns.ts", method: "get", path: "/api/returns", permission: "orders.view" },
