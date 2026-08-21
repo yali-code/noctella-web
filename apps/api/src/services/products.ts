@@ -43,6 +43,7 @@ function toProduct(row: typeof products.$inferSelect): Product {
     slug: row.slug,
     type: row.type as ProductType,
     status: row.status as ProductStatus,
+    salePausedAt: row.salePausedAt ? new Date(row.salePausedAt as unknown as string | number | Date).toISOString() : undefined,
     categoryId: row.categoryId ?? undefined,
     collectionId: row.collectionId ?? undefined,
     brand: row.brand ?? undefined,

@@ -38,6 +38,32 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureProductPriceEurNullable(sqlite);
   ensureMarketingTagsTables(sqlite);
   ensureCanonicalProductAiProposalsTable(sqlite);
+  ensureProductLifecycleFoundation(sqlite);
+}
+
+/** Sprint 149 Checkpoint 1: additive, rerunnable local Pause foundation. */
+function ensureProductLifecycleFoundation(sqlite: Database.Database): void {
+  const columns = sqlite.prepare("PRAGMA table_info(products)").all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "sale_paused_at")) sqlite.exec("ALTER TABLE products ADD COLUMN sale_paused_at TEXT");
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS product_lifecycle_operations (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('pause','relist')),
+      status TEXT NOT NULL CHECK(status IN ('processing','succeeded','partially_failed','failed')),
+      reason TEXT,
+      previous_product_status TEXT NOT NULL,
+      target_snapshot TEXT NOT NULL,
+      target_results TEXT NOT NULL,
+      actor_admin_user_id TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_product_lifecycle_product ON product_lifecycle_operations(product_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_product_lifecycle_one_processing ON product_lifecycle_operations(product_id) WHERE status = 'processing';
+  `);
 }
 
 /**

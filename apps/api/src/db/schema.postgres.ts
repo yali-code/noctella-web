@@ -41,6 +41,7 @@ export const products = pgTable("products", {
   slug: text("slug").notNull().unique(),
   type: text("type").notNull(),
   status: text("status").notNull(),
+  salePausedAt: timestamp("sale_paused_at", { withTimezone: true }),
   categoryId: text("category_id"),
   collectionId: text("collection_id"),
   brand: text("brand"),
@@ -462,6 +463,9 @@ export const externalListings = pgTable("external_listings", {
   publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
+export const productLifecycleOperations = pgTable("product_lifecycle_operations", {
+  id: text("id").primaryKey().notNull(), productId: text("product_id").notNull(), action: text("action").notNull(), status: text("status").notNull(), reason: text("reason"), previousProductStatus: text("previous_product_status").notNull(), targetSnapshot: jsonb("target_snapshot").notNull(), targetResults: jsonb("target_results").notNull(), actorAdminUserId: text("actor_admin_user_id").notNull(), idempotencyKey: text("idempotency_key").notNull().unique(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`), completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [index("idx_product_lifecycle_product").on(table.productId), uniqueIndex("idx_product_lifecycle_one_processing").on(table.productId).where(sql`status = 'processing'`)]);
 
 export const marketplaceWebhookEvents = pgTable("marketplace_webhook_events", {
   id: text("id").primaryKey().notNull(),

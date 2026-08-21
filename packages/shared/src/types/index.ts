@@ -120,6 +120,8 @@ export interface Product extends Timestamps {
   slug: string;
   type: ProductType;
   status: ProductStatus;
+  /** Independent emergency sales block; Product.status retains its lifecycle meaning. */
+  salePausedAt?: string;
   categoryId?: ID;
   collectionId?: ID;
 
@@ -534,6 +536,12 @@ export interface MarketplaceConnection extends Timestamps { id: ID; channel: Pub
 export interface PublishJob extends Timestamps { id: ID; productId: ID; channel: PublishChannel; status: PublishJobStatus; idempotencyKey: string; payloadSnapshot: PublishPayload; externalListingId?: string; externalListingUrl?: string; attemptCount: number; lastError?: string; completedAt?: string; }
 export interface PublishAttempt { id: ID; publishJobId: ID; attemptNumber: number; requestSnapshot: unknown; responseSnapshot?: unknown; errorCode?: string; errorMessage?: string; createdAt: string; }
 export interface ExternalListing { id: ID; productId: ID; channel: PublishChannel; connectionId: ID; externalListingId: string; externalListingUrl?: string; externalStatus: string; payloadSnapshot: PublishPayload; publishedAt: string; updatedAt: string; }
+export type ProductLifecycleAction = "pause" | "relist";
+export type ProductLifecycleOperationStatus = "processing" | "succeeded" | "partially_failed" | "failed";
+export type ProductLifecycleTargetStatus = "pending" | "processing" | "succeeded" | "failed";
+export interface ProductLifecycleTarget { key: string; channel: PublishChannel; kind: "local" | "external"; internalListingId?: ID; externalListingId?: string; connectionId?: ID; previousExternalStatus?: string; status: ProductLifecycleTargetStatus; processingStartedAt?: string; error?: string; retryable?: boolean; replacementExternalListingId?: string; }
+export interface ProductLifecycleOperation extends Timestamps { id: ID; productId: ID; action: ProductLifecycleAction; status: ProductLifecycleOperationStatus; reason?: string; previousProductStatus: ProductStatus; targetSnapshot: ProductLifecycleTarget[]; targetResults: ProductLifecycleTarget[]; actorAdminUserId: ID; idempotencyKey: string; completedAt?: string; }
+export interface ProductLifecycleResult { operation: ProductLifecycleOperation; productUpdatedAtBefore: string; productUpdatedAtAfter: string; }
 export interface PublishExecutionResult { job: PublishJob; externalListing?: ExternalListing; attempts?: PublishAttempt[]; error?: MarketplaceApiError; }
 
 /**

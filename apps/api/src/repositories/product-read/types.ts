@@ -2,7 +2,7 @@ export type ProductReadListQuery = { page?: number; pageSize?: number; limit?: n
 
 type Nullable<T> = T | null;
 export type ProductBaseReadProjection = {
-  id: string; erpReferenceId: Nullable<string>; sku: string; title: string; slug: string; type: string; status: string;
+  id: string; erpReferenceId: Nullable<string>; sku: string; title: string; slug: string; type: string; status: string; salePausedAt: Nullable<string>;
   categoryId: Nullable<string>; collectionId: Nullable<string>; brand: Nullable<string>; model: Nullable<string>;
   manufacturer: Nullable<string>; countryOfOrigin: Nullable<string>; period: Nullable<string>; materials: Nullable<string>;
   description: Nullable<string>; productStory: Nullable<string>; condition: Nullable<string>; conditionDescription: Nullable<string>;
