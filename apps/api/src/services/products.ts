@@ -22,6 +22,7 @@ import type { ProductReadServiceContext } from "../repositories/product-read/typ
 import { createProductWriteServiceContextForDb } from "../repositories/product-write/factory";
 import { categoryExistsInTransaction, createProductPhotoWithPromotionOutboxInTransaction, listProductPhotosInTransaction } from "../repositories/product-write/drizzle";
 import { createProductWithInventoryUseCase, updateProductWithInventoryUseCase, updateProductPhotoAltUseCase, setPrimaryProductPhotoUseCase, reorderProductPhotosUseCase, deleteProductPhotoMetadataUseCase, archiveProductUseCase } from "../use-cases/product-write/useCases";
+import { assertProductArchiveSafe } from "./productArchiveSafety";
 import { createInventoryApplicationContextForDb } from "./inventoryApplicationContextForDb";
 import { createProductWriteTransactionCapabilityForDb } from "./productWriteTransactionCapabilityForDb";
 import { createProductPhotoMutationLockCapabilityForDb, type ProductPhotoMutationLockDriver } from "./productPhotoMutationLockTransactionCapabilityForDb";
@@ -422,6 +423,7 @@ export async function updateProduct(
 
 /** Archive only — Sprint 2 explicitly forbids permanent deletion. */
 export async function archiveProduct(db: DbClient, id: string): Promise<ProductWithImages> {
+  await assertProductArchiveSafe(db, id);
   await archiveProductUseCase(productWriteUseCaseContext(db), id);
   return getProductById(db, id);
 }
