@@ -45,6 +45,7 @@ async function transitionOffer(db: DbClient, id: string, to: OfferStatus): Promi
   if (offer.status !== OfferStatus.Pending) {
     throw new BadRequestError("Invalid offer status transition");
   }
+  if(to===OfferStatus.Accepted){const[product]=await db.select().from(products).where(eq(products.id,offer.productId));if(!product||product.salePausedAt)throw new BadRequestError("Product is unavailable for sale");}
   await db
     .update(offers)
     .set({ status: to, updatedAt: new Date().toISOString() })
@@ -94,6 +95,7 @@ export async function createOffer(db: DbClient, input: CreateOfferInput): Promis
   if (product.status !== ProductStatus.Published) {
     throw new BadRequestError("Offers can only be made on published products");
   }
+  if(product.salePausedAt)throw new BadRequestError("Product is unavailable for sale");
   if (!product.allowMakeOffer) {
     throw new BadRequestError("This product does not accept offers");
   }

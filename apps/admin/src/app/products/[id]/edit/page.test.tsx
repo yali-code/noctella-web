@@ -14,6 +14,7 @@ import userEvent from "@testing-library/user-event";
 import { ApiError } from "@/lib/api";
 import * as apiLib from "@/lib/api";
 import * as marketplacesLib from "@/lib/marketplaces";
+import{productLifecycleApi}from"@/lib/productLifecycle";import{ProductStatus}from"@noctella/shared";
 import EditProductPage from "./page";
 
 afterEach(() => {
@@ -79,6 +80,7 @@ function baseProduct(overrides: Record<string, unknown> = {}) {
 }
 
 describe("EditProductPage — Sprint 88 version-token ownership", () => {
+  it.each([{before:"2026-01-01T00:00:00.000Z",after:"V2",expected:"V2",conflict:false},{before:"V2",after:"V3",expected:"2026-01-01T00:00:00.000Z",conflict:true}])("keeps Pause token rule for later Save",async({before,after,expected,conflict})=>{const user=userEvent.setup();mockGetForProduct(baseProduct());vi.spyOn(productLifecycleApi,"archiveSafety").mockResolvedValue({canArchive:true});vi.spyOn(productLifecycleApi,"state").mockResolvedValue({productId:"p1",productStatus:ProductStatus.Draft,productUpdatedAt:after,hasActiveExternalListings:false});vi.spyOn(productLifecycleApi,"pause").mockResolvedValue({operation:{id:"o",productId:"p1",action:"pause",status:"succeeded",previousProductStatus:ProductStatus.Draft,targetSnapshot:[],targetResults:[],actorAdminUserId:"a",idempotencyKey:"k",createdAt:"t",updatedAt:"t"},productUpdatedAtBefore:before,productUpdatedAtAfter:after});const put=vi.spyOn(apiLib.api,"put");conflict?put.mockRejectedValue(new ApiError("Conflict",409,undefined,"PRODUCT_VERSION_CONFLICT")):put.mockResolvedValue(baseProduct({updatedAt:after}));render(<EditProductPage params={{id:"p1"}}/>);const title=await screen.findByDisplayValue("Original Title");await user.clear(title);await user.type(title,"Unsaved");await user.click(await screen.findByRole("button",{name:"Pause"}));await user.click(screen.getByRole("button",{name:"Pause Now"}));await user.click(screen.getByRole("button",{name:"Save Changes"}));await waitFor(()=>expect(put).toHaveBeenCalledWith("/api/products/p1",expect.objectContaining({expectedUpdatedAt:expected,title:"Unsaved"})));if(conflict){expect(await screen.findByRole("button",{name:"Reload Latest Product"})).toBeInTheDocument();expect(screen.getByDisplayValue("Unsaved")).toBeInTheDocument();expect(push).not.toHaveBeenCalled()}});
   it("initializes the token from GET, forwards it on PUT, replaces it on success, and a second save uses the new token", async () => {
     const user = userEvent.setup();
     const product = baseProduct();

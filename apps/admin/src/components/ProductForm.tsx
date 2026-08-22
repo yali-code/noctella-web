@@ -22,6 +22,7 @@ import { AiChannelSuggestionsSection } from "./AiChannelSuggestionsSection";
 import { CanonicalProductAiSuggestionsSection } from "./CanonicalProductAiSuggestionsSection";
 import { MarketingTagsSection } from "./MarketingTagsSection";
 import { PublishActions } from "./PublishActions";
+import { ProductLifecycleActions } from "./ProductLifecycleActions";
 
 export interface ProductFormValues {
   sku: string;
@@ -328,6 +329,8 @@ interface ProductFormProps {
    * endpoint's own server-side freshness checks remain sole authority).
    */
   productUpdatedAt?: string;
+  productSalePausedAt?: string;
+  onLifecycleVersionResult?: (before:string,after:string)=>void;
   /**
    * Sprint 145: fired only after a successful inline Marketplace Preparation Approve, with the
    * exact updatedAt the approve endpoint returned. EditProductPage uses this to advance its own
@@ -399,6 +402,8 @@ export function ProductForm({
   onVersionConflictReload,
   productId,
   productUpdatedAt,
+  productSalePausedAt,
+  onLifecycleVersionResult,
   onProductVersionAdvanced,
   onSaveForPublish,
   onPublishComplete,
@@ -414,6 +419,7 @@ export function ProductForm({
   // handleAiSuggestionsApplied below, never by re-reading the productUpdatedAt prop after mount
   // (EditProductPage never re-renders ProductForm with a new prop value while it stays mounted).
   const [currentProductUpdatedAt, setCurrentProductUpdatedAt] = useState(productUpdatedAt);
+  const[salePaused,setSalePaused]=useState(Boolean(productSalePausedAt));
   /**
    * Sprint 146: the last-known-PERSISTED Product form values - distinct from `initialValues` (the
    * fixed original page-open snapshot, no longer used for payload diffing) and from `values` (the
@@ -448,7 +454,9 @@ export function ProductForm({
     setPersistedBaseline((prev) => ({ ...prev, ...channelFields }));
     setCurrentProductUpdatedAt(product.updatedAt);
     onProductVersionAdvanced?.(product.updatedAt);
+    setSalePaused(Boolean(product.salePausedAt));
   }
+  function handleLifecycleVersion(before:string,after:string){setCurrentProductUpdatedAt(current=>current===before?after:current);onLifecycleVersionResult?.(before,after)}
 
   // Sprint 148: bumped after a successful canonical AI Accept that included at least one Marketing
   // Tag - forces MarketingTagsSection's own independent load() to re-run, without coupling
@@ -1210,6 +1218,8 @@ export function ProductForm({
             saveForPublish={saveForPublish}
             onProductRefreshed={applyRefreshedProduct}
             onPublishComplete={onPublishComplete}
+            paused={salePaused}
+            archived={persistedBaseline.status === ProductStatus.Archived}
           />
         </Section>
       )}
@@ -1231,6 +1241,7 @@ export function ProductForm({
       >
         {submitting ? "Saving..." : submitLabel}
       </button>
+      {productId&&<ProductLifecycleActions productId={productId} isDirty={isDirty} salePaused={salePaused} persistedStatus={persistedBaseline.status} onPausedChange={setSalePaused} onVersionResult={handleLifecycleVersion} onCanonicalProduct={applyRefreshedProduct}/>}
     </form>
   );
 }

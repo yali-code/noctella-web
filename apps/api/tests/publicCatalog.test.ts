@@ -1,5 +1,6 @@
 import { ProductStatus, ProductType } from "@noctella/shared";
 import { beforeEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import * as schema from "../src/db/schema";
 import { createCategory } from "../src/services/categories";
 import { createCollection } from "../src/services/collections";
@@ -10,6 +11,7 @@ import {
   listArchiveProducts,
   listPublicCategories,
   listPublicProducts,
+  listRelatedProducts,
 } from "../src/services/publicCatalog";
 import { NotFoundError } from "../src/services/errors";
 import { createTestDb } from "./testDb";
@@ -64,6 +66,8 @@ describe("public catalog service", () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0].id).toBe(published.id);
   });
+
+  it("hides a paused Published Product from list, detail, and related products while preserving internal retrieval",async()=>{const visible=await createProduct(db,baseInput({title:"Visible",status:ProductStatus.Published})),paused=await createProduct(db,baseInput({title:"Paused",status:ProductStatus.Published,categoryId}));expect((await listPublicProducts(db,{page:1,pageSize:20,sort:"newest"})).items.map(p=>p.id)).toEqual(expect.arrayContaining([visible.id,paused.id]));await getPublicProductBySlug(db,paused.slug);await db.update(schema.products).set({salePausedAt:new Date().toISOString()}).where(eq(schema.products.id,paused.id));const listed=await listPublicProducts(db,{page:1,pageSize:20,sort:"newest"});expect(listed.items.map(p=>p.id)).toContain(visible.id);expect(listed.items.map(p=>p.id)).not.toContain(paused.id);await expect(getPublicProductBySlug(db,paused.slug)).rejects.toBeInstanceOf(NotFoundError);expect((await listRelatedProducts(db,visible.id,categoryId,10)).map(p=>p.id)).not.toContain(paused.id);await expect(listProducts(db,{page:1,pageSize:20})).resolves.toMatchObject({items:expect.arrayContaining([expect.objectContaining({id:paused.id})])});});
 
   it("never exposes Draft/PendingReview/Approved/Reserved/Archived/Returned statuses via getPublicProductBySlug", async () => {
     const hiddenStatuses = [

@@ -59,6 +59,7 @@ export const products = sqliteTable("products", {
   slug: text("slug").notNull().unique(),
   type: text("type").notNull(),
   status: text("status").notNull(),
+  salePausedAt: text("sale_paused_at"),
   categoryId: text("category_id"),
   collectionId: text("collection_id"),
 
@@ -573,6 +574,9 @@ export const publishAttempts = sqliteTable("publish_attempts", {
 export const externalListings = sqliteTable("external_listings", {
   id: text("id").primaryKey(), productId: text("product_id").notNull(), channel: text("channel").notNull(), connectionId: text("connection_id").notNull(), externalListingId: text("external_listing_id").notNull(), externalListingUrl: text("external_listing_url"), externalStatus: text("external_status").notNull(), payloadSnapshot: text("payload_snapshot").notNull(), publishedAt: text("published_at").notNull(), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
 }, (table) => [index("idx_external_listings_product").on(table.productId), index("idx_external_listings_channel").on(table.channel), index("idx_external_listings_connection").on(table.connectionId)]);
+export const productLifecycleOperations = sqliteTable("product_lifecycle_operations", {
+  id: text("id").primaryKey(), productId: text("product_id").notNull(), action: text("action").notNull(), status: text("status").notNull(), reason: text("reason"), previousProductStatus: text("previous_product_status").notNull(), targetSnapshot: text("target_snapshot").notNull(), targetResults: text("target_results").notNull(), actorAdminUserId: text("actor_admin_user_id").notNull(), idempotencyKey: text("idempotency_key").notNull().unique(), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(), completedAt: text("completed_at"),
+}, (table) => [index("idx_product_lifecycle_product").on(table.productId), uniqueIndex("idx_product_lifecycle_one_processing").on(table.productId).where(sql`status = 'processing'`)]);
 
 
 export const marketplaceWebhookEvents = sqliteTable("marketplace_webhook_events", {

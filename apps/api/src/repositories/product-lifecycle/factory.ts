@@ -1,0 +1,1 @@
+export { createProductLifecycleRepository } from "./drizzle";
