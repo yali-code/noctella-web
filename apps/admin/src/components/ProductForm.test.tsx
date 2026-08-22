@@ -12,6 +12,8 @@ import * as marketingTagsLib from "@/lib/marketingTags";
 import * as publishingLib from "@/lib/publishing";
 import * as marketplacesLib from "@/lib/marketplaces";
 import * as canonicalProductProposalsLib from "@/lib/canonicalProductProposals";
+import {productLifecycleApi}from"@/lib/productLifecycle";
+import{ProductStatus}from"@noctella/shared";
 import { ProductForm, emptyProductForm, productToFormValues } from "./ProductForm";
 
 afterEach(() => vi.restoreAllMocks());
@@ -62,6 +64,11 @@ function baseProduct(overrides: Record<string, unknown> = {}) {
     ...overrides,
   } as any;
 }
+describe("ProductForm final lifecycle integration",()=>{
+ it("keeps dirty values and disables Publish immediately after Pause even when refresh fails",async()=>{const user=userEvent.setup(),state=vi.spyOn(productLifecycleApi,"state");state.mockResolvedValueOnce({productId:"p1",productStatus:ProductStatus.Draft,productUpdatedAt:"v1",hasActiveExternalListings:false}).mockRejectedValueOnce(new Error("refresh failed"));vi.spyOn(productLifecycleApi,"archiveSafety").mockResolvedValue({canArchive:true});vi.spyOn(productLifecycleApi,"pause").mockResolvedValue({operation:{id:"o",productId:"p1",action:"pause",status:"partially_failed",previousProductStatus:ProductStatus.Draft,targetSnapshot:[],targetResults:[],actorAdminUserId:"a",idempotencyKey:"k",createdAt:"t",updatedAt:"t"},productUpdatedAtBefore:"v1",productUpdatedAtAfter:"v2"});const submit=vi.fn();render(<ProductForm initialValues={baseValues()} submitLabel="Save Changes" onSubmit={submit} productId="p1" productUpdatedAt="v1"/>);const title=screen.getAllByLabelText("Title")[0];await user.clear(title);await user.type(title,"Unsaved");await user.click(await screen.findByRole("button",{name:"Pause"}));await user.click(screen.getByRole("button",{name:"Pause Now"}));expect(await screen.findByRole("button",{name:"Paused"})).toBeDisabled();expect(screen.getByDisplayValue("Unsaved")).toBeInTheDocument();expect(screen.getByRole("button",{name:"Publish Selected"})).toBeDisabled();expect(screen.getByText("This Product is paused. Use Relist to restore its previously active channels.")).toBeInTheDocument();expect(submit).not.toHaveBeenCalled()});
+ it("applies canonical Archived Product to parent-owned persisted state",async()=>{const user=userEvent.setup();vi.spyOn(productLifecycleApi,"state").mockResolvedValue({productId:"p1",productStatus:ProductStatus.Draft,productUpdatedAt:"v1",hasActiveExternalListings:false});vi.spyOn(productLifecycleApi,"archiveSafety").mockResolvedValue({canArchive:true});vi.spyOn(productLifecycleApi,"archive").mockResolvedValue(baseProduct({status:"archived",updatedAt:"v2"}));render(<ProductForm initialValues={baseValues()} submitLabel="Save Changes" onSubmit={vi.fn()} productId="p1" productUpdatedAt="v1"/>);await user.click(await screen.findByRole("button",{name:"Archive"}));await user.click(screen.getAllByRole("button",{name:"Archive"})[0]);expect(await screen.findByRole("button",{name:"Archived"})).toBeDisabled();expect(screen.getByRole("button",{name:"Pause"})).toBeDisabled();expect(screen.getByRole("button",{name:"Relist"})).toBeDisabled();expect(screen.queryByRole("button",{name:/restore|delete/i})).not.toBeInTheDocument()});
+ it("create mode makes no lifecycle reads",()=>{const state=vi.spyOn(productLifecycleApi,"state"),safety=vi.spyOn(productLifecycleApi,"archiveSafety");render(<ProductForm initialValues={emptyProductForm} submitLabel="Create Product" onSubmit={vi.fn()}/>);expect(screen.queryByTestId("product-lifecycle-actions")).not.toBeInTheDocument();expect(state).not.toHaveBeenCalled();expect(safety).not.toHaveBeenCalled()});
+});
 
 describe("Sprint 137: ProductForm with a null priceEur (unpriced Draft/Approved Product)", () => {
   it("productToFormValues does not throw when priceEur is null, and represents it as a blank string", () => {

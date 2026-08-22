@@ -12,7 +12,7 @@ export interface CreateInternalOrderInput { id?:string; orderNumber?:string; ord
   shippingMethodId?:string; expectedShippingAmountEur?:number }
 export type OrderPricingContext = "canonical" | "noctella_web";
 export interface PaidSessionPricing { amount:number; currency:string }
-export interface OrderProductReference { id:string; sku:string; title:string; wooProductName:string|null; slug:string; type:string; priceEur:number; wooListingPriceEur:number|null; stockQuantity:number; status:string; allowCashOnDelivery:boolean; imageUrl?:string; shippingProfile:string|null }
+export interface OrderProductReference { id:string; sku:string; title:string; wooProductName:string|null; slug:string; type:string; priceEur:number; wooListingPriceEur:number|null; stockQuantity:number; status:string; salePausedAt:string|null; allowCashOnDelivery:boolean; imageUrl?:string; shippingProfile:string|null }
 export interface UpdateOrderStatusInput { id:string; status:OrderStatus; expectedVersion?:number }
 export interface UpdateOrderPaymentStatusInput { id:string; paymentStatus:PaymentStatus; expectedVersion?:number }
 export interface CancelOrderInput { id:string; reason?:string; expectedVersion?:number }

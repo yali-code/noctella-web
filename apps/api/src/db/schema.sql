@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS products (
   slug TEXT NOT NULL UNIQUE,
   type TEXT NOT NULL,
   status TEXT NOT NULL,
+  sale_paused_at TEXT,
   category_id TEXT,
   collection_id TEXT,
   brand TEXT,

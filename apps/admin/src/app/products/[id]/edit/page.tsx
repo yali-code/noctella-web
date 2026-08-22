@@ -16,6 +16,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
   // and left unchanged on a PRODUCT_VERSION_CONFLICT (the PUT call below
   // throws before reaching the line that would update it).
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(null);
+  const[salePausedAt,setSalePausedAt]=useState<string|undefined>();
 
   useEffect(() => {
     api
@@ -23,6 +24,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       .then((product) => {
         setInitialValues(productToFormValues(product));
         setExpectedUpdatedAt(product.updatedAt);
+        setSalePausedAt(product.salePausedAt);
       })
       .catch((err) => setError(err.message ?? "Failed to load product"));
   }, [params.id]);
@@ -39,6 +41,8 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         submitLabel="Save Changes"
         productId={params.id}
         productUpdatedAt={expectedUpdatedAt ?? undefined}
+        productSalePausedAt={salePausedAt}
+        onLifecycleVersionResult={(before,after)=>setExpectedUpdatedAt(current=>current===before?after:current)}
         onSubmit={async (payload) => {
           const updated = await api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt });
           setExpectedUpdatedAt(updated.updatedAt);
