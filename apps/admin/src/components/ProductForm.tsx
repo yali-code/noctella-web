@@ -1219,6 +1219,7 @@ export function ProductForm({
             onProductRefreshed={applyRefreshedProduct}
             onPublishComplete={onPublishComplete}
             paused={salePaused}
+            archived={persistedBaseline.status === ProductStatus.Archived}
           />
         </Section>
       )}
