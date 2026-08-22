@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { MarketplaceConnectionStatus, PublishChannel, PublishJobStatus } from "@noctella/shared";
 import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
@@ -11,6 +12,9 @@ import { createOAuthState } from "../src/services/oauthState";
 import { completeConnect, disconnect, endExternalListing, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
 import { buildPublishPayload } from "../src/services/publishing";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
+import * as sqlitePublishingSchema from "../src/db/schema.sqlite";
+import * as postgresPublishingSchema from "../src/db/schema.postgres";
+import { decodePublishingJson, encodePublishingJson, encodePublishingTimestamp, marketplacePublishingSchema, publishingTimestampToIso } from "../src/repositories/marketplace-publishing/schema";
 
 const key = Buffer.alloc(32, 7).toString("base64");
 type TestDb = ReturnType<typeof db>;
@@ -76,6 +80,17 @@ async function product(database: TestDb, id = "p1", overrides: { photo?: false |
 }
 
 beforeEach(() => { process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = key; process.env.MARKETPLACE_OAUTH_STATE_SECRET = "state-secret"; process.env.MARKETPLACE_PUBLISH_MAX_RETRIES = "3"; vi.restoreAllMocks(); });
+
+
+describe("marketplace publishing dialect boundary", () => {
+  it.each(["sqlite", "postgres", "supabase-postgres"] as const)("selects actual %s table objects", (driver) => {
+    const selected=marketplacePublishingSchema(driver), expected=driver==="sqlite"?sqlitePublishingSchema:postgresPublishingSchema;
+    for(const key of ["marketplaceConnections","publishJobs","publishAttempts","externalListings"] as const) expect(selected[key]).toBe(expected[key]);
+  });
+  it("normalizes SQLite text and PostgreSQL native JSON without JSONB string scalars",()=>{const value={title:"Current"};expect(decodePublishingJson(JSON.stringify(value))).toEqual(value);expect(decodePublishingJson(value)).toBe(value);expect(decodePublishingJson(null,undefined)).toBeUndefined();expect(encodePublishingJson("sqlite",value)).toBe(JSON.stringify(value));expect(encodePublishingJson("postgres",value)).toBe(value);expect(encodePublishingJson("supabase-postgres",JSON.stringify(value))).toEqual(value);});
+  it("declares PostgreSQL connection-upsert and listing identity uniqueness",()=>{expect(getTableConfig(postgresPublishingSchema.marketplaceConnections).indexes.map(i=>i.config.name)).toContain("idx_marketplace_connections_channel_account");expect(getTableConfig(postgresPublishingSchema.externalListings).indexes.map(i=>i.config.name)).toContain("idx_external_listings_channel_external");});
+  it("normalizes timestamp reads and driver-correct writes",()=>{const iso="2026-01-02T03:04:05.000Z",date=new Date(iso);expect(publishingTimestampToIso(iso)).toBe(iso);expect(publishingTimestampToIso(date)).toBe(iso);expect(encodePublishingTimestamp("sqlite",date)).toBe(iso);expect(encodePublishingTimestamp("postgres",iso)).toEqual(date);expect(encodePublishingTimestamp("supabase-postgres",iso)).toEqual(date);});
+});
 
 describe("marketplace credential and API security", () => {
   it("encrypts/decrypts, uses different IVs, rejects wrong or missing keys", () => {
