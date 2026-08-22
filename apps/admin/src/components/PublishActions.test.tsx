@@ -43,6 +43,7 @@ function alwaysOkSave(updatedAt = "2026-02-05T00:00:00.000Z") {
 }
 
 describe("PublishActions — channel selection", () => {
+  it("blocks paused publishing without saving or batching",async()=>{const save=alwaysOkSave(),batch=vi.spyOn(marketplacesLib.marketplaceApi,"executePublishBatch");render(<PublishActions productId="p1" isDirty paused currentProductUpdatedAt="v" saveForPublish={save} onProductRefreshed={vi.fn()}/>);await userEvent.click(await screen.findByRole("checkbox",{name:"eBay"}));expect(screen.getByRole("button",{name:"Publish Selected"})).toBeDisabled();expect(save).not.toHaveBeenCalled();expect(batch).not.toHaveBeenCalled()});
   it("renders exactly one checkbox each for eBay, Etsy, and Noctella Web", async () => {
     render(<PublishActions productId="p1" isDirty={false} currentProductUpdatedAt="t" saveForPublish={alwaysOkSave()} onProductRefreshed={vi.fn()} />);
     expect(await screen.findByRole("checkbox", { name: "eBay" })).toBeInTheDocument();

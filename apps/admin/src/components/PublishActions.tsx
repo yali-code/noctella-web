@@ -39,6 +39,7 @@ interface PublishActionsProps {
    * supplies this callback and performs the actual `router.push`.
    */
   onPublishComplete?: () => void;
+  paused?: boolean;
 }
 
 /** Sprint 146: duplicated locally (not imported) from products/[id]/publishing/page.tsx's own unifiedOutcomeText - that file is explicitly required to remain unchanged as a legacy Operations/History surface, and it does not export this helper. */
@@ -56,7 +57,7 @@ function outcomeText(item: UnifiedPublishChannelResult): string {
  * per-channel publish preview/validation read - never a new endpoint, never a second publishing
  * implementation.
  */
-export function PublishActions({ productId, isDirty, currentProductUpdatedAt, saveForPublish, onProductRefreshed, onPublishComplete }: PublishActionsProps) {
+export function PublishActions({ productId, isDirty, currentProductUpdatedAt, saveForPublish, onProductRefreshed, onPublishComplete, paused=false }: PublishActionsProps) {
   const [connections, setConnections] = useState<MarketplaceConnection[]>([]);
   const [previews, setPreviews] = useState<Partial<Record<PublishChannel, PublishPreview>>>({});
   const [selectedChannels, setSelectedChannels] = useState<Set<PublishChannel>>(new Set());
@@ -108,7 +109,7 @@ export function PublishActions({ productId, isDirty, currentProductUpdatedAt, sa
    * exits this function before executePublishBatch is ever called).
    */
   async function handlePublishSelected() {
-    if (selectedChannels.size === 0) return;
+    if (selectedChannels.size === 0||paused) return;
     setPublishing(true);
     setError(null);
     try {
@@ -178,9 +179,10 @@ export function PublishActions({ productId, isDirty, currentProductUpdatedAt, sa
         })}
       </div>
 
-      <button type="button" onClick={handlePublishSelected} disabled={publishing || selectedChannels.size === 0}>
+      <button type="button" onClick={handlePublishSelected} disabled={publishing || selectedChannels.size === 0||paused}>
         {publishing ? "Publishing..." : "Publish Selected"}
       </button>
+      {paused&&<p>This Product is paused. Use Relist to restore its previously active channels.</p>}
 
       <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--noctella-aged-bronze)" }}>
         Manage eBay/Etsy connections on the{" "}
