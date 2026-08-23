@@ -481,7 +481,7 @@ export const marketplaceWebhookEvents = pgTable("marketplace_webhook_events", {
   processedAt: timestamp("processed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (table) => [uniqueIndex("idx_webhook_channel_external").on(table.channel, table.externalEventId)]);
 
 export const marketplaceOrders = pgTable("marketplace_orders", {
   id: text("id").primaryKey().notNull(),
@@ -509,7 +509,7 @@ export const marketplaceOrders = pgTable("marketplace_orders", {
   orderedAt: timestamp("ordered_at", { withTimezone: true }).notNull(),
   importedAt: timestamp("imported_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (table) => [uniqueIndex("idx_marketplace_orders_channel_external").on(table.channel, table.externalOrderId)]);
 
 export const marketplaceOrderItems = pgTable("marketplace_order_items", {
   id: text("id").primaryKey().notNull(),
@@ -518,7 +518,7 @@ export const marketplaceOrderItems = pgTable("marketplace_order_items", {
   externalListingId: text("external_listing_id"),
   productId: text("product_id"),
   sku: text("sku"),
-  titleSnapshot: jsonb("title_snapshot").notNull(),
+  titleSnapshot: text("title_snapshot").notNull(),
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 18, scale: 6 }).notNull(),
   lineTotal: numeric("line_total", { precision: 18, scale: 6 }).notNull(),

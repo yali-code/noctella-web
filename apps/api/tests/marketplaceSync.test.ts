@@ -13,6 +13,9 @@ import { getMarketplaceOrder, importMarketplaceOrder, listSyncRuns, listWebhookE
 import { EbayAdapter, EtsyAdapter } from "../src/services/marketplaceAdapters";
 import type { MarketplaceAdapter, NormalizedMarketplaceOrder } from "../src/services/marketplaceAdapters";
 import { BadRequestError } from "../src/services/errors";
+import * as sqliteMarketplaceSchema from "../src/db/schema.sqlite";
+import * as postgresMarketplaceSchema from "../src/db/schema.postgres";
+import { decodeMarketplaceJson, encodeMarketplaceJson, encodeMarketplaceTimestamp, encodeMarketplaceValues, marketplaceSyncSchema, marketplaceTimestampToIso, normalizeMarketplaceRow } from "../src/repositories/marketplace-sync/schema";
 
 const key = Buffer.alloc(32, 9).toString("base64");
 type TestDb = ReturnType<typeof db>;
@@ -32,6 +35,34 @@ describe("marketplace sync database consistency", () => {
     for (const table of ["marketplace_webhook_events","marketplace_orders","marketplace_order_items","marketplace_sync_runs"]) { expect(clean.prepare(`PRAGMA table_info(${table})`).all().length).toBeGreaterThan(0); expect(upgraded.prepare(`PRAGMA table_info(${table})`).all().length).toBe(clean.prepare(`PRAGMA table_info(${table})`).all().length); }
     expect(clean.prepare("PRAGMA index_list(marketplace_webhook_events)").all()).toEqual(expect.arrayContaining([expect.objectContaining({ name:"idx_webhook_channel_external", unique:1 })]));
     expect(clean.prepare("PRAGMA index_list(marketplace_orders)").all()).toEqual(expect.arrayContaining([expect.objectContaining({ name:"idx_marketplace_orders_channel_external", unique:1 })]));
+  });
+});
+
+describe("Sprint 150 marketplace sync dialect parity", () => {
+  it.each(["sqlite", "postgres", "supabase-postgres"] as const)("selects actual %s marketplace table objects", (driver) => {
+    const selected = marketplaceSyncSchema(driver);
+    const expected = driver === "sqlite" ? sqliteMarketplaceSchema : postgresMarketplaceSchema;
+    for (const name of ["marketplaceConnections", "externalListings", "marketplaceWebhookEvents", "marketplaceOrders", "marketplaceOrderItems", "marketplaceSyncRuns", "marketplaceImportAttempts", "products"] as const)
+      expect(selected[name]).toBe(expected[name]);
+  });
+
+  it("uses serialized SQLite JSON and native PostgreSQL JSONB values", () => {
+    const value = { ok: true };
+    expect(encodeMarketplaceJson("sqlite", value)).toBe(JSON.stringify(value));
+    expect(encodeMarketplaceJson("postgres", value)).toBe(value);
+    expect(encodeMarketplaceJson("supabase-postgres", JSON.stringify(value))).toEqual(value);
+    expect(decodeMarketplaceJson(JSON.stringify(value))).toEqual(value);
+    expect(decodeMarketplaceJson(value)).toBe(value);
+  });
+
+  it("uses ISO SQLite timestamps, Date PostgreSQL timestamps, and normalizes database reads", () => {
+    const iso = "2026-01-02T03:04:05.000Z", date = new Date(iso);
+    expect(encodeMarketplaceTimestamp("sqlite", date)).toBe(iso);
+    expect(encodeMarketplaceTimestamp("postgres", iso)).toEqual(date);
+    expect(encodeMarketplaceTimestamp("supabase-postgres", iso)).toEqual(date);
+    expect(marketplaceTimestampToIso(date)).toBe(iso);
+    expect(normalizeMarketplaceRow({ orderedAt: date, subtotal: "10.50", retryable: 1 })).toEqual({ orderedAt: iso, subtotal: 10.5, retryable: true });
+    expect(encodeMarketplaceValues("postgres", { signatureValid: true, retryable: false })).toEqual({ signatureValid: 1, retryable: 0 });
   });
 });
 
