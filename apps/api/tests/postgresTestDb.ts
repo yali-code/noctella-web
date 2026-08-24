@@ -27,16 +27,27 @@ function migrationFiles(through: string) {
   return files.map((file) => ({ file, sql: fs.readFileSync(path.join(directory, file), "utf8") }));
 }
 
-export async function applyPostgresMigrations(client: pg.PoolClient, through = "0021_sprint150_marketplace_sync_parity.sql") {
+export async function applyPostgresMigrations(client: pg.PoolClient, schemaName: string, through = "0021_sprint150_marketplace_sync_parity.sql") {
   const applied: string[] = [];
+  let currentMigration: string | undefined;
   await client.query("BEGIN");
   try {
-    for (const migration of migrationFiles(through)) { await client.query(migration.sql); applied.push(migration.file); }
+    await client.query("SELECT set_config('search_path', $1, true)", [schemaName]);
+    const effective = await client.query<{ currentSchema: string | null }>("SELECT current_schema() AS \"currentSchema\"");
+    if (effective.rows[0]?.currentSchema !== schemaName) throw new Error("POSTGRES_TEST_SCHEMA_TARGET_MISMATCH");
+    for (const migration of migrationFiles(through)) { currentMigration = migration.file; await client.query(migration.sql); applied.push(migration.file); }
     await client.query("COMMIT");
     return applied;
   } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+    try { await client.query("ROLLBACK"); } catch { /* preserve the original failure */ }
+    if (!currentMigration) throw error;
+    const failure = new Error(`POSTGRES_MIGRATION_FAILED:${currentMigration}`, { cause: error });
+    if (error && typeof error === "object") {
+      for (const key of ["code", "detail", "hint", "position", "schema", "table", "constraint"] as const) {
+        if (key in error) (failure as unknown as Record<string, unknown>)[key] = (error as Record<string, unknown>)[key];
+      }
+    }
+    throw failure;
   }
 }
 
@@ -56,11 +67,11 @@ export async function createPostgresTestDb(through = "0021_sprint150_marketplace
   await admin.end();
   const pool = new pg.Pool({ connectionString, max: 4, options: `-c search_path=${schemaName}` });
   const client = await pool.connect();
-  try { await applyPostgresMigrations(client, through); } catch (error) { client.release(); await pool.end(); const cleanup = new pg.Pool({ connectionString, max: 1 }); await cleanup.query(`DROP SCHEMA "${schemaName}" CASCADE`); await cleanup.end(); throw error; }
+  try { await applyPostgresMigrations(client, schemaName, through); } catch (error) { client.release(); await pool.end(); const cleanup = new pg.Pool({ connectionString, max: 1 }); await cleanup.query(`DROP SCHEMA "${schemaName}" CASCADE`); await cleanup.end(); throw error; }
   client.release();
   return {
     db: drizzle(pool, { schema }), pool, schemaName,
-    async migrateAgain() { const next = await pool.connect(); try { return await applyPostgresMigrations(next, through); } finally { next.release(); } },
+    async migrateAgain() { const next = await pool.connect(); try { return await applyPostgresMigrations(next, schemaName, through); } finally { next.release(); } },
     async close() { await pool.end(); const cleanup = new pg.Pool({ connectionString, max: 1 }); try { await cleanup.query(`DROP SCHEMA "${schemaName}" CASCADE`); } finally { await cleanup.end(); } },
   };
 }
