@@ -628,6 +628,28 @@ CREATE TABLE IF NOT EXISTS warehouse_events (
   id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_warehouse_events_sprint24_pk ON warehouse_events(id);
-ALTER TABLE order_items ADD CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id);
-ALTER TABLE product_photos ADD CONSTRAINT fk_product_photos_product FOREIGN KEY (product_id) REFERENCES products(id);
-ALTER TABLE stock_movements ADD CONSTRAINT fk_stock_movements_product FOREIGN KEY (product_id) REFERENCES products(id);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fk_order_items_order'
+      AND conrelid = 'order_items'::regclass
+  ) THEN
+    ALTER TABLE order_items ADD CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fk_product_photos_product'
+      AND conrelid = 'product_photos'::regclass
+  ) THEN
+    ALTER TABLE product_photos ADD CONSTRAINT fk_product_photos_product FOREIGN KEY (product_id) REFERENCES products(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fk_stock_movements_product'
+      AND conrelid = 'stock_movements'::regclass
+  ) THEN
+    ALTER TABLE stock_movements ADD CONSTRAINT fk_stock_movements_product FOREIGN KEY (product_id) REFERENCES products(id);
+  END IF;
+END $$;
