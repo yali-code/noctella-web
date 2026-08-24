@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id text PRIMARY KEY,
   order_id text ,
   provider text NOT NULL,
+  provider_reference text ,
   status text NOT NULL,
   amount numeric(18,6) NOT NULL,
   currency text NOT NULL DEFAULT 'EUR',
@@ -224,6 +225,8 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_payments_sprint24_pk ON payments(id);
+CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_unique ON payments(order_id) WHERE order_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS stock_movements (
   id text PRIMARY KEY,
   product_id text NOT NULL,
