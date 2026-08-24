@@ -466,7 +466,6 @@ CREATE INDEX IF NOT EXISTS idx_erp_command_executions_sprint24_pk ON erp_command
 CREATE TABLE IF NOT EXISTS product_erp_metadata (
   product_id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_product_erp_metadata_sprint24_pk ON product_erp_metadata(id);
 CREATE TABLE IF NOT EXISTS suppliers (
   id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
