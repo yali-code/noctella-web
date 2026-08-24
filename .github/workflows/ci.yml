@@ -9,6 +9,20 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_sprint151_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_sprint151_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       # Sprint 73: the Storefront's next build evaluates root layout metadata (which reads
       # STOREFRONT_SITE_URL) under Next's internally-forced NODE_ENV=production during the
@@ -36,6 +50,11 @@ jobs:
 
       - name: Test
         run: npm test --workspaces --if-present
+
+      - name: Real PostgreSQL integration tests
+        run: npm run test:postgres -w apps/api
+        env:
+          POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_sprint151_test
 
       - name: Build
         run: npm run build --workspaces --if-present
