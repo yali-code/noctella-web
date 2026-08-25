@@ -27,7 +27,7 @@ function migrationFiles(through: string) {
   return files.map((file) => ({ file, sql: fs.readFileSync(path.join(directory, file), "utf8") }));
 }
 
-export async function applyPostgresMigrations(client: pg.PoolClient, schemaName: string, through = "0022_sprint151_orders_offer_id_parity.sql") {
+export async function applyPostgresMigrations(client: pg.PoolClient, schemaName: string, through = "0023_sprint151_orders_shipping_snapshot_parity.sql") {
   const applied: string[] = [];
   let currentMigration: string | undefined;
   await client.query("BEGIN");
@@ -59,7 +59,7 @@ export interface PostgresTestDb {
   close(): Promise<void>;
 }
 
-export async function createPostgresTestDb(through = "0022_sprint151_orders_offer_id_parity.sql"): Promise<PostgresTestDb> {
+export async function createPostgresTestDb(through = "0023_sprint151_orders_shipping_snapshot_parity.sql"): Promise<PostgresTestDb> {
   const connectionString = assertDisposablePostgresUrl(process.env.POSTGRES_TEST_DATABASE_URL);
   const schemaName = `sprint151_test_${crypto.randomBytes(8).toString("hex")}`;
   const admin = new pg.Pool({ connectionString, max: 1 });
