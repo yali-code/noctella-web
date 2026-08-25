@@ -270,6 +270,12 @@ export function findProductPhotosByIdsInTransaction(
 export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres", execution: Execution = "asynchronous"): any {
   const products = table(schema, "products"), productErpMetadata = table(schema, "productErpMetadata"), categories = table(schema, "categories"), collections = table(schema, "collections"), productPhotos = table(schema, "productPhotos");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v === undefined ? null : v]));
+  const productTimestamp = (value: unknown) => dialect === "postgres" && typeof value === "string" ? new Date(value) : value;
+  const normalizeProductValues = (values: Record<string, unknown>) => normalize({
+    ...values,
+    ...(values.createdAt !== undefined ? { createdAt: productTimestamp(values.createdAt) } : {}),
+    ...(values.updatedAt !== undefined ? { updatedAt: productTimestamp(values.updatedAt) } : {}),
+  });
   const exists = (tbl: any, col: any, value: string, excludeId?: string, idCol = tbl.id) => then(rows(db.select({ id: idCol }).from(tbl).where(eq(col, value)), execution), values => values.some((r: any) => r.id !== excludeId));
   const productRepository: SynchronousProductWriteRepository = {
       /**
@@ -285,7 +291,7 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
        */
       create({ values }) {
         try {
-          const result = run(db.insert(products).values(normalize(values)), execution);
+          const result = run(db.insert(products).values(normalizeProductValues(values)), execution);
           if (result instanceof Promise) {
             return result.then(
               () => ({ id: String(values.id), created: true }),
@@ -301,7 +307,7 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
           throw err;
         }
       },
-      update({ id, values }) { return then(run(db.update(products).set(normalize(values)).where(eq(products.id, id)), execution), () => ({ id, updated: true })) as any; },
+      update({ id, values }) { return then(run(db.update(products).set(normalizeProductValues(values)).where(eq(products.id, id)), execution), () => ({ id, updated: true })) as any; },
       existsBySku: (sku, excludeId) => exists(products, products.sku, sku, excludeId) as any,
       existsByErpReference: (erpReferenceId, excludeId) => exists(products, products.erpReferenceId, erpReferenceId, excludeId) as any,
       existsByNoctellaId(noctellaId, excludeProductId) { return exists(productErpMetadata, productErpMetadata.noctellaId, noctellaId, excludeProductId, productErpMetadata.productId) as any; },
@@ -316,7 +322,7 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
        * below only runs after a failed update, to report which of the two
        * failure reasons occurred and the actual current token.
        */
-      updateWithExpectedVersion({ id, values, expectedUpdatedAt }) { return then(rows(db.update(products).set(normalize(values)).where(and(eq(products.id, id), eq(products.updatedAt, expectedUpdatedAt))).returning(), execution), (changed: any[]) => { if (changed.length) return { id, updated: true }; return then(this.getVersionForUpdate(id), (current: string | null) => { if (!current) return { id, updated: false, conflict: { field: "id", value: id, message: "Product not found" } }; return { id, updated: false, conflict: { field: "updatedAt", value: expectedUpdatedAt, currentValue: current, message: "Product has changed since expectedUpdatedAt" } }; }); }) as any; },
+      updateWithExpectedVersion({ id, values, expectedUpdatedAt }) { return then(rows(db.update(products).set(normalizeProductValues(values)).where(and(eq(products.id, id), eq(products.updatedAt, productTimestamp(expectedUpdatedAt)))).returning(), execution), (changed: any[]) => { if (changed.length) return { id, updated: true }; return then(this.getVersionForUpdate(id), (current: string | null) => { if (!current) return { id, updated: false, conflict: { field: "id", value: id, message: "Product not found" } }; return { id, updated: false, conflict: { field: "updatedAt", value: expectedUpdatedAt, currentValue: current, message: "Product has changed since expectedUpdatedAt" } }; }); }) as any; },
       createErpMetadata(record) { return then(run(db.insert(productErpMetadata).values(normalize(record)), execution), () => undefined); },
       updateErpMetadata(productId, values) { return then(run(db.update(productErpMetadata).set(normalize(values)).where(eq(productErpMetadata.productId, productId)), execution), () => undefined); },
       getErpMetadataForUpdate(productId) { return then(first(db.select().from(productErpMetadata).where(eq(productErpMetadata.productId, productId)), execution), row => row ?? null); },
