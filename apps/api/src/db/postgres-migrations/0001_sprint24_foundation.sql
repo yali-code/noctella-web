@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id text PRIMARY KEY,
   order_id text ,
   provider text NOT NULL,
+  provider_reference text ,
   status text NOT NULL,
   amount numeric(18,6) NOT NULL,
   currency text NOT NULL DEFAULT 'EUR',
@@ -224,6 +225,8 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_payments_sprint24_pk ON payments(id);
+CREATE INDEX IF NOT EXISTS idx_payments_provider_reference ON payments(provider, provider_reference);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order_unique ON payments(order_id) WHERE order_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS stock_movements (
   id text PRIMARY KEY,
   product_id text NOT NULL,
@@ -420,17 +423,67 @@ CREATE TABLE IF NOT EXISTS sale_financials (
 );
 CREATE INDEX IF NOT EXISTS idx_sale_financials_sprint24_pk ON sale_financials(id);
 CREATE TABLE IF NOT EXISTS return_requests (
-  id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
+  id text PRIMARY KEY,
+  order_id text NOT NULL,
+  marketplace_order_id text,
+  shipment_id text,
+  channel text,
+  external_return_id text,
+  external_return_number text,
+  status text NOT NULL,
+  reason text NOT NULL,
+  reason_details text,
+  requested_resolution text NOT NULL,
+  approved_resolution text,
+  buyer_message text,
+  internal_note text,
+  requested_at timestamptz NOT NULL,
+  authorized_at timestamptz,
+  received_at timestamptz,
+  inspected_at timestamptz,
+  completed_at timestamptz,
+  cancelled_at timestamptz,
+  return_carrier_code text,
+  return_tracking_number text,
+  return_tracking_url text,
+  buyer_shipped_at timestamptz,
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_return_requests_sprint24_pk ON return_requests(id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_order ON return_requests(order_id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_status ON return_requests(status);
+CREATE INDEX IF NOT EXISTS idx_return_requests_channel ON return_requests(channel);
+CREATE INDEX IF NOT EXISTS idx_return_requests_external ON return_requests(channel, external_return_id);
+CREATE INDEX IF NOT EXISTS idx_return_requests_dates ON return_requests(requested_at, completed_at);
 CREATE TABLE IF NOT EXISTS return_items (
-  id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
+  id text PRIMARY KEY,
+  return_request_id text NOT NULL,
+  order_item_id text NOT NULL,
+  product_id text,
+  quantity_requested integer NOT NULL,
+  quantity_approved integer,
+  quantity_received integer,
+  condition text,
+  stock_disposition text,
+  inspection_note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_return_items_sprint24_pk ON return_items(id);
+CREATE INDEX IF NOT EXISTS idx_return_items_request ON return_items(return_request_id);
+CREATE INDEX IF NOT EXISTS idx_return_items_order_item ON return_items(order_item_id);
 CREATE TABLE IF NOT EXISTS return_events (
-  id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
+  id text PRIMARY KEY,
+  return_request_id text NOT NULL,
+  event_type text NOT NULL,
+  previous_status text,
+  new_status text,
+  payload_snapshot jsonb,
+  error_code text,
+  error_message text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_return_events_sprint24_pk ON return_events(id);
+CREATE INDEX IF NOT EXISTS idx_return_events_request ON return_events(return_request_id, created_at);
 CREATE TABLE IF NOT EXISTS refunds (
   id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
@@ -466,7 +519,6 @@ CREATE INDEX IF NOT EXISTS idx_erp_command_executions_sprint24_pk ON erp_command
 CREATE TABLE IF NOT EXISTS product_erp_metadata (
   product_id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_product_erp_metadata_sprint24_pk ON product_erp_metadata(id);
 CREATE TABLE IF NOT EXISTS suppliers (
   id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
@@ -576,6 +628,28 @@ CREATE TABLE IF NOT EXISTS warehouse_events (
   id timestamptz PRIMARY KEY NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_warehouse_events_sprint24_pk ON warehouse_events(id);
-ALTER TABLE order_items ADD CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id);
-ALTER TABLE product_photos ADD CONSTRAINT fk_product_photos_product FOREIGN KEY (product_id) REFERENCES products(id);
-ALTER TABLE stock_movements ADD CONSTRAINT fk_stock_movements_product FOREIGN KEY (product_id) REFERENCES products(id);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fk_order_items_order'
+      AND conrelid = 'order_items'::regclass
+  ) THEN
+    ALTER TABLE order_items ADD CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fk_product_photos_product'
+      AND conrelid = 'product_photos'::regclass
+  ) THEN
+    ALTER TABLE product_photos ADD CONSTRAINT fk_product_photos_product FOREIGN KEY (product_id) REFERENCES products(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fk_stock_movements_product'
+      AND conrelid = 'stock_movements'::regclass
+  ) THEN
+    ALTER TABLE stock_movements ADD CONSTRAINT fk_stock_movements_product FOREIGN KEY (product_id) REFERENCES products(id);
+  END IF;
+END $$;

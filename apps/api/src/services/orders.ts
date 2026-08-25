@@ -1,6 +1,7 @@
 import { OrderStatus, PaymentStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { SqliteUnitOfWork } from "./unitOfWork";
+import { PostgresUnitOfWork, SqliteUnitOfWork } from "./unitOfWork";
+import { getDatabaseConfig } from "../db/config";
 import { enqueueProductStockSync } from "./stockSync";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { findPaymentByProviderReference, linkPaymentToOrder } from "../payments/paymentRepository";
@@ -12,7 +13,8 @@ import { dispatchDueSalesInvoiceOutboxEvents, enqueueSalesInvoiceDraftForPaidOrd
 import type { OrderPricingContext } from "../repositories/order/types";
 
 export interface OrderWithItems { id:string; orderNumber:string; items:unknown[]; [key:string]:unknown }
-function uow(db:DbClient){ return new SqliteUnitOfWork(db); }
+function orderDriver(){ return getDatabaseConfig().driver; }
+function uow(db:DbClient){ const driver=orderDriver(); return driver==="sqlite"?new SqliteUnitOfWork(db):new PostgresUnitOfWork(db as any,driver); }
 const sync=(db:DbClient)=>({ enqueue:(productId:string,key:string)=>enqueueProductStockSync(db,productId,key).then(()=>undefined) });
 /**
  * Sprint 79 correction: the real (invoice-domain-aware) implementation of the generic
@@ -54,7 +56,7 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
   }
 
   const outbox = options.enqueueInvoiceDraft===false ? undefined : paidOrderOutbox;
-  const result = await createInternalOrderUseCase(uow(db),sync(db),undefined,undefined,"sqlite",outbox,pricingContext,{ amount:session.amount, currency:session.currency }).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
+  const result = await createInternalOrderUseCase(uow(db),sync(db),undefined,undefined,orderDriver(),outbox,pricingContext,{ amount:session.amount, currency:session.currency }).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
 
   await linkPaymentToOrder(db, session.id, result.id).catch(()=>undefined);
   // Sprint 79: the durable outbox event (enqueued above, inside the same transaction as the order

@@ -36,6 +36,7 @@ export interface InternalOrderTransactionResult {
   order: OrderDetailProjection;
   affectedProductIds: string[];
 }
+const continueWith = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>): U | Promise<U> => value instanceof Promise ? value.then(next) : next(value);
 
 /**
  * Canonical order finalization inside an already-open transaction. It returns synchronously for
@@ -48,14 +49,9 @@ export function finalizeInternalOrderInTransaction(
 ): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> {
   const { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, codPending, orderId, idempotencyKey: idem } = context;
   const inventoryRepositories = createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite");
-  const existing = repositories.order.orders.write.findByIdempotencyKey(idem) as any;
-  if (existing?.id) {
-    return {
-      order: repositories.order.orders.read.getOrderDetailProjection(existing.id) as any,
-      affectedProductIds: [],
-    };
-  }
-  const products = repositories.order.orderItems.write.validateProductReferences(input.items.map((i) => i.productId)) as unknown as any[];
+  return continueWith(repositories.order.orders.write.findByIdempotencyKey(idem), (existing: any) => {
+  if (existing?.id) return continueWith(repositories.order.orders.read.getOrderDetailProjection(existing.id), (order: any) => ({ order, affectedProductIds: [] }));
+  return continueWith(repositories.order.orderItems.write.validateProductReferences(input.items.map((i) => i.productId)), (products: any[]) => {
   if (products.length !== input.items.length) throw new NotFoundError("Product not found");
   if (codPending && products.some((product) => product.allowCashOnDelivery !== true)) throw new BadRequestError("Cash on Delivery is not available for all products");
   const now = c.now().toISOString();
@@ -107,14 +103,13 @@ export function finalizeInternalOrderInTransaction(
     shippingMethodId = resolution.shippingMethodId ?? undefined;
     shippingMethodLabel = resolution.shippingMethodLabel ?? undefined;
   }
-  repositories.order.orders.write.create({ id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount, taxAmount: 0, totalAmount: subtotal + shippingAmount, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, shippingMethodId, shippingMethodLabel, createdAt: now, updatedAt: now, idempotencyKey: idem });
-  repositories.order.orderItems.write.createMany(itemRows);
   const affectedProductIds: string[] = [];
-  const complete = (): InternalOrderTransactionResult => {
+  const complete = (): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> => {
     outbox?.enqueue(repositories.db, orderId);
-    const order = repositories.order.orders.read.getOrderDetailProjection(orderId) as any;
-    if (!order) throw new NotFoundError("Order not found");
-    return { order, affectedProductIds };
+    return continueWith(repositories.order.orders.read.getOrderDetailProjection(orderId), (order: any) => {
+      if (!order) throw new NotFoundError("Order not found");
+      return { order, affectedProductIds };
+    });
   };
   const mutate = (index: number): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> => {
     if (index >= itemRows.length) return complete();
@@ -124,7 +119,10 @@ export function finalizeInternalOrderInTransaction(
       ? result.then(() => { affectedProductIds.push(row.productId); return mutate(index + 1); })
       : ((affectedProductIds.push(row.productId)), mutate(index + 1));
   };
-  return mutate(0);
+  const orderRecord = { id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount, taxAmount: 0, totalAmount: subtotal + shippingAmount, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, shippingMethodId, shippingMethodLabel, createdAt: now, updatedAt: now, idempotencyKey: idem };
+  return continueWith(repositories.order.orders.write.create(orderRecord as any), () => continueWith(repositories.order.orderItems.write.createMany(itemRows), () => mutate(0)));
+  });
+  });
 }
 
 export function createInternalOrderUseCase(

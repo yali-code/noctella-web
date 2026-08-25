@@ -36,6 +36,44 @@ describe("Sprint 27 executable SQLite Product write repositories", () => {
 
 describe("Sprint 27 executable PostgreSQL dialect write repositories", () => { for (const name of ["Product create","Product update","uniqueness lookup","optimistic concurrency","ERP metadata write","Category create/update","Collection create/update","Photo create","alt update","set primary","reorder","delete/promote","processing state","transaction commit","transaction rollback","timestamp mapping","numeric/JSONB/null mapping","parameter binding","no SQLite client/syntax"]) test(name, async()=>{ const db=await seeded(); const r=createDrizzleProductWriteRepositories(db, postgresSchema, "postgres"); expect(r).toBeTruthy(); expect(read("src/repositories/product-write/drizzle.ts")).not.toContain("better-sqlite3"); }); });
 
+describe("Sprint 151 PostgreSQL Product timestamp driver boundary", () => {
+  const iso = "2026-08-25T12:34:56.789Z";
+  function captureDb(returning = false) {
+    let values: Record<string, unknown> | undefined;
+    let condition: unknown;
+    const db = { update: () => ({ set: (next: Record<string, unknown>) => { values = next; return { where: (where: unknown) => { condition = where; return returning ? { returning: () => Promise.resolve([{ id: "p" }]) } : Promise.resolve(); } }; } }) };
+    return { db, values: () => values, condition: () => condition };
+  }
+  function conditionValues(value: unknown, seen = new WeakSet<object>()): unknown[] {
+    if (!value || typeof value !== "object" || value instanceof Date || seen.has(value)) return [];
+    seen.add(value);
+    const record = value as Record<string, unknown>;
+    return Object.values(record).flatMap((entry) => Array.isArray(entry) ? entry.flatMap((item) => [item, ...conditionValues(item, seen)]) : [entry, ...conditionValues(entry, seen)]);
+  }
+
+  test("products.update converts an ISO updatedAt write to Date for PostgreSQL", async () => {
+    const captured = captureDb();
+    const repository = createDrizzleProductWriteRepositories(captured.db as any, postgresSchema, "postgres");
+    await repository.products.update({ id: "p", values: { updatedAt: iso } });
+    expect(captured.values()?.updatedAt).toEqual(new Date(iso));
+  });
+
+  test("products.updateWithExpectedVersion converts write and comparison timestamps to Date for PostgreSQL", async () => {
+    const captured = captureDb(true);
+    const repository = createDrizzleProductWriteRepositories(captured.db as any, postgresSchema, "postgres");
+    await repository.products.updateWithExpectedVersion({ id: "p", values: { updatedAt: iso }, expectedUpdatedAt: iso });
+    expect(captured.values()?.updatedAt).toEqual(new Date(iso));
+    expect(conditionValues(captured.condition()).some((value) => value instanceof Date && value.getTime() === Date.parse(iso))).toBe(true);
+  });
+
+  test("SQLite products.update preserves the established ISO string representation", async () => {
+    const db = await seeded();
+    const repository = createDrizzleProductWriteRepositories(db, sqliteSchema, "sqlite");
+    await repository.products.update({ id: "p", values: { updatedAt: iso } });
+    expect(await repository.products.getVersionForUpdate("p")).toBe(iso);
+  });
+});
+
 describe("Sprint 27 actual use case/service migration", () => { for (const name of ["minimal product creation","marketplace fields optional","duplicate SKU","duplicate ERP reference","create rollback","update","stale update conflict","category create/update","collection create/update","photo alt","primary","reorder","invalid reorder rollback","delete primary/promote","no stock mutation","no marketplace call","no filesystem inside DB transaction","ERP create/update path","repository calls verified","response shape unchanged"]) test(name, async()=>{ const source = read("src/services/products.ts") + read("src/services/categories.ts") + read("src/services/collections.ts") + read("src/services/erpInventoryBridge.ts"); expect(source).toMatch(/UseCase|createProduct\(|updateProduct\(/); }); });
 
 describe("Sprint 27 audit and route verification", () => { for (const name of ["direct DB import in use case rejected","schema import in use case rejected","driver import rejected","raw SQL rejected","filesystem Sharp network UOW rejected","deprecated transaction rejected","route product create","route product update","route category collection","route photo metadata"]) test(name,()=>{ expect(read("src/use-cases/product-write/useCases.ts")).not.toMatch(/schema|sharp|fetch\(|db\.select|sql`/); }); });
