@@ -51,7 +51,7 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
       expect(defaults.created_at).toMatch(/^now\(\)$/i);
       expect(defaults.updated_at).toMatch(/^now\(\)$/i);
 
-      const primaryKey = await h.pool.query<{ columns: string[] }>(`SELECT array_agg(a.attname ORDER BY key.ordinality) AS columns
+      const primaryKey = await h.pool.query<{ columns: string[] }>(`SELECT json_agg(a.attname::text ORDER BY key.ordinality) AS columns
         FROM pg_constraint c
         JOIN pg_class t ON t.oid = c.conrelid
         JOIN pg_namespace n ON n.oid = t.relnamespace
@@ -61,7 +61,7 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
         GROUP BY c.oid`);
       expect(primaryKey.rows).toEqual([{ columns: ["id"] }]);
 
-      const indexes = await h.pool.query<{ index_name: string; is_unique: boolean; columns: string[] }>(`SELECT i.relname AS index_name, ix.indisunique AS is_unique, array_agg(a.attname ORDER BY key.ordinality) AS columns
+      const indexes = await h.pool.query<{ index_name: string; is_unique: boolean; columns: string[] }>(`SELECT i.relname AS index_name, ix.indisunique AS is_unique, json_agg(a.attname::text ORDER BY key.ordinality) AS columns
         FROM pg_class t
         JOIN pg_namespace n ON n.oid = t.relnamespace
         JOIN pg_index ix ON ix.indrelid = t.oid
@@ -87,9 +87,18 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
     try {
       await h.pool.query("INSERT INTO background_jobs DEFAULT VALUES");
       const client = await h.pool.connect();
-      try { await expect(applyPostgresMigrations(client, h.schemaName, migration)).rejects.toThrow(/BACKGROUND_JOBS_INCOMPLETE_LEGACY_ROWS_REQUIRE_MANUAL_RECONCILIATION/); } finally { client.release(); }
+      let failure: unknown;
+      try { await applyPostgresMigrations(client, h.schemaName, migration); } catch (error) { failure = error; } finally { client.release(); }
+      expect(failure).toBeInstanceOf(Error);
+      const wrapped = failure as Error & { cause?: { message?: string; code?: string } };
+      expect(wrapped.message).toBe(`POSTGRES_MIGRATION_FAILED:${migration}`);
+      expect(wrapped.cause?.message).toMatch(/BACKGROUND_JOBS_INCOMPLETE_LEGACY_ROWS_REQUIRE_MANUAL_RECONCILIATION/);
+      expect(wrapped.cause?.code).toBe("P0001");
       expect((await h.pool.query("SELECT count(*)::int AS count FROM background_jobs")).rows[0].count).toBe(1);
-      expect((await h.pool.query("SELECT data_type FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='background_jobs' AND column_name='id'")).rows[0].data_type).toBe("timestamp with time zone");
+      const columns = await h.pool.query<{ column_name: string; data_type: string; column_default: string | null }>("SELECT column_name,data_type,column_default FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='background_jobs' ORDER BY ordinal_position");
+      expect(columns.rows.map((row) => row.column_name)).toEqual(["id"]);
+      expect(columns.rows[0]?.data_type).toBe("timestamp with time zone");
+      expect(columns.rows[0]?.column_default).toMatch(/^now\(\)$/i);
     } finally { await h.close(); }
   });
 
