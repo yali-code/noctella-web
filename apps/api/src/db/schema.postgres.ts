@@ -552,8 +552,32 @@ export const marketplaceImportAttempts = pgTable("marketplace_import_attempts", 
 });
 
 export const backgroundJobs = pgTable("background_jobs", {
-  id: integer("id").primaryKey().notNull().default(sql`now()`),
-});
+  id: text("id").primaryKey().notNull(),
+  type: text("type").notNull(),
+  status: text("status").notNull(),
+  channel: text("channel"),
+  productId: text("product_id"),
+  externalListingId: text("external_listing_id"),
+  payloadSnapshot: jsonb("payload_snapshot").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  priority: integer("priority").notNull().default(0),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(5),
+  runAfter: timestamp("run_after", { withTimezone: true }).notNull(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("idx_background_jobs_idempotency").on(table.idempotencyKey),
+  index("idx_background_jobs_status_run").on(table.status, table.runAfter, table.priority),
+  index("idx_background_jobs_type").on(table.type),
+  index("idx_background_jobs_channel").on(table.channel),
+  index("idx_background_jobs_product").on(table.productId),
+  index("idx_background_jobs_external_listing").on(table.externalListingId),
+]);
 
 export const marketplaceInventorySnapshots = pgTable("marketplace_inventory_snapshots", {
   id: integer("id").primaryKey().notNull().default(sql`now()`),
