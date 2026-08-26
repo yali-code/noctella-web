@@ -25,7 +25,7 @@ describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
   afterEach(async () => { await harness?.close(); harness = undefined; });
 
   it("applies the complete migration chain through 0025 twice with the stock-sync target shape", async () => {
-    harness = await createPostgresTestDb();
+    harness = await createPostgresTestDb("0025_sprint153_stock_sync_runtime_parity.sql");
     const retained = await stockSync.createStockSyncConflict(harness.db as any, { channel: "ebay", conflictType: "manual_review", details: { retained: true } });
     expect((await harness.migrateAgain()).at(-1)).toBe("0025_sprint153_stock_sync_runtime_parity.sql");
     expect(await harness.db.select().from(schema.stockSyncConflicts)).toEqual([expect.objectContaining({ id: retained.id, channel: "ebay", conflictType: "manual_review", detailsSnapshot: { retained: true } })]);
@@ -41,6 +41,28 @@ describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
       { table_name: "stock_sync_conflicts", column_name: "details_snapshot", data_type: "jsonb" },
       { table_name: "stock_sync_audit", column_name: "created_at", data_type: "timestamp with time zone" },
     ]));
+  });
+
+  it("makes Product EUR price nullable through 0026 without changing an existing price", async () => {
+    harness = await createPostgresTestDb("0025_sprint153_stock_sync_runtime_parity.sql");
+    const now = new Date();
+    await harness.db.insert(schema.products).values({ id: "p-priced", sku: "SPRINT153-PRICED", title: "Priced", slug: "sprint153-priced", type: "unique", status: "draft", stockQuantity: 1, priceEur: "123.450000", createdAt: now, updatedAt: now });
+
+    const migrate = async () => {
+      const client = await harness!.pool.connect();
+      try { return await applyPostgresMigrations(client, harness!.schemaName); } finally { client.release(); }
+    };
+    expect((await migrate()).at(-1)).toBe("0026_sprint153_product_price_eur_nullable_parity.sql");
+    const nullable = await harness.pool.query<{ is_nullable: "YES" | "NO" }>(
+      "SELECT is_nullable FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'products' AND column_name = 'price_eur'",
+      [harness.schemaName],
+    );
+    expect(nullable.rows).toEqual([{ is_nullable: "YES" }]);
+    expect((await harness.pool.query<{ price_eur: string }>("SELECT price_eur FROM products WHERE id = 'p-priced'")).rows).toEqual([{ price_eur: "123.450000" }]);
+
+    await harness.db.insert(schema.products).values({ id: "p-unpriced", sku: "SPRINT153-UNPRICED", title: "Unpriced", slug: "sprint153-unpriced", type: "unique", status: "draft", stockQuantity: 1, createdAt: now, updatedAt: now });
+    expect((await harness.pool.query<{ price_is_null: boolean }>("SELECT price_eur IS NULL AS price_is_null FROM products WHERE id = 'p-unpriced'")).rows).toEqual([{ price_is_null: true }]);
+    expect((await migrate()).at(-1)).toBe("0026_sprint153_product_price_eur_nullable_parity.sql");
   });
 
   it("executes a due stock-sync listing job and durably records a normalized conflict", async () => {

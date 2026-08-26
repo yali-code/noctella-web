@@ -1,0 +1,2 @@
+ALTER TABLE products
+  ALTER COLUMN price_eur DROP NOT NULL;
