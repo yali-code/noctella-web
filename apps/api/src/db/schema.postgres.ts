@@ -580,16 +580,16 @@ export const backgroundJobs = pgTable("background_jobs", {
 ]);
 
 export const marketplaceInventorySnapshots = pgTable("marketplace_inventory_snapshots", {
-  id: integer("id").primaryKey().notNull().default(sql`now()`),
-});
+  id: text("id").primaryKey().notNull(), channel: text("channel").notNull(), productId: text("product_id").notNull(), externalListingId: text("external_listing_id").notNull(), localStock: integer("local_stock").notNull(), marketplaceStock: integer("marketplace_stock").notNull(), capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_inventory_snapshots_listing").on(table.channel, table.externalListingId, table.capturedAt), index("idx_inventory_snapshots_product").on(table.productId, table.capturedAt)]);
 
 export const stockSyncConflicts = pgTable("stock_sync_conflicts", {
-  id: integer("id").primaryKey().notNull().default(sql`now()`),
-});
+  id: text("id").primaryKey().notNull(), channel: text("channel").notNull(), productId: text("product_id"), externalListingId: text("external_listing_id"), conflictType: text("conflict_type").notNull(), status: text("status").notNull(), localStock: integer("local_stock"), marketplaceStock: integer("marketplace_stock"), detailsSnapshot: jsonb("details_snapshot"), resolution: text("resolution"), detectedAt: timestamp("detected_at", { withTimezone: true }).notNull(), resolvedAt: timestamp("resolved_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_stock_sync_conflicts_open").on(table.status, table.channel, table.productId), index("idx_stock_sync_conflicts_listing").on(table.externalListingId)]);
 
 export const stockSyncAudit = pgTable("stock_sync_audit", {
-  id: integer("id").primaryKey().notNull().default(sql`now()`),
-});
+  id: text("id").primaryKey().notNull(), jobId: text("job_id"), channel: text("channel").notNull(), productId: text("product_id").notNull(), externalListingId: text("external_listing_id"), previousMarketplaceStock: integer("previous_marketplace_stock"), requestedMarketplaceStock: integer("requested_marketplace_stock").notNull(), confirmedMarketplaceStock: integer("confirmed_marketplace_stock"), resultStatus: text("result_status").notNull(), errorCode: text("error_code"), errorMessage: text("error_message"), orderId: text("order_id"), idempotencyKey: text("idempotency_key"), createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_stock_sync_audit_job").on(table.jobId), index("idx_stock_sync_audit_listing").on(table.channel, table.externalListingId, table.createdAt)]);
 
 export const shipments = pgTable("shipments", {
   id: text("id").primaryKey().notNull(),
