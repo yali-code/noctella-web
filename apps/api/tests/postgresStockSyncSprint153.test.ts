@@ -6,6 +6,12 @@ import * as schema from "../src/db/schema.postgres";
 import { encryptCredential } from "../src/services/credentialEncryption";
 import { applyPostgresMigrations, createPostgresTestDb, postgresTestConfigured, type PostgresTestDb } from "./postgresTestDb";
 
+if (postgresTestConfigured) {
+  process.env.DATABASE_DRIVER = "postgres";
+  process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
+  process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+}
+
 const describePostgres = postgresTestConfigured ? describe : describe.skip;
 let stockSync: typeof import("../src/services/stockSync");
 let backgroundJobs: typeof import("../src/services/backgroundJobs");
@@ -13,8 +19,6 @@ let harness: PostgresTestDb | undefined;
 
 describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
   beforeAll(async () => {
-    process.env.DATABASE_DRIVER = "postgres";
-    process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
     stockSync = await import("../src/services/stockSync");
     backgroundJobs = await import("../src/services/backgroundJobs");
   });
