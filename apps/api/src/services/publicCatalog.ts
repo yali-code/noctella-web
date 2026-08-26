@@ -1,11 +1,9 @@
-import { and, asc, desc, eq, isNull, like, or, sql } from "drizzle-orm";
 import { ProductStatus, ProductType } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { categories, collections, productImages, productPhotos, products } from "../db/schema";
 import { NotFoundError } from "./errors";
 import type { PublicProductListQuery } from "../validation/publicCatalog";
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
-import type { ProductReadServiceContext } from "../repositories/product-read/types";
+import type { CategoryReadProjection, CollectionReadProjection, ProductListProjection, ProductReadServiceContext } from "../repositories/product-read/types";
 
 /**
  * Customer-safe product shape. Deliberately excludes internal/ERP-only
@@ -77,7 +75,7 @@ export interface PublicCollection {
   metaDescription?: string;
 }
 
-function toPublicCategory(row: typeof categories.$inferSelect): PublicCategory {
+function toPublicCategory(row: CategoryReadProjection): PublicCategory {
   return {
     id: row.id,
     name: row.name,
@@ -89,7 +87,7 @@ function toPublicCategory(row: typeof categories.$inferSelect): PublicCategory {
   };
 }
 
-function toPublicCollection(row: typeof collections.$inferSelect): PublicCollection {
+function toPublicCollection(row: CollectionReadProjection): PublicCollection {
   return {
     id: row.id,
     name: row.name,
@@ -103,7 +101,7 @@ function toPublicCollection(row: typeof collections.$inferSelect): PublicCollect
 
 async function toPublicProduct(
   db: DbClient,
-  row: typeof products.$inferSelect,
+  row: ProductListProjection,
   context?: ProductReadServiceContext,
 ): Promise<PublicProduct> {
   context ??= createProductReadServiceContextForDb(db);
@@ -117,8 +115,8 @@ async function toPublicProduct(
        is now the sole gate that ever transitions a Product to Published, guaranteeing
        wooListingPriceEur ?? priceEur is a valid positive number for every row reaching here. */
     priceEur: (row.wooListingPriceEur ?? row.priceEur)!, priceUsd: row.priceUsd ?? undefined, videoUrl: row.videoUrl ?? undefined, shippingNote: row.shippingNote ?? undefined, customsWarning: row.customsWarning, isFeatured: row.isFeatured, allowMakeOffer: row.allowMakeOffer, allowCashOnDelivery: row.allowCashOnDelivery, status: row.status as ProductStatus, categoryId: row.categoryId ?? undefined, categoryName: cat?.name, categorySlug: cat?.slug, collectionId: row.collectionId ?? undefined, collectionName: col?.name, collectionSlug: col?.slug, seoTitle: row.wooSeoTitle ?? row.seoTitle ?? undefined, metaDescription: row.wooMetaDescription ?? row.metaDescription ?? undefined,
-    photos: photos.map((photo: any) => ({ id: photo.id, url: photo.url, thumbnailUrl: photo.thumbnailUrl ?? undefined, altText: photo.altText ?? undefined, sortOrder: photo.sortOrder, isPrimary: photo.isPrimary })),
-    images: images.map((img: any) => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl ?? undefined, altText: img.altText ?? undefined, sortOrder: img.sortOrder, isPrimary: img.isPrimary })),
+    photos: photos.map((photo) => ({ id: photo.id, url: photo.url, thumbnailUrl: photo.thumbnailUrl ?? undefined, altText: photo.altText ?? undefined, sortOrder: photo.sortOrder, isPrimary: Boolean(photo.isPrimary) })),
+    images: images.map((img) => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl ?? undefined, altText: img.altText ?? undefined, sortOrder: img.sortOrder, isPrimary: Boolean(img.isPrimary) })),
     createdAt: row.createdAt, updatedAt: row.updatedAt,
   };
 }
@@ -128,15 +126,14 @@ export async function listPublicProducts(db: DbClient, query: PublicProductListQ
   context ??= createProductReadServiceContextForDb(db);
   const rows = await context.repositories.products.list(q);
   const total = await context.repositories.products.count(q);
-  const items = await Promise.all(rows.map((row: any) => toPublicProduct(db, row, context)));
+  const items = await Promise.all(rows.map((row) => toPublicProduct(db, row, context)));
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
 export async function getPublicProductBySlug(db: DbClient, slug: string, context?: ProductReadServiceContext): Promise<PublicProduct> {
   context ??= createProductReadServiceContextForDb(db);
-  const rows = await context.repositories.products.list({ published: true, pageSize: 100 });
-  const row = rows.find((p: any) => p.slug === slug);
-  if (!row) throw new NotFoundError("Product not found");
+  const row = await context.repositories.products.getBySlug(slug);
+  if (!row || row.status !== ProductStatus.Published || row.salePausedAt) throw new NotFoundError("Product not found");
   return toPublicProduct(db, row, context);
 }
 
@@ -146,42 +143,21 @@ export async function listRelatedProducts(
   productId: string,
   categoryId: string | undefined,
   limit = 4,
+  context?: ProductReadServiceContext,
 ): Promise<PublicProduct[]> {
   if (!categoryId) return [];
-  const rows = await db
-    .select()
-    .from(products)
-    .where(
-      and(
-        eq(products.status, ProductStatus.Published),
-        isNull(products.salePausedAt),
-        eq(products.categoryId, categoryId),
-        sql`${products.id} != ${productId}`,
-      ),
-    )
-    .orderBy(desc(products.createdAt))
-    .limit(limit);
-  return Promise.all(rows.map((row) => toPublicProduct(db, row)));
+  context ??= createProductReadServiceContextForDb(db);
+  const rows = await context.repositories.products.list({ published: true, categoryId, excludeId: productId, sort: "newest", pageSize: limit });
+  return Promise.all(rows.map((row) => toPublicProduct(db, row, context)));
 }
 
 /** Archive / Sold Gallery: Sold status AND showInArchiveAfterSale true. */
-export async function listArchiveProducts(db: DbClient, query: { page: number; pageSize: number }) {
-  const whereClause = and(
-    eq(products.status, ProductStatus.Sold),
-    eq(products.showInArchiveAfterSale, true),
-  );
-
-  const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(products).where(whereClause);
-
-  const rows = await db
-    .select()
-    .from(products)
-    .where(whereClause)
-    .orderBy(desc(products.updatedAt))
-    .limit(query.pageSize)
-    .offset((query.page - 1) * query.pageSize);
-
-  const items = await Promise.all(rows.map((row) => toPublicProduct(db, row)));
+export async function listArchiveProducts(db: DbClient, query: { page: number; pageSize: number }, context?: ProductReadServiceContext) {
+  context ??= createProductReadServiceContextForDb(db);
+  const archiveQuery = { ...query, status: ProductStatus.Sold, showInArchiveAfterSale: true };
+  const total = await context.repositories.products.count(archiveQuery);
+  const rows = await context.repositories.products.list(archiveQuery);
+  const items = await Promise.all(rows.map((row) => toPublicProduct(db, row, context)));
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 

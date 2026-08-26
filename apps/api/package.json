@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:postgres": "vitest run tests/postgresRuntimeSprint151.test.ts tests/postgresMarketplaceDuplicatePreflight.test.ts tests/postgresBackgroundJobsSprint152.test.ts tests/postgresStockSyncSprint153.test.ts",
+    "test:postgres": "vitest run tests/postgresRuntimeSprint151.test.ts tests/postgresMarketplaceDuplicatePreflight.test.ts tests/postgresBackgroundJobsSprint152.test.ts tests/postgresStockSyncSprint153.test.ts tests/postgresPublicCatalogSprint154.test.ts",
     "db:parity": "tsx src/scripts/dbParity.ts",
     "db:marketplace-duplicate-preflight": "tsx src/scripts/postgresMarketplaceDuplicatePreflight.ts",
     "db:migration-preview": "tsx src/scripts/dbMigrationPreview.ts",

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, like, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, like, ne, notExists, or, sql } from "drizzle-orm";
 import { ProductStatus, PublishJobStatus } from "@noctella/shared";
 import type { ProductBreakdownDimension, ProductReadListQuery, ProductReadRepositoryBundle } from "./types";
 
@@ -12,8 +12,15 @@ const PENDING_PUBLISH_STATUSES: string[] = [ProductStatus.Draft, ProductStatus.A
 export function createDrizzleProductReadRepositories(db: any, schema: any, dialect: "sqlite" | "postgres"): ProductReadRepositoryBundle {
   const { products, categories, collections, productPhotos, productImages, aiProductIntakes, publishJobs } = schema;
   const contains = (col: any, value: string) => dialect === "postgres" ? ilike(col, `%${value}%`) : like(sql`lower(${col})`, `%${value.toLowerCase()}%`);
+  const storedBoolean = (value: boolean) => dialect === "postgres" ? Number(value) : value;
   const numericFields = ["lengthValue","widthValue","heightValue","weightValue","purchaseCost","priceEur","priceUsd","minOfferPrice","ebayListingPriceEur","etsyListingPriceEur","wooListingPriceEur"];
-  const mapProduct = (row: any) => { if (!row) return row; const copy = { ...row }; for (const key of numericFields) if (copy[key] != null) copy[key] = Number(copy[key]); return copy; };
+  const booleanFields = ["customsWarning", "isFeatured", "allowMakeOffer", "allowCashOnDelivery", "showInArchiveAfterSale"];
+  const timestampFields = ["salePausedAt", "createdAt", "updatedAt"];
+  const normalizeTimestamp = (value: unknown) => value instanceof Date ? value.toISOString() : value;
+  const mapProduct = (row: any) => { if (!row) return row; const copy = { ...row }; for (const key of numericFields) if (copy[key] != null) copy[key] = Number(copy[key]); for (const key of booleanFields) copy[key] = Boolean(copy[key]); for (const key of timestampFields) copy[key] = normalizeTimestamp(copy[key]); return copy; };
+  const mapCategory = (row: any) => row ? { ...row, isActive: Boolean(row.isActive), createdAt: normalizeTimestamp(row.createdAt), updatedAt: normalizeTimestamp(row.updatedAt) } : row;
+  const mapCollection = (row: any) => row ? { ...row, isActive: Boolean(row.isActive), createdAt: normalizeTimestamp(row.createdAt), updatedAt: normalizeTimestamp(row.updatedAt) } : row;
+  const mapPhoto = (row: any) => row ? { ...row, isPrimary: Boolean(row.isPrimary), processingUpdatedAt: normalizeTimestamp(row.processingUpdatedAt), createdAt: normalizeTimestamp(row.createdAt), updatedAt: normalizeTimestamp(row.updatedAt) } : row;
   const productWhere = async (q: ProductReadListQuery = {}) => {
     const filters: any[] = [];
     if (q.search) { const s = searchTerm(q.search); if (s) filters.push(or(contains(products.title, s), contains(products.sku, s), contains(products.description, s), contains(products.wooProductName, s))); }
@@ -22,7 +29,9 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     if (q.categoryId) filters.push(eq(products.categoryId, q.categoryId));
     if (q.collectionId) filters.push(eq(products.collectionId, q.collectionId));
     if (q.published) filters.push(eq(products.status, "published"),isNull(products.salePausedAt));
-    if (q.isFeatured !== undefined) filters.push(eq(products.isFeatured, q.isFeatured));
+    if (q.isFeatured !== undefined) filters.push(eq(products.isFeatured, storedBoolean(q.isFeatured)));
+    if (q.showInArchiveAfterSale !== undefined) filters.push(eq(products.showInArchiveAfterSale, storedBoolean(q.showInArchiveAfterSale)));
+    if (q.excludeId) filters.push(ne(products.id, q.excludeId));
     if (q.updatedSince) filters.push(gt(products.updatedAt, dialect === "postgres" ? new Date(q.updatedSince) : q.updatedSince));
     if (q.categorySlug) { const c = await categoriesRepo.getBySlug(q.categorySlug); filters.push(eq(products.categoryId, c?.id ?? "__no_match__")); }
     if (q.collectionSlug) { const c = await collectionsRepo.getBySlug(q.collectionSlug); filters.push(eq(products.collectionId, c?.id ?? "__no_match__")); }
@@ -78,6 +87,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
   };
   const productsRepo = {
     getById: async (id: string) => mapProduct((await db.select().from(products).where(eq(products.id, id)).limit(1))[0]),
+    getBySlug: async (slug: string) => mapProduct((await db.select().from(products).where(eq(products.slug, slug)).limit(1))[0]),
     getBySku: async (sku: string) => mapProduct((await db.select().from(products).where(eq(products.sku, sku)).limit(1))[0]),
     getByErpReference: async (erpReferenceId: string) => mapProduct((await db.select().from(products).where(eq(products.erpReferenceId, erpReferenceId)).limit(1))[0]),
     getByNoctellaId: async (id: string) => productsRepo.getById(id),
@@ -108,27 +118,27 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
       .where(pendingPublishWhere(q)))[0]?.total ?? 0),
   };
   const categoriesRepo = {
-    getById: async (id: string) => (await db.select().from(categories).where(eq(categories.id, id)).limit(1))[0],
-    getBySlug: async (slug: string) => (await db.select().from(categories).where(eq(categories.slug, slug)).limit(1))[0],
-    list: async (q: any = {}) => db.select().from(categories).where(q.includeInactive ? undefined : eq(categories.isActive, true)).orderBy(asc(categories.displayOrder), asc(categories.id)).limit(pageSize(q)).offset(offset(q)),
-    count: async (q: any = {}) => Number((await db.select({ total: sql<number>`count(*)` }).from(categories).where(q.includeInactive ? undefined : eq(categories.isActive, true)))[0]?.total ?? 0),
+    getById: async (id: string) => mapCategory((await db.select().from(categories).where(eq(categories.id, id)).limit(1))[0]),
+    getBySlug: async (slug: string) => mapCategory((await db.select().from(categories).where(eq(categories.slug, slug)).limit(1))[0]),
+    list: async (q: any = {}) => (await db.select().from(categories).where(q.includeInactive ? undefined : eq(categories.isActive, storedBoolean(true))).orderBy(asc(categories.displayOrder), asc(categories.id)).limit(pageSize(q)).offset(offset(q))).map(mapCategory),
+    count: async (q: any = {}) => Number((await db.select({ total: sql<number>`count(*)` }).from(categories).where(q.includeInactive ? undefined : eq(categories.isActive, storedBoolean(true))))[0]?.total ?? 0),
     listWithProductCounts: async () => db.select({ category: categories, productCount: sql<number>`count(${products.id})` }).from(categories).leftJoin(products, eq(products.categoryId, categories.id)).groupBy(categories.id).orderBy(asc(categories.displayOrder), asc(categories.id)),
-    listPublic: async () => db.select().from(categories).where(eq(categories.isActive, true)).orderBy(asc(categories.displayOrder), asc(categories.id)),
+    listPublic: async () => (await db.select().from(categories).where(eq(categories.isActive, storedBoolean(true))).orderBy(asc(categories.displayOrder), asc(categories.id))).map(mapCategory),
   };
   const collectionsRepo = {
-    getById: async (id: string) => (await db.select().from(collections).where(eq(collections.id, id)).limit(1))[0],
-    getBySlug: async (slug: string) => (await db.select().from(collections).where(eq(collections.slug, slug)).limit(1))[0],
-    list: async (q: any = {}) => db.select().from(collections).where(q.includeInactive ? undefined : eq(collections.isActive, true)).orderBy(asc(collections.displayOrder), asc(collections.id)).limit(pageSize(q)).offset(offset(q)),
-    count: async (q: any = {}) => Number((await db.select({ total: sql<number>`count(*)` }).from(collections).where(q.includeInactive ? undefined : eq(collections.isActive, true)))[0]?.total ?? 0),
+    getById: async (id: string) => mapCollection((await db.select().from(collections).where(eq(collections.id, id)).limit(1))[0]),
+    getBySlug: async (slug: string) => mapCollection((await db.select().from(collections).where(eq(collections.slug, slug)).limit(1))[0]),
+    list: async (q: any = {}) => (await db.select().from(collections).where(q.includeInactive ? undefined : eq(collections.isActive, storedBoolean(true))).orderBy(asc(collections.displayOrder), asc(collections.id)).limit(pageSize(q)).offset(offset(q))).map(mapCollection),
+    count: async (q: any = {}) => Number((await db.select({ total: sql<number>`count(*)` }).from(collections).where(q.includeInactive ? undefined : eq(collections.isActive, storedBoolean(true))))[0]?.total ?? 0),
     listWithProductCounts: async () => db.select({ collection: collections, productCount: sql<number>`count(${products.id})` }).from(collections).leftJoin(products, eq(products.collectionId, collections.id)).groupBy(collections.id).orderBy(asc(collections.displayOrder), asc(collections.id)),
-    listPublic: async () => db.select().from(collections).where(eq(collections.isActive, true)).orderBy(asc(collections.displayOrder), asc(collections.id)),
+    listPublic: async () => (await db.select().from(collections).where(eq(collections.isActive, storedBoolean(true))).orderBy(asc(collections.displayOrder), asc(collections.id))).map(mapCollection),
   };
   const photosRepo = {
-    getById: async (id: string) => (await db.select().from(productPhotos).where(eq(productPhotos.id, id)).limit(1))[0],
-    listByProduct: async (productId: string) => db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(asc(productPhotos.sortOrder), asc(productPhotos.id)),
-    getPrimaryByProduct: async (productId: string) => (await db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(desc(productPhotos.isPrimary), asc(productPhotos.sortOrder), asc(productPhotos.id)).limit(1))[0],
+    getById: async (id: string) => mapPhoto((await db.select().from(productPhotos).where(eq(productPhotos.id, id)).limit(1))[0]),
+    listByProduct: async (productId: string) => (await db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(asc(productPhotos.sortOrder), asc(productPhotos.id))).map(mapPhoto),
+    getPrimaryByProduct: async (productId: string) => mapPhoto((await db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(desc(productPhotos.isPrimary), asc(productPhotos.sortOrder), asc(productPhotos.id)).limit(1))[0]),
     countByProduct: async (productId: string) => Number((await db.select({ total: sql<number>`count(*)` }).from(productPhotos).where(eq(productPhotos.productId, productId)))[0]?.total ?? 0),
-    listReadyByProduct: async (productId: string) => db.select().from(productPhotos).where(and(eq(productPhotos.productId, productId), eq(productPhotos.processingStatus, "Ready"))).orderBy(asc(productPhotos.sortOrder), asc(productPhotos.id)),
+    listReadyByProduct: async (productId: string) => (await db.select().from(productPhotos).where(and(eq(productPhotos.productId, productId), eq(productPhotos.processingStatus, "Ready"))).orderBy(asc(productPhotos.sortOrder), asc(productPhotos.id))).map(mapPhoto),
     // Sprint 85: the strict "Ready" gate above is correct for outbox/promotion-specific logic,
     // but LocalPhotoStorage (the only storage backend implemented today) fully writes and awaits
     // the photo file to disk before the ProductPhoto row is ever inserted (see
@@ -141,7 +151,7 @@ export function createDrizzleProductReadRepositories(db: any, schema: any, diale
     // because it is the model's genuine negative signal (promotion could not confirm the file).
     // This visibility policy must be reconsidered before a genuinely asynchronous remote-storage
     // backend (e.g. S3) is introduced, where "Processing" could mean the file is not yet present.
-    listPubliclyVisibleByProduct: async (productId: string) => db.select().from(productPhotos).where(and(eq(productPhotos.productId, productId), or(eq(productPhotos.processingStatus, "Ready"), eq(productPhotos.processingStatus, "Processing")))).orderBy(desc(productPhotos.isPrimary), asc(productPhotos.sortOrder), asc(productPhotos.id)),
+    listPubliclyVisibleByProduct: async (productId: string) => (await db.select().from(productPhotos).where(and(eq(productPhotos.productId, productId), or(eq(productPhotos.processingStatus, "Ready"), eq(productPhotos.processingStatus, "Processing")))).orderBy(desc(productPhotos.isPrimary), asc(productPhotos.sortOrder), asc(productPhotos.id))).map(mapPhoto),
     listAdminByProduct: async (productId: string) => photosRepo.listByProduct(productId),
     listLegacyCompatibleByProduct: async (productId: string) => { const photos = await photosRepo.listPubliclyVisibleByProduct(productId); return photos.length ? photos : db.select().from(productImages).where(eq(productImages.productId, productId)).orderBy(asc(productImages.sortOrder), asc(productImages.id)); },
   };

@@ -1,13 +1,14 @@
 import * as sqliteSchema from "../../db/schema.sqlite";
 import * as postgresSchema from "../../db/schema.postgres";
+import { getDatabaseConfig } from "../../db/config";
 import { createDrizzleProductReadRepositories } from "./drizzle";
 import type { ProductReadRepositoryBundle } from "./types";
 export function createProductReadRepositories(driver?: string, db?: any): ProductReadRepositoryBundle {
-  if (!driver || !db) {
+  if (!db) {
     const { dbRuntime } = require("../../db/client") as typeof import("../../db/client");
+    db = dbRuntime.db;
     driver ??= dbRuntime.driver;
-    db ??= dbRuntime.db;
-  }
+  } else if (!driver) driver = getDatabaseConfig(process.env).driver;
   if (!db) throw new Error("Product read repository requires a database client");
   if (driver === "sqlite") return createDrizzleProductReadRepositories(db, sqliteSchema, "sqlite");
   if (driver === "postgres" || driver === "supabase-postgres") return createDrizzleProductReadRepositories(db, postgresSchema, "postgres");
@@ -16,5 +17,5 @@ export function createProductReadRepositories(driver?: string, db?: any): Produc
 }
 let defaultBundle: ProductReadRepositoryBundle | undefined;
 export function getDefaultProductReadServiceContext() { defaultBundle ??= createProductReadRepositories(); return { repositories: defaultBundle }; }
-export function createProductReadServiceContextForDb(db: any, driver: "sqlite" | "postgres" | "supabase-postgres" = "sqlite") { return { repositories: createProductReadRepositories(driver, db) }; }
+export function createProductReadServiceContextForDb(db: any, driver?: "sqlite" | "postgres" | "supabase-postgres") { return { repositories: createProductReadRepositories(driver, db) }; }
 export async function shutdownProductReadRepositories() { await defaultBundle?.shutdown?.(); defaultBundle = undefined; }
