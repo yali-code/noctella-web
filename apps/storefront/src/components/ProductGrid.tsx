@@ -34,13 +34,7 @@ export function ProductGrid({ products, loading, error, emptyMessage }: ProductG
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-        gap: 20,
-      }}
-    >
+    <div className="sf-product-grid">
       {products.map((product) => (
         <ProductCard key={product.id} product={product} />
       ))}

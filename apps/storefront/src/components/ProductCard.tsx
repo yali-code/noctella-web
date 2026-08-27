@@ -1,72 +1,57 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { resolveApiAssetUrl } from "@/lib/api";
 import { primaryProductImage, productThumbnailUrl } from "@/lib/productImages";
 import type { PublicProduct } from "@/lib/types";
+import { getWishlistIds, toggleWishlistPersisted } from "@/lib/wishlist";
 
 export function ProductCard({ product }: { product: PublicProduct }) {
   const primaryImage = primaryProductImage(product);
+  const [wishlisted, setWishlisted] = useState(false);
+
+  useEffect(() => setWishlisted(getWishlistIds().includes(product.id)), [product.id]);
+
+  function toggleWishlist() {
+    const updated = toggleWishlistPersisted(product.id);
+    setWishlisted(updated.includes(product.id));
+    window.dispatchEvent(new Event("noctella:wishlist-updated"));
+  }
 
   return (
-    <Link
-      href={`/product/${product.slug}`}
-      className="noctella-panel"
-      style={{
-        display: "block",
-        textDecoration: "none",
-        color: "var(--noctella-ivory)",
-        overflow: "hidden",
-      }}
-    >
-      <div style={{ position: "relative", aspectRatio: "1 / 1", background: "var(--noctella-night-navy)" }}>
-        {primaryImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={resolveApiAssetUrl(productThumbnailUrl(primaryImage))}
-            alt={primaryImage.altText || product.title}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        ) : (
-          <div style={{ width: "100%", height: "100%" }} />
-        )}
-        <div style={{ position: "absolute", top: 8, left: 8, display: "flex", gap: 6 }}>
-          {product.isFeatured && <Badge label="Featured" />}
-          {product.allowMakeOffer && <Badge label="Make Offer" />}
+    <article className="sf-product-card">
+      <Link href={`/product/${product.slug}`} className="sf-product-card__link" aria-label={`View ${product.title}`}>
+        <div className="sf-product-card__image">
+          {primaryImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={resolveApiAssetUrl(productThumbnailUrl(primaryImage))} alt={primaryImage.altText || product.title}
+              width={800} height={1000} loading="lazy" decoding="async" />
+          ) : <span role="img" aria-label={`${product.title}: image unavailable`}>Image unavailable</span>}
+          <div className="sf-product-card__badges" aria-hidden="true">
+            {product.isFeatured && <Badge label="Featured" />}
+            {product.allowMakeOffer && <Badge label="Make Offer" />}
+          </div>
         </div>
-      </div>
-      <div style={{ padding: 14 }}>
-        {product.categoryName && (
-          <p style={{ margin: 0, fontSize: 11, color: "var(--noctella-aged-bronze)", textTransform: "uppercase" }}>
-            {product.categoryName}
-          </p>
-        )}
-        <h3 style={{ margin: "4px 0", fontSize: 16 }}>{product.title}</h3>
-        <p style={{ margin: 0, fontSize: 14 }}>
-          €{product.priceEur.toFixed(2)}
-          {product.priceUsd !== undefined && (
-            <span style={{ color: "var(--noctella-aged-bronze)", marginLeft: 8, fontSize: 12 }}>
-              (${product.priceUsd.toFixed(2)})
-            </span>
-          )}
-        </p>
-      </div>
-    </Link>
+        <div className="sf-product-card__content">
+          {product.condition && <p className="sf-product-card__condition">{product.condition}</p>}
+          <h3>{product.title}</h3>
+          <p className="sf-product-card__price">{formatPrice(product.priceEur)}</p>
+        </div>
+      </Link>
+      <button type="button" className="sf-product-card__wishlist"
+        aria-label={`${wishlisted ? "Remove" : "Add"} ${product.title} ${wishlisted ? "from" : "to"} wishlist`}
+        aria-pressed={wishlisted} onClick={toggleWishlist}>
+        <span aria-hidden="true">{wishlisted ? "♥" : "♡"}</span>
+      </button>
+    </article>
   );
 }
 
+function formatPrice(value: number) {
+  return typeof value === "number" && Number.isFinite(value) ? `€${value.toFixed(2)}` : "Price unavailable";
+}
+
 function Badge({ label }: { label: string }) {
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        padding: "3px 8px",
-        borderRadius: 3,
-        background: "var(--noctella-antique-gold)",
-        color: "var(--noctella-night-navy)",
-        fontWeight: 600,
-        letterSpacing: "0.03em",
-      }}
-    >
-      {label}
-    </span>
-  );
+  return <span className="sf-product-card__badge">{label}</span>;
 }

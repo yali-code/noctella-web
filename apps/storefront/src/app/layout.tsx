@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Header } from "@/components/Header";
-import { storefrontFooterItems } from "@/config/nav";
+import { Footer } from "@/components/Footer";
 import { getStorefrontSiteUrl, SITE_DEFAULT_DESCRIPTION, SITE_DEFAULT_TITLE } from "@/lib/seo";
 import "./globals.css";
 
@@ -29,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-storefront-theme="product-first">
       <body>
         <a href="#main-content" className="noctella-skip-link">
           Skip to main content
@@ -38,21 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main id="main-content" tabIndex={-1} style={{ minHeight: "70vh" }}>
           {children}
         </main>
-        <footer
-          style={{
-            padding: "32px 40px",
-            borderTop: "1px solid var(--noctella-antique-gold)",
-            display: "flex",
-            gap: 24,
-            flexWrap: "wrap",
-          }}
-        >
-          {storefrontFooterItems.map((item) => (
-            <Link key={item.href} href={item.href} style={{ fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
-              {item.label}
-            </Link>
-          ))}
-        </footer>
+        <Footer />
       </body>
     </html>
   );
