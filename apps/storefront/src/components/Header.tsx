@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { SearchForm } from "@/components/SearchForm";
 import { getWishlistIds } from "@/lib/wishlist";
 import { cartItemCount, getCart } from "@/lib/cart";
 import { storefrontHeaderNavItems as NAV_ITEMS } from "@/config/nav";
 
+const MOBILE_NAV_ID = "storefront-mobile-navigation";
+
 export function Header() {
-  const router = useRouter();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [wishlistCount, setWishlistCount] = useState(0);
   const [cartCount, setCartCount] = useState(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setWishlistCount(getWishlistIds().length);
@@ -31,107 +35,49 @@ export function Header() {
     };
   }, []);
 
-  function handleSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    router.push(`/shop?search=${encodeURIComponent(search)}`);
-    setMenuOpen(false);
-  }
+  useEffect(() => setMenuOpen(false), [pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    mobileNavRef.current?.querySelector<HTMLElement>("input, a, button")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
+  const closeMenu = () => setMenuOpen(false);
   return (
-    <header
-      style={{
-        borderBottom: "1px solid var(--noctella-antique-gold)",
-        padding: "16px 24px",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-        <Link href="/" style={{ textDecoration: "none" }}>
-          <h1 style={{ fontSize: 24, margin: 0 }}>Noctella</h1>
-        </Link>
-
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          aria-label="Toggle navigation menu"
-          className="noctella-mobile-menu-toggle"
-          style={{
-            display: "none",
-            background: "none",
-            border: "1px solid var(--noctella-antique-gold)",
-            color: "var(--noctella-ivory)",
-            borderRadius: 4,
-            padding: "8px 12px",
-            cursor: "pointer",
-          }}
-        >
-          Menu
-        </button>
-
-        <nav
-          className="noctella-nav"
-          style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}
-        >
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} style={{ fontSize: 14 }}>
-              {item.label}
-            </Link>
-          ))}
-
-          <form onSubmit={handleSearchSubmit} role="search" style={{ display: "flex", alignItems: "center" }}>
-            <label htmlFor="storefront-search" style={{ position: "absolute", left: -9999 }}>
-              Search products
-            </label>
-            <input
-              id="storefront-search"
-              type="search"
-              placeholder="Search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                background: "var(--noctella-deep-star-blue)",
-                border: "1px solid var(--noctella-antique-gold)",
-                color: "var(--noctella-ivory)",
-                borderRadius: 4,
-                padding: "6px 10px",
-                fontSize: 13,
-                width: 130,
-              }}
-            />
-          </form>
-
-          <Link href="/wishlist" style={{ fontSize: 14 }} aria-label={`Wishlist (${wishlistCount} items)`}>
-            Wishlist{wishlistCount > 0 ? ` (${wishlistCount})` : ""}
-          </Link>
-          <Link href="/account" style={{ fontSize: 14 }}>
-            Account
-          </Link>
-          <Link href="/cart" style={{ fontSize: 14 }} aria-label={`Cart (${cartCount} items)`}>
-            Cart{cartCount > 0 ? ` (${cartCount})` : ""}
-          </Link>
+    <header className="sf-header">
+      <div className="sf-header__bar">
+        <Link href="/" className="sf-brand" aria-label="Noctella home">Noctella</Link>
+        <button ref={triggerRef} type="button" onClick={() => setMenuOpen((value) => !value)}
+          aria-expanded={menuOpen} aria-controls={MOBILE_NAV_ID} aria-label="Toggle navigation menu"
+          className="sf-menu-toggle noctella-mobile-menu-toggle">Menu</button>
+        <nav className="sf-desktop-nav noctella-nav" aria-label="Main navigation">
+          {NAV_ITEMS.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+          <SearchForm compact />
+          <AccountLinks wishlistCount={wishlistCount} cartCount={cartCount} onNavigate={closeMenu} />
         </nav>
       </div>
-
       {menuOpen && (
-        <nav
-          className="noctella-mobile-nav"
-          style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}
-        >
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} style={{ fontSize: 14 }} onClick={() => setMenuOpen(false)}>
-              {item.label}
-            </Link>
-          ))}
-          <Link href="/wishlist" style={{ fontSize: 14 }} onClick={() => setMenuOpen(false)}>
-            Wishlist{wishlistCount > 0 ? ` (${wishlistCount})` : ""}
-          </Link>
-          <Link href="/account" style={{ fontSize: 14 }} onClick={() => setMenuOpen(false)}>
-            Account
-          </Link>
-          <Link href="/cart" style={{ fontSize: 14 }} onClick={() => setMenuOpen(false)}>
-            Cart{cartCount > 0 ? ` (${cartCount})` : ""}
-          </Link>
+        <nav ref={mobileNavRef} id={MOBILE_NAV_ID} className="sf-mobile-nav noctella-mobile-nav" aria-label="Mobile navigation">
+          <SearchForm compact onNavigate={closeMenu} />
+          {NAV_ITEMS.map((item) => <Link key={item.href} href={item.href} onClick={closeMenu}>{item.label}</Link>)}
+          <AccountLinks wishlistCount={wishlistCount} cartCount={cartCount} onNavigate={closeMenu} />
         </nav>
       )}
     </header>
   );
+}
+
+function AccountLinks({ wishlistCount, cartCount, onNavigate }: { wishlistCount: number; cartCount: number; onNavigate: () => void }) {
+  return <>
+    <Link href="/wishlist" aria-label={`Wishlist (${wishlistCount} items)`} onClick={onNavigate}>Wishlist{wishlistCount ? ` (${wishlistCount})` : ""}</Link>
+    <Link href="/account" onClick={onNavigate}>Account</Link>
+    <Link href="/cart" aria-label={`Cart (${cartCount} items)`} onClick={onNavigate}>Cart{cartCount ? ` (${cartCount})` : ""}</Link>
+  </>;
 }
