@@ -108,11 +108,26 @@ export function ProductDetailClient({ slug }: { slug: string }) {
   const dimensions = [product.lengthValue, product.widthValue, product.heightValue]
     .filter((v) => v !== undefined)
     .join(" × ");
+  const productFacts = [
+    ["Product type", formatProductType(product.type)],
+    product.categoryName ? ["Category", product.categoryName] : null,
+    product.collectionName ? ["Collection", product.collectionName] : null,
+    product.brand ? ["Brand", product.brand] : null,
+    product.model ? ["Model", product.model] : null,
+    product.manufacturer ? ["Manufacturer", product.manufacturer] : null,
+    product.countryOfOrigin ? ["Country of origin", product.countryOfOrigin] : null,
+    product.period ? ["Period", product.period] : null,
+    product.materials ? ["Materials", product.materials] : null,
+    dimensions ? ["Dimensions", `${dimensions}${product.dimensionUnit ? ` ${product.dimensionUnit}` : ""}`] : null,
+    product.weightValue !== undefined
+      ? ["Weight", `${product.weightValue}${product.weightUnit ? ` ${product.weightUnit}` : ""}`]
+      : null,
+  ].filter((fact): fact is string[] => fact !== null);
 
   return (
-    <section style={{ padding: "48px 40px" }}>
-      <div style={{ display: "flex", gap: 40, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 380px", maxWidth: 480 }}>
+    <section className="sf-pdp">
+      <div className="sf-pdp__layout">
+        <div className="sf-pdp__media">
           <ProductGallery images={product.images} title={product.title} />
           {product.videoUrl && (
             <p style={{ marginTop: 12 }}>
@@ -123,7 +138,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
           )}
         </div>
 
-        <div style={{ flex: "1 1 380px" }}>
+        <div className="sf-pdp__content">
           {product.isFeatured && (
             <span
               style={{
@@ -140,8 +155,8 @@ export function ProductDetailClient({ slug }: { slug: string }) {
               Featured
             </span>
           )}
-          <h1 style={{ marginTop: 0 }}>{product.title}</h1>
-          <p style={{ fontSize: 22, margin: "8px 0" }}>
+          <h1>{product.title}</h1>
+          <p className="sf-pdp__price">
             €{product.priceEur.toFixed(2)}
             {product.priceUsd !== undefined && (
               <span style={{ fontSize: 14, color: "var(--noctella-aged-bronze)", marginLeft: 10 }}>
@@ -150,44 +165,32 @@ export function ProductDetailClient({ slug }: { slug: string }) {
             )}
           </p>
           {product.shortDescription && (
-            <p style={{ color: "var(--noctella-ivory)", margin: "8px 0 16px" }}>{product.shortDescription}</p>
+            <p className="sf-pdp__summary">{product.shortDescription}</p>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 14, margin: "16px 0" }}>
-            <Row label="Product Type" value={formatProductType(product.type)} />
-            {product.categoryName && <Row label="Category" value={product.categoryName} />}
-            {product.collectionName && <Row label="Collection" value={product.collectionName} />}
-            {product.brand && <Row label="Brand" value={product.brand} />}
-            {product.model && <Row label="Model" value={product.model} />}
-            {product.manufacturer && <Row label="Manufacturer" value={product.manufacturer} />}
-            {product.countryOfOrigin && <Row label="Country of Origin" value={product.countryOfOrigin} />}
-            {product.period && <Row label="Period" value={product.period} />}
-            {product.materials && <Row label="Materials" value={product.materials} />}
-            {dimensions && (
-              <Row label="Dimensions" value={`${dimensions}${product.dimensionUnit ? ` ${product.dimensionUnit}` : ""}`} />
-            )}
-            {product.weightValue !== undefined && (
-              <Row label="Weight" value={`${product.weightValue}${product.weightUnit ? ` ${product.weightUnit}` : ""}`} />
-            )}
-            {product.condition && <Row label="Condition" value={product.condition} />}
-          </div>
+          {product.condition && (
+            <div className="sf-pdp__condition" aria-label="Cosmetic condition">
+              <span>Cosmetic condition</span>
+              <strong>{product.condition}</strong>
+            </div>
+          )}
 
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "20px 0" }}>
-            <button onClick={handleToggleWishlist} style={secondaryButtonStyle} aria-pressed={inWishlist}>
+          <div className="sf-pdp__actions">
+            <button onClick={handleToggleWishlist} className="sf-pdp__button sf-pdp__button--secondary" aria-pressed={inWishlist}>
               {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
             </button>
             {product.allowMakeOffer && (
-              <button onClick={() => setShowOfferForm((v) => !v)} style={primaryButtonStyle}>
+              <button onClick={() => setShowOfferForm((v) => !v)} className="sf-pdp__button sf-pdp__button--primary">
                 Make an Offer
               </button>
             )}
-            <button disabled style={disabledButtonStyle} title="Coming soon">
+            <button disabled className="sf-pdp__button sf-pdp__button--disabled" title="Coming soon">
               Ask AI
             </button>
             <button
               onClick={handleAddToCart}
               disabled={product.status !== "published" || inCart}
-              style={inCart ? secondaryButtonStyle : primaryButtonStyle}
+              className={`sf-pdp__button ${inCart ? "sf-pdp__button--secondary" : "sf-pdp__button--primary"}`}
               aria-live="polite"
             >
               {inCart ? (justAdded ? "Added to Cart" : "Already in Cart") : "Add to Cart"}
@@ -209,30 +212,42 @@ export function ProductDetailClient({ slug }: { slug: string }) {
           )}
 
           {product.conditionDescription && (
-            <>
-              <h2 style={{ fontSize: 16 }}>Condition</h2>
-              <p style={{ color: "var(--noctella-ivory)" }}>{product.conditionDescription}</p>
-            </>
+            <section className="sf-pdp__section" aria-labelledby="condition-details-heading">
+              <h2 id="condition-details-heading">Condition details</h2>
+              <p>{product.conditionDescription}</p>
+            </section>
           )}
+
+          <section className="sf-pdp__section" aria-labelledby="product-facts-heading">
+            <h2 id="product-facts-heading">Product facts</h2>
+            <dl className="sf-pdp__facts">
+              {productFacts.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
 
           {product.description && (
             <>
-              <h2 style={{ fontSize: 16 }}>Description</h2>
-              <p style={{ color: "var(--noctella-ivory)" }}>{product.description}</p>
+              <h2 className="sf-pdp__section-heading">Description</h2>
+              <p className="sf-pdp__prose">{product.description}</p>
             </>
           )}
 
           {product.productStory && (
             <>
-              <h2 style={{ fontSize: 16 }}>Story</h2>
-              <p style={{ color: "var(--noctella-ivory)" }}>{product.productStory}</p>
+              <h2 className="sf-pdp__section-heading">Story</h2>
+              <p className="sf-pdp__prose">{product.productStory}</p>
             </>
           )}
 
           {(product.shippingNote || product.customsWarning) && (
             <div style={{ marginTop: 20 }}>
-              <h2 style={{ fontSize: 16 }}>Shipping</h2>
-              {product.shippingNote && <p style={{ color: "var(--noctella-ivory)" }}>{product.shippingNote}</p>}
+              <h2 className="sf-pdp__section-heading">Shipping</h2>
+              {product.shippingNote && <p className="sf-pdp__prose">{product.shippingNote}</p>}
               {product.customsWarning && (
                 <p style={{ color: "var(--noctella-aged-bronze)", fontSize: 13 }}>
                   Buyer is responsible for customs duties and import taxes.
@@ -264,45 +279,9 @@ export function ProductDetailClient({ slug }: { slug: string }) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", gap: 8 }}>
-      <span style={{ color: "var(--noctella-aged-bronze)", minWidth: 140 }}>{label}</span>
-      <span>{value}</span>
-    </div>
-  );
-}
-
 function formatProductType(type: string): string {
   return type
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "var(--noctella-antique-gold)",
-  color: "var(--noctella-night-navy)",
-  border: "none",
-  borderRadius: 4,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "transparent",
-  color: "var(--noctella-ivory)",
-  border: "1px solid var(--noctella-aged-bronze)",
-  borderRadius: 4,
-  fontSize: 14,
-  cursor: "pointer",
-};
-
-const disabledButtonStyle: React.CSSProperties = {
-  ...secondaryButtonStyle,
-  opacity: 0.5,
-  cursor: "not-allowed",
-};

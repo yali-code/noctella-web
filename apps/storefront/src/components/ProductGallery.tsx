@@ -14,44 +14,29 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
 
   if (sorted.length === 0) {
     return (
-      <div
-        style={{
-          width: "100%",
-          aspectRatio: "1 / 1",
-          background: "var(--noctella-night-navy)",
-          border: "1px solid var(--noctella-antique-gold)",
-          borderRadius: 4,
-        }}
-      />
+      <div className="sf-pdp-gallery__empty" role="img" aria-label={`${title}: image unavailable`}>
+        Image unavailable
+      </div>
     );
   }
 
   return (
-    <div>
+    <div className="sf-pdp-gallery">
       <button
         type="button"
         onClick={() => setZoomed(true)}
         aria-label={`Zoom image: ${active.altText || title}`}
-        style={{
-          display: "block",
-          width: "100%",
-          padding: 0,
-          border: "1px solid var(--noctella-antique-gold)",
-          borderRadius: 4,
-          background: "none",
-          cursor: "zoom-in",
-        }}
+        className="sf-pdp-gallery__main"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={resolveApiAssetUrl(active.url)}
           alt={active.altText || title}
-          style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", borderRadius: 4 }}
         />
       </button>
 
       {sorted.length > 1 && (
-        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <div className="sf-pdp-gallery__thumbnails">
           {sorted.map((img, i) => (
             <button
               key={img.id}
@@ -59,22 +44,12 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
               onClick={() => setActiveIndex(i)}
               aria-label={`View image ${i + 1} of ${sorted.length}`}
               aria-current={i === activeIndex}
-              style={{
-                padding: 0,
-                border:
-                  i === activeIndex
-                    ? "2px solid var(--noctella-bright-star-gold)"
-                    : "1px solid var(--noctella-aged-bronze)",
-                borderRadius: 4,
-                cursor: "pointer",
-                background: "none",
-              }}
+              className="sf-pdp-gallery__thumbnail"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={resolveApiAssetUrl(productThumbnailUrl(img))}
                 alt={img.altText || `${title} thumbnail ${i + 1}`}
-                style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 3 }}
               />
             </button>
           ))}
@@ -87,33 +62,13 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
           aria-modal="true"
           aria-label={`${title} enlarged image`}
           onClick={() => setZoomed(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(11, 18, 32, 0.92)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-            cursor: "zoom-out",
-            padding: 24,
-          }}
+          className="sf-pdp-gallery__dialog"
         >
           <button
             type="button"
             onClick={() => setZoomed(false)}
             aria-label="Close enlarged image"
-            style={{
-              position: "absolute",
-              top: 24,
-              right: 24,
-              background: "none",
-              border: "1px solid var(--noctella-antique-gold)",
-              color: "var(--noctella-ivory)",
-              borderRadius: 4,
-              padding: "6px 12px",
-              cursor: "pointer",
-            }}
+            className="sf-pdp-gallery__close"
           >
             Close
           </button>
@@ -121,7 +76,7 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
           <img
             src={resolveApiAssetUrl(active.url)}
             alt={active.altText || title}
-            style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }}
+            className="sf-pdp-gallery__zoomed-image"
           />
         </div>
       )}
