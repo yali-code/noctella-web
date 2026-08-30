@@ -20,11 +20,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     fetchPublicJson<{ items: PublicCollection[] }>("/api/public/collections"),
   ]);
 
-  const products = await collectAllPages<PublicProduct>((page) =>
-    fetchPublicJson<PaginatedResult<PublicProduct>>(
-      `/api/public/products?page=${page}&pageSize=${PRODUCT_PAGE_SIZE}`,
+  const [products, archivalProducts] = await Promise.all([
+    collectAllPages<PublicProduct>((page) =>
+      fetchPublicJson<PaginatedResult<PublicProduct>>(
+        `/api/public/products?page=${page}&pageSize=${PRODUCT_PAGE_SIZE}`,
+      ),
     ),
-  );
+    collectAllPages<PublicProduct>((page) =>
+      fetchPublicJson<PaginatedResult<PublicProduct>>(
+        `/api/public/products/archive?page=${page}&pageSize=${PRODUCT_PAGE_SIZE}`,
+      ),
+    ),
+  ]);
 
   const staticEntries: MetadataRoute.Sitemap = SITEMAP_STATIC_PATHS.map((path) => ({
     url: buildCanonicalUrl(path),
@@ -38,10 +45,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     url: buildCanonicalUrl(`/collection/${collection.slug}`),
   }));
 
-  const productEntries: MetadataRoute.Sitemap = products.map((product) => ({
-    url: buildCanonicalUrl(`/product/${product.slug}`),
-    ...(product.updatedAt ? { lastModified: new Date(product.updatedAt) } : {}),
-  }));
+  const productEntries: MetadataRoute.Sitemap = Array.from(
+    new Map(
+      [...products, ...archivalProducts].map((product) => {
+        const entry: MetadataRoute.Sitemap[number] = {
+          url: buildCanonicalUrl(`/product/${product.slug}`),
+          ...(product.updatedAt ? { lastModified: new Date(product.updatedAt) } : {}),
+        };
+        return [entry.url, entry] as const;
+      }),
+    ).values(),
+  );
 
   return [...staticEntries, ...categoryEntries, ...collectionEntries, ...productEntries];
 }
