@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, resolveApiAssetUrl } from "@/lib/api";
 import type { PaginatedResult, PublicProduct } from "@/lib/types";
 
 const PAGE_SIZE = 12;
@@ -38,7 +38,7 @@ export default function ArchivePage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <section style={{ padding: "48px 40px" }}>
+    <section className="sf-archive">
       <h1>Archive / Sold Gallery</h1>
       <p style={{ color: "var(--noctella-aged-bronze)", maxWidth: 560 }}>
         A record of objects that have found their next home.
@@ -62,13 +62,7 @@ export default function ArchivePage() {
       )}
 
       {!loading && !error && products.length > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: 20,
-          }}
-        >
+        <div className="sf-archive__grid">
           {products.map((product) => {
             const primaryImage = product.images.find((img) => img.isPrimary) ?? product.images[0];
             const excerpt = storyExcerpt(product);
@@ -76,16 +70,14 @@ export default function ArchivePage() {
               <Link
                 key={product.id}
                 href={`/product/${product.slug}`}
-                className="noctella-panel"
-                style={{ display: "block", textDecoration: "none", color: "var(--noctella-ivory)", overflow: "hidden" }}
+                className="noctella-panel sf-archive__card"
               >
-                <div style={{ position: "relative", aspectRatio: "1 / 1", background: "var(--noctella-night-navy)" }}>
+                <div className="sf-archive__image">
                   {primaryImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={primaryImage.url}
+                      src={resolveApiAssetUrl(primaryImage.url)}
                       alt={primaryImage.altText || product.title}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", filter: "grayscale(30%)" }}
                     />
                   ) : (
                     <div style={{ width: "100%", height: "100%" }} />
@@ -126,7 +118,7 @@ export default function ArchivePage() {
       )}
 
       {!loading && !error && products.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 28 }}>
+        <div className="sf-archive__pagination">
           <span style={{ fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
             Page {page} of {totalPages} ({total} items)
           </span>
