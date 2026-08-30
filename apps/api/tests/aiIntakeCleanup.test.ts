@@ -517,8 +517,13 @@ describe("Sprint 96 ai-intake-cleanup repository (real SQLite)", () => {
 
     it("respects a bounded remaining-row budget - selects and deletes only up to the budget, leaving the remainder", async () => {
       const p1 = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("1"), mimetype: "image/png", size: 1 }, "a.png", "admin-1", mockPhotoStorage());
-      await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("2"), mimetype: "image/png", size: 1 }, "b.png", "admin-1", mockPhotoStorage());
-      await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("3"), mimetype: "image/png", size: 1 }, "c.png", "admin-1", mockPhotoStorage());
+      const p2 = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("2"), mimetype: "image/png", size: 1 }, "b.png", "admin-1", mockPhotoStorage());
+      const p3 = await uploadIntakePhoto(db as any, intakeId, { buffer: Buffer.from("3"), mimetype: "image/png", size: 1 }, "c.png", "admin-1", mockPhotoStorage());
+      const tiedCreatedAt = "2026-01-01T00:00:00.000Z";
+      for (const photo of [p1, p2, p3]) {
+        await db.update(aiIntakePhotos).set({ createdAt: tiedCreatedAt }).where(eq(aiIntakePhotos.id, photo.id));
+      }
+      const expectedOrder = [p1, p2, p3].sort((a, b) => a.id.localeCompare(b.id));
       await cancelIntake(db as any, intakeId, "admin-2");
 
       const result = await repo().deleteRetentionEligibleStagedPhotosLocked(
@@ -529,10 +534,11 @@ describe("Sprint 96 ai-intake-cleanup repository (real SQLite)", () => {
       expect(result.cleaned).toBe(true);
       if (result.cleaned) {
         expect(result.deletedPhotos).toHaveLength(1);
-        expect(result.deletedPhotos[0].id).toBe(p1.id); // createdAt ASC, id ASC - the first uploaded photo
+        expect(result.deletedPhotos[0].id).toBe(expectedOrder[0].id); // createdAt ASC, then id ASC for the explicit timestamp tie
       }
       const remaining = await db.select().from(aiIntakePhotos).where(eq(aiIntakePhotos.intakeId, intakeId));
       expect(remaining).toHaveLength(2);
+      expect(remaining.map((photo) => photo.id).sort()).toEqual(expectedOrder.slice(1).map((photo) => photo.id).sort());
     });
 
     it("returns immediately with a safe empty result when the remaining budget is already zero (no transaction opened for nothing)", async () => {
