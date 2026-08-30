@@ -406,7 +406,13 @@ describe("public catalog service", () => {
   it("shows Sold products in the archive only when showInArchiveAfterSale is true", async () => {
     const soldVisible = await createProduct(
       db,
-      baseInput({ title: "Sold Visible", status: ProductStatus.Draft, showInArchiveAfterSale: true }),
+      baseInput({
+        title: "Sold Visible",
+        status: ProductStatus.Draft,
+        showInArchiveAfterSale: true,
+        purchaseCost: 300,
+        internalNotes: "Private sold-item sourcing note",
+      }),
     );
     await updateProduct(db, soldVisible.id, { status: ProductStatus.Sold });
 
@@ -425,6 +431,30 @@ describe("public catalog service", () => {
     const archive = await listArchiveProducts(db, { page: 1, pageSize: 20 });
     expect(archive.items).toHaveLength(1);
     expect(archive.items[0].title).toBe("Sold Visible");
+
+    const soldDetail = await getPublicProductBySlug(db, soldVisible.slug);
+    expect(soldDetail).toMatchObject({
+      id: soldVisible.id,
+      status: ProductStatus.Sold,
+      title: "Sold Visible",
+    });
+    for (const privateField of [
+      "actualSalePriceEur",
+      "stockQuantity",
+      "salePausedAt",
+      "showInArchiveAfterSale",
+      "soldAt",
+      "sku",
+      "purchaseCost",
+      "internalNotes",
+    ]) {
+      expect(soldDetail).not.toHaveProperty(privateField);
+    }
+    await expect(getPublicProductBySlug(db, soldHidden.slug)).rejects.toBeInstanceOf(NotFoundError);
+
+    const active = await listPublicProducts(db, { page: 1, pageSize: 20, sort: "newest" });
+    expect(active.items.map((product) => product.id)).not.toContain(soldVisible.id);
+    expect(active.items.map((product) => product.id)).not.toContain(soldHidden.id);
   });
 
   it("filters by isFeatured", async () => {

@@ -22,7 +22,7 @@ async function fetchProduct(slug: string): Promise<PublicProductDetail | null> {
 
 /**
  * Sprint 73: server-side fetch used only for metadata/JSON-LD. Never calls notFound() - a
- * missing/draft/sold/archived slug must fall through to safe generic, noindexed metadata and
+ * missing/draft/non-public archival slug must fall through to safe generic, noindexed metadata and
  * still let ProductDetailClient mount and render Sprint 72's friendly "may have been sold or is
  * no longer available" UI, not Next's own not-found boundary.
  */
@@ -54,12 +54,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const product = await fetchProduct(params.slug);
 
   let jsonLdScript: string | null = null;
-  if (product && product.status === "published") {
+  if (product && (product.status === "published" || product.status === "sold")) {
     const canonicalUrl = buildCanonicalUrl(`/product/${params.slug}`);
     const absoluteImageUrls = (product.photos && product.photos.length > 0 ? product.photos : product.images)
       .map((image) => resolveAbsoluteImageUrl(image.url))
       .filter((url): url is string => Boolean(url));
     const jsonLd = buildProductJsonLd({ product, canonicalUrl, absoluteImageUrls });
+    if (product.status === "sold") delete jsonLd.offers;
     jsonLdScript = safeJsonLdScript(jsonLd);
   }
 

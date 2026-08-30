@@ -110,10 +110,9 @@ async function toPublicProduct(
   const cat = row.categoryId ? await context.repositories.categories.getById(row.categoryId) : undefined;
   const col = row.collectionId ? await context.repositories.collections.getById(row.collectionId) : undefined;
   return {
-    id: row.id, slug: row.slug, title: row.wooProductName ?? row.title, type: row.type as ProductType, shortDescription: row.wooShortDescription ?? undefined, description: row.wooLongDescription ?? row.description ?? undefined, productStory: row.productStory ?? undefined, brand: row.brand ?? undefined, model: row.model ?? undefined, manufacturer: row.manufacturer ?? undefined, countryOfOrigin: row.countryOfOrigin ?? undefined, period: row.period ?? undefined, materials: row.materials ?? undefined, lengthValue: row.lengthValue ?? undefined, widthValue: row.widthValue ?? undefined, heightValue: row.heightValue ?? undefined, dimensionUnit: row.dimensionUnit ?? undefined, weightValue: row.weightValue ?? undefined, weightUnit: row.weightUnit ?? undefined, condition: row.condition ?? undefined, conditionDescription: row.conditionDescription ?? undefined, /* Sprint 137: non-null assertion is safe - listPublicProducts (the only caller of this mapper)
-       always forces `published: true` on its query, and services/publishing.ts's validatePublish
-       is now the sole gate that ever transitions a Product to Published, guaranteeing
-       wooListingPriceEur ?? priceEur is a valid positive number for every row reaching here. */
+    id: row.id, slug: row.slug, title: row.wooProductName ?? row.title, type: row.type as ProductType, shortDescription: row.wooShortDescription ?? undefined, description: row.wooLongDescription ?? row.description ?? undefined, productStory: row.productStory ?? undefined, brand: row.brand ?? undefined, model: row.model ?? undefined, manufacturer: row.manufacturer ?? undefined, countryOfOrigin: row.countryOfOrigin ?? undefined, period: row.period ?? undefined, materials: row.materials ?? undefined, lengthValue: row.lengthValue ?? undefined, widthValue: row.widthValue ?? undefined, heightValue: row.heightValue ?? undefined, dimensionUnit: row.dimensionUnit ?? undefined, weightValue: row.weightValue ?? undefined, weightUnit: row.weightUnit ?? undefined, condition: row.condition ?? undefined, conditionDescription: row.conditionDescription ?? undefined, /* Sprint 137: non-null assertion is safe because public rows are either currently Published
+       or were previously publishable and are now preserved as archival Sold products. The
+       publishing gate guarantees wooListingPriceEur ?? priceEur for both lifecycle states. */
     priceEur: (row.wooListingPriceEur ?? row.priceEur)!, priceUsd: row.priceUsd ?? undefined, videoUrl: row.videoUrl ?? undefined, shippingNote: row.shippingNote ?? undefined, customsWarning: row.customsWarning, isFeatured: row.isFeatured, allowMakeOffer: row.allowMakeOffer, allowCashOnDelivery: row.allowCashOnDelivery, status: row.status as ProductStatus, categoryId: row.categoryId ?? undefined, categoryName: cat?.name, categorySlug: cat?.slug, collectionId: row.collectionId ?? undefined, collectionName: col?.name, collectionSlug: col?.slug, seoTitle: row.wooSeoTitle ?? row.seoTitle ?? undefined, metaDescription: row.wooMetaDescription ?? row.metaDescription ?? undefined,
     photos: photos.map((photo) => ({ id: photo.id, url: photo.url, thumbnailUrl: photo.thumbnailUrl ?? undefined, altText: photo.altText ?? undefined, sortOrder: photo.sortOrder, isPrimary: Boolean(photo.isPrimary) })),
     images: images.map((img) => ({ id: img.id, url: img.url, thumbnailUrl: img.thumbnailUrl ?? undefined, altText: img.altText ?? undefined, sortOrder: img.sortOrder, isPrimary: Boolean(img.isPrimary) })),
@@ -133,7 +132,9 @@ export async function listPublicProducts(db: DbClient, query: PublicProductListQ
 export async function getPublicProductBySlug(db: DbClient, slug: string, context?: ProductReadServiceContext): Promise<PublicProduct> {
   context ??= createProductReadServiceContextForDb(db);
   const row = await context.repositories.products.getBySlug(slug);
-  if (!row || row.status !== ProductStatus.Published || row.salePausedAt) throw new NotFoundError("Product not found");
+  const isActive = row?.status === ProductStatus.Published && !row.salePausedAt;
+  const isArchivalSold = row?.status === ProductStatus.Sold && row.showInArchiveAfterSale;
+  if (!row || (!isActive && !isArchivalSold)) throw new NotFoundError("Product not found");
   return toPublicProduct(db, row, context);
 }
 

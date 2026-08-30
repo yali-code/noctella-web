@@ -123,6 +123,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
       ? ["Weight", `${product.weightValue}${product.weightUnit ? ` ${product.weightUnit}` : ""}`]
       : null,
   ].filter((fact): fact is string[] => fact !== null);
+  const isSold = product.status === "sold";
 
   return (
     <section className="sf-pdp">
@@ -139,6 +140,12 @@ export function ProductDetailClient({ slug }: { slug: string }) {
         </div>
 
         <div className="sf-pdp__content">
+          {isSold && (
+            <div className="sf-pdp__sold-status" role="status">
+              <strong>Sold</strong>
+              <span>Preserved in the Noctella archive as a collectible reference.</span>
+            </div>
+          )}
           {product.isFeatured && (
             <span
               style={{
@@ -157,6 +164,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
           )}
           <h1>{product.title}</h1>
           <p className="sf-pdp__price">
+            {isSold && <span className="sf-pdp__price-label">Listed price</span>}
             €{product.priceEur.toFixed(2)}
             {product.priceUsd !== undefined && (
               <span style={{ fontSize: 14, color: "var(--noctella-aged-bronze)", marginLeft: 10 }}>
@@ -175,29 +183,37 @@ export function ProductDetailClient({ slug }: { slug: string }) {
             </div>
           )}
 
-          <div className="sf-pdp__actions">
-            <button onClick={handleToggleWishlist} className="sf-pdp__button sf-pdp__button--secondary" aria-pressed={inWishlist}>
-              {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
-            </button>
-            {product.allowMakeOffer && (
-              <button onClick={() => setShowOfferForm((v) => !v)} className="sf-pdp__button sf-pdp__button--primary">
-                Make an Offer
+          {!isSold && (
+            <div className="sf-pdp__actions">
+              <button onClick={handleToggleWishlist} className="sf-pdp__button sf-pdp__button--secondary" aria-pressed={inWishlist}>
+                {inWishlist ? "Remove from Wishlist" : "Add to Wishlist"}
               </button>
-            )}
-            <button disabled className="sf-pdp__button sf-pdp__button--disabled" title="Coming soon">
-              Ask AI
-            </button>
-            <button
-              onClick={handleAddToCart}
-              disabled={product.status !== "published" || inCart}
-              className={`sf-pdp__button ${inCart ? "sf-pdp__button--secondary" : "sf-pdp__button--primary"}`}
-              aria-live="polite"
-            >
-              {inCart ? (justAdded ? "Added to Cart" : "Already in Cart") : "Add to Cart"}
-            </button>
-          </div>
+              {product.allowMakeOffer && (
+                <button onClick={() => setShowOfferForm((v) => !v)} className="sf-pdp__button sf-pdp__button--primary">
+                  Make an Offer
+                </button>
+              )}
+              <button disabled className="sf-pdp__button sf-pdp__button--disabled" title="Coming soon">
+                Ask AI
+              </button>
+              <button
+                onClick={handleAddToCart}
+                disabled={product.status !== "published" || inCart}
+                className={`sf-pdp__button ${inCart ? "sf-pdp__button--secondary" : "sf-pdp__button--primary"}`}
+                aria-live="polite"
+              >
+                {inCart ? (justAdded ? "Added to Cart" : "Already in Cart") : "Add to Cart"}
+              </button>
+            </div>
+          )}
 
-          {inCart && (
+          {isSold && (
+            <p className="sf-pdp__archive-link">
+              This object is no longer available to purchase. <Link href="/archive">Explore the archive</Link>
+            </p>
+          )}
+
+          {!isSold && inCart && (
             <p style={{ fontSize: 13, color: "var(--noctella-bright-star-gold)", marginTop: -12 }}>
               <Link href="/cart" style={{ color: "inherit" }}>
                 View Cart
@@ -205,7 +221,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
             </p>
           )}
 
-          {showOfferForm && product.allowMakeOffer && (
+          {!isSold && showOfferForm && product.allowMakeOffer && (
             <div style={{ marginBottom: 20 }}>
               <MakeOfferForm productId={product.id} productTitle={product.title} />
             </div>
