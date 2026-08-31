@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { resolveApiAssetUrl } from "@/lib/api";
+import { CartFreshnessBlocker, useCartFreshness } from "@/components/CartFreshness";
 import {
-  type CartItem,
   cartEurSubtotal,
   cartUsdSubtotal,
   clearCartPersisted,
-  getCart,
   removeFromCartPersisted,
 } from "@/lib/cart";
 
@@ -20,35 +18,32 @@ function formatProductType(type: string): string {
 }
 
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    setItems(getCart());
-    setLoaded(true);
-  }, []);
+  const freshness = useCartFreshness();
+  const items = freshness.items;
 
   function handleRemove(productId: string) {
-    const updated = removeFromCartPersisted(productId);
-    setItems(updated);
+    removeFromCartPersisted(productId);
+    void freshness.reconcileNow();
     window.dispatchEvent(new Event("noctella:cart-updated"));
   }
 
   function handleClear() {
-    const updated = clearCartPersisted();
-    setItems(updated);
+    clearCartPersisted();
+    void freshness.reconcileNow();
     window.dispatchEvent(new Event("noctella:cart-updated"));
   }
 
   const eurSubtotal = cartEurSubtotal(items);
   const usdSubtotal = cartUsdSubtotal(items);
 
+  if (!freshness.canProceed) return <CartFreshnessBlocker freshness={freshness} title="Cart" />;
+
   return (
     <section style={{ padding: "48px 40px" }}>
       <h1>Cart</h1>
       <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
 
-      {loaded && items.length === 0 && (
+      {!freshness.loading && items.length === 0 && (
         <div style={{ padding: "40px 0", textAlign: "center" }}>
           <p style={{ color: "var(--noctella-aged-bronze)" }}>Your cart is empty.</p>
           <Link href="/shop" style={{ fontSize: 14 }}>

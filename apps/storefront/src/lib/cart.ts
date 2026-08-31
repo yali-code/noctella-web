@@ -101,6 +101,12 @@ function saveCart(items: CartItem[]): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
+/** Replaces the persisted guest cart after the customer accepts a reconciled snapshot. */
+export function replaceCartPersisted(items: CartItem[]): CartItem[] {
+  saveCart(items);
+  return items;
+}
+
 export function addToCartPersisted(item: CartItem): CartItem[] {
   const updated = addCartItem(getCart(), item);
   saveCart(updated);

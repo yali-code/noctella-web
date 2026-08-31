@@ -30,7 +30,7 @@ describe("Sprint 133 COD settlement -> automatic Draft SalesInvoice handoff", ()
     seq += 1;
     const cat = await createCategory(db, { name: `Cat-133-${seq}`, displayOrder: 0, isActive: true });
     const product = await createProduct(db, { sku: `SKU-COD133-${seq}`, title: `COD Product ${seq}`, wooProductName: `Web COD Product ${seq}`, slug: `cod133-product-${seq}`, type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId: cat.id, priceEur: 150, wooListingPriceEur: 150, stockQuantity: 1, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: true, showInArchiveAfterSale: false, ...overrides });
-    const order = await createCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db)).execute({ orderDraftId: `cod133-draft-${seq}`, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, items: [{ productId: product.id, quantity: 1 }] });
+    const order = await createCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db)).execute({ orderDraftId: `cod133-draft-${seq}`, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, items: [{ productId: product.id, quantity: 1 }], subtotalAmount: Number(product.wooListingPriceEur ?? product.priceEur) });
     return { product, order };
   }
 

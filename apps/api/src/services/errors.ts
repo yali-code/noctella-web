@@ -12,6 +12,14 @@ export class ConflictError extends Error {
   }
 }
 
+export class CheckoutPriceChangedError extends ConflictError {
+  readonly code = "CHECKOUT_PRICE_CHANGED";
+  constructor() {
+    super("Cart prices changed; please review your updated cart before placing the order");
+    this.name = "CheckoutPriceChangedError";
+  }
+}
+
 /**
  * Sprint 88 (ADR-017): thrown when a Product update's expectedUpdatedAt no
  * longer matches the current row. Extends ConflictError so any existing

@@ -28,6 +28,7 @@ import {
   AiIntakeProposalSuggestionUnavailableError,
   AiIntakeProposalVersionConflictError,
   BadRequestError,
+  CheckoutPriceChangedError,
   CanonicalProductProposalNotPendingError,
   CanonicalProductProposalVersionConflictError,
   ConflictError,
@@ -190,6 +191,10 @@ export function handleRouteError(err: unknown, res: Response): void {
     return;
   }
   if (err instanceof ConflictError) {
+    if (err instanceof CheckoutPriceChangedError) {
+      res.status(409).json({ error: err.message, code: err.code });
+      return;
+    }
     res.status(409).json({ error: err.message });
     return;
   }

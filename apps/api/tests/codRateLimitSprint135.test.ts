@@ -31,7 +31,7 @@ async function product() {
 }
 
 function intent(orderDraftId: string, productId: string) {
-  return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, items: [{ productId, quantity: 1 }] };
+  return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, items: [{ productId, quantity: 1 }], subtotalAmount: 50 };
 }
 
 function postCod(clientIp: string, body: unknown) {

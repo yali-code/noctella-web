@@ -28,8 +28,8 @@ async function product(suffix: string, overrides: Record<string, unknown> = {}) 
   return createProduct(db, { sku: `COD-${suffix}`, title: `Canonical ${suffix}`, wooProductName: `Web ${suffix}`, slug: `cod-${suffix}`, type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId, priceEur: 120, wooListingPriceEur: 100, stockQuantity: 1, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: true, showInArchiveAfterSale: false, ...overrides });
 }
 
-function intent(orderDraftId: string, productIds: string[]) {
-  return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, notes: "COD", items: productIds.map((productId) => ({ productId, quantity: 1 })) };
+function intent(orderDraftId: string, productIds: string[], subtotalAmount = productIds.length * 100) {
+  return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, notes: "COD", items: productIds.map((productId) => ({ productId, quantity: 1 })), subtotalAmount };
 }
 
 /**
@@ -91,15 +91,15 @@ describe("Sprint 129 COD order flow", () => {
 
   it("uses canonical price and title fallbacks", async () => {
     const p = await product("fallback", { wooProductName: null, wooListingPriceEur: null, priceEur: 75 });
-    const response = await postCod("10.0.129.3", intent("cod-draft-fallback", [p.id]));
+    const response = await postCod("10.0.129.3", intent("cod-draft-fallback", [p.id], 75));
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ subtotalAmount: 75, totalAmount: 75 });
     expect(response.body.items[0]).toMatchObject({ productTitle: "Canonical fallback", unitPrice: 75 });
   });
 
-  it("rejects browser monetary/payment authority at validation", async () => {
+  it("accepts only the reviewed subtotal while rejecting all other browser monetary/payment authority", async () => {
     const p = await product("authority");
-    const authorityCases = [{ subtotalAmount: 1 }, { totalAmount: 1 }, { currency: "USD" }, { paymentStatus: "paid" }, { paymentProvider: "stripe" }, { paymentReference: "fake" }];
+    const authorityCases = [{ totalAmount: 1 }, { currency: "USD" }, { paymentStatus: "paid" }, { paymentProvider: "stripe" }, { paymentReference: "fake" }];
     for (const [index, extra] of authorityCases.entries()) {
       const response = await postCod(`10.0.129.${10 + index}`, { ...intent(`cod-authority-${Object.keys(extra)[0]}`, [p.id]), ...extra });
       expect(response.status).toBe(400);

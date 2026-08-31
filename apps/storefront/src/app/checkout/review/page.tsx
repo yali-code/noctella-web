@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { resolveApiAssetUrl } from "@/lib/api";
-import { getCart } from "@/lib/cart";
+import { CartFreshnessBlocker, useCartFreshness } from "@/components/CartFreshness";
 import { getCheckoutDraft, isCheckoutDraftValid, type Address } from "@/lib/checkout";
 import { getOrRebuildOrderDraft, type OrderDraft } from "@/lib/orderDraft";
 
@@ -14,13 +14,15 @@ function formatAddress(address: Address): string {
 }
 
 export default function CheckoutReviewPage() {
+  const freshness = useCartFreshness();
   const [loaded, setLoaded] = useState(false);
   const [cartEmpty, setCartEmpty] = useState(false);
   const [checkoutInvalid, setCheckoutInvalid] = useState(false);
   const [draft, setDraft] = useState<OrderDraft | null>(null);
 
   useEffect(() => {
-    const cart = getCart();
+    if (!freshness.canProceed) return;
+    const cart = freshness.items;
     if (cart.length === 0) {
       setCartEmpty(true);
       setLoaded(true);
@@ -36,7 +38,9 @@ export default function CheckoutReviewPage() {
 
     setDraft(getOrRebuildOrderDraft(cart, checkoutDraft));
     setLoaded(true);
-  }, []);
+  }, [freshness.canProceed, freshness.items]);
+
+  if (!freshness.canProceed) return <CartFreshnessBlocker freshness={freshness} title="Review Order" />;
 
   if (!loaded) {
     return (

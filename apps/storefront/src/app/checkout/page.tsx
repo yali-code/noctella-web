@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { resolveApiAssetUrl } from "@/lib/api";
-import { type CartItem, cartEurSubtotal, cartUsdSubtotal, getCart } from "@/lib/cart";
+import { cartEurSubtotal, cartUsdSubtotal } from "@/lib/cart";
+import { CartFreshnessBlocker, useCartFreshness } from "@/components/CartFreshness";
 import {
   type Address,
   type CheckoutDraft,
@@ -19,14 +20,12 @@ import {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [cartLoaded, setCartLoaded] = useState(false);
+  const freshness = useCartFreshness();
+  const cartItems = freshness.items;
   const [draft, setDraft] = useState<CheckoutDraft>(emptyCheckoutDraft);
   const [errors, setErrors] = useState<CheckoutFormErrors>({});
 
   useEffect(() => {
-    setCartItems(getCart());
-    setCartLoaded(true);
     setDraft(getCheckoutDraft());
   }, []);
 
@@ -66,7 +65,9 @@ export default function CheckoutPage() {
   const eurSubtotal = cartEurSubtotal(cartItems);
   const usdSubtotal = cartUsdSubtotal(cartItems);
 
-  if (cartLoaded && cartItems.length === 0) {
+  if (!freshness.canProceed) return <CartFreshnessBlocker freshness={freshness} title="Checkout" />;
+
+  if (cartItems.length === 0) {
     return (
       <section style={{ padding: "60px 40px", textAlign: "center" }}>
         <h1>Checkout</h1>

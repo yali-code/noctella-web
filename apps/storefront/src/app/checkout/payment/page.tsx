@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getCart, isCashOnDeliveryAvailable } from "@/lib/cart";
+import { isCashOnDeliveryAvailable } from "@/lib/cart";
+import { CartFreshnessBlocker, useCartFreshness } from "@/components/CartFreshness";
 import { getCheckoutDraft, isCheckoutDraftValid } from "@/lib/checkout";
 import { getOrRebuildOrderDraft, type OrderDraft } from "@/lib/orderDraft";
 import { createCashOnDeliveryOrder, saveCreatedOrder } from "@/lib/orders";
@@ -12,6 +13,7 @@ import { ApiError } from "@/lib/api";
 
 export default function CheckoutPaymentPage() {
   const router = useRouter();
+  const freshness = useCartFreshness();
   const [loaded, setLoaded] = useState(false);
   const [cartEmpty, setCartEmpty] = useState(false);
   const [checkoutInvalid, setCheckoutInvalid] = useState(false);
@@ -26,7 +28,8 @@ export default function CheckoutPaymentPage() {
   const [selectedShippingMethodId, setSelectedShippingMethodId] = useState<string | null>(null);
 
   useEffect(() => {
-    const cart = getCart();
+    if (!freshness.canProceed) return;
+    const cart = freshness.items;
     if (cart.length === 0) {
       setCartEmpty(true);
       setLoaded(true);
@@ -59,7 +62,7 @@ export default function CheckoutPaymentPage() {
       })
       .catch(() => setShippingError(true))
       .finally(() => setShippingLoading(false));
-  }, []);
+  }, [freshness.canProceed, freshness.items]);
 
   const selectedOption = shippingOptions.find((option) => option.shippingMethodId === selectedShippingMethodId) ?? null;
   const shippingReady = !shippingLoading && !shippingError && selectedOption !== null;
@@ -71,7 +74,12 @@ export default function CheckoutPaymentPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const order = await createCashOnDeliveryOrder(orderDraft, {
+      const check = await freshness.reconcileNow();
+      if (!check.canProceed) return;
+      const checkoutDraft = getCheckoutDraft();
+      const currentDraft = getOrRebuildOrderDraft(check.items, checkoutDraft);
+      if (!currentDraft) return;
+      const order = await createCashOnDeliveryOrder(currentDraft, {
         shippingMethodId: selectedOption.shippingMethodId,
         expectedShippingAmountEur: selectedOption.amountEurCents / 100,
       });
@@ -83,6 +91,8 @@ export default function CheckoutPaymentPage() {
       setSubmitting(false);
     }
   }
+
+  if (!freshness.canProceed) return <CartFreshnessBlocker freshness={freshness} title="Payment" />;
 
   if (!loaded) {
     return (

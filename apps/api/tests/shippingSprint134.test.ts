@@ -30,14 +30,17 @@ describe("Sprint 134 shipping domain", () => {
     return createProduct(db, { sku: `SKU-SHIP-${seq}`, title: `Ship Product ${seq}`, wooProductName: `Web Ship Product ${seq}`, slug: `ship-product-${seq}`, type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId: cat.id, priceEur: 100, wooListingPriceEur: 100, stockQuantity: 1, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: true, showInArchiveAfterSale: false, ...overrides });
   }
 
-  function createCodOrder(productIds: string[], overrides: { shippingMethodId?: string; expectedShippingAmountEur?: number; countryCode?: string } = {}) {
+  async function createCodOrder(productIds: string[], overrides: { shippingMethodId?: string; expectedShippingAmountEur?: number; countryCode?: string } = {}) {
     seq += 1;
+    const rows = await Promise.all(productIds.map(async (id) => (await db.select().from(schema.products).where(eq(schema.products.id, id)))[0]));
+    const subtotalAmount = rows.reduce((sum, row) => sum + Number(row.wooListingPriceEur ?? row.priceEur), 0);
     return createCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db)).execute({
       orderDraftId: `ship-draft-${seq}`,
       guestEmail: "buyer@example.com",
       billingAddress: address(overrides.countryCode),
       shippingAddress: address(overrides.countryCode),
       items: productIds.map((productId) => ({ productId, quantity: 1 })),
+      subtotalAmount,
       shippingMethodId: overrides.shippingMethodId,
       expectedShippingAmountEur: overrides.expectedShippingAmountEur,
     });
@@ -219,8 +222,8 @@ describe("Sprint 134 shipping domain", () => {
     seq += 1;
     const draftId = `ship-replay-${seq}`;
     const useCase = createCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db));
-    const first = await useCase.execute({ orderDraftId: draftId, guestEmail: "buyer@example.com", billingAddress: address(), shippingAddress: address(), items: [{ productId: p.id, quantity: 1 }] });
-    const replay = await useCase.execute({ orderDraftId: draftId, guestEmail: "buyer@example.com", billingAddress: address(), shippingAddress: address(), items: [{ productId: p.id, quantity: 1 }] });
+    const first = await useCase.execute({ orderDraftId: draftId, guestEmail: "buyer@example.com", billingAddress: address(), shippingAddress: address(), items: [{ productId: p.id, quantity: 1 }], subtotalAmount: 100 });
+    const replay = await useCase.execute({ orderDraftId: draftId, guestEmail: "buyer@example.com", billingAddress: address(), shippingAddress: address(), items: [{ productId: p.id, quantity: 1 }], subtotalAmount: 100 });
     expect(replay.id).toBe(first.id);
     expect(replay.shippingAmount).toBe(first.shippingAmount);
     const movements = await db.select().from(schema.stockMovements).where(eq(schema.stockMovements.orderId, first.id));
@@ -234,7 +237,7 @@ describe("Sprint 134 shipping domain", () => {
     const p = await product();
     seq += 1;
     const draftId = `ship-concurrent-${seq}`;
-    const intent = { orderDraftId: draftId, guestEmail: "buyer@example.com", billingAddress: address(), shippingAddress: address(), items: [{ productId: p.id, quantity: 1 }] };
+    const intent = { orderDraftId: draftId, guestEmail: "buyer@example.com", billingAddress: address(), shippingAddress: address(), items: [{ productId: p.id, quantity: 1 }], subtotalAmount: 100 };
     const [a, b] = await Promise.all([
       createCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db)).execute(intent),
       createCashOnDeliveryOrderUseCase(new SqliteUnitOfWork(db)).execute(intent),
