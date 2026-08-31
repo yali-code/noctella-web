@@ -77,7 +77,6 @@ export function Header() {
 function AccountLinks({ wishlistCount, cartCount, onNavigate }: { wishlistCount: number; cartCount: number; onNavigate: () => void }) {
   return <>
     <Link href="/wishlist" aria-label={`Wishlist (${wishlistCount} items)`} onClick={onNavigate}>Wishlist{wishlistCount ? ` (${wishlistCount})` : ""}</Link>
-    <Link href="/account" onClick={onNavigate}>Account</Link>
     <Link href="/cart" aria-label={`Cart (${cartCount} items)`} onClick={onNavigate}>Cart{cartCount ? ` (${cartCount})` : ""}</Link>
   </>;
 }
