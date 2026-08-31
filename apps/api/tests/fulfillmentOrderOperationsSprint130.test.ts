@@ -27,7 +27,7 @@ async function seedProduct(id:string,stock=1){
 async function codOrder(id:string){
   const productId=`product-${id}`;
   await seedProduct(productId);
-  const order=await createCashOnDeliveryOrder(db,{orderDraftId:`draft-${id}`,guestEmail:"buyer@example.com",billingAddress:address,shippingAddress:address,items:[{productId,quantity:1}]});
+  const order=await createCashOnDeliveryOrder(db,{orderDraftId:`draft-${id}`,guestEmail:"buyer@example.com",billingAddress:address,shippingAddress:address,items:[{productId,quantity:1}],subtotalAmount:10});
   return {order,productId};
 }
 

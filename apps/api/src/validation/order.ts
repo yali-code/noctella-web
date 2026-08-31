@@ -51,6 +51,9 @@ export const createCashOnDeliveryOrderSchema = z.object({
   shippingAddress: addressSchema,
   notes: z.string().optional(),
   items: z.array(orderItemInputSchema.strict()).min(1),
+  // Customer-reviewed cart subtotal. It is never authoritative: final order creation resolves
+  // current product prices and requires this value to match them in exact EUR cents.
+  subtotalAmount: z.number().finite().min(0),
   // Sprint 134: non-authoritative shipping selection - the server always independently re-resolves
   // the amount from current shipping-method configuration; shippingMethodId only identifies which
   // eligible method to use, and expectedShippingAmountEur (if present) is compared in exact EUR

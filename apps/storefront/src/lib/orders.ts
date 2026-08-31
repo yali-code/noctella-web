@@ -63,6 +63,7 @@ export function buildCashOnDeliveryOrderPayload(draft: OrderDraft, shipping?: { 
     shippingAddress: toApiAddress(draft.shippingAddress, draft.customer),
     notes: draft.customerNote,
     items: draft.items.map((item) => ({ productId: item.productId, quantity: 1 as const })),
+    subtotalAmount: draft.currencySummary.eurSubtotal,
     ...(shipping ? { shippingMethodId: shipping.shippingMethodId, expectedShippingAmountEur: shipping.expectedShippingAmountEur } : {}),
   };
 }

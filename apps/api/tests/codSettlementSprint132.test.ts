@@ -40,8 +40,8 @@ async function product(suffix: string, overrides: Record<string, unknown> = {}) 
   return createProduct(db, { sku: `CODSET-${suffix}`, title: `Canonical ${suffix}`, wooProductName: `Web ${suffix}`, slug: `codset-${suffix}`, type: ProductType.UniqueItem, status: ProductStatus.Published, categoryId, priceEur: 120, wooListingPriceEur: 100, stockQuantity: 1, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: true, showInArchiveAfterSale: false, ...overrides });
 }
 
-function intent(orderDraftId: string, productIds: string[]) {
-  return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, notes: "COD settlement", items: productIds.map((productId) => ({ productId, quantity: 1 })) };
+function intent(orderDraftId: string, productIds: string[], subtotalAmount = 100) {
+  return { orderDraftId, guestEmail: "buyer@example.com", billingAddress: address, shippingAddress: address, notes: "COD settlement", items: productIds.map((productId) => ({ productId, quantity: 1 })), subtotalAmount };
 }
 
 /**
@@ -55,7 +55,8 @@ let codOrderClientIpSequence = 0;
 async function createCodOrder(suffix: string, priceOverrides: Record<string, unknown> = {}) {
   const p = await product(suffix, priceOverrides);
   codOrderClientIpSequence += 1;
-  const response = await request(app).post("/api/orders/cod").set("X-Forwarded-For", `10.0.132.${codOrderClientIpSequence}`).send(intent(`cod-settle-${suffix}`, [p.id]));
+  const reviewedSubtotal = Number(priceOverrides.wooListingPriceEur ?? priceOverrides.priceEur ?? 100);
+  const response = await request(app).post("/api/orders/cod").set("X-Forwarded-For", `10.0.132.${codOrderClientIpSequence}`).send(intent(`cod-settle-${suffix}`, [p.id], reviewedSubtotal));
   expect(response.status).toBe(201);
   return response.body;
 }

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   createCashOnDeliveryOrder: vi.fn(),
   saveCreatedOrder: vi.fn(),
   getShippingOptions: vi.fn(),
+  reconcileNow: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
@@ -23,6 +24,20 @@ vi.mock("@/lib/checkout", () => ({ getCheckoutDraft: mocks.getCheckoutDraft, isC
 vi.mock("@/lib/orderDraft", () => ({ getOrRebuildOrderDraft: mocks.getOrRebuildOrderDraft }));
 vi.mock("@/lib/orders", () => ({ createCashOnDeliveryOrder: mocks.createCashOnDeliveryOrder, saveCreatedOrder: mocks.saveCreatedOrder }));
 vi.mock("@/lib/shipping", () => ({ getShippingOptions: mocks.getShippingOptions }));
+vi.mock("@/components/CartFreshness", () => ({
+  useCartFreshness: () => ({
+    items: cart.items,
+    loading: false,
+    error: false,
+    result: null,
+    canProceed: true,
+    reconcileNow: mocks.reconcileNow,
+    acceptChanges: vi.fn(),
+    removeUnavailable: vi.fn(),
+    retry: vi.fn(),
+  }),
+  CartFreshnessBlocker: () => null,
+}));
 
 const cart = { items: [{ productId: "product-1", quantity: 1 }] };
 const checkoutDraft = { customer: { email: "buyer@example.com" }, shippingAddress: { line1: "1 Test St", city: "Sofia", postalCode: "1000", country: "BG", countryCode: "BG" } };
@@ -46,6 +61,7 @@ function arrange(codAvailable = true) {
   mocks.isCashOnDeliveryAvailable.mockReturnValue(codAvailable);
   mocks.createCashOnDeliveryOrder.mockResolvedValue(createdOrder);
   mocks.getShippingOptions.mockResolvedValue({ items: [freeShippingOption] });
+  mocks.reconcileNow.mockResolvedValue({ canProceed: true, items: cart.items });
 }
 
 describe("Sprint 129 COD-only checkout presentation", () => {

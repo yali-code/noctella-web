@@ -7,9 +7,20 @@ import {
   listRelatedProducts,
 } from "../services/publicCatalog";
 import { publicProductListQuerySchema } from "../validation/publicCatalog";
+import { publicCartReconciliationSchema } from "../validation/cartReconciliation";
+import { reconcilePublicCart } from "../services/cartReconciliation";
 import { handleRouteError } from "./errorHandler";
 
 const router = Router();
+
+router.post("/reconcile", async (req, res) => {
+  try {
+    const input = publicCartReconciliationSchema.parse(req.body);
+    res.json(await reconcilePublicCart(db, input));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.get("/", async (req, res) => {
   try {

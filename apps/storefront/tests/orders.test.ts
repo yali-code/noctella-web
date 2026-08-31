@@ -120,10 +120,10 @@ describe("Sprint 129 Cash on Delivery order client", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(() => vi.restoreAllMocks());
 
-  it("builds a stable intent-only payload with no monetary or payment authority", () => {
+  it("builds a stable intent payload with only the customer-reviewed subtotal as monetary input", () => {
     const payload = buildCashOnDeliveryOrderPayload(draft);
-    expect(payload).toMatchObject({ orderDraftId: "draft-1", guestEmail: "jane@example.com", items: [{ productId: "product-1", quantity: 1 }] });
-    for (const key of ["subtotalAmount", "totalAmount", "currency", "paymentStatus", "paymentProvider", "paymentReference"]) expect(payload).not.toHaveProperty(key);
+    expect(payload).toMatchObject({ orderDraftId: "draft-1", guestEmail: "jane@example.com", subtotalAmount: 1200, items: [{ productId: "product-1", quantity: 1 }] });
+    for (const key of ["totalAmount", "currency", "paymentStatus", "paymentProvider", "paymentReference"]) expect(payload).not.toHaveProperty(key);
   });
 
   it("posts the same stable draft ID to the dedicated COD endpoint", async () => {
