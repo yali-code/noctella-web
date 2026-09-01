@@ -39,6 +39,7 @@ import {
   UnauthorizedError,
 } from "../services/errors";
 import { InventoryUseCaseError, type InventoryErrorCategory } from "../application/inventory/errors";
+import { logUnhandledRequestError } from "../middleware/requestObservability";
 
 // Sprint 64D: InventoryUseCaseError previously fell through to the generic 500 branch below -
 // it doesn't extend BadRequestError/ConflictError/NotFoundError, so none of the checks above
@@ -232,6 +233,6 @@ export function handleRouteError(err: unknown, res: Response): void {
   // Logging a fixed operational message is the only way to guarantee that never happens - err is
   // deliberately never touched here, not even indirectly.
   // eslint-disable-next-line no-console
-  console.error("Unhandled route error");
+  logUnhandledRequestError(res);
   res.status(500).json({ error: "Internal server error" });
 }

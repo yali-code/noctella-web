@@ -53,6 +53,7 @@ import { createRequireAuth, requirePermission } from "./auth/permissions";
 import { requireAdminOriginForMutations } from "./auth/csrf";
 import { requireSchedulerAuth } from "./auth/machineAuth";
 import { parseConfiguredOrigins } from "./auth/originAllowlist";
+import { requestObservability } from "./middleware/requestObservability";
 
 /**
  * Sprint 64B: split out of index.ts (which now only imports this and calls listen()) so the
@@ -70,6 +71,7 @@ const app = express();
  * services/adminAuth.ts) resolve to the real client IP instead of Render's own proxy address.
  */
 app.set("trust proxy", 1);
+app.use(requestObservability);
 const requireAuth = createRequireAuth(db);
 
 /**
