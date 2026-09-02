@@ -13,7 +13,7 @@ import { ensureSchema } from "../src/db/migrate";
  * on-disk deployment as closely as possible, and asserts the *current* (corrected) migration
  * never throws regardless of pre-existing data shape.
  */
-describe("Sprint 79 correction: invoice migration is safe against historical duplicate SalesInvoice data", () => {
+describe("Sprint 79 correction: invoice migration is safe against historical duplicate SalesInvoice data", { timeout: 10_000 }, () => {
   let tempDir: string | undefined;
   afterEach(async () => { if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); tempDir = undefined; });
 

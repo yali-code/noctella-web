@@ -36,14 +36,19 @@ describe("handleRouteError safe logging (Sprint 69)", () => {
     errorSpy.mockRestore();
   });
 
-  it("logs only the fixed operational message - never err, err.message, or a JSON.stringify of it", () => {
+  it("logs only the structured safe event - never err, err.message, or a JSON.stringify of it", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = mockRes();
     const err = new Error("pw=abc123");
 
     handleRouteError(err, res);
 
-    expect(errorSpy).toHaveBeenCalledExactlyOnceWith("Unhandled route error");
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(errorSpy.mock.calls[0][0]))).toEqual({
+      event: "request_error",
+      requestId: "unavailable",
+      category: "unhandled",
+    });
     errorSpy.mockRestore();
   });
 
@@ -56,11 +61,16 @@ describe("handleRouteError safe logging (Sprint 69)", () => {
     vi.restoreAllMocks();
   });
 
-  it("logs the same fixed message (not silently swallowed) for a non-Error unknown throw", () => {
+  it("logs the same structured safe event (not silently swallowed) for a non-Error unknown throw", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = mockRes();
     handleRouteError("a plain string throw", res);
-    expect(errorSpy).toHaveBeenCalledExactlyOnceWith("Unhandled route error");
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(errorSpy.mock.calls[0][0]))).toEqual({
+      event: "request_error",
+      requestId: "unavailable",
+      category: "unhandled",
+    });
     expect(res.statusCode).toBe(500);
     errorSpy.mockRestore();
   });

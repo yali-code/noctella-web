@@ -69,7 +69,7 @@ export function logUnhandledRequestError(res: Response): void {
   // eslint-disable-next-line no-console
   console.error(JSON.stringify({
     event: "request_error",
-    requestId: typeof res.locals.requestId === "string" ? res.locals.requestId : "unavailable",
+    requestId: typeof res.locals?.requestId === "string" ? res.locals.requestId : "unavailable",
     category: "unhandled",
   }));
 }
