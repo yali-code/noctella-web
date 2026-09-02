@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    fileParallelism: false,
     // Sprint 53B: tests/build-copy.test.mjs uses node:test (not Vitest) and runs
     // exclusively via `npm run test:build-copy`. Vitest's default include glob
     // would otherwise also pick it up and report it as a failed suite.

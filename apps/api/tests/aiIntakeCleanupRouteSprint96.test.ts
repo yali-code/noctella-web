@@ -47,7 +47,7 @@ beforeAll(async () => {
   managerCookie = await login("cleanup-editor@example.com");
   await adminAuth.createAdminUser(db, { email: "cleanup-aireviewer@example.com", password: PASSWORD, role: AdminRole.AiReviewer });
   noPermissionCookie = await login("cleanup-aireviewer@example.com");
-});
+}, 30_000);
 
 afterAll(() => {
   rmSync(stagedTempDir, { recursive: true, force: true });

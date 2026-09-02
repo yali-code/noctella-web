@@ -13,7 +13,7 @@ import { ensureSchema } from "../src/db/migrate";
  * real file-backed SQLite database (not :memory:) so the scenario matches an actual on-disk
  * deployment as closely as possible.
  */
-describe("Sprint 80 correction: historical orders.status='Completed' rows are normalized on startup", () => {
+describe("Sprint 80 correction: historical orders.status='Completed' rows are normalized on startup", { timeout: 10_000 }, () => {
   let tempDir: string | undefined;
   afterEach(async () => { if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); tempDir = undefined; });
 

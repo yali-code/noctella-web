@@ -5,12 +5,13 @@ import { requireAdminOriginForMutations } from "../auth/csrf";
 import { parseCookieHeader, serializeClearCookie, serializeSessionCookie, SESSION_COOKIE_NAME } from "../auth/cookies";
 import { login, logout } from "../services/adminAuth";
 import { handleRouteError } from "./errorHandler";
+import { adminLoginRateLimit } from "../middleware/adminLoginRateLimit";
 
 const router = Router();
 const requireAuth = createRequireAuth(db);
 
 /** Public. Generic failure response for every failure mode (see services/adminAuth.ts's login). */
-router.post("/login", async (req, res) => {
+router.post("/login", adminLoginRateLimit, async (req, res) => {
   try {
     const body = (req.body ?? {}) as { email?: unknown; password?: unknown };
     const result = await login(db, {

@@ -37,6 +37,9 @@ services:
     autoDeployTrigger: off
     buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
     startCommand: node apps/api/dist/index.js
+    # Keep the platform probe on lightweight liveness. GET /ready is the mandatory post-deploy,
+    # pre-traffic gate; using business readiness here could cause traffic flapping while an
+    # operator temporarily disables shipping during controlled maintenance.
     healthCheckPath: /health
     disk:
       name: noctella-production-data

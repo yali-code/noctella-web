@@ -80,7 +80,7 @@ describe("Sprint 154 homepage architecture", () => {
   });
 
   it("defines Product-first Minimal as the layout default and keeps a token-only comparison variant", async () => {
-    const css = await readFile(path.resolve(process.cwd(), "src/app/globals.css"), "utf8");
+    const css = (await readFile(path.resolve(process.cwd(), "src/app/globals.css"), "utf8")).replace(/\r\n?/g, "\n");
     const layout = await readFile(path.resolve(process.cwd(), "src/app/layout.tsx"), "utf8");
     expect(layout).toContain('data-storefront-theme="product-first"');
     expect(css).toContain('[data-storefront-theme="noctella-character"]');

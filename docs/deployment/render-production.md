@@ -1,5 +1,39 @@
 # Render Production Deployment Runbook — COD-Only Initial Launch
 
+## Sprint 158 launch-evidence gate
+
+Production remains unauthorized until an authorized operator records every item below. Repository
+tests prove software readiness only; they do not prove infrastructure or business readiness. Use
+only `VERIFIED`, `NOT VERIFIED`, `OWNER VERIFICATION REQUIRED`, or
+`INFRASTRUCTURE VERIFICATION REQUIRED`. Never record credentials or customer data in evidence.
+
+| Gate | Required evidence | Initial state |
+| --- | --- | --- |
+| Repository/software | Approved commit, required CI, API/Admin/Storefront builds | NOT VERIFIED |
+| Render resources | API, Admin, Storefront, jobs, database backup, photo backup | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Production configuration | Required variables present; secrets safely retained/rotated | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Domains and transport | Custom domains, DNS, TLS, redirects | INFRASTRUCTURE VERIFICATION REQUIRED |
+| URL alignment | Public API URLs, canonical URL, API origins | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Browser security | CORS and production cookie-domain behavior | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Liveness and deploy gate | `/health` succeeds; `/ready` returns 200 before traffic | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Persistent storage | SQLite and product photos survive restart/redeploy | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Shipping | Owner-approved active method produces the intended quote | OWNER VERIFICATION REQUIRED |
+| Admin bootstrap | Owner login works; bootstrap variables removed or rotated | OWNER VERIFICATION REQUIRED |
+| COD checkout | Synthetic order, idempotent replay, inventory effect, Admin visibility, settlement | OWNER VERIFICATION REQUIRED |
+| Scheduler | Authenticated cron succeeds and durable work is processed | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Backups | Database and photo backups plus integrity verification succeed | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Restore rehearsal | Representative database and photo recovery completed | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Ownership | Named rollback owner and recovery owner with contact route | OWNER VERIFICATION REQUIRED |
+| Customer support | `support@noctella.com` receives mail and is monitored | OWNER VERIFICATION REQUIRED |
+| Operational alerts | Named owner receives service, cron, readiness, and backup failures | INFRASTRUCTURE VERIFICATION REQUIRED |
+| Smoke-test record | Timestamped, redacted complete post-deploy results | NOT VERIFIED |
+
+The Render probe remains `/health`, which answers only whether the process accepts HTTP traffic.
+`/ready` is deliberately the manual pre-traffic deploy gate because temporary shipping
+administration must not create automatic restart or traffic flapping. Any non-200 readiness result
+blocks traffic. Optional integrations, legal facts, mailbox ownership, backups, and recovery
+evidence remain human gates rather than machine-readiness checks.
+
 ## PRODUCTION IS NOT AUTHORIZED MERELY BECAUSE SPRINT 135 MERGES.
 
 Sprint 135 provides the code-level and configuration-artifact prerequisites for a controlled
