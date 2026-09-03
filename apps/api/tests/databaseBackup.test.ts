@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -9,8 +9,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDatabaseBackupRouter } from "../src/routes/databaseBackup";
 import { DatabaseBackupConfigurationError, readS3CompatibleBackupConfig } from "../src/repositories/database-backup/s3Compatible";
 import type { DatabaseBackupObjectMetadata, DatabaseBackupRepository } from "../src/repositories/database-backup/types";
-import { createDatabaseBackupUseCase, createDatabaseRestoreVerificationUseCase, DatabaseBackupError } from "../src/use-cases/database-backup/useCases";
+import { createDatabaseBackupUseCase, createDatabaseRestoreMaterializationUseCase, createDatabaseRestoreVerificationUseCase, DatabaseBackupError } from "../src/use-cases/database-backup/useCases";
 import { DATABASE_BACKUP_REQUEST_TIMEOUT_MS, requestDatabaseBackup } from "../src/scripts/runDatabaseBackup";
+import { runDatabaseRestoreMaterializationCli } from "../src/scripts/materializeDatabaseRestore";
 import { createS3CompatibleBackupRepository } from "../src/repositories/database-backup/s3Compatible";
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { checkSqliteIntegrity } from "../src/services/databaseMigrationFoundation";
@@ -22,6 +23,7 @@ class FakeRepository implements DatabaseBackupRepository {
   downloadError = false;
   metadataOverride?: Partial<DatabaseBackupObjectMetadata>;
   remoteBytes?: Buffer;
+  reportedDownloadBytes?: number;
   downloadPaths: string[] = [];
 
   async upload(localPath: string, metadata: DatabaseBackupObjectMetadata) {
@@ -39,7 +41,7 @@ class FakeRepository implements DatabaseBackupRepository {
     const bytes = this.remoteBytes ?? this.bytes;
     if (bytes.length > maximumBytes) throw new Error("too large");
     await writeFile(destinationPath, bytes, { flag: "wx" });
-    return bytes.length;
+    return this.reportedDownloadBytes ?? bytes.length;
   }
 }
 
@@ -68,6 +70,10 @@ function useCase(sqlite: Database.Database, repository: FakeRepository, prefix =
     prefix,
     now: () => new Date("2026-08-09T03:00:00.000Z"),
   });
+}
+
+function materialization(repository: FakeRepository, liveDatabasePath: string, expectedPrefix = "database-backups", removeTemporaryWorkspace?: (directory: string) => Promise<void>) {
+  return createDatabaseRestoreMaterializationUseCase({ repository, inspector: artifactInspector, expectedPrefix, liveDatabasePath, removeTemporaryWorkspace });
 }
 
 const artifactInspector = { inspect(filePath: string) { const result = checkSqliteIntegrity(filePath); if (result.integrity !== "ok" || !result.fingerprint) throw new DatabaseBackupError("Database backup integrity verification failed"); return result.fingerprint; } };
@@ -181,6 +187,179 @@ describe("Sprint 124 SQLite database backup", () => {
 
   it("rejects an unsafe restore object key", async () => {
     await expect(createDatabaseRestoreVerificationUseCase(new FakeRepository(), artifactInspector).execute("../live.sqlite")).rejects.toThrow("Invalid database backup object key");
+  });
+
+  it("materializes a verified SQLite candidate to a new destination and removes its temporary workspace", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    const destination = path.join(directory, "recovery.sqlite");
+    const result = await materialization(repository, livePath).execute(backup.objectKey, destination);
+    expect(result).toEqual({ objectKey: backup.objectKey, byteSize: backup.byteSize, sha256: backup.sha256, createdAt: backup.createdAt, destination, integrity: "ok" });
+    const candidate = new Database(destination, { readonly: true });
+    expect(candidate.pragma("integrity_check", { simple: true })).toBe("ok");
+    expect(candidate.prepare("SELECT value FROM proof").pluck().get()).toBe("committed");
+    candidate.close();
+    expect(repository.downloadPaths).toHaveLength(2);
+    await expect(access(path.dirname(repository.downloadPaths[1]))).rejects.toThrow();
+    sqlite.close();
+  });
+
+  it.each([
+    "../live.sqlite",
+    "database-backups/../live.sqlite",
+    "other-prefix/noctella.sqlite",
+    "database-backups/not-a-database.txt",
+  ])("materialization rejects unsafe or out-of-namespace object key %s", async (objectKey) => {
+    const { livePath, sqlite } = await sourceDatabase();
+    await expect(materialization(new FakeRepository(), livePath).execute(objectKey, path.join(path.dirname(livePath), "candidate.sqlite"))).rejects.toThrow("Invalid database backup object key");
+    sqlite.close();
+  });
+
+  it.each([
+    ["missing createdAt", { createdAt: "" }],
+    ["malformed createdAt", { createdAt: "not-a-date" }],
+    ["malformed size", { byteSize: 0 }],
+    ["malformed fingerprint", { sha256: "not-a-sha" }],
+    ["wrong object key", { objectKey: "database-backups/different.sqlite" }],
+  ])("materialization rejects %s metadata without leaving files", async (_name, override) => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    repository.metadataOverride = override;
+    const destination = path.join(directory, "candidate.sqlite");
+    await expect(materialization(repository, livePath).execute(backup.objectKey, destination)).rejects.toThrow("metadata verification failed");
+    await expect(access(destination)).rejects.toThrow();
+    sqlite.close();
+  });
+
+  it.each([
+    ["truncated transfer", "actual"],
+    ["reported byte-count mismatch", "reported"],
+    ["resulting file-size mismatch", "file"],
+  ])("materialization rejects %s and cleans temporary state", async (_name, mode) => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    repository.remoteBytes = repository.bytes.subarray(0, repository.bytes.length - 1);
+    if (mode === "reported") { repository.remoteBytes = repository.bytes; repository.reportedDownloadBytes = repository.bytes.length - 1; }
+    if (mode === "file") repository.reportedDownloadBytes = repository.bytes.length;
+    const destination = path.join(directory, "candidate.sqlite");
+    await expect(materialization(repository, livePath).execute(backup.objectKey, destination)).rejects.toThrow("remote size verification failed");
+    await expect(access(destination)).rejects.toThrow();
+    await expect(access(path.dirname(repository.downloadPaths.at(-1)!))).rejects.toThrow();
+    sqlite.close();
+  });
+
+  it("materialization rejects a SHA-256 mismatch and removes the temporary artifact", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    const changed = Buffer.from(repository.bytes); changed[changed.length - 1] ^= 1; repository.remoteBytes = changed;
+    const destination = path.join(directory, "candidate.sqlite");
+    await expect(materialization(repository, livePath).execute(backup.objectKey, destination)).rejects.toThrow("SHA-256 verification failed");
+    await expect(access(destination)).rejects.toThrow();
+    await expect(access(path.dirname(repository.downloadPaths.at(-1)!))).rejects.toThrow();
+    sqlite.close();
+  });
+
+  it("materialization rejects a corrupt SQLite artifact with matching metadata and cleans up", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    repository.bytes = Buffer.from("not-a-sqlite-database");
+    repository.metadata = { objectKey: "database-backups/corrupt.sqlite", byteSize: repository.bytes.length, sha256: createHash("sha256").update(repository.bytes).digest("hex"), createdAt: "2026-08-09T03:00:00.000Z" };
+    const destination = path.join(directory, "candidate.sqlite");
+    await expect(materialization(repository, livePath).execute(repository.metadata.objectKey, destination)).rejects.toThrow("integrity verification failed");
+    await expect(access(destination)).rejects.toThrow();
+    await expect(access(path.dirname(repository.downloadPaths.at(-1)!))).rejects.toThrow();
+    sqlite.close();
+  });
+
+  it("never overwrites an existing destination", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    const destination = path.join(directory, "existing.sqlite");
+    await writeFile(destination, "preserve-me");
+    await expect(materialization(repository, livePath).execute(backup.objectKey, destination)).rejects.toThrow("destination already exists");
+    expect(await readFile(destination, "utf8")).toBe("preserve-me");
+    sqlite.close();
+  });
+
+  it("atomically refuses a destination created after validation without replacing it", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    const destination = path.join(directory, "raced.sqlite");
+    const originalDownload = repository.download.bind(repository);
+    repository.download = async (...args) => { const bytes = await originalDownload(...args); await writeFile(destination, "race-winner", { flag: "wx" }); return bytes; };
+    await expect(materialization(repository, livePath).execute(backup.objectKey, destination)).rejects.toThrow("destination already exists");
+    expect(await readFile(destination, "utf8")).toBe("race-winner");
+    await expect(access(path.dirname(repository.downloadPaths.at(-1)!))).rejects.toThrow();
+    sqlite.close();
+  });
+
+  it("preserves the published destination when temporary cleanup fails", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    const destination = path.join(directory, "published.sqlite");
+    const removeTemporaryWorkspace = vi.fn(async () => { throw new Error("cleanup failed"); });
+    await expect(materialization(repository, livePath, "database-backups", removeTemporaryWorkspace).execute(backup.objectKey, destination)).rejects.toThrow("temporary cleanup failed");
+    expect(await readFile(destination)).toEqual(repository.bytes);
+    expect(removeTemporaryWorkspace).toHaveBeenCalledOnce();
+    sqlite.close();
+  });
+
+  it("never deletes a replacement destination after post-publication cleanup failure", async () => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    const destination = path.join(directory, "replaced.sqlite");
+    const replacement = Buffer.from("replacement-owned-by-another-actor");
+    const removeTemporaryWorkspace = async (temporaryDirectory: string) => {
+      expect(await readFile(destination)).toEqual(repository.bytes);
+      await rm(destination, { force: true });
+      await writeFile(destination, replacement, { flag: "wx" });
+      await rm(temporaryDirectory, { recursive: true, force: true });
+      throw new Error("cleanup failed");
+    };
+    await expect(materialization(repository, livePath, "database-backups", removeTemporaryWorkspace).execute(backup.objectKey, destination)).rejects.toThrow("temporary cleanup failed");
+    expect(await readFile(destination)).toEqual(replacement);
+    sqlite.close();
+  });
+
+  it.each(["exact", "normalized", "relative"])("rejects the %s live database path alias without modifying it", async (_kind) => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    const repository = new FakeRepository();
+    const backup = await useCase(sqlite, repository).execute();
+    await mkdir(path.join(directory, "alias"));
+    const destinations = {
+      exact: livePath,
+      normalized: path.join(directory, "alias", "..", "live.sqlite"),
+      relative: path.relative(process.cwd(), livePath),
+    };
+    const before = await readFile(livePath);
+    await expect(materialization(repository, livePath).execute(backup.objectKey, destinations[_kind as keyof typeof destinations])).rejects.toThrow("must not be the live database");
+    expect(await readFile(livePath)).toEqual(before);
+    sqlite.close();
+  });
+
+  it.each(["", "candidate.db", "missing/candidate.sqlite"])("rejects unsafe destination %s", async (destination) => {
+    const { directory, livePath, sqlite } = await sourceDatabase();
+    await expect(materialization(new FakeRepository(), livePath).execute("database-backups/valid.sqlite", path.join(directory, destination))).rejects.toThrow(/destination|metadata/);
+    sqlite.close();
+  });
+
+  it("the materialization CLI requires exactly two inputs and emits only safe structured success output", async () => {
+    const errors: string[] = [];
+    await expect(runDatabaseRestoreMaterializationCli([], { error: (value) => errors.push(value) })).resolves.toBe(1);
+    expect(errors).toEqual(["A database backup object key and new recovery destination are required"]);
+    const output: string[] = [];
+    const materialize = vi.fn().mockResolvedValue({ objectKey: "database-backups/proof.sqlite", destination: "/recovery/proof.sqlite", byteSize: 42, sha256: "a".repeat(64), integrity: "ok", createdAt: "2026-08-09T03:00:00.000Z", secretAccessKey: "must-not-print" });
+    await expect(runDatabaseRestoreMaterializationCli(["database-backups/proof.sqlite", "/recovery/proof.sqlite"], { materialize, output: (value) => output.push(value) })).resolves.toBe(0);
+    expect(JSON.parse(output[0])).toEqual({ objectKey: "database-backups/proof.sqlite", destination: "/recovery/proof.sqlite", byteSize: 42, sha256: "a".repeat(64), integrity: "ok" });
+    expect(output[0]).not.toContain("must-not-print");
   });
 
   it("missing S3 configuration fails closed without exposing credential values", () => {

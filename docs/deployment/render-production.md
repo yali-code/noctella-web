@@ -223,32 +223,72 @@ choosing a response — they require different actions.
 - After rollback: re-run `GET /health`, then `GET /ready`, then the required post-deploy smoke
   checks above before resuming traffic.
 
-### Database restore (data/migration failure)
+### Database restore candidate materialization (data/migration failure)
 
-The repository provides backup and **verification** tooling only — `npm run db:restore-verify`
-and `npm run photos:recovery-verify` confirm a given backup object's integrity (byte size,
-checksum); neither of these, nor any other script in this repository, writes to
-`/var/data/noctella.sqlite` or automatically applies a backup to a running deployment. Do not
-describe or treat either as a one-command live restore.
+`npm run db:restore-verify -w apps/api -- <object-key>` verifies a selected backup without retaining
+it. `npm run db:restore-materialize -w apps/api -- <object-key> <new-recovery-destination>` instead
+retains a verified SQLite restore candidate at the explicit destination. Both commands require the
+configured `DATABASE_BACKUP_S3_*` credentials and settings. Materialization also requires the live
+SQLite `DATABASE_URL` so that it can reject that path and its normalized aliases.
+
+The materialization command validates the object namespace and metadata, transferred byte count,
+file length, SHA-256 fingerprint, and SQLite integrity before publishing the candidate. It downloads
+to an isolated temporary location beside the requested destination and attempts to remove its private
+temporary workspace after the operation. The destination must have a `.sqlite` extension, its parent
+directory must already exist, and the destination itself must not exist. Publication is fail-closed
+and cannot replace a destination created concurrently. Failures return a non-zero status and a fixed
+message without storage credentials or internal provider errors.
+
+Interpret materialization outcomes as follows:
+
+- **Success:** the candidate was verified and published, temporary-workspace cleanup succeeded, and
+  the command returned success.
+- **Failure before publication:** no candidate was published, private temporary-workspace cleanup was
+  attempted, and the command returned failure.
+- **Cleanup failure after publication:** the verified candidate was already published, cleanup of the
+  private temporary workspace failed, and the command returned failure. The published destination is
+  preserved and is not deleted or rolled back; private temporary residue may remain.
+
+Command failure therefore does not necessarily mean that no candidate was published. After a cleanup
+failure, inspect the requested destination and any operation-owned temporary residue before deciding
+how to proceed. Remove temporary residue only after confirming its identity and that removal is safe.
+Before retrying, check whether the requested destination already exists; a blind retry will correctly
+fail existing-destination protection. Existing destinations are never overwritten, so use an
+intentionally selected new, nonexistent recovery destination if another materialization is required.
+
+> **Materializing a verified restore candidate does NOT restore the live database.** The command
+> never stops the API, changes `DATABASE_URL`, replaces the live database, restarts a service, or
+> performs a Render recovery. Successful output means only that a verified SQLite restore candidate
+> exists at the explicitly selected recovery destination.
 
 If an actual data-level restore is genuinely required:
 
 1. Identify the correct pre-cutover database backup object (from the daily
    `noctella-production-database-backup` cron's history, or the manual pre-cutover backup taken
    per step 23 above).
-2. Verify that object's integrity using `npm run db:restore-verify` (with the object key) before
-   using it for anything.
-3. Stop or quiesce the API service so no further writes occur against the live database.
-4. Preserve or separately retain the current (failed/suspect) `/var/data/noctella.sqlite` file
+2. Materialize it to an explicitly new, non-live recovery destination using
+   `npm run db:restore-materialize -w apps/api -- <object-key> <new-recovery-destination>`.
+3. Inspect the requested destination and command outcome. On success, confirm the safe structured
+   result identifies the selected object, destination, verified byte size, SHA-256 fingerprint, and
+   `integrity: "ok"`. On failure, determine whether a verified candidate was already published.
+4. Inspect and safely resolve any operation-owned temporary cleanup residue when necessary. Do not
+   remove unidentified files or directories.
+5. Obtain separate authorization for a recovery rehearsal or live recovery. Materialization alone
+   does not authorize either action.
+6. In an approved isolated environment, stop or quiesce the API service so no further writes occur.
+7. Preserve or separately retain the current (failed/suspect) SQLite file
    before replacing it, when operationally safe to do so.
-5. Replace the SQLite file on the persistent disk with the verified backup. This apply/copy-back
-   step is **manual and operator-executed**, using the approved S3-compatible storage access and
-   Render's own persistent-disk shell access — no repository script performs this step
-   automatically.
-6. Restart/redeploy the API service once the data file is in place.
-7. Re-run `GET /health`, then `GET /ready`.
-8. Re-run the required post-deploy production smoke checks above.
-9. Do not resume customer traffic until the recovery is verified end-to-end.
+8. Manually replace the stopped environment's SQLite file with the materialized candidate according
+   to the controlled recovery procedure. No repository command performs this live replacement.
+9. Restart the isolated service once the data file is in place.
+10. Re-run `GET /health`.
+11. Re-run `GET /ready`.
+12. Verify representative data.
+13. Record redacted recovery evidence. Do not resume customer traffic until recovery is verified
+    end-to-end and separately authorized.
+
+Sprint 159 does not complete or claim the required external restore rehearsal. That rehearsal
+remains a separate operational gate.
 
 ### Photo restore
 

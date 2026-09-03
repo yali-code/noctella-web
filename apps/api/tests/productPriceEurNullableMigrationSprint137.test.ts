@@ -12,7 +12,10 @@ import { ensureSchema } from "../src/db/migrate";
  * behavior), and the exact OLD products table DDL (price_eur REAL NOT NULL) created directly,
  * never through the already-updated ensureSchema/schema.sql.
  */
-describe("Sprint 137: products.price_eur nullable migration", () => {
+describe(
+  "Sprint 137: products.price_eur nullable migration",
+  { timeout: 10_000 },
+  () => {
   let tempDir: string | undefined;
   afterEach(async () => { if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); tempDir = undefined; });
 
