@@ -12,6 +12,7 @@ export interface CloseableServer {
 const DEFAULT_PORT = 4000;
 const MIN_PORT = 1;
 const MAX_PORT = 65535;
+export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
 
 /**
  * Parses a base-10 integer TCP port from a raw env-var string, or undefined if the value is
@@ -43,6 +44,7 @@ export interface ShutdownDeps {
   log?: (...args: unknown[]) => void;
   logError?: (...args: unknown[]) => void;
   exit?: (code: number) => void;
+  shutdownTimeoutMs?: number;
 }
 
 /**
@@ -60,20 +62,35 @@ export function createGracefulShutdown({
   log = console.log,
   logError = console.error,
   exit = process.exit,
+  shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
 }: ShutdownDeps) {
   let shuttingDown = false;
+  let terminal = false;
   return async function shutdown(signal: string): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     log(`Received ${signal}, shutting down gracefully`);
+    const deadline = setTimeout(() => {
+      if (terminal) return;
+      terminal = true;
+      logError("Error during shutdown");
+      exit(1);
+    }, shutdownTimeoutMs);
     try {
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
       });
+      if (terminal) return;
       await dbRuntime.shutdown();
+      if (terminal) return;
+      terminal = true;
+      clearTimeout(deadline);
       log("Shutdown complete");
       exit(0);
     } catch {
+      if (terminal) return;
+      terminal = true;
+      clearTimeout(deadline);
       // A shutdown failure's raw error/message could embed a connection string or token (e.g. a
       // postgres pool error) - deliberately never touched, not even via a redactor. Fixed
       // operational message only.
