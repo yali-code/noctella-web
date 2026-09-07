@@ -182,6 +182,34 @@ describe("Sprint 158 production configuration validation", () => {
   it("accepts the controlled production topology", () => expect(() => validateProductionApiConfig(valid)).not.toThrow());
   it("preserves development and test ergonomics", () => expect(() => validateProductionApiConfig({ NODE_ENV: "test" })).not.toThrow());
   it.each([
+    ["the persistent mount root", { PRODUCT_PHOTO_DIR: "/var/data" }],
+    ["a normalized persistent mount-root alias", { PRODUCT_PHOTO_DIR: "/var/data/." }],
+    ["the database path equal to the photo root", { DATABASE_URL: "/var/data/product-photos", PRODUCT_PHOTO_DIR: "/var/data/product-photos" }],
+    ["the database immediately inside the photo root", { DATABASE_URL: "/var/data/product-photos/noctella.sqlite" }],
+    ["the database nested beneath the photo root", { DATABASE_URL: "/var/data/product-photos/private/noctella.sqlite" }],
+    ["a dot-segment database overlap", { DATABASE_URL: "/var/data/product-photos/./private/noctella.sqlite" }],
+    ["a parent-segment database overlap", { DATABASE_URL: "/var/data/product-photos/temp/../private/noctella.sqlite" }],
+  ])("rejects PRODUCT_PHOTO_DIR when it exposes %s without exposing configured values", (_scenario, override) => {
+    const configured = { ...valid, ...override };
+    expect(() => validateProductionApiConfig(configured)).toThrow(/PRODUCT_PHOTO_DIR/);
+    try { validateProductionApiConfig(configured); } catch (error) {
+      const output = String(error);
+      expect(output).not.toContain(String(configured.DATABASE_URL));
+      expect(output).not.toContain(String(configured.PRODUCT_PHOTO_DIR));
+      expect(output).not.toContain("scheduler-value");
+      expect(output).not.toContain("erp-value");
+    }
+  });
+
+  it("accepts a deeper dedicated photo root when the database remains its sibling", () => {
+    expect(() => validateProductionApiConfig({ ...valid, PRODUCT_PHOTO_DIR: "/var/data/media/product-photos" })).not.toThrow();
+  });
+
+  it("accepts a database path whose sibling directory only shares the photo-root prefix", () => {
+    expect(() => validateProductionApiConfig({ ...valid, DATABASE_URL: "/var/data/photos-old/noctella.sqlite", PRODUCT_PHOTO_DIR: "/var/data/photos" })).not.toThrow();
+  });
+
+  it.each([
     ["DATABASE_DRIVER", { DATABASE_DRIVER: "postgres" }], ["DATABASE_URL", { DATABASE_URL: ":memory:" }], ["DATABASE_URL", { DATABASE_URL: "relative.sqlite" }], ["DATABASE_URL", { DATABASE_URL: "/tmp/noctella.sqlite" }], ["DATABASE_URL", { DATABASE_URL: "/var/data" }], ["DATABASE_URL", { DATABASE_URL: "/var/data/../outside.sqlite" }], ["PRODUCT_PHOTO_DIR", { PRODUCT_PHOTO_DIR: "uploads/photos" }], ["PRODUCT_PHOTO_DIR", { PRODUCT_PHOTO_DIR: "/tmp/product-photos" }], ["PRODUCT_PHOTO_DIR", { PRODUCT_PHOTO_DIR: "/var/data/../photos" }], ["ADMIN_APP_ORIGIN", { ADMIN_APP_ORIGIN: "http://localhost:3001" }], ["STOREFRONT_APP_ORIGIN", { STOREFRONT_APP_ORIGIN: "not-a-url" }], ["COOKIE_DOMAIN", { COOKIE_DOMAIN: "localhost" }], ["COOKIE_DOMAIN", { COOKIE_DOMAIN: "https://noctella.example" }], ["COOKIE_DOMAIN", { COOKIE_DOMAIN: ".unrelated.example" }], ["COOKIE_DOMAIN", { COOKIE_DOMAIN: ".evilnoctella.example" }], ["SCHEDULER_AUTH_TOKEN", { SCHEDULER_AUTH_TOKEN: "" }], ["ERP_INTEGRATION_KEY", { ERP_INTEGRATION_KEY: "" }], ["MOCK_PAYMENTS_ENABLED", { MOCK_PAYMENTS_ENABLED: "true" }], ["STRIPE_PUBLIC_CHECKOUT_ENABLED", { STRIPE_PUBLIC_CHECKOUT_ENABLED: "true" }],
   ])("fails closed for %s without exposing configured values", (variable, override) => {
     expect(() => validateProductionApiConfig({ ...valid, ...override })).toThrow(new RegExp(String(variable)));

@@ -28,17 +28,23 @@ function productionOrigin(value: string, variable: string): URL {
   return parsed;
 }
 
-function pathInsidePersistentMount(value: string, variable: string, allowMountRoot: boolean): void {
+function pathInsidePersistentMount(value: string, variable: string, allowMountRoot: boolean): string {
   if (!path.isAbsolute(value)) {
-    throw new ProductionConfigurationError(variable, "must be an absolute path inside /var/data");
+    throw new ProductionConfigurationError(variable, "must be an absolute path inside the persistent mount");
   }
   const mount = path.resolve(PRODUCTION_PERSISTENT_MOUNT);
   const resolved = path.resolve(value);
   const relative = path.relative(mount, resolved);
-  const inside = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  const inside = relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
   if (!inside || (!allowMountRoot && relative === "")) {
-    throw new ProductionConfigurationError(variable, "must resolve inside /var/data");
+    throw new ProductionConfigurationError(variable, "must resolve inside the persistent mount");
   }
+  return resolved;
+}
+
+function pathContains(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 function hostnameUsesCookieDomain(hostname: string, cookieDomain: string): boolean {
@@ -53,9 +59,12 @@ export function validateProductionApiConfig(env: NodeJS.ProcessEnv = process.env
 
   const databaseUrl = required(env, "DATABASE_URL");
   if (databaseUrl === ":memory:") throw new ProductionConfigurationError("DATABASE_URL", "must be a persistent SQLite file path");
-  pathInsidePersistentMount(databaseUrl, "DATABASE_URL", false);
+  const databasePath = pathInsidePersistentMount(databaseUrl, "DATABASE_URL", false);
   const photoDir = required(env, "PRODUCT_PHOTO_DIR");
-  pathInsidePersistentMount(photoDir, "PRODUCT_PHOTO_DIR", true);
+  const photoRoot = pathInsidePersistentMount(photoDir, "PRODUCT_PHOTO_DIR", false);
+  if (pathContains(photoRoot, databasePath)) {
+    throw new ProductionConfigurationError("PRODUCT_PHOTO_DIR", "must not contain DATABASE_URL");
+  }
 
   const configuredOrigins: URL[] = [];
   for (const variable of ["ADMIN_APP_ORIGIN", "STOREFRONT_APP_ORIGIN"] as const) {
