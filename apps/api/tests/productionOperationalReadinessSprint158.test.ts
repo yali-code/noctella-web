@@ -177,10 +177,33 @@ describe("Sprint 158 request correlation and safe structured logs", () => {
 });
 
 describe("Sprint 158 production configuration validation", () => {
-  const valid: NodeJS.ProcessEnv = { NODE_ENV: "production", DATABASE_DRIVER: "sqlite", DATABASE_URL: "/var/data/noctella.sqlite", PRODUCT_PHOTO_DIR: "/var/data/product-photos", ADMIN_APP_ORIGIN: "https://admin.noctella.example", STOREFRONT_APP_ORIGIN: "https://shop.noctella.example", COOKIE_DOMAIN: ".noctella.example", SCHEDULER_AUTH_TOKEN: "scheduler-value", ERP_INTEGRATION_KEY: "erp-value", MOCK_PAYMENTS_ENABLED: "false" };
+  const valid: NodeJS.ProcessEnv = { NODE_ENV: "production", PORT: "10000", DATABASE_DRIVER: "sqlite", DATABASE_URL: "/var/data/noctella.sqlite", PRODUCT_PHOTO_DIR: "/var/data/product-photos", ADMIN_APP_ORIGIN: "https://admin.noctella.example", STOREFRONT_APP_ORIGIN: "https://shop.noctella.example", COOKIE_DOMAIN: ".noctella.example", SCHEDULER_AUTH_TOKEN: "scheduler-value", ERP_INTEGRATION_KEY: "erp-value", MOCK_PAYMENTS_ENABLED: "false" };
 
   it("accepts the controlled production topology", () => expect(() => validateProductionApiConfig(valid)).not.toThrow());
   it("preserves development and test ergonomics", () => expect(() => validateProductionApiConfig({ NODE_ENV: "test" })).not.toThrow());
+  it.each(["1", "10000", "65535", " 10000 "])("accepts valid production PORT %s", (PORT) => {
+    expect(() => validateProductionApiConfig({ ...valid, PORT })).not.toThrow();
+  });
+
+  it.each([undefined, "", "   ", "abc", "10000abc", "1.5", "0", "-1", "65536", "999999", "Infinity", "NaN", "1e4", "+10000"])(
+    "rejects invalid production PORT %s without falling back to API_PORT",
+    (PORT) => expect(() => validateProductionApiConfig({ ...valid, PORT, API_PORT: "5000" })).toThrow(/PORT/),
+  );
+
+  it("does not expose an invalid PORT or configured secrets in diagnostics", () => {
+    const configured = { ...valid, PORT: "distinct-invalid-port-162", API_PORT: "5000" };
+    try { validateProductionApiConfig(configured); } catch (error) {
+      const output = String(error);
+      expect(output).toContain("PORT");
+      expect(output).not.toContain("distinct-invalid-port-162");
+      expect(output).not.toContain("5000");
+      expect(output).not.toContain("scheduler-value");
+      expect(output).not.toContain("erp-value");
+      return;
+    }
+    throw new Error("Expected production PORT validation to fail");
+  });
+
   it.each([
     ["the persistent mount root", { PRODUCT_PHOTO_DIR: "/var/data" }],
     ["a normalized persistent mount-root alias", { PRODUCT_PHOTO_DIR: "/var/data/." }],
@@ -235,6 +258,7 @@ describe("Sprint 158 real startup validation boundary", () => {
       env: {
         ...process.env,
         NODE_ENV: "production",
+        PORT: "10000",
         DATABASE_DRIVER: "sqlite",
         DATABASE_URL: databasePath,
         PRODUCT_PHOTO_DIR: "/var/data/product-photos",
