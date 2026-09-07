@@ -16,6 +16,16 @@ function required(env: NodeJS.ProcessEnv, variable: string): string {
   return value;
 }
 
+function productionPort(value: string): void {
+  if (!/^\d+$/.test(value)) {
+    throw new ProductionConfigurationError("PORT", "must be a decimal integer from 1 to 65535");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new ProductionConfigurationError("PORT", "must be a decimal integer from 1 to 65535");
+  }
+}
+
 function productionOrigin(value: string, variable: string): URL {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new ProductionConfigurationError(variable, "must be a valid HTTPS origin"); }
@@ -55,6 +65,7 @@ function hostnameUsesCookieDomain(hostname: string, cookieDomain: string): boole
 
 export function validateProductionApiConfig(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV !== "production") return;
+  productionPort(required(env, "PORT"));
   if (env.DATABASE_DRIVER !== "sqlite") throw new ProductionConfigurationError("DATABASE_DRIVER", "must be sqlite");
 
   const databaseUrl = required(env, "DATABASE_URL");
