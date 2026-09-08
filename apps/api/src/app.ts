@@ -44,6 +44,8 @@ import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutb
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
 import { dispatchDueAiSalesPreparationOutboxEvents } from "./services/aiSalesPreparationOutbox";
 import { runAiIntakeCleanupForScheduler, MAX_CLEANUP_BATCH_SIZE } from "./services/aiIntakeCleanup";
+import { parseSchedulerBatchSize } from "./validation/backgroundJobs";
+import { handleRouteError } from "./routes/errorHandler";
 import { runDatabaseBackup } from "./services/databaseBackup";
 import { runProductPhotoBackup } from "./services/productPhotoBackup";
 import { BackgroundJobType } from "@noctella/shared";
@@ -153,9 +155,15 @@ app.use("/api/erp", erpRouter);
 // the ERP integration key. Mounted before the admin session gate below - a scheduler must never
 // need an admin session cookie.
 app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next) => {
+  const workerId = String(req.body?.workerId ?? "scheduler");
+  let batchSize: number;
   try {
-    const workerId = String(req.body?.workerId ?? "scheduler");
-    const batchSize = Number(req.body?.batchSize ?? 10);
+    batchSize = parseSchedulerBatchSize(req.body?.batchSize);
+  } catch (e) {
+    handleRouteError(e, res);
+    return;
+  }
+  try {
     const processed = await runDueJobs(db, workerId, batchSize);
     // Sprint 71: reuses this same scheduler trigger for the product-photo outbox (promotion,
     // delete, temp-cleanup) instead of adding a second cron/endpoint for it.
