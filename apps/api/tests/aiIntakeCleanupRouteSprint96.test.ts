@@ -8,7 +8,11 @@ import request from "supertest";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { AdminRole } from "@noctella/shared";
+import { AdminRole, BackgroundJobStatus } from "@noctella/shared";
+import { eq } from "drizzle-orm";
+import { parseSchedulerBatchSize } from "../src/validation/backgroundJobs";
+import { enqueueJob } from "../src/services/backgroundJobs";
+import { backgroundJobs } from "../src/db/schema";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 6).toString("base64");
@@ -203,23 +207,62 @@ describe("scheduler integration: POST /api/background-jobs/run", () => {
     expect(res.body.aiIntakeCleanup.dryRun).toBe(false);
   });
 
-  it("cleanup's batch size is capped at 500 even if a larger batchSize is requested; other domains' own batchSize behavior is unaffected", async () => {
-    process.env.AI_INTAKE_CLEANUP_EXECUTION_ENABLED = "true";
+  it.each([1, 10])("accepts shared batchSize boundary %s", async (batchSize) => {
     const res = await request(app)
       .post("/api/background-jobs/run")
       .set("Authorization", "Bearer test-scheduler-token-ai-intake-cleanup")
-      .send({ batchSize: 999999 });
+      .send({ batchSize });
     expect(res.status).toBe(200);
-    expect(res.body.aiIntakeCleanup).toBeTruthy();
-    // Not directly observable from the response how many rows the cap allowed - the correctness of
-    // the 500-cap itself is proven at the service/use-case level (aiIntakeCleanup.test.ts); this
-    // asserts only that the request completes successfully and the other domains still process
-    // using their own unmodified (uncapped) requested batchSize.
-    expect(typeof res.body.processed).toBe("number");
+  });
+
+  it.each([
+    0,
+    -1,
+    1.5,
+    11,
+    999999,
+    "10",
+    "",
+    "   ",
+    "1e1",
+    null,
+    true,
+    false,
+    [],
+    {},
+  ])("rejects invalid shared batchSize %# with 400 before scheduler work", async (batchSize) => {
+    const job = await enqueueJob(db, {
+      type: "sprint-163-zero-execution-proof",
+      idempotencyKey: `sprint-163-invalid-${JSON.stringify(batchSize)}-${Math.random()}`,
+    });
+    const res = await request(app)
+      .post("/api/background-jobs/run")
+      .set("Authorization", "Bearer test-scheduler-token-ai-intake-cleanup")
+      .send({ batchSize });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Validation failed");
+    expect(res.body.details).toEqual([expect.objectContaining({ path: "batchSize" })]);
+    expect(JSON.stringify(res.body.details)).not.toContain("999999");
+    const [unchanged] = await db.select().from(backgroundJobs).where(eq(backgroundJobs.id, job.id));
+    expect(unchanged.status).toBe(BackgroundJobStatus.Pending);
+    expect(unchanged.lockedBy).toBeNull();
+    expect(unchanged.attemptCount).toBe(0);
   });
 
   it("requires the real scheduler bearer token - rejects without it", async () => {
     const res = await request(app).post("/api/background-jobs/run").send({});
     expect(res.status).toBe(401);
+  });
+});
+
+describe("scheduler batchSize schema boundary", () => {
+  it("defaults omitted input to 10 and accepts the inclusive boundaries", () => {
+    expect(parseSchedulerBatchSize(undefined)).toBe(10);
+    expect(parseSchedulerBatchSize(1)).toBe(1);
+    expect(parseSchedulerBatchSize(10)).toBe(10);
+  });
+
+  it.each([11, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])("rejects non-finite or above-maximum input %s", (batchSize) => {
+    expect(() => parseSchedulerBatchSize(batchSize)).toThrow();
   });
 });
