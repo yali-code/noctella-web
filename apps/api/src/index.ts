@@ -12,10 +12,7 @@ async function start(): Promise<void> {
   ]);
   const port = resolvePort();
 
-  seedInitialCategoriesIfEmpty(db).catch(() => {
-    // eslint-disable-next-line no-console
-    console.error("Failed to seed initial categories");
-  });
+  await seedInitialCategoriesIfEmpty(db);
 
   const server = app.listen(port, () => {
     // eslint-disable-next-line no-console

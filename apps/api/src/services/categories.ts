@@ -50,17 +50,16 @@ export async function seedInitialCategoriesIfEmpty(db: DbClient): Promise<void> 
   if (existing.length > 0) return;
 
   const now = new Date().toISOString();
-  for (const [index, name] of INITIAL_CATEGORY_NAMES.entries()) {
-    await db.insert(categories).values({
-      id: randomUUID(),
-      name,
-      slug: slugify(name),
-      displayOrder: index,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
+  const values = INITIAL_CATEGORY_NAMES.map((name, index) => ({
+    id: randomUUID(),
+    name,
+    slug: slugify(name),
+    displayOrder: index,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  await db.insert(categories).values(values);
 }
 
 async function assertSlugAvailable(db: DbClient, slug: string, excludeId?: string): Promise<void> {

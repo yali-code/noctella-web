@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ConflictError, NotFoundError } from "../src/services/errors";
 import {
   archiveCategory,
@@ -7,6 +9,18 @@ import {
   seedInitialCategoriesIfEmpty,
 } from "../src/services/categories";
 import { createTestDb } from "./testDb";
+import { ensureSchema } from "../src/db/migrate";
+import { categories } from "../src/db/schema";
+
+const canonicalCategories = [
+  ["Cameras & Optics", "cameras-optics", 0],
+  ["Watches & Timepieces", "watches-timepieces", 1],
+  ["Pens & Writing", "pens-writing", 2],
+  ["Collectibles", "collectibles", 3],
+  ["Decorative Objects", "decorative-objects", 4],
+  ["Gentleman Series", "gentleman-series", 5],
+  ["Archive / Sold Gallery", "archive-sold-gallery", 6],
+] as const;
 
 describe("category service", () => {
   let db: ReturnType<typeof createTestDb>;
@@ -50,17 +64,48 @@ describe("category service", () => {
     await expect(archiveCategory(db, "does-not-exist")).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it("seeds the initial category list only when the table is empty", async () => {
-    const { categories } = await import("../src/db/schema");
+  it("seeds the exact canonical list once when the table is empty", async () => {
+    await seedInitialCategoriesIfEmpty(db);
+    const afterFirstSeed = await db.select().from(categories).orderBy(categories.displayOrder);
+    expect(afterFirstSeed.map(({ name, slug, displayOrder, isActive }) => ({ name, slug, displayOrder, isActive }))).toEqual(
+      canonicalCategories.map(([name, slug, displayOrder]) => ({ name, slug, displayOrder, isActive: true })),
+    );
 
     await seedInitialCategoriesIfEmpty(db);
-    const afterFirstSeed = await db.select().from(categories);
-    expect(afterFirstSeed.length).toBe(7);
+    expect(await db.select().from(categories)).toEqual(afterFirstSeed);
+  });
 
-    await createCategory(db, { name: "Extra Category", displayOrder: 99, isActive: true });
-    await seedInitialCategoriesIfEmpty(db); // should be a no-op now, table is non-empty
+  it("leaves an existing nonempty category table untouched", async () => {
+    await createCategory(db, { name: "User Category", displayOrder: 99, isActive: false });
+    const beforeSeed = await db.select().from(categories);
+    await seedInitialCategoriesIfEmpty(db);
+    expect(await db.select().from(categories)).toEqual(beforeSeed);
+  });
 
-    const rows = await db.select().from(categories);
-    expect(rows.length).toBe(8);
+  it("submits all canonical categories through one bulk insert", async () => {
+    const values = vi.fn().mockResolvedValue(undefined);
+    const insert = vi.fn(() => ({ values }));
+    const fakeDb = {
+      select: () => ({ from: () => ({ limit: async () => [] }) }),
+      insert,
+    };
+
+    await seedInitialCategoriesIfEmpty(fakeDb as never);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(values).toHaveBeenCalledTimes(1);
+    expect(values.mock.calls[0][0]).toHaveLength(7);
+  });
+
+  it("leaves no partial canonical rows when the bulk statement fails", async () => {
+    const sqlite = new Database(":memory:");
+    sqlite.pragma("foreign_keys = ON");
+    ensureSchema(sqlite);
+    sqlite.exec(`CREATE TRIGGER fail_canonical_seed BEFORE INSERT ON categories
+      WHEN NEW.name = 'Collectibles' BEGIN SELECT RAISE(ABORT, 'injected failure'); END;`);
+    const failingDb = drizzle(sqlite);
+
+    await expect(seedInitialCategoriesIfEmpty(failingDb as never)).rejects.toThrow();
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM categories").get()).toEqual({ count: 0 });
+    sqlite.close();
   });
 });
