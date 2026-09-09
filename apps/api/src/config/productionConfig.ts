@@ -1,5 +1,6 @@
 import path from "node:path";
 import { parseConfiguredOrigins } from "../auth/originAllowlist";
+import { MARKETPLACE_REQUEST_TIMEOUT_RULE, resolveMarketplaceRequestTimeoutMs } from "./marketplaceConfig";
 
 const PRODUCTION_PERSISTENT_MOUNT = "/var/data";
 
@@ -66,6 +67,9 @@ function hostnameUsesCookieDomain(hostname: string, cookieDomain: string): boole
 export function validateProductionApiConfig(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV !== "production") return;
   productionPort(required(env, "PORT"));
+  try { resolveMarketplaceRequestTimeoutMs(env); } catch {
+    throw new ProductionConfigurationError("MARKETPLACE_REQUEST_TIMEOUT_MS", MARKETPLACE_REQUEST_TIMEOUT_RULE);
+  }
   if (env.DATABASE_DRIVER !== "sqlite") throw new ProductionConfigurationError("DATABASE_DRIVER", "must be sqlite");
 
   const databaseUrl = required(env, "DATABASE_URL");

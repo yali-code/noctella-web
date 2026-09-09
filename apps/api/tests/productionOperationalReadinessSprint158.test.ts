@@ -185,6 +185,31 @@ describe("Sprint 158 production configuration validation", () => {
     expect(() => validateProductionApiConfig({ ...valid, PORT })).not.toThrow();
   });
 
+  it.each([undefined, "1", "10000", "30000", " 10000 "])("accepts valid production marketplace timeout %s", (MARKETPLACE_REQUEST_TIMEOUT_MS) => {
+    expect(() => validateProductionApiConfig({ ...valid, MARKETPLACE_REQUEST_TIMEOUT_MS })).not.toThrow();
+  });
+
+  it.each(["", "   ", "0", "-1", "1.5", "1e4", "+10000", "NaN", "Infinity", "30001", "9007199254740993", "10000ms"])(
+    "rejects invalid production marketplace timeout %s",
+    (MARKETPLACE_REQUEST_TIMEOUT_MS) => {
+      expect(() => validateProductionApiConfig({ ...valid, MARKETPLACE_REQUEST_TIMEOUT_MS })).toThrow(/MARKETPLACE_REQUEST_TIMEOUT_MS/);
+    },
+  );
+
+  it("does not expose an invalid marketplace timeout or configured secrets in diagnostics", () => {
+    const configured = { ...valid, MARKETPLACE_REQUEST_TIMEOUT_MS: "secret-invalid-timeout-165" };
+    try { validateProductionApiConfig(configured); } catch (error) {
+      const output = String(error);
+      expect(output).toContain("MARKETPLACE_REQUEST_TIMEOUT_MS");
+      expect(output).toContain("1 to 30000");
+      expect(output).not.toContain("secret-invalid-timeout-165");
+      expect(output).not.toContain("scheduler-value");
+      expect(output).not.toContain("erp-value");
+      return;
+    }
+    throw new Error("Expected production marketplace timeout validation to fail");
+  });
+
   it.each([undefined, "", "   ", "abc", "10000abc", "1.5", "0", "-1", "65536", "999999", "Infinity", "NaN", "1e4", "+10000"])(
     "rejects invalid production PORT %s without falling back to API_PORT",
     (PORT) => expect(() => validateProductionApiConfig({ ...valid, PORT, API_PORT: "5000" })).toThrow(/PORT/),
