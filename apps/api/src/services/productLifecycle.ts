@@ -10,8 +10,9 @@ import { ConflictError, NotFoundError } from "./errors";
 import { executeControlledRelistPublish, getAdapter, getPublishJobByIdempotencyKey, retryControlledRelistPublishJob, sanitizeMarketplaceError } from "./marketplacePublishing";
 import { getProductById } from "./products";
 import { eq } from "drizzle-orm";
+import { resolveMarketplaceRequestTimeoutMs } from "../config/marketplaceConfig";
 
-export const marketplacePauseLeaseMs = (timeoutMs = Number(process.env.MARKETPLACE_REQUEST_TIMEOUT_MS ?? 10_000)) => Math.max(60_000, 3 * timeoutMs);
+export const marketplacePauseLeaseMs = (timeoutMs = resolveMarketplaceRequestTimeoutMs()) => Math.max(60_000, 3 * timeoutMs);
 export const isProcessingTargetStale = (target: ProductLifecycleTarget, nowMs = Date.now(), leaseMs = marketplacePauseLeaseMs()) => target.status === "processing" && !!target.processingStartedAt && nowMs - Date.parse(target.processingStartedAt) > leaseMs;
 type AdapterResolver = (channel: PublishChannel) => MarketplaceAdapter;
 const terminal = ["ended", "inactive", "sold", "closed"];

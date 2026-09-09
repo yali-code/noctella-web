@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload, type ShipmentUpdateResult, type MarketplaceReturnResult } from "@noctella/shared";
+import { resolveMarketplaceRequestTimeoutMs } from "../config/marketplaceConfig";
 
 export interface MarketplaceTokens { accessToken: string; refreshToken?: string; expiresAt?: string; scopes?: string[]; externalAccountId?: string; }
 export interface MarketplaceInventoryResult { externalListingId: string; stock: number; raw?: unknown; }
@@ -46,7 +47,7 @@ async function requestJson(url: string, init: RequestInit, timeoutMs: number): P
 
 abstract class HttpAdapter implements MarketplaceAdapter {
   constructor(protected env: Record<string,string|undefined>, protected prefix: "EBAY"|"ETSY") {}
-  protected timeout() { return Number(this.env.MARKETPLACE_REQUEST_TIMEOUT_MS ?? 10000); }
+  protected timeout() { return resolveMarketplaceRequestTimeoutMs(this.env); }
   protected base() { return this.env[`${this.prefix}_API_BASE_URL`] ?? (this.prefix === "EBAY" ? "https://api.ebay.com" : "https://api.etsy.com"); }
   protected clientId() { return this.env[`${this.prefix}_CLIENT_ID`] ?? ""; }
   protected redirect() { return this.env[`${this.prefix}_REDIRECT_URI`] ?? ""; }
