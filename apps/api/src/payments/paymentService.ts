@@ -14,7 +14,7 @@ const providers: Record<PaymentProvider, PaymentProviderClient> = {
  * gateway exists yet), so mock usage must never be silently possible in production. An explicit
  * MOCK_PAYMENTS_ENABLED override ("true"/"false") always wins; when unset, mock payments remain
  * enabled everywhere except NODE_ENV=production, which requires the explicit "true" opt-in
- * (e.g. Render staging sets this deliberately - see render.yaml).
+ * for any separately authorized controlled use.
  */
 export function mockPaymentsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.MOCK_PAYMENTS_ENABLED === "true") return true;

@@ -32,9 +32,10 @@ see `docs/releases/` for the capabilities and known limitations of a specific ca
      There is no known/default fallback secret — an unset, empty, or whitespace-only secret now
      makes signature verification for that channel fail closed (every webhook request for that
      channel is rejected) rather than silently accepting a known test value.
-   - **`MOCK_PAYMENTS_ENABLED` (Sprint 76):** confirm this is `"true"` only on
-     `noctella-staging-api` (already set in `render.yaml`). This flag must never be copied to a
-     real production deployment before a real payment gateway is integrated.
+   - **`MOCK_PAYMENTS_ENABLED` (Sprint 166):** confirm this is `"false"` on
+     `noctella-staging-api` (already set in `render.yaml`). Baseline staging is COD-only: legacy
+     mock providers are disabled, public Stripe remains separately gated and disabled, and no
+     Stripe credentials are required for this baseline.
 5. **Configure DNS** for the three custom domains to point at their respective Render services,
    per Render's provided DNS instructions:
    - `api.staging.noctella.com` → `noctella-staging-api`
@@ -99,16 +100,16 @@ configuration this environment is meant to validate.
 - [ ] Stock adjustment: adjust stock on that product
 - [ ] Storefront catalog: load `https://shop.staging.noctella.com` and confirm published
       products appear
-- [ ] Guest checkout: complete the full guest checkout path (cart → address → payment mock →
-      order created)
+- [ ] Guest checkout: complete the full guest COD checkout path (cart → address → Cash on
+      Delivery → pending/uncollected order created); no real card charge occurs
 - [ ] Make an Offer: submit a guest "Make an Offer" on an eligible product
 - [ ] Read-only marketplace connections: load the Admin marketplace connections list (read-only —
       do not exercise a real OAuth connect/publish flow against live eBay/Etsy unless you
       intentionally configured staging-safe credentials in step 4)
 - [ ] Background-job run: confirm the Cron service's most recent run succeeded (see step 14)
 - [ ] Logout: log out of Admin and confirm a subsequent authenticated request returns 401
-- [ ] Mock payment labeling (Sprint 76): the Admin Orders list and order detail page show the
-      payment provider suffixed with `(mock)` for the order created in the guest-checkout step
+- [ ] COD settlement: through the authorized Admin action, record collection for the temporary
+      COD order and confirm its payment status becomes paid
 - [ ] Restart persistence: create a temporary staging order and upload a temporary product photo,
       redeploy or restart `noctella-staging-api`, and confirm both the order and the photo are
       still present afterward
@@ -250,18 +251,19 @@ capture, and the safety constraint that applies.
     - Evidence: Storefront screenshot
     - Safety: none beyond isolation
 
-11. **Approved mock-payment staging flow**
-    - Precondition: `MOCK_PAYMENTS_ENABLED=true` on the isolated API only
-    - Action: confirm the mock-payment gate is active for this isolated instance
-    - Expected: mock payment usable, clearly labeled `(mock)`
-    - Evidence: settings/order screenshot showing the `(mock)` label
-    - Safety: this flag must never be set on any real production deployment
+11. **COD-only payment safety**
+    - Precondition: `MOCK_PAYMENTS_ENABLED=false` and public Stripe disabled on the isolated API
+    - Action: confirm baseline staging exposes only the public Cash on Delivery checkout path
+    - Expected: legacy mock providers unavailable; no Stripe or other real provider enabled
+    - Evidence: redacted environment review and Storefront payment-method screenshot
+    - Safety: no Stripe credentials are required and no real card charge occurs
 
-12. **Paid internal order**
-    - Precondition: product published, mock-payment gate confirmed
-    - Action: create a paid internal order for the synthetic product (120 EUR)
-    - Expected: order Paid, stock decremented to 0
-    - Evidence: order detail screenshot
+12. **Pending COD order and authorized settlement**
+    - Precondition: product published and COD-only payment safety confirmed
+    - Action: create a temporary COD order for the synthetic product (120 EUR), confirm it starts
+      pending/uncollected, then record collection through the authorized Admin settlement action
+    - Expected: order payment becomes Paid only after settlement; stock decremented to 0
+    - Evidence: order detail screenshots before and after settlement
     - Safety: `RC2-ACC-` prefix on any free-text order reference
 
 13. **Automatic SalesInvoice Draft creation**
