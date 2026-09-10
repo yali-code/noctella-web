@@ -9,9 +9,11 @@ export interface StorefrontNavItem {
  * tooling - the storefront's Vitest setup only parses plain .ts files, not .tsx.
  */
 export const storefrontHeaderNavItems: StorefrontNavItem[] = [
-  { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
   { label: "Categories", href: "/categories" },
+];
+
+export const storefrontSecondaryNavItems: StorefrontNavItem[] = [
   { label: "Collections", href: "/collections" },
   { label: "Gentleman Series", href: "/category/gentleman-series" },
   { label: "Archive", href: "/archive" },
@@ -20,6 +22,7 @@ export const storefrontHeaderNavItems: StorefrontNavItem[] = [
 
 /** Footer-only links. */
 export const storefrontFooterItems: StorefrontNavItem[] = [
+  ...storefrontSecondaryNavItems,
   { label: "Shipping & Delivery", href: "/shipping-delivery" },
   { label: "Returns Policy", href: "/returns-policy" },
   { label: "Customs & Import Duties", href: "/customs-duties" },

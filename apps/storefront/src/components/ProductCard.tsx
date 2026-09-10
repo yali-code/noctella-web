@@ -36,6 +36,7 @@ export function ProductCard({ product }: { product: PublicProduct }) {
         <div className="sf-product-card__content">
           {product.condition && <p className="sf-product-card__condition">{product.condition}</p>}
           <h3>{product.title}</h3>
+          {product.categoryName && <p className="sf-product-card__category">{product.categoryName}</p>}
           <p className="sf-product-card__price">{formatPrice(product.priceEur)}</p>
         </div>
       </Link>

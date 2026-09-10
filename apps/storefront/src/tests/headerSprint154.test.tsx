@@ -3,6 +3,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { SearchForm } from "@/components/SearchForm";
 
 vi.mock("next/link", () => ({ default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a href={String(href)} {...props}>{children}</a> }));
@@ -15,6 +16,15 @@ describe("Sprint 154 Header", () => {
     const { container } = render(<Header />);
     expect(container.querySelector("header h1")).toBeNull();
     expect(screen.getAllByRole("search").length).toBeGreaterThan(0);
+  });
+
+  it("keeps only marketplace destinations primary and makes secondary destinations reachable", () => {
+    render(<><Header /><Footer /></>);
+    const desktop = screen.getByRole("navigation", { name: "Main navigation" });
+    expect(within(desktop).getByRole("link", { name: "Shop" })).toBeTruthy();
+    expect(within(desktop).getByRole("link", { name: "Categories" })).toBeTruthy();
+    expect(within(desktop).queryByRole("link", { name: "About" })).toBeNull();
+    expect(within(screen.getByRole("navigation", { name: "Footer navigation" })).getByRole("link", { name: "Archive" })).toBeTruthy();
   });
 
   it("exposes mobile search and closes on Escape with focus restoration", () => {

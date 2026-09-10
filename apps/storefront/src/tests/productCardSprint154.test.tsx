@@ -9,7 +9,7 @@ vi.mock("next/link", () => ({ default: ({ href, children, ...props }: React.Anch
 
 const product: PublicProduct = {
   id: "product-1", slug: "brass-clock", title: "Antique Brass Clock", type: "physical",
-  condition: "Very good", priceEur: 125, customsWarning: false, isFeatured: false,
+  condition: "Very good", categoryName: "Timepieces", priceEur: 125, customsWarning: false, isFeatured: false,
   allowMakeOffer: false, allowCashOnDelivery: false, status: "Published", images: [],
   createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
 };
@@ -22,8 +22,14 @@ describe("Sprint 154 ProductCard", () => {
     render(<ProductCard product={product} />);
     expect(screen.getByText("Very good")).toBeTruthy();
     expect(screen.getByText("Antique Brass Clock")).toBeTruthy();
+    expect(screen.getByText("Timepieces")).toBeTruthy();
     expect(screen.getByText("€125.00")).toBeTruthy();
     expect(screen.getByText("Image unavailable")).toBeTruthy();
+  });
+
+  it("omits category when the public product has none", () => {
+    render(<ProductCard product={{ ...product, categoryName: undefined }} />);
+    expect(screen.queryByText("Timepieces")).toBeNull();
   });
 
   it("renders malformed runtime prices defensively", () => {

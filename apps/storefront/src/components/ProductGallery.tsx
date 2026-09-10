@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resolveApiAssetUrl } from "@/lib/api";
 import { productThumbnailUrl, sortedProductImages } from "@/lib/productImages";
 import type { PublicProductImage } from "@/lib/types";
@@ -9,8 +9,29 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
   const sorted = sortedProductImages({ images });
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const mainButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   const active = sorted[activeIndex];
+
+  useEffect(() => {
+    if (zoomed) closeButtonRef.current?.focus();
+  }, [zoomed]);
+
+  function closeZoom() {
+    setZoomed(false);
+    window.requestAnimationFrame(() => mainButtonRef.current?.focus());
+  }
+
+  function handleDialogKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeZoom();
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      closeButtonRef.current?.focus();
+    }
+  }
 
   if (sorted.length === 0) {
     return (
@@ -23,6 +44,7 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
   return (
     <div className="sf-pdp-gallery">
       <button
+        ref={mainButtonRef}
         type="button"
         onClick={() => setZoomed(true)}
         aria-label={`Zoom image: ${active.altText || title}`}
@@ -61,12 +83,14 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
           role="dialog"
           aria-modal="true"
           aria-label={`${title} enlarged image`}
-          onClick={() => setZoomed(false)}
+          onClick={(event) => { if (event.target === event.currentTarget) closeZoom(); }}
+          onKeyDown={handleDialogKeyDown}
           className="sf-pdp-gallery__dialog"
         >
           <button
+            ref={closeButtonRef}
             type="button"
-            onClick={() => setZoomed(false)}
+            onClick={closeZoom}
             aria-label="Close enlarged image"
             className="sf-pdp-gallery__close"
           >

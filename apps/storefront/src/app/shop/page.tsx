@@ -1,10 +1,16 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { ProductGrid } from "@/components/ProductGrid";
-import { normalizeShopSearchParam } from "@/lib/shopSearchParams";
+import {
+  parseShopSearchParams,
+  shopHref,
+  withShopBrowseChange,
+  type ShopBrowseState,
+  type ShopSort,
+} from "@/lib/shopSearchParams";
 import type { PaginatedResult, PublicCategory, PublicCollection, PublicProduct } from "@/lib/types";
 
 const PAGE_SIZE = 12;
@@ -33,30 +39,22 @@ export default function ShopPage() {
 }
 
 function ShopPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const urlSearch = normalizeShopSearchParam(searchParams.get("search"));
+  const queryString = searchParams.toString();
+  const browse = useMemo(() => parseShopSearchParams(new URLSearchParams(queryString)), [queryString]);
 
   const [products, setProducts] = useState<PublicProduct[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState(urlSearch);
-  const [categorySlug, setCategorySlug] = useState("");
-  const [collectionSlug, setCollectionSlug] = useState("");
-  const [sort, setSort] = useState("newest");
+  const [searchDraft, setSearchDraft] = useState(browse.search);
   const [categories, setCategories] = useState<PublicCategory[]>([]);
   const [collections, setCollections] = useState<PublicCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Syncs the search input/state whenever the URL's `search` query param changes - e.g. the
-  // Header's global search box calling router.push("/shop?search=...") while this page is
-  // already mounted, which re-renders this same component instance rather than remounting it.
-  // One-directional (URL -> state): typing in the input below only updates local state and never
-  // writes back to the URL, so this cannot create an update loop.
   useEffect(() => {
-    setSearch(urlSearch);
-    setPage(1);
-  }, [urlSearch]);
+    setSearchDraft(browse.search);
+  }, [browse.search]);
 
   useEffect(() => {
     api
@@ -72,10 +70,10 @@ function ShopPageContent() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE), sort });
-    if (search) params.set("search", search);
-    if (categorySlug) params.set("categorySlug", categorySlug);
-    if (collectionSlug) params.set("collectionSlug", collectionSlug);
+    const params = new URLSearchParams({ page: String(browse.page), pageSize: String(PAGE_SIZE), sort: browse.sort });
+    if (browse.search) params.set("search", browse.search);
+    if (browse.category) params.set("categorySlug", browse.category);
+    if (browse.collection) params.set("collectionSlug", browse.collection);
 
     api
       .get<PaginatedResult<PublicProduct>>(`/api/public/products?${params.toString()}`)
@@ -85,37 +83,40 @@ function ShopPageContent() {
       })
       .catch(() => setError("Something went wrong loading products. Please try again."))
       .finally(() => setLoading(false));
-  }, [page, search, categorySlug, collectionSlug, sort]);
+  }, [browse.category, browse.collection, browse.page, browse.search, browse.sort]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  return (
-    <section style={{ padding: "48px 40px" }}>
-      <h1>Shop</h1>
-      <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
+  function navigate(next: ShopBrowseState) {
+    router.push(shopHref(next));
+  }
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
-        <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 4 }}>
-          Search
+  function submitSearch(event: React.FormEvent) {
+    event.preventDefault();
+    navigate(withShopBrowseChange(browse, { search: searchDraft.trim() }));
+  }
+
+  return (
+    <section className="sf-shop">
+      <h1>Shop</h1>
+      <p className="sf-shop__intro">Browse vintage and collectible objects available from Noctella.</p>
+
+      <form className="sf-shop-controls" role="search" onSubmit={submitSearch}>
+        <label className="sf-shop-control sf-shop-control--search">
+          <span>Search</span>
           <input
-            value={search}
-            onChange={(e) => {
-              setPage(1);
-              setSearch(e.target.value);
-            }}
-            style={inputStyle}
+            type="search"
+            value={searchDraft}
+            onChange={(event) => setSearchDraft(event.target.value)}
             placeholder="Search products"
           />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 4 }}>
-          Category
+        <button type="submit" className="sf-shop-button sf-shop-button--primary">Search</button>
+        <label className="sf-shop-control">
+          <span>Category</span>
           <select
-            value={categorySlug}
-            onChange={(e) => {
-              setPage(1);
-              setCategorySlug(e.target.value);
-            }}
-            style={inputStyle}
+            value={browse.category}
+            onChange={(event) => navigate(withShopBrowseChange(browse, { category: event.target.value }))}
           >
             <option value="">All categories</option>
             {categories.map((c) => (
@@ -125,15 +126,11 @@ function ShopPageContent() {
             ))}
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 4 }}>
-          Collection
+        <label className="sf-shop-control">
+          <span>Collection</span>
           <select
-            value={collectionSlug}
-            onChange={(e) => {
-              setPage(1);
-              setCollectionSlug(e.target.value);
-            }}
-            style={inputStyle}
+            value={browse.collection}
+            onChange={(event) => navigate(withShopBrowseChange(browse, { collection: event.target.value }))}
           >
             <option value="">All collections</option>
             {collections.map((c) => (
@@ -143,15 +140,11 @@ function ShopPageContent() {
             ))}
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 4 }}>
-          Sort by
+        <label className="sf-shop-control">
+          <span>Sort by</span>
           <select
-            value={sort}
-            onChange={(e) => {
-              setPage(1);
-              setSort(e.target.value);
-            }}
-            style={inputStyle}
+            value={browse.sort}
+            onChange={(event) => navigate(withShopBrowseChange(browse, { sort: event.target.value as ShopSort }))}
           >
             {SORT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -160,45 +153,30 @@ function ShopPageContent() {
             ))}
           </select>
         </label>
-      </div>
+        <button type="button" className="sf-shop-button" onClick={() => router.push("/shop")}>Reset filters</button>
+      </form>
 
       <ProductGrid products={products} loading={loading} error={error} emptyMessage="No products match your search." />
 
       {!loading && !error && products.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 28 }}>
-          <span style={{ fontSize: 13, color: "var(--noctella-aged-bronze)" }}>
-            Page {page} of {totalPages} ({total} items)
+        <nav className="sf-shop-pagination" aria-label="Product pagination">
+          <span>
+            Page {browse.page} of {totalPages} ({total} items)
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} style={buttonStyle}>
+          <div>
+            <button className="sf-shop-button" disabled={browse.page <= 1} onClick={() => navigate({ ...browse, page: Math.max(1, browse.page - 1) })}>
               Previous
             </button>
             <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              style={buttonStyle}
+              className="sf-shop-button"
+              disabled={browse.page >= totalPages}
+              onClick={() => navigate({ ...browse, page: Math.min(totalPages, browse.page + 1) })}
             >
               Next
             </button>
           </div>
-        </div>
+        </nav>
       )}
     </section>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--noctella-deep-star-blue)",
-  border: "1px solid var(--noctella-antique-gold)",
-  color: "var(--noctella-ivory)",
-  borderRadius: 4,
-  padding: "8px 10px",
-  fontSize: 13,
-  minWidth: 160,
-};
-
-const buttonStyle: React.CSSProperties = {
-  ...inputStyle,
-  minWidth: 0,
-  cursor: "pointer",
-};
