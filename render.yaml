@@ -47,13 +47,10 @@ services:
         value: .staging.noctella.com
       - key: ERP_CLIENT_VERSION
         value: 0.1.0
-      # Sprint 76: explicit, deliberate opt-in - every payment provider is currently a mock (see
-      # .env.example), and the default with this unset would be to reject mock payments here
-      # since NODE_ENV=production above. This staging environment intentionally keeps the mock
-      # checkout demo flow usable; this must never be copied into a real production deployment
-      # before a real payment gateway is integrated.
+      # Sprint 166: baseline staging mirrors the COD-only production payment mode. Legacy mock
+      # providers are disabled; this does not enable Stripe, which remains separately gated.
       - key: MOCK_PAYMENTS_ENABLED
-        value: "true"
+        value: "false"
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET

@@ -2,8 +2,8 @@ import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import crypto from "node:crypto";
 import { adminLoginRateLimit, ADMIN_LOGIN_RATE_LIMIT_MAX_ATTEMPTS } from "../src/middleware/adminLoginRateLimit";
@@ -178,6 +178,40 @@ describe("Sprint 158 request correlation and safe structured logs", () => {
 
 describe("Sprint 158 production configuration validation", () => {
   const valid: NodeJS.ProcessEnv = { NODE_ENV: "production", PORT: "10000", DATABASE_DRIVER: "sqlite", DATABASE_URL: "/var/data/noctella.sqlite", PRODUCT_PHOTO_DIR: "/var/data/product-photos", ADMIN_APP_ORIGIN: "https://admin.noctella.example", STOREFRONT_APP_ORIGIN: "https://shop.noctella.example", COOKIE_DOMAIN: ".noctella.example", SCHEDULER_AUTH_TOKEN: "scheduler-value", ERP_INTEGRATION_KEY: "erp-value", MOCK_PAYMENTS_ENABLED: "false" };
+
+  it("keeps the actual staging API blueprint compatible with production-mode startup validation", () => {
+    const blueprint = readFileSync(resolve(__dirname, "../../../render.yaml"), "utf8");
+    const apiStart = blueprint.indexOf("name: noctella-staging-api");
+    const apiEnd = blueprint.indexOf("\n  - type:", apiStart);
+    expect(apiStart).toBeGreaterThan(-1);
+    const apiService = blueprint.slice(apiStart, apiEnd === -1 ? undefined : apiEnd);
+    const value = (key: string): string | undefined => {
+      const raw = apiService.match(new RegExp(`- key: ${key}\\r?\\n\\s+value: ([^\\r\\n]+)`))?.[1].trim();
+      return raw?.replace(/^"(.*)"$/, "$1");
+    };
+
+    expect(apiService).toMatch(/- key: SCHEDULER_AUTH_TOKEN\r?\n\s+generateValue: true/);
+    expect(apiService).toMatch(/- key: ERP_INTEGRATION_KEY\r?\n\s+generateValue: true/);
+    expect(value("NODE_ENV")).toBe("production");
+    expect(value("MOCK_PAYMENTS_ENABLED")).toBe("false");
+    expect(value("STRIPE_PUBLIC_CHECKOUT_ENABLED")).not.toBe("true");
+
+    const stagingEnv: NodeJS.ProcessEnv = {
+      NODE_ENV: value("NODE_ENV"),
+      PORT: "10000",
+      DATABASE_DRIVER: value("DATABASE_DRIVER"),
+      DATABASE_URL: value("DATABASE_URL"),
+      PRODUCT_PHOTO_DIR: value("PRODUCT_PHOTO_DIR"),
+      ADMIN_APP_ORIGIN: value("ADMIN_APP_ORIGIN"),
+      STOREFRONT_APP_ORIGIN: value("STOREFRONT_APP_ORIGIN"),
+      COOKIE_DOMAIN: value("COOKIE_DOMAIN"),
+      SCHEDULER_AUTH_TOKEN: "render-generated-scheduler-token",
+      ERP_INTEGRATION_KEY: "render-generated-erp-key",
+      MOCK_PAYMENTS_ENABLED: value("MOCK_PAYMENTS_ENABLED"),
+      STRIPE_PUBLIC_CHECKOUT_ENABLED: value("STRIPE_PUBLIC_CHECKOUT_ENABLED"),
+    };
+    expect(() => validateProductionApiConfig(stagingEnv)).not.toThrow();
+  });
 
   it("accepts the controlled production topology", () => expect(() => validateProductionApiConfig(valid)).not.toThrow());
   it("preserves development and test ergonomics", () => expect(() => validateProductionApiConfig({ NODE_ENV: "test" })).not.toThrow());
