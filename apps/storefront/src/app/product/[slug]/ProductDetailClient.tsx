@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { ProductGallery } from "@/components/ProductGallery";
@@ -108,10 +108,10 @@ export function ProductDetailClient({ slug }: { slug: string }) {
   const dimensions = [product.lengthValue, product.widthValue, product.heightValue]
     .filter((v) => v !== undefined)
     .join(" × ");
-  const productFacts = [
+  const productFacts: Array<[string, ReactNode] | null> = [
     ["Product type", formatProductType(product.type)],
-    product.categoryName ? ["Category", product.categoryName] : null,
-    product.collectionName ? ["Collection", product.collectionName] : null,
+    product.categoryName ? ["Category", product.categorySlug ? <Link href={`/category/${product.categorySlug}`}>{product.categoryName}</Link> : product.categoryName] : null,
+    product.collectionName ? ["Collection", product.collectionSlug ? <Link href={`/collection/${product.collectionSlug}`}>{product.collectionName}</Link> : product.collectionName] : null,
     product.brand ? ["Brand", product.brand] : null,
     product.model ? ["Model", product.model] : null,
     product.manufacturer ? ["Manufacturer", product.manufacturer] : null,
@@ -122,7 +122,8 @@ export function ProductDetailClient({ slug }: { slug: string }) {
     product.weightValue !== undefined
       ? ["Weight", `${product.weightValue}${product.weightUnit ? ` ${product.weightUnit}` : ""}`]
       : null,
-  ].filter((fact): fact is string[] => fact !== null);
+  ];
+  const visibleProductFacts = productFacts.filter((fact): fact is [string, ReactNode] => fact !== null);
   const isSold = product.status === "sold";
 
   return (
@@ -176,6 +177,12 @@ export function ProductDetailClient({ slug }: { slug: string }) {
             <p className="sf-pdp__summary">{product.shortDescription}</p>
           )}
 
+          {!isSold && (
+            <p className="sf-pdp__availability" role="status">
+              {product.allowCashOnDelivery ? "Available · Cash on Delivery available" : "Available"}
+            </p>
+          )}
+
           {product.condition && (
             <div className="sf-pdp__condition" aria-label="Cosmetic condition">
               <span>Cosmetic condition</span>
@@ -193,9 +200,6 @@ export function ProductDetailClient({ slug }: { slug: string }) {
                   Make an Offer
                 </button>
               )}
-              <button disabled className="sf-pdp__button sf-pdp__button--disabled" title="Coming soon">
-                Ask AI
-              </button>
               <button
                 onClick={handleAddToCart}
                 disabled={product.status !== "published" || inCart}
@@ -237,7 +241,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
           <section className="sf-pdp__section" aria-labelledby="product-facts-heading">
             <h2 id="product-facts-heading">Product facts</h2>
             <dl className="sf-pdp__facts">
-              {productFacts.map(([label, value]) => (
+              {visibleProductFacts.map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
                   <dd>{value}</dd>

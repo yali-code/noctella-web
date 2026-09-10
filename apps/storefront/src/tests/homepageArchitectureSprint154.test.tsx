@@ -22,34 +22,32 @@ describe("Sprint 154 homepage architecture", () => {
   beforeEach(() => vi.mocked(api.get).mockReset());
   afterEach(cleanup);
 
-  it("uses approved data mapping, hierarchy, and deterministic continuation deduplication", async () => {
-    const newest = Array.from({ length: 12 }, (_, index) => product(`new-${index}`));
-    const featured = [newest[8], product("featured-only")];
-    const curator = [newest[9], product("curator-only")];
+  it("uses the product-first hierarchy and bounded marketplace queries", async () => {
+    const newest = Array.from({ length: 8 }, (_, index) => product(`new-${index}`));
+    const featured = [product("featured-only")];
+    const curator = [product("curator-only")];
     vi.mocked(api.get).mockImplementation(async (path: string) => {
       const requestPath = String(path);
-      if (requestPath.includes("sort=newest")) return { items: newest, total: newest.length, page: 1, pageSize: 24 } as never;
+      if (requestPath.includes("sort=newest")) return { items: newest, total: newest.length, page: 1, pageSize: 8 } as never;
       if (requestPath.includes("isFeatured=true")) return { items: featured, total: 1, page: 1, pageSize: 8 } as never;
       if (requestPath.includes("collectionSlug=curators-pick")) return { items: curator, total: 2, page: 1, pageSize: 8 } as never;
       return { items: [{ id: "cat", name: "Lighting", slug: "lighting" }] } as never;
     });
     const { container } = render(<HomeClient />);
-    await waitFor(() => expect(screen.queryByText(/Loading curated/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Loading/)).toBeNull());
     expect(container.querySelectorAll("h1")).toHaveLength(1);
     const headings = [...container.querySelectorAll("h2")].map((node) => node.textContent);
-    expect(headings).toEqual(["Categories", "Featured Objects", "Curator's Pick", "Explore the Collection", "New Arrivals", "Every Object Has a Story"]);
+    expect(headings).toEqual(["Categories", "New Arrivals", "Featured Objects", "Curator's Pick", "Every Object Has a Story"]);
     expect(screen.getByRole("link", { name: "Lighting" }).getAttribute("href")).toBe("/category/lighting");
     expect(container.textContent).not.toContain("Archive / Sold Gallery");
     expect(container.textContent).not.toContain("Newsletter");
     expect(container.textContent).not.toContain("Gentleman Series");
     const arrivalsSection = screen.getByRole("heading", { name: "New Arrivals" }).closest("section")!;
-    const continuationSection = screen.getByRole("heading", { name: "Explore the Collection" }).closest("section")!;
     expect(within(arrivalsSection).getAllByRole("heading", { level: 3 }).map((node) => node.textContent))
       .toEqual(newest.slice(0, 8).map((item) => item.title));
-    expect(within(continuationSection).getAllByRole("heading", { level: 3 }).map((node) => node.textContent))
-      .toEqual(["Object new-10", "Object new-11"]);
-    expect(screen.getAllByText("Object new-8")).toHaveLength(1);
-    expect(screen.getAllByText("Object new-9")).toHaveLength(1);
+    expect(screen.queryByRole("heading", { name: "Explore the Collection" })).toBeNull();
+    expect(screen.getByText("Cash on Delivery")).toBeTruthy();
+    expect(screen.getByText("Options and charges are shown at checkout.")).toBeTruthy();
     expect(vi.mocked(api.get).mock.calls.filter(([path]) => String(path).includes("sort=newest"))).toHaveLength(1);
     expect(vi.mocked(api.get).mock.calls.some(([path]) => String(path).includes("collectionSlug=curators-pick"))).toBe(true);
   });
@@ -59,7 +57,7 @@ describe("Sprint 154 homepage architecture", () => {
       ? { items: [] } as never
       : { items: [], total: 0, page: 1, pageSize: 8 } as never);
     render(<HomeClient />);
-    await waitFor(() => expect(screen.queryByText(/Loading curated/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Loading/)).toBeNull());
     expect(screen.queryByRole("heading", { name: "Curator's Pick" })).toBeNull();
   });
 
@@ -67,15 +65,29 @@ describe("Sprint 154 homepage architecture", () => {
     vi.mocked(api.get).mockImplementation(async (path: string) => {
       const requestPath = String(path);
       if (requestPath.includes("collectionSlug=curators-pick")) throw new Error("optional collection unavailable");
-      if (requestPath.includes("sort=newest")) return { items: [product("newest")], total: 1, page: 1, pageSize: 24 } as never;
+      if (requestPath.includes("sort=newest")) return { items: [product("newest")], total: 1, page: 1, pageSize: 8 } as never;
       if (requestPath.includes("isFeatured=true")) return { items: [product("featured")], total: 1, page: 1, pageSize: 8 } as never;
       return { items: [{ id: "cat", name: "Lighting", slug: "lighting" }] } as never;
     });
     render(<HomeClient />);
-    await waitFor(() => expect(screen.queryByText(/Loading curated/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Loading/)).toBeNull());
     expect(screen.getByRole("link", { name: "Lighting" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Featured Objects" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "New Arrivals" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Curator's Pick" })).toBeNull();
+  });
+
+  it("shows the primary error while isolating category and merchandising failures", async () => {
+    vi.mocked(api.get).mockImplementation(async (requestPath: string) => {
+      if (String(requestPath).includes("sort=newest")) throw new Error("unavailable");
+      if (String(requestPath).includes("categories")) return { items: [] } as never;
+      return { items: [], total: 0, page: 1, pageSize: 8 } as never;
+    });
+    render(<HomeClient />);
+    expect((await screen.findByRole("alert")).textContent).toContain("New arrivals could not be loaded");
+    expect(screen.getByRole("heading", { name: "New Arrivals" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "All categories" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Featured Objects" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Curator's Pick" })).toBeNull();
   });
 

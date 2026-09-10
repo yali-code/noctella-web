@@ -39,7 +39,7 @@ export default function CartPage() {
   if (!freshness.canProceed) return <CartFreshnessBlocker freshness={freshness} title="Cart" />;
 
   return (
-    <section style={{ padding: "48px 40px" }}>
+    <section className="sf-cart">
       <h1>Cart</h1>
       <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
 
@@ -54,23 +54,23 @@ export default function CartPage() {
 
       {items.length > 0 && (
         <>
-          <div className="noctella-panel" style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="noctella-panel sf-cart-table-wrap">
+            <table className="sf-cart-table">
               <thead>
-                <tr style={{ textAlign: "left", borderBottom: "1px solid var(--noctella-antique-gold)" }}>
-                  <th style={thStyle}></th>
-                  <th style={thStyle}>Title</th>
-                  <th style={thStyle}>Type</th>
-                  <th style={thStyle}>EUR Price</th>
-                  <th style={thStyle}>USD Price</th>
-                  <th style={thStyle}>Quantity</th>
-                  <th style={thStyle}></th>
+                <tr>
+                  <th><span className="sf-visually-hidden">Image</span></th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>EUR Price</th>
+                  <th>USD Price</th>
+                  <th>Quantity</th>
+                  <th><span className="sf-visually-hidden">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.productId} style={{ borderBottom: "1px solid rgba(122,106,79,0.3)" }}>
-                    <td style={tdStyle}>
+                  <tr key={item.productId}>
+                    <td className="sf-cart-table__image" data-label="Image">
                       {item.primaryImageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -90,17 +90,17 @@ export default function CartPage() {
                         />
                       )}
                     </td>
-                    <td style={tdStyle}>
+                    <td data-label="Title">
                       <Link href={`/product/${item.slug}`} style={{ color: "var(--noctella-ivory)" }}>
                         {item.title}
                       </Link>
                     </td>
-                    <td style={tdStyle}>{formatProductType(item.productType)}</td>
-                    <td style={tdStyle}>€{item.eurPrice.toFixed(2)}</td>
-                    <td style={tdStyle}>{item.usdPrice !== undefined ? `$${item.usdPrice.toFixed(2)}` : "—"}</td>
-                    <td style={tdStyle}>{item.quantity}</td>
-                    <td style={tdStyle}>
-                      <button onClick={() => handleRemove(item.productId)} style={linkButtonStyle}>
+                    <td data-label="Type">{formatProductType(item.productType)}</td>
+                    <td data-label="EUR Price">€{item.eurPrice.toFixed(2)}</td>
+                    <td data-label="USD Price">{item.usdPrice !== undefined ? `$${item.usdPrice.toFixed(2)}` : "—"}</td>
+                    <td data-label="Quantity">{item.quantity}</td>
+                    <td className="sf-cart-table__action" data-label="Action">
+                      <button className="sf-cart-link-button" onClick={() => handleRemove(item.productId)}>
                         Remove
                       </button>
                     </td>
@@ -110,17 +110,8 @@ export default function CartPage() {
             </table>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              flexWrap: "wrap",
-              gap: 16,
-              marginTop: 24,
-            }}
-          >
-            <button onClick={handleClear} style={secondaryButtonStyle}>
+          <div className="sf-cart-summary">
+            <button onClick={handleClear} className="sf-cart-secondary-button">
               Clear Cart
             </button>
 
@@ -133,15 +124,7 @@ export default function CartPage() {
                   </span>
                 )}
               </p>
-              <Link
-                href="/checkout"
-                style={{
-                  ...primaryCtaStyle,
-                  display: "inline-block",
-                  marginTop: 10,
-                  textDecoration: "none",
-                }}
-              >
+              <Link href="/checkout" className="sf-cart-checkout-link">
                 Continue to Checkout
               </Link>
             </div>
@@ -151,43 +134,3 @@ export default function CartPage() {
     </section>
   );
 }
-
-const thStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  color: "var(--noctella-bright-star-gold)",
-  fontWeight: 500,
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 12px",
-};
-
-const linkButtonStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "var(--noctella-bright-star-gold)",
-  cursor: "pointer",
-  fontSize: 13,
-  padding: 0,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "transparent",
-  color: "var(--noctella-ivory)",
-  border: "1px solid var(--noctella-aged-bronze)",
-  borderRadius: 4,
-  fontSize: 14,
-  cursor: "pointer",
-};
-
-const primaryCtaStyle: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "var(--noctella-antique-gold)",
-  color: "var(--noctella-night-navy)",
-  border: "none",
-  borderRadius: 4,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-};

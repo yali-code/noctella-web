@@ -74,6 +74,22 @@ describe("Sprint 154B PDP trust foundation", () => {
     expect(JSON.parse(localStorage.getItem("noctella_cart") ?? "[]")[0]).toMatchObject({ productId: completeProduct.id, quantity: 1 });
   });
 
+  it("links category and collection, reports availability, and removes the disabled AI action", async () => {
+    vi.mocked(api.get).mockResolvedValue({
+      ...completeProduct,
+      categoryName: "Timepieces",
+      categorySlug: "timepieces",
+      collectionName: "Curator's Pick",
+      collectionSlug: "curators-pick",
+      allowCashOnDelivery: true,
+    } as never);
+    render(<ProductDetailClient slug={completeProduct.slug} />);
+    expect((await screen.findByRole("link", { name: "Timepieces" })).getAttribute("href")).toBe("/category/timepieces");
+    expect(screen.getByRole("link", { name: "Curator's Pick" }).getAttribute("href")).toBe("/collection/curators-pick");
+    expect(screen.getByText("Available · Cash on Delivery available")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Ask AI" })).toBeNull();
+  });
+
   it("omits Make Offer when allowMakeOffer is false", async () => {
     vi.mocked(api.get).mockResolvedValue({ ...completeProduct, allowMakeOffer: false } as never);
     render(<ProductDetailClient slug={completeProduct.slug} />);
@@ -93,6 +109,12 @@ describe("Sprint 154B PDP trust foundation", () => {
     fireEvent.click(screen.getByRole("button", { name: /Zoom image: Clock side/ }));
     expect(screen.getByRole("dialog", { name: `${completeProduct.title} enlarged image` })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close enlarged image" })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close enlarged image" })));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close enlarged image" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: /Zoom image: Clock side/ })));
 
     const css = await readFile(path.resolve(process.cwd(), "src/app/globals.css"), "utf8");
     expect(css).toContain(".sf-pdp-gallery__main img");
