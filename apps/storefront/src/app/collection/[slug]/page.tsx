@@ -8,10 +8,12 @@ import {
   resolveAbsoluteImageUrl,
 } from "@/lib/seo";
 import type { PublicCollection } from "@/lib/types";
+import { normalizeTaxonomyPage } from "@/lib/taxonomyBrowseParams";
 import { CollectionPageClient } from "./CollectionPageClient";
 
 interface CollectionPageProps {
   params: { slug: string };
+  searchParams?: { page?: string | string[] };
 }
 
 /** Never calls notFound() - a missing collection still lets CollectionPageClient render its own state. */
@@ -38,6 +40,6 @@ export async function generateMetadata({ params }: CollectionPageProps): Promise
   };
 }
 
-export default function CollectionPage({ params }: CollectionPageProps) {
-  return <CollectionPageClient slug={params.slug} />;
+export default function CollectionPage({ params, searchParams }: CollectionPageProps) {
+  return <CollectionPageClient slug={params.slug} page={normalizeTaxonomyPage(searchParams?.page)} />;
 }
