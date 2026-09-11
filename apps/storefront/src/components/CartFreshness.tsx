@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCart, removeFromCartPersisted, replaceCartPersisted, type CartItem } from "@/lib/cart";
 import { reconcileCart, type CartReconciliationResult } from "@/lib/cartReconciliation";
 
@@ -21,12 +21,16 @@ export function useCartFreshness(): CartFreshnessState {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [result, setResult] = useState<CartReconciliationResult | null>(null);
+  const reconciliationGeneration = useRef(0);
 
   const run = useCallback(async (source = getCart()) => {
+    const generation = ++reconciliationGeneration.current;
+    const isAuthoritative = () => generation === reconciliationGeneration.current;
     setLoading(true);
     setError(false);
     try {
       const next = await reconcileCart(source);
+      if (!isAuthoritative()) return { canProceed: false, items: getCart() };
       setResult(next);
       const needsReview = next.changes.length > 0;
       const hasUnavailable = next.unavailableItems.length > 0;
@@ -41,6 +45,7 @@ export function useCartFreshness(): CartFreshnessState {
       setLoading(false);
       return { canProceed: !needsReview && !hasUnavailable, items: needsReview ? source : next.currentItems };
     } catch {
+      if (!isAuthoritative()) return { canProceed: false, items: getCart() };
       setItems(source);
       setResult(null);
       setError(true);
@@ -49,7 +54,12 @@ export function useCartFreshness(): CartFreshnessState {
     }
   }, []);
 
-  useEffect(() => { void run(); }, [run]);
+  useEffect(() => {
+    void run();
+    return () => {
+      reconciliationGeneration.current += 1;
+    };
+  }, [run]);
 
   const acceptChanges = useCallback(() => {
     if (!result) return;
