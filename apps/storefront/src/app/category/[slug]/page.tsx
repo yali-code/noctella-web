@@ -8,10 +8,12 @@ import {
   resolveAbsoluteImageUrl,
 } from "@/lib/seo";
 import type { PublicCategory } from "@/lib/types";
+import { normalizeTaxonomyPage } from "@/lib/taxonomyBrowseParams";
 import { CategoryPageClient } from "./CategoryPageClient";
 
 interface CategoryPageProps {
   params: { slug: string };
+  searchParams?: { page?: string | string[] };
 }
 
 /** Never calls notFound() - a missing category still lets CategoryPageClient render its own state. */
@@ -38,6 +40,6 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   };
 }
 
-export default function CategoryPage({ params }: CategoryPageProps) {
-  return <CategoryPageClient slug={params.slug} />;
+export default function CategoryPage({ params, searchParams }: CategoryPageProps) {
+  return <CategoryPageClient slug={params.slug} page={normalizeTaxonomyPage(searchParams?.page)} />;
 }
