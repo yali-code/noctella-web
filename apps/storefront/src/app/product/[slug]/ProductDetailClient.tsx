@@ -25,19 +25,38 @@ export function ProductDetailClient({ slug }: { slug: string }) {
   const [showOfferForm, setShowOfferForm] = useState(false);
   const [inCart, setInCart] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  const [resolvedSlug, setResolvedSlug] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+    setProduct(null);
+    setNotFound(false);
+    setError(null);
+    setShowOfferForm(false);
+    setInWishlist(false);
+    setInCart(false);
+    setJustAdded(false);
+    setResolvedSlug(null);
+
     api
       .get<PublicProductDetail>(`/api/public/products/${slug}`)
       .then((p) => {
+        if (!active) return;
         setProduct(p);
         setInWishlist(getWishlistIds().includes(p.id));
         setInCart(cartHasItem(getCart(), p.id));
+        setResolvedSlug(slug);
       })
       .catch((err) => {
+        if (!active) return;
         if (err instanceof ApiError && err.status === 404) setNotFound(true);
         else setError("Something went wrong loading this product. Please try again.");
+        setResolvedSlug(slug);
       });
+
+    return () => {
+      active = false;
+    };
   }, [slug]);
 
   function handleToggleWishlist() {
@@ -64,6 +83,18 @@ export function ProductDetailClient({ slug }: { slug: string }) {
     setInCart(true);
     setJustAdded(true);
     window.dispatchEvent(new Event("noctella:cart-updated"));
+  }
+
+  const stateIsCurrent = resolvedSlug === slug;
+
+  if (!stateIsCurrent) {
+    return (
+      <section style={{ padding: "60px 40px" }}>
+        <p role="status" style={{ color: "var(--noctella-aged-bronze)" }}>
+          Loading...
+        </p>
+      </section>
+    );
   }
 
   if (notFound) {
@@ -95,15 +126,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
     );
   }
 
-  if (!product) {
-    return (
-      <section style={{ padding: "60px 40px" }}>
-        <p role="status" style={{ color: "var(--noctella-aged-bronze)" }}>
-          Loading...
-        </p>
-      </section>
-    );
-  }
+  if (!product) return null;
 
   const dimensions = [product.lengthValue, product.widthValue, product.heightValue]
     .filter((v) => v !== undefined)
@@ -130,7 +153,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
     <section className="sf-pdp">
       <div className="sf-pdp__layout">
         <div className="sf-pdp__media">
-          <ProductGallery images={product.images} title={product.title} />
+          <ProductGallery key={product.id} images={product.images} title={product.title} />
           {product.videoUrl && (
             <p style={{ marginTop: 12 }}>
               <a href={product.videoUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>

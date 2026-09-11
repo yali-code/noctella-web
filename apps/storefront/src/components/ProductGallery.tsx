@@ -12,7 +12,13 @@ export function ProductGallery({ images, title }: { images: PublicProductImage[]
   const mainButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  const active = sorted[activeIndex];
+  const galleryIdentity = JSON.stringify([title, sorted.map((image) => [image.id, image.url])]);
+  const active = sorted[activeIndex] ?? sorted[0];
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setZoomed(false);
+  }, [galleryIdentity]);
 
   useEffect(() => {
     if (zoomed) closeButtonRef.current?.focus();
