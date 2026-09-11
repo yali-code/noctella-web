@@ -51,6 +51,8 @@ function ShopPageContent() {
   const [collections, setCollections] = useState<PublicCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedBrowseKey, setResolvedBrowseKey] = useState<string | null>(null);
+  const browseKey = JSON.stringify([browse.search, browse.category, browse.collection, browse.sort, browse.page]);
 
   useEffect(() => {
     setSearchDraft(browse.search);
@@ -68,6 +70,7 @@ function ShopPageContent() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ page: String(browse.page), pageSize: String(PAGE_SIZE), sort: browse.sort });
@@ -78,14 +81,48 @@ function ShopPageContent() {
     api
       .get<PaginatedResult<PublicProduct>>(`/api/public/products?${params.toString()}`)
       .then((res) => {
+        if (!active) return;
         setProducts(res.items);
         setTotal(res.total);
+        setResolvedBrowseKey(browseKey);
       })
-      .catch(() => setError("Something went wrong loading products. Please try again."))
-      .finally(() => setLoading(false));
-  }, [browse.category, browse.collection, browse.page, browse.search, browse.sort]);
+      .catch(() => {
+        if (!active) return;
+        setProducts([]);
+        setTotal(0);
+        setError("Something went wrong loading products. Please try again.");
+        setResolvedBrowseKey(browseKey);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [browse.category, browse.collection, browse.page, browse.search, browse.sort, browseKey]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const resultsAreCurrent = resolvedBrowseKey === browseKey;
+  const resultsLoading = loading || !resultsAreCurrent;
+  const activeFilters = [
+    browse.search ? { key: "search" as const, label: "Search", value: browse.search } : null,
+    browse.category
+      ? {
+          key: "category" as const,
+          label: "Category",
+          value: categories.find((category) => category.slug === browse.category)?.name ?? browse.category,
+        }
+      : null,
+    browse.collection
+      ? {
+          key: "collection" as const,
+          label: "Collection",
+          value: collections.find((collection) => collection.slug === browse.collection)?.name ?? browse.collection,
+        }
+      : null,
+  ].filter((filter): filter is NonNullable<typeof filter> => filter !== null);
+  const hasActiveFilters = activeFilters.length > 0;
 
   function navigate(next: ShopBrowseState) {
     router.push(shopHref(next));
@@ -96,69 +133,108 @@ function ShopPageContent() {
     navigate(withShopBrowseChange(browse, { search: searchDraft.trim() }));
   }
 
+  function clearFilters() {
+    navigate(withShopBrowseChange(browse, { search: "", category: "", collection: "" }));
+  }
+
+  function removeFilter(key: "search" | "category" | "collection") {
+    navigate(withShopBrowseChange(browse, { [key]: "" }));
+  }
+
   return (
     <section className="sf-shop">
       <h1>Shop</h1>
       <p className="sf-shop__intro">Browse vintage and collectible objects available from Noctella.</p>
 
       <form className="sf-shop-controls" role="search" onSubmit={submitSearch}>
-        <label className="sf-shop-control sf-shop-control--search">
-          <span>Search</span>
-          <input
-            type="search"
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder="Search products"
-          />
-        </label>
-        <button type="submit" className="sf-shop-button sf-shop-button--primary">Search</button>
-        <label className="sf-shop-control">
-          <span>Category</span>
-          <select
-            value={browse.category}
-            onChange={(event) => navigate(withShopBrowseChange(browse, { category: event.target.value }))}
-          >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.slug}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sf-shop-control">
-          <span>Collection</span>
-          <select
-            value={browse.collection}
-            onChange={(event) => navigate(withShopBrowseChange(browse, { collection: event.target.value }))}
-          >
-            <option value="">All collections</option>
-            {collections.map((c) => (
-              <option key={c.id} value={c.slug}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sf-shop-control">
+        <div className="sf-shop-controls__search">
+          <label className="sf-shop-control sf-shop-control--search">
+            <span>Search</span>
+            <input
+              type="search"
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              placeholder="Search products"
+            />
+          </label>
+          <button type="submit" className="sf-shop-button sf-shop-button--primary">Search</button>
+        </div>
+        <div className="sf-shop-controls__filters" aria-label="Browse filters">
+          <label className="sf-shop-control">
+            <span>Category</span>
+            <select
+              value={browse.category}
+              onChange={(event) => navigate(withShopBrowseChange(browse, { category: event.target.value }))}
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.slug}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="sf-shop-control">
+            <span>Collection</span>
+            <select
+              value={browse.collection}
+              onChange={(event) => navigate(withShopBrowseChange(browse, { collection: event.target.value }))}
+            >
+              <option value="">All collections</option>
+              {collections.map((c) => (
+                <option key={c.id} value={c.slug}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="sf-shop-control sf-shop-control--sort">
           <span>Sort by</span>
           <select
             value={browse.sort}
             onChange={(event) => navigate(withShopBrowseChange(browse, { sort: event.target.value as ShopSort }))}
           >
             {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </label>
-        <button type="button" className="sf-shop-button" onClick={() => router.push("/shop")}>Reset filters</button>
+        <button type="button" className="sf-shop-button sf-shop-button--reset" onClick={() => router.push("/shop")}>Reset filters</button>
       </form>
 
-      <ProductGrid products={products} loading={loading} error={error} emptyMessage="No products match your search." />
+      <div className="sf-shop-results-header">
+        {!resultsLoading && !error && <p className="sf-shop-results-count" role="status" aria-live="polite">{total} {total === 1 ? "result" : "results"}</p>}
+        {hasActiveFilters && (
+          <div className="sf-shop-active-filters" aria-label="Active filters">
+            <span className="sf-shop-active-filters__label">Active filters</span>
+            {activeFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                className="sf-shop-filter-chip"
+                onClick={() => removeFilter(filter.key)}
+                aria-label={`Remove ${filter.label} filter: ${filter.value}`}
+              >
+                <span>{filter.label}: {filter.value}</span>
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+            <button type="button" className="sf-shop-clear-filters" onClick={clearFilters}>Clear all filters</button>
+          </div>
+        )}
+      </div>
 
-      {!loading && !error && products.length > 0 && (
+      {!resultsLoading && !error && products.length === 0 ? (
+        <div className="sf-shop-empty">
+          <h2>No matching products found</h2>
+          <p>No products match your search.</p>
+          <p>Try clearing your filters to browse all available products.</p>
+          <button type="button" className="sf-shop-button sf-shop-button--primary" onClick={clearFilters}>
+            {hasActiveFilters ? "Clear filters and browse all" : "Browse all products"}
+          </button>
+        </div>
+      ) : (
+        <ProductGrid products={resultsAreCurrent ? products : []} loading={resultsLoading} error={resultsAreCurrent ? error : null} />
+      )}
+
+      {!resultsLoading && !error && products.length > 0 && (
         <nav className="sf-shop-pagination" aria-label="Product pagination">
           <span>
             Page {browse.page} of {totalPages} ({total} items)
