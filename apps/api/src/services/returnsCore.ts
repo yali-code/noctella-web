@@ -1,10 +1,11 @@
 import { createReturnApplicationContext } from "./returnApplicationContext";
 import { approveReturnUseCase, authorizeReturnUseCase, cancelReturnUseCase, completeReturnUseCase, createReturnUseCase, getReturnDetailUseCase, getReturnEventsUseCase, getReturnReadinessUseCase, inspectReturnUseCase, listReturnsUseCase, markReturnInTransitUseCase, receiveReturnUseCase, rejectReturnUseCase, updateReturnUseCase } from "../use-cases/return/useCases";
+import type { UpdateReturnMetadataInput } from "../validation/return";
 
 export const createReturnRequest = (db: any, input: any) => createReturnUseCase(createReturnApplicationContext(db), input);
 export const getReturnRequest = (db: any, id: string) => getReturnDetailUseCase(createReturnApplicationContext(db), id);
 export const listReturnRequests = (db: any, q: any = {}) => listReturnsUseCase(createReturnApplicationContext(db), q);
-export const updateReturnRequest = (db: any, id: string, input: any) => updateReturnUseCase(createReturnApplicationContext(db), id, input);
+export const updateReturnRequest = (db: any, id: string, input: UpdateReturnMetadataInput) => updateReturnUseCase(createReturnApplicationContext(db), id, input);
 export const authorizeReturn = (db: any, id: string, input: any = {}) => authorizeReturnUseCase(createReturnApplicationContext(db), id, input);
 export const rejectReturn = (db: any, id: string, input: any = {}) => rejectReturnUseCase(createReturnApplicationContext(db), id, input);
 export const markReturnInTransit = (db: any, id: string, input: any = {}) => markReturnInTransitUseCase(createReturnApplicationContext(db), id, input);
