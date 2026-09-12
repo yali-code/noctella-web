@@ -2,6 +2,7 @@ import { ProductStatus, ProductType } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { NotFoundError } from "./errors";
 import type { PublicProductListQuery } from "../validation/publicCatalog";
+import type { PublicWishlistResolutionInput } from "../validation/wishlistResolution";
 import { createProductReadServiceContextForDb } from "../repositories/product-read/factory";
 import type { CategoryReadProjection, CollectionReadProjection, ProductListProjection, ProductReadServiceContext } from "../repositories/product-read/types";
 
@@ -127,6 +128,26 @@ export async function listPublicProducts(db: DbClient, query: PublicProductListQ
   const total = await context.repositories.products.count(q);
   const items = await Promise.all(rows.map((row) => toPublicProduct(db, row, context)));
   return { items, total, page: query.page, pageSize: query.pageSize };
+}
+
+export async function resolvePublicWishlistProducts(
+  db: DbClient,
+  input: PublicWishlistResolutionInput,
+  context: ProductReadServiceContext = createProductReadServiceContextForDb(db),
+): Promise<{ items: PublicProduct[] }> {
+  const seen = new Set<string>();
+  const ids = input.ids.filter((id) => {
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  const items: PublicProduct[] = [];
+  for (const id of ids) {
+    const row = await context.repositories.products.getById(id);
+    if (!row || row.status !== ProductStatus.Published || row.salePausedAt) continue;
+    items.push(await toPublicProduct(db, row, context));
+  }
+  return { items };
 }
 
 export async function getPublicProductBySlug(db: DbClient, slug: string, context?: ProductReadServiceContext): Promise<PublicProduct> {

@@ -5,13 +5,24 @@ import {
   listArchiveProducts,
   listPublicProducts,
   listRelatedProducts,
+  resolvePublicWishlistProducts,
 } from "../services/publicCatalog";
 import { publicProductListQuerySchema } from "../validation/publicCatalog";
+import { publicWishlistResolutionSchema } from "../validation/wishlistResolution";
 import { publicCartReconciliationSchema } from "../validation/cartReconciliation";
 import { reconcilePublicCart } from "../services/cartReconciliation";
 import { handleRouteError } from "./errorHandler";
 
 const router = Router();
+
+router.post("/resolve", async (req, res) => {
+  try {
+    const input = publicWishlistResolutionSchema.parse(req.body);
+    res.json(await resolvePublicWishlistProducts(db, input));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
 
 router.post("/reconcile", async (req, res) => {
   try {
