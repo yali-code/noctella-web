@@ -72,16 +72,16 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
 
   it("resolves and renders multiple initial wishlist IDs", async () => {
     setIds(["a", "b"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA, itemB]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     expect(await screen.findByText("Item A")).toBeTruthy();
     expect(screen.getByText("Item B")).toBeTruthy();
-    expect(api.get).toHaveBeenCalledWith("/api/public/products?pageSize=100");
+    expect(api.post).toHaveBeenCalledWith("/api/public/products/resolve", { ids: ["a", "b"] });
   });
 
   it("removes one card immediately after its same-tab ProductCard toggle", async () => {
     setIds(["a", "b"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA, itemB]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
@@ -91,7 +91,7 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
 
   it("shows the empty state immediately after removing the last card", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
@@ -100,39 +100,60 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
 
   it("renders a same-tab addition from resolved cache without refetching", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA, itemB]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     setIds(["a", "b"]);
     act(wishlistUpdated);
     expect(screen.getByText("Item B")).toBeTruthy();
-    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.post).toHaveBeenCalledTimes(1);
   });
 
-  it("reloads the bounded catalog for an unresolved same-tab addition", async () => {
+  it("reloads the bounded resolver for an unresolved same-tab addition", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValueOnce(catalog([itemA])).mockResolvedValueOnce(catalog([itemA, itemB]));
+    vi.mocked(api.post).mockResolvedValueOnce(catalog([itemA])).mockResolvedValueOnce(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     setIds(["a", "b"]);
     act(wishlistUpdated);
     expect(await screen.findByText("Item B")).toBeTruthy();
-    expect(api.get).toHaveBeenCalledTimes(2);
+    expect(api.post).toHaveBeenCalledTimes(2);
   });
 
   it("resolves empty-to-non-empty membership without remounting", async () => {
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     render(<WishlistPage />);
     expect(await screen.findByText(/Your wishlist is empty/)).toBeTruthy();
     setIds(["a"]);
     act(wishlistUpdated);
     expect(await screen.findByText("Item A")).toBeTruthy();
-    expect(api.get).toHaveBeenCalledOnce();
+    expect(api.post).toHaveBeenCalledOnce();
+  });
+
+  it("renders eligible results while leaving unavailable membership unresolved", async () => {
+    setIds(["a", "missing"]);
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
+    render(<WishlistPage />);
+    expect(await screen.findByText("Item A")).toBeTruthy();
+    expect(screen.queryByText(/Your wishlist is empty/)).toBeNull();
+    expect(api.post).toHaveBeenCalledWith("/api/public/products/resolve", { ids: ["a", "missing"] });
+  });
+
+  it("batches more than 100 unique membership IDs without truncation", async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `product-${index}`);
+    vi.mocked(api.post)
+      .mockResolvedValueOnce(catalog(ids.slice(0, 100).map(product)))
+      .mockResolvedValueOnce(catalog([product(ids[100])]));
+    setIds(ids);
+    render(<WishlistPage />);
+    expect(await screen.findByText("Item PRODUCT-100")).toBeTruthy();
+    expect(api.post).toHaveBeenNthCalledWith(1, "/api/public/products/resolve", { ids: ids.slice(0, 100) });
+    expect(api.post).toHaveBeenNthCalledWith(2, "/api/public/products/resolve", { ids: [ids[100]] });
   });
 
   it("reconciles a relevant cross-tab storage event", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA, itemB]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     setIds(["b"]);
@@ -143,7 +164,7 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
 
   it("reconciles a storage-clear event whose key is null", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     localStorage.clear();
@@ -153,49 +174,49 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
 
   it("ignores irrelevant storage events", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     setIds(["b"]);
     act(() => storageChanged("noctella_cart"));
     expect(screen.getByText("Item A")).toBeTruthy();
     expect(screen.queryByText("Item B")).toBeNull();
-    expect(api.get).toHaveBeenCalledOnce();
+    expect(api.post).toHaveBeenCalledOnce();
   });
 
   it("does not refetch or show loading when removing from resolved products", async () => {
     setIds(["a", "b"]);
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA, itemB]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
-    expect(api.get).toHaveBeenCalledOnce();
+    expect(api.post).toHaveBeenCalledOnce();
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByText("Item B")).toBeTruthy();
   });
 
   it("preserves the existing blocking initial-load error", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockRejectedValue(new Error("network"));
+    vi.mocked(api.post).mockRejectedValue(new Error("network"));
     render(<WishlistPage />);
     expect((await screen.findByRole("alert")).textContent).toContain("Something went wrong loading your wishlist");
   });
 
   it("preserves valid products when a background addition reload fails", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockResolvedValueOnce(catalog([itemA])).mockRejectedValueOnce(new Error("network"));
+    vi.mocked(api.post).mockResolvedValueOnce(catalog([itemA])).mockRejectedValueOnce(new Error("network"));
     render(<WishlistPage />);
     await screen.findByText("Item A");
     setIds(["a", "b"]);
     act(wishlistUpdated);
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
     expect(screen.getByText("Item A")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("recovers from a current failure on a later relevant event", async () => {
     setIds(["a"]);
-    vi.mocked(api.get).mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(catalog([itemA]));
+    vi.mocked(api.post).mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(catalog([itemA]));
     render(<WishlistPage />);
     await screen.findByRole("alert");
     act(wishlistUpdated);
@@ -207,9 +228,9 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     const older = deferred<PaginatedResult<PublicProduct>>();
     const newer = deferred<PaginatedResult<PublicProduct>>();
     setIds(["a"]);
-    vi.mocked(api.get).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    vi.mocked(api.post).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
     render(<WishlistPage />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.post).toHaveBeenCalledOnce());
     setIds(["b"]);
     act(wishlistUpdated);
     await act(async () => { newer.resolve(catalog([itemB])); await newer.promise; });
@@ -222,9 +243,9 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
   it("suppresses a stale failure after a newer success", async () => {
     const older = deferred<PaginatedResult<PublicProduct>>();
     setIds(["a"]);
-    vi.mocked(api.get).mockReturnValueOnce(older.promise).mockResolvedValueOnce(catalog([itemB]));
+    vi.mocked(api.post).mockReturnValueOnce(older.promise).mockResolvedValueOnce(catalog([itemB]));
     render(<WishlistPage />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.post).toHaveBeenCalledOnce());
     setIds(["b"]);
     act(wishlistUpdated);
     expect(await screen.findByText("Item B")).toBeTruthy();
@@ -233,13 +254,50 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     expect(screen.getByText("Item B")).toBeTruthy();
   });
 
+  it("suppresses stale later-batch failure and finalization after membership changes", async () => {
+    const staleSecondBatch = deferred<PaginatedResult<PublicProduct>>();
+    const ids = Array.from({ length: 101 }, (_, index) => `old-${index}`);
+    vi.mocked(api.post)
+      .mockResolvedValueOnce(catalog(ids.slice(0, 100).map(product)))
+      .mockReturnValueOnce(staleSecondBatch.promise)
+      .mockResolvedValueOnce(catalog([itemB]));
+    setIds(ids);
+    render(<WishlistPage />);
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+    setIds(["b"]);
+    act(wishlistUpdated);
+    expect(await screen.findByText("Item B")).toBeTruthy();
+    await act(async () => { staleSecondBatch.reject(new Error("obsolete")); try { await staleSecondBatch.promise; } catch {} });
+    expect(screen.getByText("Item B")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("suppresses stale later-batch success after membership changes", async () => {
+    const staleSecondBatch = deferred<PaginatedResult<PublicProduct>>();
+    const ids = Array.from({ length: 101 }, (_, index) => `old-success-${index}`);
+    vi.mocked(api.post)
+      .mockResolvedValueOnce(catalog(ids.slice(0, 100).map(product)))
+      .mockReturnValueOnce(staleSecondBatch.promise)
+      .mockResolvedValueOnce(catalog([itemB]));
+    setIds(ids);
+    render(<WishlistPage />);
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+    setIds(["b"]);
+    act(wishlistUpdated);
+    expect(await screen.findByText("Item B")).toBeTruthy();
+    await act(async () => { staleSecondBatch.resolve(catalog([product(ids[100])])); await staleSecondBatch.promise; });
+    expect(screen.getByText("Item B")).toBeTruthy();
+    expect(screen.queryByText("Item OLD-SUCCESS-100")).toBeNull();
+  });
+
   it("does not let stale finalization end a newer pending load", async () => {
     const older = deferred<PaginatedResult<PublicProduct>>();
     const newer = deferred<PaginatedResult<PublicProduct>>();
     setIds(["a"]);
-    vi.mocked(api.get).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    vi.mocked(api.post).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
     render(<WishlistPage />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.post).toHaveBeenCalledOnce());
     setIds(["b"]);
     act(wishlistUpdated);
     await act(async () => { older.resolve(catalog([itemA])); await older.promise; });
@@ -251,9 +309,9 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
   it("invalidates pending catalog work when membership becomes empty", async () => {
     const pending = deferred<PaginatedResult<PublicProduct>>();
     setIds(["a"]);
-    vi.mocked(api.get).mockReturnValue(pending.promise);
+    vi.mocked(api.post).mockReturnValue(pending.promise);
     render(<WishlistPage />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.post).toHaveBeenCalledOnce());
     setIds([]);
     act(wishlistUpdated);
     expect(screen.getByText(/Your wishlist is empty/)).toBeTruthy();
@@ -263,23 +321,23 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
   });
 
   it("removes listeners on unmount", async () => {
-    vi.mocked(api.get).mockResolvedValue(catalog([itemA]));
+    vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     const view = render(<WishlistPage />);
     expect(await screen.findByText(/Your wishlist is empty/)).toBeTruthy();
     view.unmount();
     setIds(["a"]);
     act(wishlistUpdated);
     storageChanged();
-    expect(api.get).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
   });
 
   it("prevents a pending completion from reading response data after unmount", async () => {
     const pending = deferred<PaginatedResult<PublicProduct>>();
     const itemsRead = vi.fn(() => [itemA]);
     setIds(["a"]);
-    vi.mocked(api.get).mockReturnValue(pending.promise);
+    vi.mocked(api.post).mockReturnValue(pending.promise);
     const view = render(<WishlistPage />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.post).toHaveBeenCalledOnce());
     view.unmount();
     const response = { total: 1, page: 1, pageSize: 100 } as PaginatedResult<PublicProduct>;
     Object.defineProperty(response, "items", { get: itemsRead });
@@ -291,9 +349,9 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     const invalidated = deferred<PaginatedResult<PublicProduct>>();
     const current = deferred<PaginatedResult<PublicProduct>>();
     setIds(["a"]);
-    vi.mocked(api.get).mockReturnValueOnce(invalidated.promise).mockReturnValueOnce(current.promise);
+    vi.mocked(api.post).mockReturnValueOnce(invalidated.promise).mockReturnValueOnce(current.promise);
     render(<StrictMode><WishlistPage /></StrictMode>);
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
     await act(async () => { current.resolve(catalog([itemA])); await current.promise; });
     expect(screen.getByText("Item A")).toBeTruthy();
     await act(async () => { invalidated.resolve(catalog([itemB])); await invalidated.promise; });

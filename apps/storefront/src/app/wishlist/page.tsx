@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { ProductGrid } from "@/components/ProductGrid";
 import { getWishlistIds } from "@/lib/wishlist";
-import type { PaginatedResult, PublicProduct } from "@/lib/types";
+import type { PublicProduct } from "@/lib/types";
 
 export default function WishlistPage() {
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
@@ -36,13 +36,24 @@ export default function WishlistPage() {
       const hasVisibleProducts = ids.some((id) => resolvedIds.has(id));
       setError(null);
       setLoading(!hasVisibleProducts);
-      // The bounded catalog is deliberately unchanged; exact-ID completeness is a separate concern.
-      api
-        .get<PaginatedResult<PublicProduct>>("/api/public/products?pageSize=100")
-        .then((res) => {
-          if (generation !== synchronizationGeneration.current) return;
-          resolvedProductsRef.current = res.items;
-          setResolvedProducts(res.items);
+      const uniqueIds = [...new Set(ids)];
+      const batches = Array.from(
+        { length: Math.ceil(uniqueIds.length / 100) },
+        (_, index) => uniqueIds.slice(index * 100, (index + 1) * 100),
+      );
+      void (async () => {
+        const items: PublicProduct[] = [];
+        for (const batch of batches) {
+          const res = await api.post<{ items: PublicProduct[] }>("/api/public/products/resolve", { ids: batch });
+          if (generation !== synchronizationGeneration.current) return null;
+          items.push(...res.items);
+        }
+        return items;
+      })()
+        .then((items) => {
+          if (items === null || generation !== synchronizationGeneration.current) return;
+          resolvedProductsRef.current = items;
+          setResolvedProducts(items);
         })
         .catch(() => {
           if (generation !== synchronizationGeneration.current || hasVisibleProducts) return;
