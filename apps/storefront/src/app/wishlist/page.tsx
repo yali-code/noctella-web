@@ -1,33 +1,76 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { ProductGrid } from "@/components/ProductGrid";
 import { getWishlistIds } from "@/lib/wishlist";
 import type { PaginatedResult, PublicProduct } from "@/lib/types";
 
 export default function WishlistPage() {
-  const [products, setProducts] = useState<PublicProduct[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [resolvedProducts, setResolvedProducts] = useState<PublicProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const resolvedProductsRef = useRef<PublicProduct[]>([]);
+  const synchronizationGeneration = useRef(0);
 
   useEffect(() => {
-    const ids = getWishlistIds();
-    if (ids.length === 0) {
-      setLoading(false);
-      return;
+    function synchronize() {
+      const generation = ++synchronizationGeneration.current;
+      const ids = getWishlistIds();
+      setWishlistIds(ids);
+
+      if (ids.length === 0) {
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      const resolvedIds = new Set(resolvedProductsRef.current.map((product) => product.id));
+      if (ids.every((id) => resolvedIds.has(id))) {
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      const hasVisibleProducts = ids.some((id) => resolvedIds.has(id));
+      setError(null);
+      setLoading(!hasVisibleProducts);
+      // The bounded catalog is deliberately unchanged; exact-ID completeness is a separate concern.
+      api
+        .get<PaginatedResult<PublicProduct>>("/api/public/products?pageSize=100")
+        .then((res) => {
+          if (generation !== synchronizationGeneration.current) return;
+          resolvedProductsRef.current = res.items;
+          setResolvedProducts(res.items);
+        })
+        .catch(() => {
+          if (generation !== synchronizationGeneration.current || hasVisibleProducts) return;
+          setError("Something went wrong loading your wishlist. Please try again.");
+        })
+        .finally(() => {
+          if (generation === synchronizationGeneration.current) setLoading(false);
+        });
     }
-    // No bulk/by-id public endpoint exists yet; fetch the published catalog
-    // and filter client-side by the ids stored in localStorage.
-    api
-      .get<PaginatedResult<PublicProduct>>("/api/public/products?pageSize=100")
-      .then((res) => {
-        const idSet = new Set(ids);
-        setProducts(res.items.filter((p) => idSet.has(p.id)));
-      })
-      .catch(() => setError("Something went wrong loading your wishlist. Please try again."))
-      .finally(() => setLoading(false));
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "noctella_wishlist" || event.key === null) synchronize();
+    };
+
+    synchronize();
+    window.addEventListener("noctella:wishlist-updated", synchronize);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      synchronizationGeneration.current += 1;
+      window.removeEventListener("noctella:wishlist-updated", synchronize);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
+
+  const products = useMemo(() => {
+    const idSet = new Set(wishlistIds);
+    return resolvedProducts.filter((product) => idSet.has(product.id));
+  }, [resolvedProducts, wishlistIds]);
 
   return (
     <section style={{ padding: "48px 40px" }}>
