@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  ReturnItemCondition,
+  ReturnStockDisposition,
+} from "@noctella/shared";
 
 export const updateReturnMetadataSchema = z
   .object({
@@ -15,3 +19,19 @@ export const updateReturnMetadataSchema = z
 export type UpdateReturnMetadataInput = z.infer<
   typeof updateReturnMetadataSchema
 >;
+
+export const inspectReturnInputSchema = z
+  .object({
+    orderItemId: z.string().min(1),
+    quantityReceived: z.number().finite().int().min(1).optional(),
+    condition: z.nativeEnum(ReturnItemCondition).nullable().optional(),
+    stockDisposition: z
+      .nativeEnum(ReturnStockDisposition)
+      .nullable()
+      .optional(),
+    inspectionNote: z.string().nullable().optional(),
+    inspectionResult: z.unknown().optional(),
+  })
+  .strict();
+
+export type InspectReturnInput = z.infer<typeof inspectReturnInputSchema>;
