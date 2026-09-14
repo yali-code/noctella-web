@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildProductPublicationEnvelope, PRODUCT_PUBLICATION_TARGETS } from "../src/integrations/productPublishingFoundation";
+import { buildHistoricalPublishPayload, buildProductPublicationEnvelope, PRODUCT_PUBLICATION_TARGETS, WOO_FIELD_OWNERSHIP } from "../src/integrations/productPublishingFoundation";
+import { PublishChannel } from "@noctella/shared";
 
 const product = {
   id: "p1", sku: "ART-000001", title: "Moon vase", slug: "moon-vase", status: "approved",
@@ -19,5 +20,17 @@ describe("shared Product publishing foundation", () => {
   it("uses optional marketplace overrides without making them core requirements", () => {
     expect(buildProductPublicationEnvelope(product, [], "ebay").payload).toMatchObject({ title: "Moon vase", priceEur: 100 });
     expect(buildProductPublicationEnvelope({ ...product, etsyTitle: "Etsy moon" }, [], "etsy").payload).toMatchObject({ title: "Etsy moon" });
+  });
+
+  it("feeds the historical payload contract while retaining established woo fields as Noctella Web defaults", () => {
+    const owned = { ...product, wooProductName: "Web moon", wooListingPriceEur: 120 };
+    expect(WOO_FIELD_OWNERSHIP).toBe("noctella_web_defaults_for_woocommerce");
+    expect(buildHistoricalPublishPayload(owned, [], PublishChannel.NoctellaWeb)).toMatchObject({ productId: "p1", title: "Web moon", priceEur: 120 });
+    expect(buildProductPublicationEnvelope(owned, [], "woocommerce").payload).toMatchObject({ name: "Web moon", regular_price: "120.00" });
+  });
+
+  it.each([PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy])("derives historical %s execution payload from the canonical envelope", (channel) => {
+    const target = channel === PublishChannel.Ebay ? "ebay" : channel === PublishChannel.Etsy ? "etsy" : "noctella_web";
+    expect(buildHistoricalPublishPayload(product, [], channel)).toEqual(buildProductPublicationEnvelope(product, [], target).historicalExecutionPayload);
   });
 });

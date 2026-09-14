@@ -8,6 +8,7 @@ import { createInventoryRepositoryBundleForDb, type InventoryRepositoryDriver } 
 import { effectiveShippingProfile, resolveFinalShipping } from "../shipping/useCases";
 
 export interface Clock { now(): Date } export interface IdGenerator { id(): string } export interface PostCommitStockSyncPort { enqueue(productId:string, key:string): Promise<void> }
+export interface DurableStockSyncIntentPort { enqueue(tx:import("../../db/client").DbClient, productId:string, key:string): void | Promise<void> }
 /** Sprint 79 correction: a generic, domain-agnostic hook so this Order use case never needs to import invoice-domain code — it only knows "enqueue this durable signal, using the same transaction handle, for a newly (not idempotent-replay) created paid order." services/orders.ts supplies the real (invoice-specific) implementation. */
 export interface PaidOrderOutboxPort { enqueue(tx:import("../../db/client").DbClient, orderId:string): void }
 const clock:Clock={now:()=>new Date()}; const ids:IdGenerator={id:()=>randomUUID()};
@@ -25,6 +26,7 @@ export interface InternalOrderTransactionContext {
   idGenerator: IdGenerator;
   inventoryDriver: InventoryRepositoryDriver;
   outbox?: PaidOrderOutboxPort;
+  stockSyncIntent?: DurableStockSyncIntentPort;
   pricingContext: OrderPricingContext;
   paidSession?: PaidSessionPricing;
   codPending?: true;
@@ -47,7 +49,7 @@ export function finalizeInternalOrderInTransaction(
   input: CreateInternalOrderInput,
   context: InternalOrderTransactionContext,
 ): InternalOrderTransactionResult | Promise<InternalOrderTransactionResult> {
-  const { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, codPending, orderId, idempotencyKey: idem } = context;
+  const { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, stockSyncIntent, pricingContext, paidSession, codPending, orderId, idempotencyKey: idem } = context;
   const inventoryRepositories = createInventoryRepositoryBundleForDb(repositories.db, driver, driver === "sqlite");
   return continueWith(repositories.order.orders.write.findByIdempotencyKey(idem), (existing: any) => {
   if (existing?.id) return continueWith(repositories.order.orders.read.getOrderDetailProjection(existing.id), (order: any) => ({ order, affectedProductIds: [] }));
@@ -116,9 +118,10 @@ export function finalizeInternalOrderInTransaction(
     if (index >= itemRows.length) return complete();
     const row = itemRows[index];
     const result = decreaseInventoryForSaleInTransactionUseCase({ clock: c, idGenerator: { newId: () => g.id() } }, inventoryRepositories, { productId: row.productId, quantity: row.quantity, orderId, orderItemId: row.id, note: `Sale for order ${orderId}`, idempotencyKey: `order-sale:${orderId}:${row.productId}` });
-    return result instanceof Promise
-      ? result.then(() => { affectedProductIds.push(row.productId); return mutate(index + 1); })
-      : ((affectedProductIds.push(row.productId)), mutate(index + 1));
+    return continueWith(result, () => continueWith(
+      stockSyncIntent?.enqueue(repositories.db, row.productId, `order-sale:${orderId}:${row.productId}`),
+      () => { affectedProductIds.push(row.productId); return mutate(index + 1); },
+    ));
   };
   const orderRecord = { id: orderId, orderNumber: input.orderNumber ?? formatOrderNumber(c.now()), orderDraftId: idem, guestEmail: input.guestEmail, customerId: input.customerId, status: input.status, paymentStatus: input.paymentStatus, paymentProvider: input.paymentProvider as any, paymentReference: input.paymentReference, subtotalAmount: subtotal, shippingAmount, taxAmount: 0, totalAmount: subtotal + shippingAmount, currency: "EUR" as any, billingAddress: input.billingAddress, shippingAddress: input.shippingAddress, notes: input.notes, shippingMethodId, shippingMethodLabel, createdAt: now, updatedAt: now, idempotencyKey: idem };
   return continueWith(repositories.order.orders.write.create(orderRecord as any), () => continueWith(repositories.order.orderItems.write.createMany(itemRows), () => mutate(0)));
@@ -135,6 +138,7 @@ export function createInternalOrderUseCase(
   outbox?: PaidOrderOutboxPort,
   pricingContext: OrderPricingContext = "canonical",
   paidSession?: PaidSessionPricing,
+  stockSyncIntent?: DurableStockSyncIntentPort,
 ) {
   return {
     async execute(input: CreateInternalOrderInput): Promise<OrderDetailProjection> {
@@ -146,7 +150,7 @@ export function createInternalOrderUseCase(
       const idem = input.idempotencyKey ?? input.orderDraftId;
       const keyHash = stablePayload({ ...input, id: undefined, orderNumber: undefined });
       const orderId = input.id ?? g.id();
-      const result = await uow.run(({ repositories }) => finalizeInternalOrderInTransaction(input, { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, pricingContext, paidSession, orderId, idempotencyKey: idem }));
+      const result = await uow.run(({ repositories }) => finalizeInternalOrderInTransaction(input, { repositories, clock: c, idGenerator: g, inventoryDriver: driver, outbox, stockSyncIntent, pricingContext, paidSession, orderId, idempotencyKey: idem }));
       for (const p of result.affectedProductIds) await sync?.enqueue(p, `order-sale:${orderId}:${p}`).catch(() => undefined);
       void keyHash;
       return result.order;
@@ -154,7 +158,7 @@ export function createInternalOrderUseCase(
   };
 }
 export interface CreateCashOnDeliveryOrderInput { orderDraftId:string; guestEmail:string; billingAddress:CreateInternalOrderInput["billingAddress"]; shippingAddress:CreateInternalOrderInput["shippingAddress"]; notes?:string; items:Array<{productId:string;quantity:number}>; subtotalAmount:number; shippingMethodId?:string; expectedShippingAmountEur?:number }
-export function createCashOnDeliveryOrderUseCase(uow:UnitOfWork,sync?:PostCommitStockSyncPort,c:Clock=clock,g:IdGenerator=ids,driver:InventoryRepositoryDriver="sqlite") { return { async execute(intent:CreateCashOnDeliveryOrderInput):Promise<OrderDetailProjection> { if(intent.items.some(item=>!Number.isInteger(item.quantity)||item.quantity<=0)) throw new BadRequestError("Order quantities must be positive integers"); const orderId=g.id(); let result:Awaited<ReturnType<typeof finalizeInternalOrderInTransaction>>; try { result=await uow.run(({repositories})=>finalizeInternalOrderInTransaction({orderDraftId:intent.orderDraftId,idempotencyKey:intent.orderDraftId,channel:"Direct",guestEmail:intent.guestEmail,status:OrderStatus.Pending,paymentStatus:PaymentStatus.Pending,paymentProvider:PaymentProvider.CashOnDelivery,currency:PriceCurrency.Eur,billingAddress:intent.billingAddress,shippingAddress:intent.shippingAddress,subtotalAmount:intent.subtotalAmount,totalAmount:intent.subtotalAmount,notes:intent.notes,items:intent.items,shippingMethodId:intent.shippingMethodId,expectedShippingAmountEur:intent.expectedShippingAmountEur},{repositories,clock:c,idGenerator:g,inventoryDriver:driver,pricingContext:"noctella_web",codPending:true,orderId,idempotencyKey:intent.orderDraftId})); } catch(error) { const cause=(error as {cause?:unknown})?.cause; if(cause instanceof CheckoutPriceChangedError) throw cause; throw error; } for(const productId of result.affectedProductIds) await sync?.enqueue(productId,`order-sale:${result.order.id}:${productId}`).catch(()=>undefined); return result.order; } }; }
+export function createCashOnDeliveryOrderUseCase(uow:UnitOfWork,sync?:PostCommitStockSyncPort,c:Clock=clock,g:IdGenerator=ids,driver:InventoryRepositoryDriver="sqlite",stockSyncIntent?:DurableStockSyncIntentPort) { return { async execute(intent:CreateCashOnDeliveryOrderInput):Promise<OrderDetailProjection> { if(intent.items.some(item=>!Number.isInteger(item.quantity)||item.quantity<=0)) throw new BadRequestError("Order quantities must be positive integers"); const orderId=g.id(); let result:Awaited<ReturnType<typeof finalizeInternalOrderInTransaction>>; try { result=await uow.run(({repositories})=>finalizeInternalOrderInTransaction({orderDraftId:intent.orderDraftId,idempotencyKey:intent.orderDraftId,channel:"Direct",guestEmail:intent.guestEmail,status:OrderStatus.Pending,paymentStatus:PaymentStatus.Pending,paymentProvider:PaymentProvider.CashOnDelivery,currency:PriceCurrency.Eur,billingAddress:intent.billingAddress,shippingAddress:intent.shippingAddress,subtotalAmount:intent.subtotalAmount,totalAmount:intent.subtotalAmount,notes:intent.notes,items:intent.items,shippingMethodId:intent.shippingMethodId,expectedShippingAmountEur:intent.expectedShippingAmountEur},{repositories,clock:c,idGenerator:g,inventoryDriver:driver,stockSyncIntent,pricingContext:"noctella_web",codPending:true,orderId,idempotencyKey:intent.orderDraftId})); } catch(error) { const cause=(error as {cause?:unknown})?.cause; if(cause instanceof CheckoutPriceChangedError) throw cause; throw error; } for(const productId of result.affectedProductIds) await sync?.enqueue(productId,`order-sale:${result.order.id}:${productId}`).catch(()=>undefined); return result.order; } }; }
 export const getOrderDetailUseCase=(uow:UnitOfWork)=>({execute:(id:string)=>uow.run(({repositories})=>{const o=repositories.order.orders.read.getOrderDetailProjection(id); if(!o) throw new NotFoundError("Order not found"); return o;})});
 export interface CreateDraftOrderFromOfferInput { offerId:string; productId:string; customerName:string; customerEmail:string; offeredAmount:number; currency:string }
 /**

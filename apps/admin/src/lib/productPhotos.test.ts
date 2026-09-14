@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productPhotoCapabilities, productPhotoUploadForm, reorderProductPhotoIds } from "./productPhotos";
+import { productPhotoCapabilities, productPhotoPublicationReadiness, productPhotoUploadForm, reorderProductPhotoIds } from "./productPhotos";
 
 describe("admin product photo helpers", () => {
   it("builds multipart upload form data", async () => {
@@ -20,5 +20,14 @@ describe("admin product photo helpers", () => {
     const photos = [{ id: "a", isPrimary: true }, { id: "b", isPrimary: false }] as any;
     expect(productPhotoCapabilities(photos, "a")).toEqual({ canMoveEarlier: false, canMoveLater: true, canSetPrimary: false, canDelete: true });
     expect(productPhotoCapabilities(photos, "b").canSetPrimary).toBe(true);
+  });
+});
+
+describe("productPhotoPublicationReadiness", () => {
+  it("requires a ready resolved primary and reports missing alt text", () => {
+    expect(productPhotoPublicationReadiness([
+      { id: "a", processingStatus: "Ready", url: "/a", isPrimary: true, altText: "" },
+      { id: "b", processingStatus: "Failed", url: "/b", isPrimary: false, altText: "ignored" },
+    ] as any)).toEqual({ ready: true, readyPhotoCount: 1, hasPrimary: true, missingAltTextCount: 1 });
   });
 });

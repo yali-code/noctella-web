@@ -43,6 +43,7 @@ import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
 import { dispatchDueAiSalesPreparationOutboxEvents } from "./services/aiSalesPreparationOutbox";
+import { dispatchDueStockSyncOutboxEvents } from "./services/stockSyncOutbox";
 import { runAiIntakeCleanupForScheduler, MAX_CLEANUP_BATCH_SIZE } from "./services/aiIntakeCleanup";
 import { parseSchedulerBatchSize } from "./validation/backgroundJobs";
 import { handleRouteError } from "./routes/errorHandler";
@@ -176,6 +177,7 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     // attempt in services/aiIntakeStockAcceptance.ts is only a best-effort responsiveness optimization;
     // this scheduled sweep is what actually guarantees eventual delivery (retries, dead-lettering).
     const aiSalesPreparationOutboxResults = await dispatchDueAiSalesPreparationOutboxEvents(db, workerId, batchSize);
+    const stockSyncOutboxResults = await dispatchDueStockSyncOutboxEvents(db, workerId, batchSize);
     // Sprint 96: same reuse for AI intake staged-photo retention cleanup and orphan-file recovery -
     // never a second scheduler endpoint/cron. Cleanup has its own approved batch-size ceiling (500),
     // applied only to this call; the other three domains' own batchSize behavior above is unchanged.
@@ -186,6 +188,7 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
       photoOutboxProcessed: photoOutboxResults.length,
       salesInvoiceOutboxProcessed: salesInvoiceOutboxResults.length,
       aiSalesPreparationOutboxProcessed: aiSalesPreparationOutboxResults.length,
+      stockSyncOutboxProcessed: stockSyncOutboxResults.length,
       aiIntakeCleanup,
     });
   } catch (e) {

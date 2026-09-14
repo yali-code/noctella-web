@@ -11,11 +11,13 @@ import { createCashOnDeliveryOrderUseCase, createInternalOrderUseCase, getOrderD
 import { getShippingOptionsUseCase, type ResolvedShippingOption } from "../use-cases/shipping/useCases";
 import { dispatchDueSalesInvoiceOutboxEvents, enqueueSalesInvoiceDraftForPaidOrderSync } from "./salesInvoiceOutbox";
 import type { OrderPricingContext } from "../repositories/order/types";
+import { dispatchDueStockSyncOutboxEvents, enqueueStockSyncIntent } from "./stockSyncOutbox";
 
 export interface OrderWithItems { id:string; orderNumber:string; items:unknown[]; [key:string]:unknown }
 function orderDriver(){ return getDatabaseConfig().driver; }
 function uow(db:DbClient){ const driver=orderDriver(); return driver==="sqlite"?new SqliteUnitOfWork(db):new PostgresUnitOfWork(db as any,driver); }
 const sync=(db:DbClient)=>({ enqueue:(productId:string,key:string)=>enqueueProductStockSync(db,productId,key).then(()=>undefined) });
+const durableSync={ enqueue:enqueueStockSyncIntent };
 /**
  * Sprint 79 correction: the real (invoice-domain-aware) implementation of the generic
  * PaidOrderOutboxPort the Order use cases call — kept here, not in the use-case file, so Order
@@ -56,9 +58,10 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
   }
 
   const outbox = options.enqueueInvoiceDraft===false ? undefined : paidOrderOutbox;
-  const result = await createInternalOrderUseCase(uow(db),sync(db),undefined,undefined,orderDriver(),outbox,pricingContext,{ amount:session.amount, currency:session.currency }).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
+  const result = await createInternalOrderUseCase(uow(db),undefined,undefined,undefined,orderDriver(),outbox,pricingContext,{ amount:session.amount, currency:session.currency },durableSync).execute({ ...input, idempotencyKey, channel:(input as any).channel??"Internal", status:input.status??OrderStatus.Processing, paymentStatus:PaymentStatus.Paid }) as unknown as OrderWithItems;
 
   await linkPaymentToOrder(db, session.id, result.id).catch(()=>undefined);
+  await dispatchDueStockSyncOutboxEvents(db, "order-post-commit", Math.max(1, (result.items as unknown[]).length)).catch(()=>undefined);
   // Sprint 79: the durable outbox event (enqueued above, inside the same transaction as the order
   // and stock mutation) is the actual guarantee — this is only a best-effort immediate dispatch
   // attempt for responsiveness, so most orders get their invoice draft without waiting for the
@@ -68,7 +71,7 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
 
   return result;
 }
-export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDeliveryOrderInput):Promise<OrderWithItems>{ return createCashOnDeliveryOrderUseCase(uow(db),sync(db)).execute(input) as unknown as Promise<OrderWithItems>; }
+export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDeliveryOrderInput):Promise<OrderWithItems>{ const result=await createCashOnDeliveryOrderUseCase(uow(db),undefined,undefined,undefined,orderDriver(),durableSync).execute(input) as unknown as OrderWithItems; await dispatchDueStockSyncOutboxEvents(db,"cod-post-commit",Math.max(1,(result.items as unknown[]).length)).catch(()=>undefined); return result; }
 /**
  * Sprint 134: public, non-mutating shipping-options quote - delegates entirely to the canonical
  * Use Case (getShippingOptionsUseCase), which reads products through the same repository method

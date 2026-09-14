@@ -22,6 +22,8 @@ import { createPaymentSession } from "../src/payments/paymentRepository";
 import { listStockMovements } from "../src/services/stockMovements";
 import { createOrderSchema } from "../src/validation/order";
 import type { PhotoStorage } from "../src/services/photoStorage";
+import { OutboxEventType } from "../src/services/outbox";
+import { stockSyncIntentKey } from "../src/services/stockSyncOutbox";
 
 /**
  * A fake PhotoStorage so this database-persistence suite can exercise the real
@@ -146,14 +148,22 @@ describe("Sprint 75 real SQLite restart persistence", () => {
     expect(saleMovementBeforeRestart).toBeDefined();
     expect(saleMovementBeforeRestart?.orderId).toBe(order.id);
 
-    // Sprint 79 correction: the paid order created above now also durably enqueues its own
-    // automatic-sales-invoice-draft outbox event (see services/salesInvoiceOutbox.ts), alongside
-    // the pre-existing product-photo-promotion event from uploadProductPhoto() below - two rows,
-    // not one. The photo-specific event is identified by aggregateId rather than array order.
+    // The outbox now contains independent durable intents for the invoice, photo promotion, and
+    // every canonical stock movement. Assert each semantic group without relying on insertion order.
     const outboxRowsBeforeRestart = await dbFirst.select().from(schema.outboxEvents);
-    expect(outboxRowsBeforeRestart).toHaveLength(2);
-    const photoOutboxRowBeforeRestart = outboxRowsBeforeRestart.find((r) => r.aggregateId === photo.id);
-    expect(photoOutboxRowBeforeRestart).toBeDefined();
+    const allMovementsBeforeRestart = await dbFirst.select().from(schema.stockMovements);
+    const stockIntentsBeforeRestart = outboxRowsBeforeRestart.filter((row) => row.eventType === OutboxEventType.StockSyncRequested);
+    const invoiceEventsBeforeRestart = outboxRowsBeforeRestart.filter((row) => row.eventType === OutboxEventType.SalesInvoiceDraftRequested);
+    const photoEventsBeforeRestart = outboxRowsBeforeRestart.filter((row) => row.eventType === OutboxEventType.ProductPhotoPromoteRequested);
+    expect(stockIntentsBeforeRestart).toHaveLength(allMovementsBeforeRestart.length);
+    expect(stockIntentsBeforeRestart.map((row) => ({ aggregateId: row.aggregateId, idempotencyKey: row.idempotencyKey })).sort((a, b) => a.idempotencyKey.localeCompare(b.idempotencyKey))).toEqual(
+      allMovementsBeforeRestart.map((movement) => ({ aggregateId: movement.productId, idempotencyKey: stockSyncIntentKey(movement.idempotencyKey ?? movement.id, movement.productId) })).sort((a, b) => a.idempotencyKey.localeCompare(b.idempotencyKey)),
+    );
+    expect(invoiceEventsBeforeRestart).toHaveLength(1);
+    expect(invoiceEventsBeforeRestart[0]).toMatchObject({ aggregateType: "Order", aggregateId: order.id });
+    expect(photoEventsBeforeRestart).toHaveLength(1);
+    expect(photoEventsBeforeRestart[0]).toMatchObject({ aggregateId: photo.id });
+    expect(outboxRowsBeforeRestart).toHaveLength(stockIntentsBeforeRestart.length + invoiceEventsBeforeRestart.length + photoEventsBeforeRestart.length);
 
     const categoriesBeforeRestart = await dbFirst.select().from(schema.categories);
 
@@ -199,11 +209,11 @@ describe("Sprint 75 real SQLite restart persistence", () => {
     expect(saleMovementAfterRestart?.id).toBe(saleMovementBeforeRestart?.id);
 
     const outboxRowsAfterRestart = await dbSecond.select().from(schema.outboxEvents);
-    expect(outboxRowsAfterRestart).toHaveLength(2);
-    const photoOutboxRowAfterRestart = outboxRowsAfterRestart.find((r) => r.aggregateId === photo.id);
-    expect(photoOutboxRowAfterRestart?.id).toBe(photoOutboxRowBeforeRestart?.id);
-    const orderOutboxRowAfterRestart = outboxRowsAfterRestart.find((r) => r.aggregateId === order.id);
-    expect(orderOutboxRowAfterRestart).toBeDefined();
+    expect(outboxRowsAfterRestart.map((row) => row.id).sort()).toEqual(outboxRowsBeforeRestart.map((row) => row.id).sort());
+    const stockIntentsAfterRestart = outboxRowsAfterRestart.filter((row) => row.eventType === OutboxEventType.StockSyncRequested);
+    expect(stockIntentsAfterRestart.map((row) => row.idempotencyKey).sort()).toEqual(stockIntentsBeforeRestart.map((row) => row.idempotencyKey).sort());
+    expect(outboxRowsAfterRestart.filter((row) => row.eventType === OutboxEventType.ProductPhotoPromoteRequested)).toEqual(photoEventsBeforeRestart);
+    expect(outboxRowsAfterRestart.filter((row) => row.eventType === OutboxEventType.SalesInvoiceDraftRequested)).toEqual(invoiceEventsBeforeRestart);
 
     await second.shutdown();
   });

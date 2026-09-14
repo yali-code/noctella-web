@@ -32,6 +32,18 @@ export function productPhotoCapabilities(photos: readonly ProductPhoto[], photoI
   };
 }
 
+export type ProductPhotoUploadState = "queued" | "uploading" | "processing" | "completed" | "failed";
+
+export function productPhotoPublicationReadiness(photos: readonly ProductPhoto[]) {
+  const ready = photos.filter((photo) => photo.processingStatus === "Ready" && Boolean(photo.url));
+  return {
+    ready: ready.length > 0 && ready.some((photo) => photo.isPrimary),
+    readyPhotoCount: ready.length,
+    hasPrimary: ready.some((photo) => photo.isPrimary),
+    missingAltTextCount: ready.filter((photo) => !photo.altText?.trim()).length,
+  };
+}
+
 export const productPhotoApi = {
   upload: (productId: string, file: File, altText?: string) =>
     uploadForm<ProductPhoto>(`/api/products/${productId}/photos`, productPhotoUploadForm(file, altText)),
