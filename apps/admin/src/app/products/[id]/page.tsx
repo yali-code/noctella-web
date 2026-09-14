@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, resolveApiAssetUrl } from "@/lib/api";
+import { buildProductCardSummary, formatEur } from "@/lib/productCardDomain";
 import type { ProductDetail } from "@/lib/types";
 
 export default function ProductViewPage({ params }: { params: { id: string } }) {
@@ -31,7 +32,8 @@ export default function ProductViewPage({ params }: { params: { id: string } }) 
   if (error) return <p style={{ color: "#c86a6a" }}>{error}</p>;
   if (!product) return <p style={{ color: "var(--noctella-aged-bronze)" }}>Loading...</p>;
 
-  const primaryImage = product.images.find((img) => img.isPrimary) ?? product.images[0];
+  const card = buildProductCardSummary(product);
+  const primaryImage = card.media.primaryPhoto ?? product.images.find((img) => img.isPrimary) ?? product.images[0];
 
   return (
     <div>
@@ -87,34 +89,36 @@ export default function ProductViewPage({ params }: { params: { id: string } }) 
             style={{ width: 220, height: 220, objectFit: "cover", borderRadius: 4, border: "1px solid var(--noctella-antique-gold)" }}
           />
         )}
-        <div className="noctella-panel" style={{ padding: 20, flex: 1 }}>
-          <Row label="SKU" value={product.sku} />
-          <Row label="Slug" value={product.slug} />
-          <Row label="Type" value={product.type} />
-          <Row label="Status" value={product.status} />
-          <Row label="EUR Price" value={product.priceEur != null ? `€${product.priceEur.toFixed(2)}` : "No price set"} />
+        <section aria-labelledby="product-identity" className="noctella-panel" style={{ padding: 20, flex: 1 }}>
+          <h2 id="product-identity">Product identity</h2>
+          <Row label="Product ID" value={card.identity.id} />
+          <Row label="SKU" value={card.identity.sku} />
+          <Row label="Slug" value={card.identity.slug} />
+          <Row label="Type" value={card.type} />
+          <Row label="Status" value={card.status} />
+          <Row label="EUR Price" value={formatEur(card.commercial.price)} />
           {product.priceUsd && <Row label="USD Price" value={`$${product.priceUsd.toFixed(2)}`} />}
-          <Row label="Stock Quantity" value={String(product.stockQuantity)} />
+          <Row label="Stock Quantity" value={String(card.inventory.quantity)} />
           {product.lotItemCount !== undefined && <Row label="Lot Item Count" value={String(product.lotItemCount)} />}
           {product.brand && <Row label="Brand" value={product.brand} />}
           {product.condition && <Row label="Condition" value={product.condition} />}
           <Row label="Updated" value={new Date(product.updatedAt).toLocaleString()} />
-        </div>
+        </section>
       </div>
 
       {product.description && (
         <div style={{ marginTop: 24 }}>
-          <h3>Description</h3>
-          <p style={{ color: "var(--noctella-ivory)" }}>{product.description}</p>
+          <h2>Content</h2>
+          <p style={{ color: "var(--noctella-ivory)" }}>{card.content.description}</p>
         </div>
       )}
 
       <div style={{ marginTop: 24 }}>
-        <h3>Marketplace Readiness</h3>
+        <h2>Publishing readiness</h2>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <ReadinessCard label="eBay" readiness={product.marketplaceReadiness.ebay} />
-          <ReadinessCard label="Etsy" readiness={product.marketplaceReadiness.etsy} />
-          <ReadinessCard label="WooCommerce" readiness={product.marketplaceReadiness.woocommerce} />
+          <ReadinessCard label="eBay" readiness={card.publishing.ebay} />
+          <ReadinessCard label="Etsy" readiness={card.publishing.etsy} />
+          <ReadinessCard label="WooCommerce" readiness={card.publishing.woocommerce} />
         </div>
       </div>
     </div>
