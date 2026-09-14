@@ -8,6 +8,30 @@ export function productPhotoUploadForm(file: File, altText?: string): FormData {
   return form;
 }
 
+export function reorderProductPhotoIds(
+  photos: readonly Pick<ProductPhoto, "id">[],
+  photoId: string,
+  direction: -1 | 1,
+): string[] | null {
+  const ids = photos.map(({ id }) => id);
+  const current = ids.indexOf(photoId);
+  const target = current + direction;
+  if (current < 0 || target < 0 || target >= ids.length) return null;
+  [ids[current], ids[target]] = [ids[target], ids[current]];
+  return ids;
+}
+
+export function productPhotoCapabilities(photos: readonly ProductPhoto[], photoId: string) {
+  const index = photos.findIndex((photo) => photo.id === photoId);
+  const photo = photos[index];
+  return {
+    canMoveEarlier: index > 0,
+    canMoveLater: index >= 0 && index < photos.length - 1,
+    canSetPrimary: Boolean(photo && !photo.isPrimary),
+    canDelete: Boolean(photo),
+  };
+}
+
 export const productPhotoApi = {
   upload: (productId: string, file: File, altText?: string) =>
     uploadForm<ProductPhoto>(`/api/products/${productId}/photos`, productPhotoUploadForm(file, altText)),

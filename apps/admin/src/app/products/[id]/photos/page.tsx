@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, resolveApiAssetUrl } from "@/lib/api";
-import { productPhotoApi } from "@/lib/productPhotos";
+import { productPhotoApi, reorderProductPhotoIds } from "@/lib/productPhotos";
 import type { ProductDetail } from "@/lib/types";
 
 export default function ProductPhotosPage({ params }: { params: { id: string } }) {
@@ -69,11 +69,8 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
 
   async function move(photoId: string, direction: -1 | 1) {
     if (!product) return;
-    const ids = product.photos.map((photo) => photo.id);
-    const index = ids.indexOf(photoId);
-    const next = index + direction;
-    if (next < 0 || next >= ids.length) return;
-    [ids[index], ids[next]] = [ids[next], ids[index]];
+    const ids = reorderProductPhotoIds(product.photos, photoId, direction);
+    if (!ids) return;
     await productPhotoApi.reorder(params.id, ids);
     await load();
   }

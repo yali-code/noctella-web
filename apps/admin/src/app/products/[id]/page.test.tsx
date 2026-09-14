@@ -40,4 +40,13 @@ describe("ProductViewPage — Sprint 109 Edit Product navigation", () => {
     const link = await screen.findByRole("link", { name: "Edit Product" });
     expect(link).toHaveAttribute("href", "/products/p1/edit");
   });
+
+  it("renders canonical Product Card identity and publishing sections", async () => {
+    vi.spyOn(apiLib.api, "get").mockResolvedValue(baseProduct({ priceEur: null }));
+    render(<ProductViewPage params={{ id: "p1" }} />);
+
+    expect(await screen.findByRole("heading", { name: "Product identity" })).toBeInTheDocument();
+    expect(screen.getByText("p1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Publishing readiness" })).toBeInTheDocument();
+  });
 });
