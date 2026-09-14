@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { DbClient } from "../../db/client";
 import { outboxEvents } from "../../db/schema";
-import { OutboxEventStatus, OutboxEventType } from "../../services/outbox";
+import { OutboxEventStatus, OutboxEventType } from "../../domain/outboxContracts";
 
 export function stockSyncIntentKey(mutationKey: string, productId: string) {
   return `stock-sync-intent:${mutationKey}:${productId}`;
