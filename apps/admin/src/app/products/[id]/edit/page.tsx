@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ProductForm, productToFormValues, type ProductFormValues } from "@/components/ProductForm";
 import type { ProductDetail } from "@/lib/types";
+import { advanceProductEditSession, beginProductEditSession, type ProductEditSession } from "@/lib/productEditSession";
 
 export default function EditProductPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
   // and left unchanged on a PRODUCT_VERSION_CONFLICT (the PUT call below
   // throws before reaching the line that would update it).
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(null);
+  const [editSession, setEditSession] = useState<ProductEditSession | null>(null);
   const[salePausedAt,setSalePausedAt]=useState<string|undefined>();
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       .then((product) => {
         setInitialValues(productToFormValues(product));
         setExpectedUpdatedAt(product.updatedAt);
+        setEditSession(beginProductEditSession(product));
         setSalePausedAt(product.salePausedAt);
       })
       .catch((err) => setError(err.message ?? "Failed to load product"));
@@ -35,6 +38,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
   return (
     <div>
       <h1>Edit Product</h1>
+      {editSession && <p>Product Card {editSession.immutableSku}</p>}
       <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
       <ProductForm
         initialValues={initialValues}
@@ -45,6 +49,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         onLifecycleVersionResult={(before,after)=>setExpectedUpdatedAt(current=>current===before?after:current)}
         onSubmit={async (payload) => {
           const updated = await api.put<ProductDetail>(`/api/products/${params.id}`, { ...payload, expectedUpdatedAt });
+          if (editSession) setEditSession(advanceProductEditSession(editSession, updated));
           setExpectedUpdatedAt(updated.updatedAt);
           // Sprint 147: a successful generic Save now returns the admin to the Pending Publish
           // queue rather than the Product Detail page - the just-saved Product may or may not be
