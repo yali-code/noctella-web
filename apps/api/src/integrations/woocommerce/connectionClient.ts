@@ -54,7 +54,14 @@ export async function saveWooCommerceConnection(db: DbClient, input: { accountLa
   const [existing] = await db.select().from(marketplaceConnections).where(accountWhere(accountLabel));
   const values = { channel: CHANNEL, accountLabel, externalAccountId: storeUrl, encryptedAccessToken: encryptCredential(input.consumerKey), encryptedRefreshToken: encryptCredential(input.consumerSecret), scopes: JSON.stringify(["read_write"]), status: "configured", lastError: null, updatedAt: now };
   if (existing) await db.update(marketplaceConnections).set(values).where(eq(marketplaceConnections.id, existing.id));
-  else await db.insert(marketplaceConnections).values({ id: `conn_${randomUUID()}`, ...values, createdAt: now });
+  else {
+    try { await db.insert(marketplaceConnections).values({ id: `conn_${randomUUID()}`, ...values, createdAt: now }); }
+    catch (error) {
+      const [raceWinner] = await db.select().from(marketplaceConnections).where(accountWhere(accountLabel));
+      if (!raceWinner) throw error;
+      await db.update(marketplaceConnections).set(values).where(eq(marketplaceConnections.id, raceWinner.id));
+    }
+  }
   const [row] = await db.select().from(marketplaceConnections).where(accountWhere(accountLabel));
   return safe(row);
 }

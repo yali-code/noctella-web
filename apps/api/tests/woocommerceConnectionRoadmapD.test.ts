@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { marketplaceConnections } from "../src/db/schema";
 import { getWooCommerceConnection, normalizeWooCommerceStoreUrl, saveWooCommerceConnection, verifyWooCommerceConnection, WooCommerceClient, WooCommerceClientError } from "../src/integrations/woocommerce/connectionClient";
 import { createTestDb } from "./testDb";
+import { getTableConfig } from "drizzle-orm/sqlite-core";
+import * as sqliteSchema from "../src/db/schema.sqlite";
+import * as postgresSchema from "../src/db/schema.postgres";
+import { getTableConfig as getPostgresTableConfig } from "drizzle-orm/pg-core";
+import Database from "better-sqlite3";
+import { ensureSchema } from "../src/db/migrate";
 
 describe("WooCommerce connection/client boundary", () => {
   beforeEach(() => { process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64"); });
@@ -50,6 +56,28 @@ describe("WooCommerce connection/client boundary", () => {
     expect(await getWooCommerceConnection(db, "Store A")).toMatchObject({ id: a.id, storeUrl: "https://a2.example.test" });
     expect(await getWooCommerceConnection(db, "Store B")).toMatchObject({ id: b.id, storeUrl: "https://b.example.test" });
     expect(await db.select().from(marketplaceConnections)).toHaveLength(2);
+  });
+  it("reuses one row for repeated and competing saves of the same identity", async () => {
+    const db = createTestDb();
+    const input = { accountLabel: "Same Store", storeUrl: "https://same.example.test", consumerKey: "ck", consumerSecret: "cs" };
+    const [first, second] = await Promise.all([saveWooCommerceConnection(db, input), saveWooCommerceConnection(db, { ...input, storeUrl: "https://same-new.example.test" })]);
+    expect(first.id).toBe(second.id);
+    expect(await db.select().from(marketplaceConnections)).toHaveLength(1);
+    expect((await saveWooCommerceConnection(db, input)).id).toBe(first.id);
+    expect(await db.select().from(marketplaceConnections)).toHaveLength(1);
+  });
+  it("declares matching SQLite and PostgreSQL account-identity uniqueness", () => {
+    expect(getTableConfig(sqliteSchema.marketplaceConnections).indexes.map((index) => index.config.name)).toContain("idx_marketplace_connections_channel_account");
+    expect(getPostgresTableConfig(postgresSchema.marketplaceConnections).indexes.map((index) => index.config.name)).toContain("idx_marketplace_connections_channel_account");
+  });
+  it("bootstraps SQLite uniqueness and fails closed rather than deleting historical duplicates", () => {
+    const fresh = new Database(":memory:"); ensureSchema(fresh);
+    const unique = fresh.prepare("PRAGMA index_list(marketplace_connections)").all() as Array<{ name: string; unique: number }>;
+    expect(unique).toContainEqual(expect.objectContaining({ name: "idx_marketplace_connections_channel_account", unique: 1 })); fresh.close();
+
+    const legacy = new Database(":memory:");
+    legacy.exec("CREATE TABLE marketplace_connections (id TEXT PRIMARY KEY, channel TEXT NOT NULL, account_label TEXT NOT NULL); INSERT INTO marketplace_connections VALUES ('a','woocommerce','Same'),('b','woocommerce','Same');");
+    expect(() => ensureSchema(legacy)).toThrow(/UNIQUE constraint failed/i); legacy.close();
   });
   it.each([[400,"remote_validation"],[404,"not_found"]])("classifies HTTP %s safely", async (status, kind) => {
     const client = new WooCommerceClient({ storeUrl: "https://shop.example.test", consumerKey: "ck", consumerSecret: "cs" }, { request: vi.fn().mockResolvedValue({ status }) });
