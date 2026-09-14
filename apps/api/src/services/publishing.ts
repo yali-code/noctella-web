@@ -1,6 +1,7 @@
 import { ListingStatus, ProductStatus, PublishChannel, type Product, type ProductImage, type ProductPhoto, type PublishPayload, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { getProductById } from "./products";
+import { buildHistoricalPublishPayload } from "../integrations/productPublishingFoundation";
 
 function issue(type: PublishValidationIssue["type"], severity: PublishValidationIssue["severity"], message: string, field?: string): PublishValidationIssue {
   return { type, severity, message, field };
@@ -90,14 +91,8 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
  * real price.
  */
 export function buildPublishPayload(product: Product, images: ProductImage[], channel: PublishChannel): PublishPayload {
-  const priceEur = effectivePriceEur(product, channel)!;
-  if (channel === PublishChannel.Ebay) {
-    return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.ebayTitle ?? product.title, description: product.ebayDescription ?? product.description ?? "", priceEur, category: product.ebayCategory, images, metadata: { subtitle: product.ebaySubtitle, itemSpecifics: product.ebayItemSpecifics, conditionDescription: product.ebayConditionDescription } };
-  }
-  if (channel === PublishChannel.Etsy) {
-    return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.etsyTitle ?? product.title, description: product.etsyDescription ?? product.description ?? "", priceEur, images, metadata: { tags: product.etsyTags, materials: product.etsyMaterials, style: product.etsyStyle, occasion: product.etsyOccasion } };
-  }
-  return { productId: product.id, channel, listingStatus: channelStatus(product, channel), title: product.wooProductName ?? product.title, description: product.wooLongDescription ?? product.description ?? "", priceEur, images, metadata: { shortDescription: product.wooShortDescription, slug: product.wooSlug, seoTitle: product.wooSeoTitle, metaDescription: product.wooMetaDescription, focusKeyword: product.wooFocusKeyword } };
+  void effectivePriceEur(product, channel); void channelStatus(product, channel);
+  return buildHistoricalPublishPayload(product, images, channel);
 }
 
 export function buildPublishPreview(product: Product & { images: ProductImage[] }, channel: PublishChannel): PublishPreview {
