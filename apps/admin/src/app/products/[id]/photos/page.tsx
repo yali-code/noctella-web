@@ -11,15 +11,14 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
   const [altText, setAltText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [message, setMessage] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [busyPhotoId, setBusyPhotoId] = useState<string | null>(null);
+  const [activeOperation, setActiveOperation] = useState<{ kind: "upload" | "photo"; photoId?: string } | null>(null);
   const [altDrafts, setAltDrafts] = useState<Record<string, string>>({});
   const [uploadStates, setUploadStates] = useState<Record<string, ProductPhotoUploadState>>({});
 
   const load = useCallback(async () => {
     const next = await api.get<ProductDetail>(`/api/products/${params.id}`);
     setProduct(next);
-    setAltDrafts(Object.fromEntries(next.photos.map((photo) => [photo.id, photo.altText ?? ""])));
+    setAltDrafts((current) => Object.fromEntries(next.photos.map((photo) => [photo.id, Object.hasOwn(current, photo.id) ? current[photo.id] : photo.altText ?? ""])));
   }, [params.id]);
 
   useEffect(() => {
@@ -38,8 +37,8 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
    */
   async function uploadPhotos(e: React.FormEvent) {
     e.preventDefault();
-    if (files.length === 0) return;
-    setUploading(true);
+    if (files.length === 0 || activeOperation) return;
+    setActiveOperation({ kind: "upload" });
     setMessage(null);
     let successCount = 0;
     const failed: string[] = [];
@@ -59,13 +58,13 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
     }
     setFiles([]);
     setAltText("");
-    setUploading(false);
     setMessage(
       failed.length === 0
         ? `Uploaded ${successCount} photo${successCount === 1 ? "" : "s"}.`
         : `Uploaded ${successCount} of ${successCount + failed.length} photo(s). Failed: ${failed.join(", ")}.`,
     );
-    await load();
+    try { await load(); }
+    finally { setActiveOperation(null); }
   }
 
   async function setPrimary(photoId: string) {
@@ -86,11 +85,11 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
   }
 
   async function mutate(photoId: string, action: string, operation: () => Promise<unknown>) {
-    if (busyPhotoId) return;
-    setBusyPhotoId(photoId); setMessage(null);
+    if (activeOperation) return;
+    setActiveOperation({ kind: "photo", photoId }); setMessage(null);
     try { await operation(); await load(); setMessage(`Successfully completed: ${action}.`); }
     catch (error) { setMessage(error instanceof Error ? `Failed to ${action}: ${error.message}` : `Failed to ${action}.`); }
-    finally { setBusyPhotoId(null); }
+    finally { setActiveOperation(null); }
   }
 
   async function saveAltText(photoId: string) {
@@ -103,17 +102,18 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
     <div>
       <Link href={`/products/${params.id}`}>← Back to product</Link>
       <h1>Manage Photos — {product.title}</h1>
-      {message && <p role="status" aria-live="polite" style={{ color: "#c86a6a" }}>{message}</p>}
+      {message && <p role={/failed/i.test(message) ? "alert" : "status"} aria-live="polite" style={{ color: "#c86a6a" }}>{message}</p>}
       <form onSubmit={uploadPhotos} className="noctella-panel" style={{ padding: 20, margin: "20px 0", display: "grid", gap: 12 }}>
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
           multiple
+          disabled={activeOperation !== null}
           onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
         />
-        <input value={altText} onChange={(event) => setAltText(event.target.value)} placeholder="Alt text" style={{ padding: 10 }} />
-        <button type="submit" disabled={files.length === 0 || uploading}>
-          {uploading ? "Uploading..." : files.length > 1 ? `Upload ${files.length} photos` : "Upload photo"}
+        <input value={altText} onChange={(event) => setAltText(event.target.value)} placeholder="Alt text" disabled={activeOperation !== null} style={{ padding: 10 }} />
+        <button type="submit" disabled={files.length === 0 || activeOperation !== null}>
+          {activeOperation?.kind === "upload" ? "Uploading..." : files.length > 1 ? `Upload ${files.length} photos` : "Upload photo"}
         </button>
         <small>JPEG, PNG, or WebP. Max 10 MB each. Select multiple files to upload them one after another. Images are normalized to WebP at 2000px plus 400px thumbnails.</small>
         {Object.entries(uploadStates).map(([name, state]) => <small key={name} role="status">{name}: {state}</small>)}
@@ -126,14 +126,14 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
             <img src={resolveApiAssetUrl(photo.thumbnailUrl)} alt={photo.altText ?? product.title} style={{ width: 96, height: 96, objectFit: "cover" }} />
             <div style={{ flex: 1 }}>
               <strong>{photo.isPrimary ? "Primary" : `Photo ${index + 1}`}</strong>
-              <label>Alt text<input aria-label={`Alt text for ${photo.filename}`} value={altDrafts[photo.id] ?? ""} onChange={(event) => setAltDrafts((current) => ({ ...current, [photo.id]: event.target.value }))} disabled={busyPhotoId !== null} /></label>
-              <button onClick={() => saveAltText(photo.id)} disabled={busyPhotoId !== null || (altDrafts[photo.id] ?? "") === (photo.altText ?? "")}>Save alt text</button>
+              <label>Alt text<input aria-label={`Alt text for ${photo.filename}`} value={altDrafts[photo.id] ?? ""} onChange={(event) => setAltDrafts((current) => ({ ...current, [photo.id]: event.target.value }))} disabled={activeOperation !== null} /></label>
+              <button onClick={() => saveAltText(photo.id)} disabled={activeOperation !== null || (altDrafts[photo.id] ?? "") === (photo.altText ?? "")}>Save alt text</button>
               <small>{photo.width}×{photo.height} · {photo.mimeType}</small>
             </div>
-            <button aria-label={`Move ${photo.filename} earlier`} onClick={() => move(photo.id, -1)} disabled={busyPhotoId !== null || index === 0}>↑</button>
-            <button aria-label={`Move ${photo.filename} later`} onClick={() => move(photo.id, 1)} disabled={busyPhotoId !== null || index === product.photos.length - 1}>↓</button>
-            <button onClick={() => setPrimary(photo.id)} disabled={busyPhotoId !== null || photo.isPrimary}>Set primary</button>
-            <button onClick={() => remove(photo.id)} disabled={busyPhotoId !== null}>Delete</button>
+            <button aria-label={`Move ${photo.filename} earlier`} onClick={() => move(photo.id, -1)} disabled={activeOperation !== null || index === 0}>↑</button>
+            <button aria-label={`Move ${photo.filename} later`} onClick={() => move(photo.id, 1)} disabled={activeOperation !== null || index === product.photos.length - 1}>↓</button>
+            <button onClick={() => setPrimary(photo.id)} disabled={activeOperation !== null || photo.isPrimary}>Set primary</button>
+            <button onClick={() => remove(photo.id)} disabled={activeOperation !== null}>Delete</button>
           </div>
         ))}
       </div>
