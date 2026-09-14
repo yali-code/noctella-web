@@ -28,4 +28,9 @@ describe("shared Product publishing foundation", () => {
     expect(buildHistoricalPublishPayload(owned, [], PublishChannel.NoctellaWeb)).toMatchObject({ productId: "p1", title: "Web moon", priceEur: 120 });
     expect(buildProductPublicationEnvelope(owned, [], "woocommerce").payload).toMatchObject({ name: "Web moon", regular_price: "120.00" });
   });
+
+  it.each([PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy])("derives historical %s execution payload from the canonical envelope", (channel) => {
+    const target = channel === PublishChannel.Ebay ? "ebay" : channel === PublishChannel.Etsy ? "etsy" : "noctella_web";
+    expect(buildHistoricalPublishPayload(product, [], channel)).toEqual(buildProductPublicationEnvelope(product, [], target).historicalExecutionPayload);
+  });
 });

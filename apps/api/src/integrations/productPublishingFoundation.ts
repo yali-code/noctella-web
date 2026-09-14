@@ -12,13 +12,15 @@ export interface ProductPublicationEnvelope {
   inventory: Readonly<{ managedBy: "noctella"; quantity: number }>;
   currency: "EUR";
   payload: Readonly<Record<string, unknown>>;
+  historicalExecutionPayload?: PublishPayload;
 }
 
 /** Canonical preparation adapter consumed by the historical job/attempt/listing executor. */
 export function buildHistoricalPublishPayload(product: Product, images: ProductImage[], channel: PublishChannel): PublishPayload {
-  if (channel === PublishChannel.Ebay) return { productId: product.id, channel, listingStatus: product.ebayListingStatus ?? ListingStatus.Draft, title: product.ebayTitle ?? product.title, description: product.ebayDescription ?? product.description ?? "", priceEur: (product.ebayListingPriceEur ?? product.priceEur)!, category: product.ebayCategory, images, metadata: { subtitle: product.ebaySubtitle, itemSpecifics: product.ebayItemSpecifics, conditionDescription: product.ebayConditionDescription } };
-  if (channel === PublishChannel.Etsy) return { productId: product.id, channel, listingStatus: product.etsyListingStatus ?? ListingStatus.Draft, title: product.etsyTitle ?? product.title, description: product.etsyDescription ?? product.description ?? "", priceEur: (product.etsyListingPriceEur ?? product.priceEur)!, images, metadata: { tags: product.etsyTags, materials: product.etsyMaterials, style: product.etsyStyle, occasion: product.etsyOccasion } };
-  return { productId: product.id, channel, listingStatus: product.wooListingStatus ?? ListingStatus.Draft, title: product.wooProductName ?? product.title, description: product.wooLongDescription ?? product.description ?? "", priceEur: (product.wooListingPriceEur ?? product.priceEur)!, images, metadata: { shortDescription: product.wooShortDescription, slug: product.wooSlug, seoTitle: product.wooSeoTitle, metaDescription: product.wooMetaDescription, focusKeyword: product.wooFocusKeyword } };
+  const target = channel === PublishChannel.Ebay ? "ebay" : channel === PublishChannel.Etsy ? "etsy" : "noctella_web";
+  const prepared = buildProductPublicationEnvelope(product, images as unknown as ProductPhoto[], target).historicalExecutionPayload;
+  if (!prepared) throw new Error(`Historical publishing is unsupported for target: ${target}`);
+  return prepared;
 }
 
 export function buildProductPublicationEnvelope(
@@ -34,7 +36,9 @@ export function buildProductPublicationEnvelope(
     currency: "EUR" as const,
   };
   if (target === "woocommerce") return { ...shared, payload: buildWooCommerceProductDraft(product, photos) as unknown as Record<string, unknown> };
-  if (target === "noctella_web") return { ...shared, payload: { productId: product.id, status: product.status } };
-  if (target === "ebay") return { ...shared, payload: { sku: product.sku, title: product.ebayTitle ?? product.title, priceEur: product.ebayListingPriceEur ?? product.priceEur } };
-  return { ...shared, payload: { sku: product.sku, title: product.etsyTitle ?? product.title, priceEur: product.etsyListingPriceEur ?? product.priceEur } };
+  const images = photos as unknown as ProductImage[];
+  if (target === "ebay") { const historicalExecutionPayload = { productId: product.id, channel: PublishChannel.Ebay, listingStatus: product.ebayListingStatus ?? ListingStatus.Draft, title: product.ebayTitle ?? product.title, description: product.ebayDescription ?? product.description ?? "", priceEur: (product.ebayListingPriceEur ?? product.priceEur)!, category: product.ebayCategory, images, metadata: { subtitle: product.ebaySubtitle, itemSpecifics: product.ebayItemSpecifics, conditionDescription: product.ebayConditionDescription } }; return { ...shared, payload: historicalExecutionPayload, historicalExecutionPayload }; }
+  if (target === "etsy") { const historicalExecutionPayload = { productId: product.id, channel: PublishChannel.Etsy, listingStatus: product.etsyListingStatus ?? ListingStatus.Draft, title: product.etsyTitle ?? product.title, description: product.etsyDescription ?? product.description ?? "", priceEur: (product.etsyListingPriceEur ?? product.priceEur)!, images, metadata: { tags: product.etsyTags, materials: product.etsyMaterials, style: product.etsyStyle, occasion: product.etsyOccasion } }; return { ...shared, payload: historicalExecutionPayload, historicalExecutionPayload }; }
+  const historicalExecutionPayload = { productId: product.id, channel: PublishChannel.NoctellaWeb, listingStatus: product.wooListingStatus ?? ListingStatus.Draft, title: product.wooProductName ?? product.title, description: product.wooLongDescription ?? product.description ?? "", priceEur: (product.wooListingPriceEur ?? product.priceEur)!, images, metadata: { shortDescription: product.wooShortDescription, slug: product.wooSlug, seoTitle: product.wooSeoTitle, metaDescription: product.wooMetaDescription, focusKeyword: product.wooFocusKeyword } };
+  return { ...shared, payload: { productId: product.id, status: product.status }, historicalExecutionPayload };
 }

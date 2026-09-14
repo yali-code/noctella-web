@@ -33,12 +33,6 @@ function effectivePriceEur(product: Product, channel: PublishChannel): number | 
   return product.wooListingPriceEur ?? product.priceEur ?? null;
 }
 
-function channelStatus(product: Product, channel: PublishChannel): ListingStatus {
-  if (channel === PublishChannel.Ebay) return product.ebayListingStatus ?? ListingStatus.Draft;
-  if (channel === PublishChannel.Etsy) return product.etsyListingStatus ?? ListingStatus.Draft;
-  return product.wooListingStatus ?? ListingStatus.Draft;
-}
-
 /**
  * Sprint 87: publish validation is an invariant gate, not a read-side resilience policy - unlike
  * the fallback-inclusive primary selection used by getPrimaryByProduct/listPubliclyVisibleByProduct
@@ -91,7 +85,6 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
  * real price.
  */
 export function buildPublishPayload(product: Product, images: ProductImage[], channel: PublishChannel): PublishPayload {
-  void effectivePriceEur(product, channel); void channelStatus(product, channel);
   return buildHistoricalPublishPayload(product, images, channel);
 }
 
