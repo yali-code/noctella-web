@@ -35,4 +35,15 @@ describe("WooCommerce Product adapter foundation", () => {
     ]);
     expect(photos[0].id).toBe("second");
   });
+
+  it("maps zero stock and positive stock as downstream Noctella inventory snapshots", () => {
+    expect(buildWooCommerceProductDraft({ ...product, stockQuantity: 0 }).stock_quantity).toBe(0);
+    expect(buildWooCommerceProductDraft({ ...product, stockQuantity: 7 }).stock_quantity).toBe(7);
+  });
+
+  it("maps representative optional Woo content without inventing absent fields", () => {
+    const draft = buildWooCommerceProductDraft({ ...product, wooProductName: "Woo Moon", wooSlug: "woo-moon", wooLongDescription: "Woo long", wooShortDescription: "Woo short" });
+    expect(draft).toMatchObject({ sku: "ART-000001", name: "Woo Moon", slug: "woo-moon", description: "Woo long", short_description: "Woo short", regular_price: "125.00" });
+    expect(buildWooCommerceProductDraft({ ...product, wooShortDescription: undefined }).short_description).toBe("");
+  });
 });

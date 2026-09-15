@@ -3,10 +3,12 @@ import { and, eq } from "drizzle-orm";
 import type { DbClient } from "../../db/client";
 import { marketplaceConnections } from "../../db/schema";
 import { decryptCredential, encryptCredential } from "../../services/credentialEncryption";
+import type { WooCommerceProductDraft } from "./productAdapter";
+import { resolveMarketplaceRequestTimeoutMs } from "../../config/marketplaceConfig";
 
 export type WooCommerceConnectionStatus = "configured" | "verified" | "error";
-export type WooCommerceClientErrorKind = "configuration" | "authentication" | "authorization" | "timeout" | "rate_limit" | "remote_validation" | "not_found" | "provider";
-export interface WooCommerceTransport { request(input: { method: "GET"; url: string; headers: Record<string, string> }): Promise<{ status: number; body?: unknown }> }
+export type WooCommerceClientErrorKind = "configuration" | "authentication" | "authorization" | "timeout" | "rate_limit" | "remote_validation" | "not_found" | "malformed_response" | "provider";
+export interface WooCommerceTransport { request(input: { method: "GET" | "POST" | "PUT"; url: string; headers: Record<string, string>; body?: string }): Promise<{ status: number; body?: unknown }> }
 export interface SafeWooCommerceConnection { id: string; accountLabel: string; storeUrl: string; credentialMode: "consumer_key_secret"; status: WooCommerceConnectionStatus; lastError?: string; createdAt: string; updatedAt: string }
 
 export class WooCommerceClientError extends Error { constructor(readonly kind: WooCommerceClientErrorKind, message: string) { super(message); this.name = "WooCommerceClientError"; } }
@@ -36,6 +38,36 @@ export class WooCommerceClient {
     if (response.status < 200 || response.status >= 300) throw new WooCommerceClientError("provider", "WooCommerce verification failed");
     return { verified: true as const };
   }
+
+  async createProduct(payload: WooCommerceProductDraft) { return this.publishRequest("POST", undefined, payload); }
+  async updateProduct(externalProductId: string, payload: WooCommerceProductDraft) {
+    if (!externalProductId.trim()) throw new WooCommerceClientError("configuration", "WooCommerce Product identity is required");
+    return this.publishRequest("PUT", externalProductId, payload);
+  }
+
+  private async publishRequest(method: "POST" | "PUT", externalProductId: string | undefined, payload: WooCommerceProductDraft) {
+    const storeUrl = normalizeWooCommerceStoreUrl(this.config.storeUrl);
+    if (!this.config.consumerKey || !this.config.consumerSecret) throw new WooCommerceClientError("configuration", "WooCommerce credentials are required");
+    const suffix = externalProductId ? `/${encodeURIComponent(externalProductId)}` : "";
+    let response: Awaited<ReturnType<WooCommerceTransport["request"]>>;
+    try {
+      response = await this.transport.request({ method, url: `${storeUrl}/wp-json/wc/v3/products${suffix}`, headers: { Authorization: `Basic ${Buffer.from(`${this.config.consumerKey}:${this.config.consumerSecret}`).toString("base64")}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    } catch { throw new WooCommerceClientError("timeout", "WooCommerce request timed out or was unavailable"); }
+    if (response.status === 401) throw new WooCommerceClientError("authentication", "WooCommerce authentication failed");
+    if (response.status === 403) throw new WooCommerceClientError("authorization", "WooCommerce authorization failed");
+    if (response.status === 429) throw new WooCommerceClientError("rate_limit", "WooCommerce rate limit reached");
+    if (response.status === 400 || response.status === 422) throw new WooCommerceClientError("remote_validation", "WooCommerce rejected the Product request");
+    if (response.status === 404) throw new WooCommerceClientError("not_found", "WooCommerce Product endpoint was not found");
+    if (response.status < 200 || response.status >= 300) throw new WooCommerceClientError("provider", "WooCommerce Product request failed");
+    const body = response.body as Record<string, unknown> | undefined;
+    if (!body || (typeof body.id !== "string" && typeof body.id !== "number")) throw new WooCommerceClientError("malformed_response", "WooCommerce response did not include a Product identity");
+    const id = String(body.id);
+    return { externalListingId: id, externalListingUrl: typeof body.permalink === "string" ? body.permalink : undefined, externalStatus: typeof body.status === "string" ? body.status : "publish", raw: body };
+  }
+}
+
+export function createWooCommerceFetchTransport(fetchImpl: typeof fetch = fetch, env: Record<string, string | undefined> = process.env): WooCommerceTransport {
+  return { async request(input) { const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), resolveMarketplaceRequestTimeoutMs(env)); try { const response = await fetchImpl(input.url, { method: input.method, headers: input.headers, body: input.body, signal: controller.signal }); return { status: response.status, body: await response.json().catch(() => undefined) }; } finally { clearTimeout(timeout); } } };
 }
 
 const CHANNEL = "woocommerce";
@@ -43,7 +75,7 @@ function safe(row: any): SafeWooCommerceConnection { return { id: row.id, accoun
 const accountWhere = (accountLabel: string) => and(eq(marketplaceConnections.channel, CHANNEL), eq(marketplaceConnections.accountLabel, accountLabel));
 function safeError(error: unknown): WooCommerceClientError {
   const kind = error instanceof WooCommerceClientError ? error.kind : "provider";
-  const messages: Record<WooCommerceClientErrorKind, string> = { configuration: "WooCommerce connection is not configured correctly", authentication: "WooCommerce authentication failed", authorization: "WooCommerce authorization failed", timeout: "WooCommerce request timed out or was unavailable", rate_limit: "WooCommerce rate limit reached", remote_validation: "WooCommerce rejected the verification request", not_found: "WooCommerce API endpoint was not found", provider: "WooCommerce verification failed" };
+  const messages: Record<WooCommerceClientErrorKind, string> = { configuration: "WooCommerce connection is not configured correctly", authentication: "WooCommerce authentication failed", authorization: "WooCommerce authorization failed", timeout: "WooCommerce request timed out or was unavailable", rate_limit: "WooCommerce rate limit reached", remote_validation: "WooCommerce rejected the verification request", not_found: "WooCommerce API endpoint was not found", malformed_response: "WooCommerce response was malformed", provider: "WooCommerce verification failed" };
   return new WooCommerceClientError(kind, messages[kind]);
 }
 

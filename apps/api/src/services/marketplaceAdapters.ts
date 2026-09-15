@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
-import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type PublishPayload, type ShipmentUpdateResult, type MarketplaceReturnResult } from "@noctella/shared";
+import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type MarketplacePublishPayload, type PublishPayload, type ShipmentUpdateResult, type MarketplaceReturnResult } from "@noctella/shared";
 import { resolveMarketplaceRequestTimeoutMs } from "../config/marketplaceConfig";
+export type { MarketplacePublishPayload } from "@noctella/shared";
 
 export interface MarketplaceTokens { accessToken: string; refreshToken?: string; expiresAt?: string; scopes?: string[]; externalAccountId?: string; }
 export interface MarketplaceInventoryResult { externalListingId: string; stock: number; raw?: unknown; }
@@ -14,8 +15,8 @@ export interface MarketplaceAdapter {
   exchangeAuthorizationCode(code: string): Promise<MarketplaceTokens>;
   refreshAccessToken(refreshToken: string): Promise<MarketplaceTokens>;
   verifyConnection(accessToken: string): Promise<{ externalAccountId?: string; raw?: unknown }>;
-  createListing(accessToken: string, payload: PublishPayload): Promise<AdapterListingResult>;
-  updateListing(accessToken: string, externalListingId: string, payload: PublishPayload): Promise<AdapterListingResult>;
+  createListing(accessToken: string, payload: MarketplacePublishPayload): Promise<AdapterListingResult>;
+  updateListing(accessToken: string, externalListingId: string, payload: MarketplacePublishPayload): Promise<AdapterListingResult>;
   endListing(accessToken: string, externalListingId: string): Promise<AdapterListingResult>;
   normalizeError(error: unknown): MarketplaceApiError;
   verifyWebhookSignature(rawBody: Buffer, headers: Record<string, string | string[] | undefined>): Promise<boolean> | boolean;

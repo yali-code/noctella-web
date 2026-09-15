@@ -1,4 +1,4 @@
-import { PublishChannel, type MarketplacePreparation, type Product, type PublishPayload, type PublishPreview, type PublishValidation } from "@noctella/shared";
+import { PublishChannel, type MarketplacePreparation, type MarketplacePublishPayload, type Product, type PublishPreview, type PublishValidation } from "@noctella/shared";
 import { api } from "./api";
 import { MARKETPLACE_CHANNELS } from "./marketplaces";
 
@@ -6,6 +6,7 @@ export const ADMIN_PUBLISH_CHANNELS = [
   { value: PublishChannel.Ebay, label: "eBay" },
   { value: PublishChannel.Etsy, label: "Etsy" },
   { value: PublishChannel.NoctellaWeb, label: "Noctella Web" },
+  { value: PublishChannel.WooCommerce, label: "WooCommerce" },
 ] as const;
 
 export function channelLabel(channel: PublishChannel): string {
@@ -20,7 +21,7 @@ export function channelLabel(channel: PublishChannel): string {
  * the marketplace-connections management page) instead of duplicating it.
  */
 export function requiresMarketplaceConnection(channel: PublishChannel): boolean {
-  return MARKETPLACE_CHANNELS.includes(channel);
+  return channel === PublishChannel.WooCommerce || MARKETPLACE_CHANNELS.includes(channel);
 }
 
 export function getChannelDraftTitle(product: Product, channel: PublishChannel): string {
@@ -36,8 +37,12 @@ export function getChannelDraftPrice(product: Product, channel: PublishChannel):
   return product.wooListingPriceEur ?? product.priceEur;
 }
 
-export function payloadSummary(payload?: PublishPayload): string {
+export function payloadSummary(payload?: MarketplacePublishPayload): string {
   if (!payload) return "Payload unavailable until validation passes.";
+  if (!("title" in payload)) {
+    const woo = payload as unknown as { name: string; regular_price?: string };
+    return `${woo.name} — ${woo.regular_price ? `€${woo.regular_price}` : "Price unavailable"} (WooCommerce)`;
+  }
   return `${payload.title} — €${payload.priceEur.toFixed(2)} (${payload.listingStatus})`;
 }
 

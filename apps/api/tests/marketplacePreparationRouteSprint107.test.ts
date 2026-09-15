@@ -103,7 +103,7 @@ describe("POST /api/products/:id/marketplace-preparation (generate)", () => {
 
   it("rejects an invalid channel value with 400", async () => {
     const productId = await createTestProduct();
-    const res = await request(app).post(`/api/products/${productId}/marketplace-preparation`).set("Cookie", ownerCookie).send({ channel: "woocommerce" });
+    const res = await request(app).post(`/api/products/${productId}/marketplace-preparation`).set("Cookie", ownerCookie).send({ channel: "unsupported-marketplace" });
     expect(res.status).toBe(400);
   });
 

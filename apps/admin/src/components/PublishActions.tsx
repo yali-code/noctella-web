@@ -186,7 +186,7 @@ export function PublishActions({ productId, isDirty, currentProductUpdatedAt, sa
       {archived?<p>This Product is archived and cannot be published.</p>:paused&&<p>This Product is paused. Use Relist to restore its previously active channels.</p>}
 
       <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--noctella-aged-bronze)" }}>
-        Manage eBay/Etsy connections on the{" "}
+        Manage marketplace connections on the{" "}
         <a href="/marketplaces" style={{ color: "var(--noctella-bright-star-gold)" }}>
           Marketplaces
         </a>{" "}
