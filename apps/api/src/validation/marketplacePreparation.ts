@@ -9,6 +9,7 @@ import { publishChannelSchema } from "./publishing";
 export const generateMarketplacePreparationSchema = z.object({ channel: publishChannelSchema }).strict();
 
 export const getMarketplacePreparationQuerySchema = z.object({ channel: publishChannelSchema });
+export const rejectMarketplacePreparationSchema = z.object({ channel: publishChannelSchema, expectedProposalUpdatedAt: z.string().min(1) }).strict();
 
 /**
  * Sprint 107: the admin-reviewed/edited final field values, submitted

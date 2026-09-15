@@ -571,7 +571,7 @@ describe("ProductForm — Sprint 145: AI Suggestions integration", () => {
     await user.clear(screen.getByLabelText("Brand"));
     await user.type(screen.getByLabelText("Brand"), "Acme");
 
-    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Apply Reviewed Suggestions" }));
     await waitFor(() => expect(approveSpy).toHaveBeenCalledWith("p1", {
       channel: "etsy",
       expectedProposalUpdatedAt: "t",
@@ -634,7 +634,7 @@ describe("ProductForm — Sprint 145: AI Suggestions integration", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Apply Reviewed Suggestions" }));
     expect(await screen.findByText(/changed since you loaded it/)).toBeInTheDocument();
     expect(onProductVersionAdvanced).not.toHaveBeenCalled();
 
@@ -820,7 +820,7 @@ describe("ProductForm — Sprint 146: canonical publishing integration", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Apply Reviewed Suggestions" }));
     await waitFor(() => expect(publishingLib.marketplacePreparationApi.approve).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: "Etsy" }));
@@ -860,7 +860,7 @@ describe("ProductForm — Sprint 146: canonical publishing integration", () => {
 
     await user.clear(screen.getByLabelText("Brand"));
     await user.type(screen.getByLabelText("Brand"), "Acme");
-    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Apply Reviewed Suggestions" }));
     await waitFor(() => expect(publishingLib.marketplacePreparationApi.approve).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: "eBay" }));

@@ -58,6 +58,7 @@ export interface MarketplacePreparationUpsertInput extends MarketplacePreparatio
  */
 export interface MarketplacePreparationRepository {
   findByProductIdAndChannel(productId: string, channel: string): Promise<MarketplacePreparationRecord | null>;
+  reject(id: string, expectedUpdatedAt: string, actorId: string): Promise<MarketplacePreparationRecord | null>;
   /**
    * Insert-if-absent, else refresh-in-place - always resets status to
    * "pending" and clears appliedAt/appliedByAdminUserId, regardless of the

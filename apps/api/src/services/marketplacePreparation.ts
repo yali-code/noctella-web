@@ -1,7 +1,7 @@
 import { PublishChannel, type MarketplacePreparation, type Product } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { getProductById } from "./products";
-import { NotFoundError } from "./errors";
+import { MarketplacePreparationNotPendingError, MarketplacePreparationVersionConflictError, NotFoundError } from "./errors";
 import { buildMarketplacePreparationContext } from "../marketplace-prep/context";
 import { createMarketplacePreparationProvider } from "../marketplace-prep/providerFactory";
 import type { MarketplacePreparationProvider } from "../marketplace-prep/types";
@@ -86,6 +86,17 @@ export async function getCurrentMarketplacePreparation(db: DbClient, productId: 
   const row = await repository.findByProductIdAndChannel(productId, channel);
   if (!row) throw new NotFoundError("Marketplace preparation not found");
   return toMarketplacePreparationReview(row);
+}
+
+export async function rejectMarketplacePreparation(db: DbClient, productId: string, channel: PublishChannel, expectedProposalUpdatedAt: string, actorId: string): Promise<MarketplacePreparation> {
+  const repository = createDrizzleMarketplacePreparationRepository(db);
+  const existing = await repository.findByProductIdAndChannel(productId, channel);
+  if (!existing) throw new NotFoundError("Marketplace preparation not found");
+  if (existing.status !== "pending") throw new MarketplacePreparationNotPendingError();
+  if (toIsoString(existing.updatedAt as string | Date) !== expectedProposalUpdatedAt) throw new MarketplacePreparationVersionConflictError();
+  const rejected = await repository.reject(existing.id as string, expectedProposalUpdatedAt, actorId);
+  if (!rejected) throw new MarketplacePreparationVersionConflictError();
+  return toMarketplacePreparationReview(rejected);
 }
 
 export interface ApproveMarketplacePreparationServiceInput extends ApproveMarketplacePreparationFieldInput {

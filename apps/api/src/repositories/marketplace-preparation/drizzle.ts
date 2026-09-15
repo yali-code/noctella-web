@@ -32,6 +32,14 @@ export function createDrizzleMarketplacePreparationRepository(db: DbClient): Mar
         .where(and(eq(marketplacePreparations.productId, productId), eq(marketplacePreparations.channel, channel)));
       return (row as MarketplacePreparationRecord) ?? null;
     },
+    async reject(id, expectedUpdatedAt, actorId) {
+      const [updated] = await db
+        .update(marketplacePreparations)
+        .set({ status: "rejected", appliedAt: new Date().toISOString(), appliedByAdminUserId: actorId, updatedAt: new Date().toISOString() })
+        .where(and(eq(marketplacePreparations.id, id), eq(marketplacePreparations.status, "pending"), eq(marketplacePreparations.updatedAt, expectedUpdatedAt)))
+        .returning();
+      return (updated as MarketplacePreparationRecord) ?? null;
+    },
     async upsert(input: MarketplacePreparationUpsertInput) {
       const [existing] = await db
         .select()

@@ -52,7 +52,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
     await user.click(await screen.findByRole("button", { name: "Generate AI Suggestions" }));
     await waitFor(() => expect(generateSpy).toHaveBeenCalledWith("p1", PublishChannel.Etsy));
     expect(await screen.findByText("AI Suggested Title")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Accept AI Suggestions" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply Reviewed Suggestions" })).toBeEnabled();
   });
 
   it("PENDING+FRESH: displays suggestion values and Accept calls approve with the exact channel fields, then reports the returned Product via onApplied", async () => {
@@ -67,7 +67,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
       <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt="2026-01-01T00:00:00.000Z" onApplied={onApplied} />,
     );
     expect(await screen.findByText("AI Suggested Title")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(screen.getByRole("button", { name: "Apply Reviewed Suggestions" }));
 
     await waitFor(() =>
       expect(approveSpy).toHaveBeenCalledWith("p1", {
@@ -81,6 +81,38 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
     await waitFor(() => expect(onApplied).toHaveBeenCalledWith(PublishChannel.Etsy, returnedProduct));
   });
 
+  it("lets an administrator edit generated copy before the explicit apply action", async () => {
+    const user = userEvent.setup();
+    const preparation = basePreparation();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockResolvedValue(preparation);
+    const approveSpy = vi.spyOn(publishingLib.marketplacePreparationApi, "approve").mockResolvedValue({ id: "p1" } as any);
+    render(
+      <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt={preparation.baseProductUpdatedAt} onApplied={vi.fn()} />,
+    );
+    const title = await screen.findByLabelText("Edit Title");
+    await user.clear(title);
+    await user.type(title, "Human reviewed title");
+    await user.click(screen.getByRole("button", { name: "Apply Reviewed Suggestions" }));
+    await waitFor(() => expect(approveSpy).toHaveBeenCalledWith("p1", expect.objectContaining({ title: "Human reviewed title" })));
+  });
+
+  it("rejects a pending suggestion without applying it and shows the rejected state", async () => {
+    const user = userEvent.setup();
+    const preparation = basePreparation();
+    vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockResolvedValue(preparation);
+    vi.spyOn(publishingLib.marketplacePreparationApi, "reject").mockResolvedValue({
+      ...preparation,
+      status: MarketplacePreparationStatus.Rejected,
+    });
+    const approveSpy = vi.spyOn(publishingLib.marketplacePreparationApi, "approve");
+    render(
+      <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt={preparation.baseProductUpdatedAt} onApplied={vi.fn()} />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Reject Suggestions" }));
+    expect(await screen.findByText("AI Suggestions Rejected.")).toBeInTheDocument();
+    expect(approveSpy).not.toHaveBeenCalled();
+  });
+
   it("PENDING+STALE: Accept is disabled and a stale message is shown when baseProductUpdatedAt no longer matches the current Product version; Regenerate remains available", async () => {
     vi.spyOn(publishingLib.marketplacePreparationApi, "get").mockResolvedValue(
       basePreparation({ baseProductUpdatedAt: "2026-01-01T00:00:00.000Z" }),
@@ -89,7 +121,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
       <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt="2026-01-05T00:00:00.000Z" onApplied={vi.fn()} />,
     );
     expect(await screen.findByText(/earlier version of this Product/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Accept AI Suggestions" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply Reviewed Suggestions" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Regenerate AI Suggestions" })).toBeEnabled();
   });
 
@@ -102,7 +134,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
     render(
       <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt="2026-01-05T00:00:00.000Z" onApplied={vi.fn()} />,
     );
-    const acceptButton = await screen.findByRole("button", { name: "Accept AI Suggestions" });
+    const acceptButton = await screen.findByRole("button", { name: "Apply Reviewed Suggestions" });
     await user.click(acceptButton);
     expect(approveSpy).not.toHaveBeenCalled();
   });
@@ -115,7 +147,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
       <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt="2026-01-01T00:00:00.000Z" onApplied={vi.fn()} />,
     );
     expect(await screen.findByText("AI Suggestions Applied.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Accept AI Suggestions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply Reviewed Suggestions" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Regenerate AI Suggestions" })).toBeInTheDocument();
   });
 
@@ -142,7 +174,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
     render(
       <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt="2026-01-01T00:00:00.000Z" onApplied={onApplied} />,
     );
-    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Apply Reviewed Suggestions" }));
     expect(await screen.findByText(/changed since you loaded it/)).toBeInTheDocument();
     expect(onApplied).not.toHaveBeenCalled();
   });
@@ -157,7 +189,7 @@ describe("AiChannelSuggestionsSection — Sprint 145", () => {
     render(
       <AiChannelSuggestionsSection productId="p1" channel={PublishChannel.Etsy} productUpdatedAt="2026-01-01T00:00:00.000Z" onApplied={onApplied} />,
     );
-    await user.click(await screen.findByRole("button", { name: "Accept AI Suggestions" }));
+    await user.click(await screen.findByRole("button", { name: "Apply Reviewed Suggestions" }));
     expect(await screen.findByText(/This product changed after you opened it/)).toBeInTheDocument();
     expect(onApplied).not.toHaveBeenCalled();
   });

@@ -85,4 +85,5 @@ export const marketplacePreparationApi = {
   generate: (productId: string, channel: PublishChannel) => api.post<MarketplacePreparation>(`/api/products/${productId}/marketplace-preparation`, { channel }),
   get: (productId: string, channel: PublishChannel) => api.get<MarketplacePreparation>(`/api/products/${productId}/marketplace-preparation?channel=${channel}`),
   approve: (productId: string, input: ApproveMarketplacePreparationInput) => api.post<Product>(`/api/products/${productId}/marketplace-preparation/approve`, input),
+  reject: (productId: string, channel: PublishChannel, expectedProposalUpdatedAt: string) => api.post<MarketplacePreparation>(`/api/products/${productId}/marketplace-preparation/reject`, { channel, expectedProposalUpdatedAt }),
 };

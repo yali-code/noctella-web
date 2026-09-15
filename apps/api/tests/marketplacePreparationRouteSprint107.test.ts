@@ -241,6 +241,20 @@ describe("POST /api/products/:id/marketplace-preparation/approve", () => {
   });
 });
 
+describe("POST /api/products/:id/marketplace-preparation/reject", () => {
+  it("records human rejection without changing Product data or creating publication work", async () => {
+    const productId = await createTestProduct();
+    const before = await (await import("../src/services/products")).getProductById(db, productId);
+    const generated = await request(app).post(`/api/products/${productId}/marketplace-preparation`).set("Cookie", ownerCookie).send({ channel: "etsy" });
+    const rejected = await request(app).post(`/api/products/${productId}/marketplace-preparation/reject`).set("Cookie", ownerCookie).send({ channel: "etsy", expectedProposalUpdatedAt: generated.body.updatedAt });
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.status).toBe("rejected");
+    expect(await (await import("../src/services/products")).getProductById(db, productId)).toEqual(before);
+    const jobs = await request(app).get("/api/publish-jobs").set("Cookie", ownerCookie);
+    expect((jobs.body as Array<{ productId: string }>).filter((job) => job.productId === productId)).toHaveLength(0);
+  });
+});
+
 describe("regression: the existing publish pipeline remains fully reachable and unaffected", () => {
   it("existing GET /:id/publish still works unchanged after a marketplace-preparation approval - the approved title/description no longer appear as missing", async () => {
     const productId = await createTestProduct();

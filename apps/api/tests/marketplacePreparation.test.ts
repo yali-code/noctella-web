@@ -26,7 +26,7 @@ import {
 } from "../src/use-cases/marketplace-preparation/useCases";
 import { createDrizzleMarketplacePreparationRepository } from "../src/repositories/marketplace-preparation/drizzle";
 import { createMarketplacePreparationApprovalTransactionCapabilityForDb } from "../src/services/marketplacePreparationApprovalTransactionCapabilityForDb";
-import { generateMarketplacePreparation, getCurrentMarketplacePreparation, approveMarketplacePreparation } from "../src/services/marketplacePreparation";
+import { generateMarketplacePreparation, getCurrentMarketplacePreparation, approveMarketplacePreparation, rejectMarketplacePreparation } from "../src/services/marketplacePreparation";
 import { publishJobs, publishAttempts, externalListings, marketplacePreparations } from "../src/db/schema";
 
 function stubProvider(proposal: Record<string, unknown> = {}) {
@@ -575,6 +575,16 @@ describe("Marketplace Preparation (Sprint 107)", () => {
         "admin-1",
       );
       expect(product.ebayTitle).toBe("Moon Watch");
+    });
+
+    it("rejects a pending suggestion without changing Product data and cannot reject twice", async () => {
+      await generateMarketplacePreparation(db, productId, PublishChannel.Etsy, new MockMarketplacePreparationProvider());
+      const proposal = await getCurrentMarketplacePreparation(db, productId, PublishChannel.Etsy);
+      const before = await getProductById(db, productId);
+      const rejected = await rejectMarketplacePreparation(db, productId, PublishChannel.Etsy, proposal.updatedAt, "admin-1");
+      expect(rejected.status).toBe("rejected");
+      expect(await getProductById(db, productId)).toEqual(before);
+      await expect(rejectMarketplacePreparation(db, productId, PublishChannel.Etsy, rejected.updatedAt, "admin-1")).rejects.toBeInstanceOf(MarketplacePreparationNotPendingError);
     });
   });
 

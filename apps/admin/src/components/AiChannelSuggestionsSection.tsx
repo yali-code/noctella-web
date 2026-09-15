@@ -82,15 +82,12 @@ function suggestionText(preparation: MarketplacePreparation, key: string): strin
   return "";
 }
 
-/** Builds exactly the approve-request fields this channel owns, straight from the stored suggestion - there is no pre-accept per-field editing in this inline surface (the admin corrects values afterward using ProductForm's own already-editable channel fields, per the approved Sprint 145 flow). */
-function buildApprovePayload(channel: PublishChannel, preparation: MarketplacePreparation) {
-  const payload: Record<string, string | string[] | undefined> = {};
+function buildEditedApprovePayload(channel: PublishChannel, edits: Record<string, string>) {
+  const payload: Record<string, string | string[]> = {};
   for (const field of CHANNEL_FIELDS[channel]) {
-    if (field.key === "tags") {
-      payload.tags = preparation.suggestedTags;
-      continue;
-    }
-    payload[field.key] = suggestionText(preparation, field.key) || undefined;
+    const value = edits[field.key]?.trim();
+    if (!value) continue;
+    payload[field.key] = field.key === "tags" ? value.split(",").map((tag) => tag.trim()).filter(Boolean) : value;
   }
   return payload;
 }
@@ -109,6 +106,13 @@ export function AiChannelSuggestionsSection({ productId, channel, productUpdated
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [edits, setEdits] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!preparation) return;
+    setEdits(Object.fromEntries(CHANNEL_FIELDS[channel].map((field) => [field.key, suggestionText(preparation, field.key)])));
+  }, [preparation, channel]);
 
   const load = () => {
     setError(null);
@@ -148,7 +152,7 @@ export function AiChannelSuggestionsSection({ productId, channel, productUpdated
       const updatedProduct = await marketplacePreparationApi.approve(productId, {
         channel,
         expectedProposalUpdatedAt: preparation.updatedAt,
-        ...buildApprovePayload(channel, preparation),
+        ...buildEditedApprovePayload(channel, edits),
       });
       onApplied(channel, updatedProduct);
       load(); // refresh this channel's own proposal state (now "applied") - independent of ProductForm's values.
@@ -157,6 +161,14 @@ export function AiChannelSuggestionsSection({ productId, channel, productUpdated
     } finally {
       setApproving(false);
     }
+  }
+
+  async function handleReject() {
+    if (!preparation || preparation.status !== MarketplacePreparationStatus.Pending) return;
+    setRejecting(true); setError(null);
+    try { setPreparation(await marketplacePreparationApi.reject(productId, channel, preparation.updatedAt)); }
+    catch (err) { setError(err instanceof ApiError ? err.message : "Failed to reject AI suggestions"); }
+    finally { setRejecting(false); }
   }
 
   const isStale =
@@ -196,6 +208,13 @@ export function AiChannelSuggestionsSection({ productId, channel, productUpdated
         </>
       )}
 
+      {preparation && preparation.status === MarketplacePreparationStatus.Rejected && (
+        <>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--noctella-aged-bronze)" }}>AI Suggestions Rejected.</p>
+          <button type="button" onClick={handleGenerate} disabled={generating}>{generating ? "Generating..." : "Regenerate AI Suggestions"}</button>
+        </>
+      )}
+
       {preparation && preparation.status === MarketplacePreparationStatus.Pending && (
         <>
           {isStale ? (
@@ -219,10 +238,17 @@ export function AiChannelSuggestionsSection({ productId, channel, productUpdated
               );
             })}
           </dl>
+          {!isStale && CHANNEL_FIELDS[channel].map((field) => (
+            <label key={`edit-${field.key}`} style={{ display: "block", marginBottom: 6, fontSize: 12 }}>
+              Edit {field.label}
+              {field.multiline ? <textarea aria-label={`Edit ${field.label}`} value={edits[field.key] ?? ""} onChange={(event) => setEdits((current) => ({ ...current, [field.key]: event.target.value }))} /> : <input aria-label={`Edit ${field.label}`} value={edits[field.key] ?? ""} onChange={(event) => setEdits((current) => ({ ...current, [field.key]: event.target.value }))} />}
+            </label>
+          ))}
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={handleAccept} disabled={approving || isStale}>
-              {approving ? "Accepting..." : "Accept AI Suggestions"}
+              {approving ? "Applying..." : "Apply Reviewed Suggestions"}
             </button>
+            <button type="button" onClick={handleReject} disabled={rejecting}>{rejecting ? "Rejecting..." : "Reject Suggestions"}</button>
             <button type="button" onClick={handleGenerate} disabled={generating}>
               {generating ? "Regenerating..." : "Regenerate AI Suggestions"}
             </button>
