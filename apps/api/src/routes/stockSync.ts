@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import { externalListings, stockSyncAudit, stockSyncConflicts } from "../db/schema";
-import { enqueueChannelStockSync, enqueueProductStockSync, resolveStockSyncConflict, stockSyncSummary } from "../services/stockSync";
+import { enqueueChannelStockSync, enqueueProductStockSync, resolveStockSyncConflict, stockSyncSummary, STOCK_SYNC_CHANNELS } from "../services/stockSync";
 import { enqueueJob } from "../services/backgroundJobs";
 import { BackgroundJobType } from "@noctella/shared";
 const router = Router();
@@ -15,5 +15,5 @@ router.get("/status", requirePermission("marketplace.view"), async (_req, res, n
 router.post("/products/:id", requirePermission("marketplace.manage"), async (req, res, next) => { try { res.json({ jobs: await enqueueProductStockSync(db, req.params.id, "manual") }); } catch (e) { next(e); } });
 router.post("/external-listings/:id", requirePermission("marketplace.manage"), async (req, res, next) => { try { const [listing] = await db.select().from(externalListings).where(eq(externalListings.id, req.params.id)); if (!listing) return res.status(404).json({ error: "External listing not found" }); res.json(await enqueueJob(db, { type: BackgroundJobType.StockSyncListing, channel: listing.channel, productId: listing.productId, externalListingId: listing.id, payload: { externalListingId: listing.id }, idempotencyKey: `stock:manual:${listing.id}:${new Date().toISOString()}` })); } catch (e) { next(e); } });
 router.post("/marketplaces/:channel", requirePermission("marketplace.manage"), async (req, res, next) => { try { res.json(await enqueueChannelStockSync(db, req.params.channel)); } catch (e) { next(e); } });
-router.post("/marketplaces/all", requirePermission("marketplace.manage"), async (_req, res, next) => { try { res.json({ jobs: await Promise.all([enqueueChannelStockSync(db, "ebay"), enqueueChannelStockSync(db, "etsy")]) }); } catch (e) { next(e); } });
+router.post("/marketplaces/all", requirePermission("marketplace.manage"), async (_req, res, next) => { try { res.json({ jobs: await Promise.all(STOCK_SYNC_CHANNELS.map((channel) => enqueueChannelStockSync(db, channel))) }); } catch (e) { next(e); } });
 export default router;

@@ -45,6 +45,36 @@ export class WooCommerceClient {
     return this.publishRequest("PUT", externalProductId, payload);
   }
 
+  async getProductInventory(externalProductId: string) {
+    const body = await this.inventoryRequest("GET", externalProductId);
+    return { externalListingId: externalProductId, stock: body.stock_quantity as number, raw: body };
+  }
+
+  async updateProductInventory(externalProductId: string, stock: number) {
+    if (!Number.isInteger(stock) || stock < 0) throw new WooCommerceClientError("configuration", "WooCommerce stock quantity must be a non-negative integer");
+    const body = await this.inventoryRequest("PUT", externalProductId, { manage_stock: true, stock_quantity: stock });
+    return { externalListingId: externalProductId, requestedStock: stock, confirmedStock: body.stock_quantity as number, raw: body };
+  }
+
+  private async inventoryRequest(method: "GET" | "PUT", externalProductId: string, payload?: { manage_stock: true; stock_quantity: number }) {
+    if (!externalProductId.trim()) throw new WooCommerceClientError("configuration", "WooCommerce Product identity is required");
+    const storeUrl = normalizeWooCommerceStoreUrl(this.config.storeUrl);
+    if (!this.config.consumerKey || !this.config.consumerSecret) throw new WooCommerceClientError("configuration", "WooCommerce credentials are required");
+    let response: Awaited<ReturnType<WooCommerceTransport["request"]>>;
+    try {
+      response = await this.transport.request({ method, url: `${storeUrl}/wp-json/wc/v3/products/${encodeURIComponent(externalProductId)}`, headers: { Authorization: `Basic ${Buffer.from(`${this.config.consumerKey}:${this.config.consumerSecret}`).toString("base64")}`, ...(payload ? { "Content-Type": "application/json" } : {}) }, ...(payload ? { body: JSON.stringify(payload) } : {}) });
+    } catch { throw new WooCommerceClientError("timeout", "WooCommerce request timed out or was unavailable"); }
+    if (response.status === 401) throw new WooCommerceClientError("authentication", "WooCommerce authentication failed");
+    if (response.status === 403) throw new WooCommerceClientError("authorization", "WooCommerce authorization failed");
+    if (response.status === 429) throw new WooCommerceClientError("rate_limit", "WooCommerce rate limit reached");
+    if (response.status === 400 || response.status === 422) throw new WooCommerceClientError("remote_validation", "WooCommerce rejected the inventory request");
+    if (response.status === 404) throw new WooCommerceClientError("not_found", "WooCommerce Product was not found");
+    if (response.status < 200 || response.status >= 300) throw new WooCommerceClientError("provider", "WooCommerce inventory request failed");
+    const body = response.body as Record<string, unknown> | undefined;
+    if (!body || String(body.id ?? "") !== externalProductId || !Number.isInteger(body.stock_quantity) || Number(body.stock_quantity) < 0) throw new WooCommerceClientError("malformed_response", "WooCommerce inventory response was malformed");
+    return body;
+  }
+
   private async publishRequest(method: "POST" | "PUT", externalProductId: string | undefined, payload: WooCommerceProductDraft) {
     const storeUrl = normalizeWooCommerceStoreUrl(this.config.storeUrl);
     if (!this.config.consumerKey || !this.config.consumerSecret) throw new WooCommerceClientError("configuration", "WooCommerce credentials are required");
