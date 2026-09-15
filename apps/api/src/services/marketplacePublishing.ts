@@ -133,11 +133,13 @@ async function executeNoctellaWebPublish(db: DbClient, productId: string, produc
   const [r] = await q.select().from(publishJobs).where(eq(publishJobs.id, jid));
   return { job: job(r) };
 }
-type InternalPublishOptions={allowPaused?:boolean;exactConnectionId?:string;wooTransport?:WooCommerceTransport};
+type InternalPublishOptions={allowPaused?:boolean;allowExistingUpdate?:boolean;exactConnectionId?:string;wooTransport?:WooCommerceTransport};
 type PublishingAdapter = Pick<MarketplaceAdapter, "createListing" | "updateListing" | "normalizeError"> | WooCommercePublishAdapter;
+class InvalidProviderResultError extends Error {}
+function normalizedPublishingError(provider:PublishingAdapter,error:unknown){return error instanceof InvalidProviderResultError?{type:"Permanent" as const,code:"malformed_response",message:error.message,retryable:false}:provider.normalizeError(error);}
 async function exactActive(db:DbClient,channel:PublishChannel,connectionId:string){const r=await createProductLifecycleRepository(db).getOriginalConnection(connectionId,channel) as PublishingRow | undefined;if(!r?.encryptedAccessToken||!isPublishableConnection(r,channel)||(channel===PublishChannel.WooCommerce&&(!r.encryptedRefreshToken||!r.externalAccountId)))throw new BadRequestError("Original marketplace connection is not connected");if(r.tokenExpiresAt&&Date.parse(String(r.tokenExpiresAt))<=Date.now())throw new BadRequestError("Original marketplace connection is expired");return r;}
 function publishingAdapter(channel:PublishChannel,connection:PublishingRow,adapter?:MarketplaceAdapter,wooTransport?:WooCommerceTransport):PublishingAdapter { if(adapter)return adapter;if(channel!==PublishChannel.WooCommerce)return getMarketplaceAdapter(channel);return new CanonicalWooCommercePublishAdapter({storeUrl:connection.externalAccountId!,consumerKey:decryptCredential(connection.encryptedAccessToken!),consumerSecret:decryptCredential(connection.encryptedRefreshToken!)},wooTransport??createWooCommerceFetchTransport()); }
-function retryableOutcome(channel:PublishChannel,isCreate:boolean,error:ReturnType<PublishingAdapter["normalizeError"]>){return !(channel===PublishChannel.WooCommerce&&isCreate&&(error.type==="Timeout"||error.type==="Unknown"))&&error.retryable;}
+function retryableOutcome(_channel:PublishChannel,isCreate:boolean,error:ReturnType<PublishingAdapter["normalizeError"]>){return !(isCreate&&(error.type==="Timeout"||error.type==="Unknown"))&&error.retryable;}
 async function executePublishCore(db: DbClient, productId: string, channel: PublishChannel, key?: string, adapter?: MarketplaceAdapter, options:InternalPublishOptions={}): Promise<PublishExecutionResult> {
   const {q,publishJobs,publishAttempts,externalListings}=persistence(db); assertKnownPublishChannel(channel);
   const product = await getProductById(db, productId); if(product.salePausedAt&&!options.allowPaused)throw new ConflictError("Paused Product cannot be published");
@@ -148,27 +150,31 @@ async function executePublishCore(db: DbClient, productId: string, channel: Publ
   const [existing] = await q.select().from(publishJobs).where(eq(publishJobs.idempotencyKey, idem));
   if (existing) return { job: job(existing), externalListing: existing.externalListingId ? (await listExternalListings(db, productId)).find((l: ExternalListing) => l.externalListingId === existing.externalListingId) : undefined };
   const sameChannelListings = await q.select().from(externalListings).where(and(eq(externalListings.productId, productId), eq(externalListings.channel, channel)));
-  const existingWooListing = channel===PublishChannel.WooCommerce ? sameChannelListings.find((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus)) : undefined;
-  if (channel!==PublishChannel.WooCommerce&&sameChannelListings.some((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus))) throw new DuplicateActiveListingError();
-  const connection = existingWooListing?await exactActive(db,channel,existingWooListing.connectionId):options.exactConnectionId?await exactActive(db,channel,options.exactConnectionId):await active(db,channel);
+  const activeListing = sameChannelListings.find((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus));
+  if(channel!==PublishChannel.WooCommerce&&activeListing&&!options.allowExistingUpdate)throw new DuplicateActiveListingError();
+  const existingListing = channel===PublishChannel.WooCommerce||options.allowExistingUpdate?activeListing:undefined;
+  const connection = existingListing?await exactActive(db,channel,existingListing.connectionId):options.exactConnectionId?await exactActive(db,channel,options.exactConnectionId):await active(db,channel);
   const provider=publishingAdapter(channel,connection,adapter,options.wooTransport); const jid=id("job"),createdAt=now();
   await q.insert(publishJobs).values({id:jid,productId,channel,status:PublishJobStatus.Processing,idempotencyKey:idem,payloadSnapshot:JSON.stringify(payload),attemptCount:0,createdAt,updatedAt:createdAt});
   try {
-    const result=existingWooListing?await provider.updateListing(decryptCredential(connection.encryptedAccessToken!),existingWooListing.externalListingId,payload):await provider.createListing(decryptCredential(connection.encryptedAccessToken!),payload);
-    if(channel===PublishChannel.WooCommerce&&!result.externalListingId)throw new Error("WooCommerce response did not include a Product identity");
+    const result=existingListing?await provider.updateListing(decryptCredential(connection.encryptedAccessToken!),existingListing.externalListingId,payload):await provider.createListing(decryptCredential(connection.encryptedAccessToken!),payload);
+    if(!result.externalListingId)throw new InvalidProviderResultError(`${channel} response did not include a listing identity`);
+    if(existingListing&&result.externalListingId!==existingListing.externalListingId)throw new InvalidProviderResultError(`${channel} update response changed the canonical listing identity`);
     const completedAt=now();
     await q.insert(publishAttempts).values({id:id("att"),publishJobId:jid,attemptNumber:1,requestSnapshot:JSON.stringify(payload),responseSnapshot:JSON.stringify(result.raw??result),createdAt:completedAt});
-    if(existingWooListing)await q.update(externalListings).set({externalListingUrl:result.externalListingUrl,externalStatus:result.externalStatus,payloadSnapshot:JSON.stringify(payload),updatedAt:completedAt}).where(eq(externalListings.id,existingWooListing.id));
+    if(existingListing)await q.update(externalListings).set({externalListingUrl:result.externalListingUrl,externalStatus:result.externalStatus,payloadSnapshot:JSON.stringify(payload),updatedAt:completedAt}).where(eq(externalListings.id,existingListing.id));
     else await q.insert(externalListings).values({id:id("ext"),productId,channel,connectionId:connection.id,externalListingId:result.externalListingId,externalListingUrl:result.externalListingUrl,externalStatus:result.externalStatus,payloadSnapshot:JSON.stringify(payload),publishedAt:completedAt,updatedAt:completedAt}).onConflictDoNothing();
     await q.update(publishJobs).set({status:PublishJobStatus.Succeeded,externalListingId:result.externalListingId,externalListingUrl:result.externalListingUrl,attemptCount:1,completedAt,updatedAt:completedAt}).where(eq(publishJobs.id,jid));
   } catch(error) {
-    const normalized=provider.normalizeError(error),canRetry=retryableOutcome(channel,!existingWooListing,normalized),failedAt=now();
+    const normalized=normalizedPublishingError(provider,error),canRetry=retryableOutcome(channel,!existingListing,normalized),failedAt=now();
     await q.insert(publishAttempts).values({id:id("att"),publishJobId:jid,attemptNumber:1,requestSnapshot:JSON.stringify(payload),errorCode:normalized.code,errorMessage:normalized.message,createdAt:failedAt});
     await q.update(publishJobs).set({status:canRetry?PublishJobStatus.RetryPending:PublishJobStatus.Failed,attemptCount:1,lastError:normalized.message,updatedAt:failedAt}).where(eq(publishJobs.id,jid));
   }
   const [row]=await q.select().from(publishJobs).where(eq(publishJobs.id,jid)); return {job:job(row)};
 }
 export async function executePublish(db:DbClient,productId:string,channel:PublishChannel,key?:string,adapter?:MarketplaceAdapter,wooTransport?:WooCommerceTransport){return executePublishCore(db,productId,channel,key,adapter,{wooTransport});}
+/** Explicit canonical revise path; ordinary publish retains duplicate-active compatibility. */
+export async function executeMarketplaceListingUpdate(db:DbClient,productId:string,channel:PublishChannel,key:string,adapter?:MarketplaceAdapter){if(channel===PublishChannel.NoctellaWeb)throw new BadRequestError("Marketplace update requires an external provider");return executePublishCore(db,productId,channel,key,adapter,{allowExistingUpdate:true});}
 /** Trusted lifecycle-only entry point. No HTTP schema exposes these controls. */
 export async function executeControlledRelistPublish(db:DbClient,productId:string,channel:PublishChannel,key:string,exactConnectionId?:string,adapter?:MarketplaceAdapter){return executePublishCore(db,productId,channel,key,adapter,{allowPaused:true,exactConnectionId});}
 /**
@@ -276,17 +282,18 @@ async function retryPublishJobCore(db: DbClient, idv: string, adapter?: Marketpl
   const {q,publishJobs,publishAttempts,externalListings}=persistence(db); const {job:j}=await getPublishJob(db,idv),max=Number(process.env.MARKETPLACE_PUBLISH_MAX_RETRIES??3);
   if(j.status!==PublishJobStatus.RetryPending||j.attemptCount>=max)throw new ConflictError("Publish job is not retryable");
   const candidates=await q.select().from(externalListings).where(and(eq(externalListings.productId,j.productId),eq(externalListings.channel,j.channel)));
-  const existingListing=j.channel===PublishChannel.WooCommerce?candidates.find((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus)):undefined;
+  const existingListing=candidates.find((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus));
   const connection=existingListing?await exactActive(db,j.channel,existingListing.connectionId):exactConnectionId?await exactActive(db,j.channel,exactConnectionId):await active(db,j.channel);
   const provider=publishingAdapter(j.channel,connection,adapter,wooTransport),attemptNumber=j.attemptCount+1;
   try {
     const result=existingListing?await provider.updateListing(decryptCredential(connection.encryptedAccessToken!),existingListing.externalListingId,j.payloadSnapshot as MarketplacePublishPayload):await provider.createListing(decryptCredential(connection.encryptedAccessToken!),j.payloadSnapshot as MarketplacePublishPayload);
-    if(j.channel===PublishChannel.WooCommerce&&!result.externalListingId)throw new Error("WooCommerce response did not include a Product identity");
+    if(!result.externalListingId)throw new InvalidProviderResultError(`${j.channel} response did not include a listing identity`);
+    if(existingListing&&result.externalListingId!==existingListing.externalListingId)throw new InvalidProviderResultError(`${j.channel} update response changed the canonical listing identity`);
     const completedAt=now(); await q.insert(publishAttempts).values({id:id("att"),publishJobId:idv,attemptNumber,requestSnapshot:JSON.stringify(j.payloadSnapshot),responseSnapshot:JSON.stringify(result.raw??result),createdAt:completedAt});
     if(existingListing)await q.update(externalListings).set({externalListingUrl:result.externalListingUrl,externalStatus:result.externalStatus,payloadSnapshot:JSON.stringify(j.payloadSnapshot),updatedAt:completedAt}).where(eq(externalListings.id,existingListing.id));
     else await q.insert(externalListings).values({id:id("ext"),productId:j.productId,channel:j.channel,connectionId:connection.id,externalListingId:result.externalListingId,externalListingUrl:result.externalListingUrl,externalStatus:result.externalStatus,payloadSnapshot:JSON.stringify(j.payloadSnapshot),publishedAt:completedAt,updatedAt:completedAt}).onConflictDoNothing();
     await q.update(publishJobs).set({status:PublishJobStatus.Succeeded,externalListingId:result.externalListingId,externalListingUrl:result.externalListingUrl,attemptCount:attemptNumber,lastError:null,completedAt,updatedAt:completedAt}).where(eq(publishJobs.id,idv));
-  } catch(error) { const normalized=provider.normalizeError(error),canRetry=retryableOutcome(j.channel,!existingListing,normalized),failedAt=now();await q.insert(publishAttempts).values({id:id("att"),publishJobId:idv,attemptNumber,requestSnapshot:JSON.stringify(j.payloadSnapshot),errorCode:normalized.code,errorMessage:normalized.message,createdAt:failedAt});await q.update(publishJobs).set({status:canRetry&&attemptNumber<max?PublishJobStatus.RetryPending:PublishJobStatus.Failed,attemptCount:attemptNumber,lastError:normalized.message,updatedAt:failedAt}).where(eq(publishJobs.id,idv)); }
+  } catch(error) { const normalized=normalizedPublishingError(provider,error),canRetry=retryableOutcome(j.channel,!existingListing,normalized),failedAt=now();await q.insert(publishAttempts).values({id:id("att"),publishJobId:idv,attemptNumber,requestSnapshot:JSON.stringify(j.payloadSnapshot),errorCode:normalized.code,errorMessage:normalized.message,createdAt:failedAt});await q.update(publishJobs).set({status:canRetry&&attemptNumber<max?PublishJobStatus.RetryPending:PublishJobStatus.Failed,attemptCount:attemptNumber,lastError:normalized.message,updatedAt:failedAt}).where(eq(publishJobs.id,idv)); }
   const {job:updated,attempts}=await getPublishJob(db,idv);return{job:updated,attempts};
 }
 export async function retryPublishJob(db:DbClient,idv:string,adapter?:MarketplaceAdapter,wooTransport?:WooCommerceTransport){return retryPublishJobCore(db,idv,adapter,undefined,wooTransport);}

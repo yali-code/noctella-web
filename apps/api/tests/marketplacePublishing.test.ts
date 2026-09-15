@@ -7,9 +7,8 @@ import { MarketplaceConnectionStatus, PublishChannel, PublishJobStatus } from "@
 import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
 import { decryptCredential, encryptCredential } from "../src/services/credentialEncryption";
-import { ConflictError } from "../src/services/errors";
 import { createOAuthState } from "../src/services/oauthState";
-import { completeConnect, disconnect, endExternalListing, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
+import { completeConnect, disconnect, endExternalListing, executeMarketplaceListingUpdate, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
 import { buildPublishPayload } from "../src/services/publishing";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 import * as sqlitePublishingSchema from "../src/db/schema.sqlite";
@@ -175,24 +174,28 @@ describe("marketplace publish workflow", () => {
 describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
   // Same-payload idempotent replay (item 1) is already covered by "deduplicates idempotency..." above -
   // it returns before the new guard runs, so it is unaffected by this feature.
-  it("blocks a genuinely new publish while an active listing exists, without touching the adapter or writing a new job/attempt/listing", async () => {
+  it("routes a new publish through update while an active listing exists, preserving canonical identity", async () => {
     const database = db(); const adapter = await connect(database); await product(database);
     await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
     const jobsBefore = await database.select().from(schema.publishJobs);
     const attemptsBefore = await database.select().from(schema.publishAttempts);
     const listingsBefore = await listExternalListings(database, "p1");
-    await expect(executePublish(database, "p1", PublishChannel.Ebay, "second", adapter)).rejects.toBeInstanceOf(ConflictError);
+    const updated = await executeMarketplaceListingUpdate(database, "p1", PublishChannel.Ebay, "second", adapter);
+    expect(updated.job.status).toBe(PublishJobStatus.Succeeded);
+    expect(updated.job.externalListingId).toBe(listingsBefore[0].externalListingId);
     expect(adapter.createCalls()).toBe(1);
-    expect(await database.select().from(schema.publishJobs)).toEqual(jobsBefore);
-    expect(await database.select().from(schema.publishAttempts)).toEqual(attemptsBefore);
-    expect(await listExternalListings(database, "p1")).toEqual(listingsBefore);
+    expect(await database.select().from(schema.publishJobs)).toHaveLength(jobsBefore.length + 1);
+    expect(await database.select().from(schema.publishAttempts)).toHaveLength(attemptsBefore.length + 1);
+    const listingsAfter = await listExternalListings(database, "p1");
+    expect(listingsAfter).toHaveLength(1);
+    expect(listingsAfter[0].id).toBe(listingsBefore[0].id);
   });
 
-  it("a changed publish payload (no explicit key, so a fresh idempotency key is derived) does not bypass the guard", async () => {
+  it("a changed publish payload updates the persisted identity without creating a duplicate", async () => {
     const database = db(); const adapter = await connect(database); await product(database);
     await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
     await database.update(schema.products).set({ ebayListingPriceEur: 999 }).where(eq(schema.products.id, "p1"));
-    await expect(executePublish(database, "p1", PublishChannel.Ebay, undefined, adapter)).rejects.toBeInstanceOf(ConflictError);
+    await expect(executeMarketplaceListingUpdate(database, "p1", PublishChannel.Ebay, "changed", adapter)).resolves.toMatchObject({ job: { status: PublishJobStatus.Succeeded } });
     expect(adapter.createCalls()).toBe(1);
   });
 
@@ -221,11 +224,29 @@ describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
     expect(other.job.status).toBe(PublishJobStatus.Succeeded);
   });
 
-  it("treats an unknown/ambiguous external status as blocking, not safely terminal", async () => {
+  it("treats an unknown/ambiguous external status as active and updates its persisted identity", async () => {
     const database = db(); let calls = 0; const adapter = makeAdapter({ createListing: async (_t, payload) => { calls += 1; return { externalListingId: "weird-1", externalStatus: "under_review", raw: { title: payload.title } }; }, createCalls: () => calls }); await connect(database, PublishChannel.Ebay, adapter); await product(database);
     await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
-    await expect(executePublish(database, "p1", PublishChannel.Ebay, "second", adapter)).rejects.toBeInstanceOf(ConflictError);
+    await expect(executeMarketplaceListingUpdate(database, "p1", PublishChannel.Ebay, "second", adapter)).resolves.toMatchObject({ job: { status: PublishJobStatus.Succeeded } });
     expect(adapter.createCalls()).toBe(1);
+  });
+
+  it.each([PublishChannel.Ebay, PublishChannel.Etsy])("fails closed for uncertain %s create outcomes to prevent duplicate listings", async (channel) => {
+    const database = db();
+    const adapter = makeAdapter({ createListing: async () => { const error = new Error("timeout"); error.name = "AbortError"; throw error; }, normalizeError: () => ({ type: "Timeout", message: "timeout", retryable: true }) });
+    await connect(database, channel, adapter); await product(database);
+    const result = await executePublish(database, "p1", channel, `${channel}-uncertain`, adapter);
+    expect(result.job.status).toBe(PublishJobStatus.Failed);
+    await expect(retryPublishJob(database, result.job.id, adapter)).rejects.toThrow(/not retryable/);
+  });
+
+  it.each([PublishChannel.Ebay, PublishChannel.Etsy])("rejects malformed %s success without persisting false identity", async (channel) => {
+    const database = db(); const adapter = makeAdapter({ createListing: async () => ({ externalListingId: "", externalStatus: "active" }) });
+    await connect(database, channel, adapter); await product(database);
+    const result = await executePublish(database, "p1", channel, `${channel}-malformed`, adapter);
+    expect(result.job.status).toBe(PublishJobStatus.Failed);
+    expect(result.job.lastError).toMatch(/listing identity/);
+    expect(await listExternalListings(database, "p1")).toHaveLength(0);
   });
 });
 
