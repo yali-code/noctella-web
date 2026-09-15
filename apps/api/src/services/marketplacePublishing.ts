@@ -133,7 +133,7 @@ async function executeNoctellaWebPublish(db: DbClient, productId: string, produc
   const [r] = await q.select().from(publishJobs).where(eq(publishJobs.id, jid));
   return { job: job(r) };
 }
-type InternalPublishOptions={allowPaused?:boolean;exactConnectionId?:string;wooTransport?:WooCommerceTransport};
+type InternalPublishOptions={allowPaused?:boolean;allowExistingUpdate?:boolean;exactConnectionId?:string;wooTransport?:WooCommerceTransport};
 type PublishingAdapter = Pick<MarketplaceAdapter, "createListing" | "updateListing" | "normalizeError"> | WooCommercePublishAdapter;
 class InvalidProviderResultError extends Error {}
 function normalizedPublishingError(provider:PublishingAdapter,error:unknown){return error instanceof InvalidProviderResultError?{type:"Permanent" as const,code:"malformed_response",message:error.message,retryable:false}:provider.normalizeError(error);}
@@ -150,7 +150,9 @@ async function executePublishCore(db: DbClient, productId: string, channel: Publ
   const [existing] = await q.select().from(publishJobs).where(eq(publishJobs.idempotencyKey, idem));
   if (existing) return { job: job(existing), externalListing: existing.externalListingId ? (await listExternalListings(db, productId)).find((l: ExternalListing) => l.externalListingId === existing.externalListingId) : undefined };
   const sameChannelListings = await q.select().from(externalListings).where(and(eq(externalListings.productId, productId), eq(externalListings.channel, channel)));
-  const existingListing = sameChannelListings.find((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus));
+  const activeListing = sameChannelListings.find((row:PublishingRow)=>!isTerminalListingStatus(row.externalStatus));
+  if(channel!==PublishChannel.WooCommerce&&activeListing&&!options.allowExistingUpdate)throw new DuplicateActiveListingError();
+  const existingListing = channel===PublishChannel.WooCommerce||options.allowExistingUpdate?activeListing:undefined;
   const connection = existingListing?await exactActive(db,channel,existingListing.connectionId):options.exactConnectionId?await exactActive(db,channel,options.exactConnectionId):await active(db,channel);
   const provider=publishingAdapter(channel,connection,adapter,options.wooTransport); const jid=id("job"),createdAt=now();
   await q.insert(publishJobs).values({id:jid,productId,channel,status:PublishJobStatus.Processing,idempotencyKey:idem,payloadSnapshot:JSON.stringify(payload),attemptCount:0,createdAt,updatedAt:createdAt});
@@ -171,6 +173,8 @@ async function executePublishCore(db: DbClient, productId: string, channel: Publ
   const [row]=await q.select().from(publishJobs).where(eq(publishJobs.id,jid)); return {job:job(row)};
 }
 export async function executePublish(db:DbClient,productId:string,channel:PublishChannel,key?:string,adapter?:MarketplaceAdapter,wooTransport?:WooCommerceTransport){return executePublishCore(db,productId,channel,key,adapter,{wooTransport});}
+/** Explicit canonical revise path; ordinary publish retains duplicate-active compatibility. */
+export async function executeMarketplaceListingUpdate(db:DbClient,productId:string,channel:PublishChannel,key:string,adapter?:MarketplaceAdapter){if(channel===PublishChannel.NoctellaWeb)throw new BadRequestError("Marketplace update requires an external provider");return executePublishCore(db,productId,channel,key,adapter,{allowExistingUpdate:true});}
 /** Trusted lifecycle-only entry point. No HTTP schema exposes these controls. */
 export async function executeControlledRelistPublish(db:DbClient,productId:string,channel:PublishChannel,key:string,exactConnectionId?:string,adapter?:MarketplaceAdapter){return executePublishCore(db,productId,channel,key,adapter,{allowPaused:true,exactConnectionId});}
 /**

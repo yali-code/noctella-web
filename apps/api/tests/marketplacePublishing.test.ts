@@ -8,7 +8,7 @@ import * as schema from "../src/db/schema";
 import { ensureSchema } from "../src/db/migrate";
 import { decryptCredential, encryptCredential } from "../src/services/credentialEncryption";
 import { createOAuthState } from "../src/services/oauthState";
-import { completeConnect, disconnect, endExternalListing, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
+import { completeConnect, disconnect, endExternalListing, executeMarketplaceListingUpdate, executePublish, getPublishJob, listConnections, listExternalListings, listPublishJobs, refreshConnection, retryPublishJob, sanitizeMarketplaceError, startConnect, verifyConnection } from "../src/services/marketplacePublishing";
 import { buildPublishPayload } from "../src/services/publishing";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 import * as sqlitePublishingSchema from "../src/db/schema.sqlite";
@@ -180,7 +180,7 @@ describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
     const jobsBefore = await database.select().from(schema.publishJobs);
     const attemptsBefore = await database.select().from(schema.publishAttempts);
     const listingsBefore = await listExternalListings(database, "p1");
-    const updated = await executePublish(database, "p1", PublishChannel.Ebay, "second", adapter);
+    const updated = await executeMarketplaceListingUpdate(database, "p1", PublishChannel.Ebay, "second", adapter);
     expect(updated.job.status).toBe(PublishJobStatus.Succeeded);
     expect(updated.job.externalListingId).toBe(listingsBefore[0].externalListingId);
     expect(adapter.createCalls()).toBe(1);
@@ -195,7 +195,7 @@ describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
     const database = db(); const adapter = await connect(database); await product(database);
     await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
     await database.update(schema.products).set({ ebayListingPriceEur: 999 }).where(eq(schema.products.id, "p1"));
-    await expect(executePublish(database, "p1", PublishChannel.Ebay, undefined, adapter)).resolves.toMatchObject({ job: { status: PublishJobStatus.Succeeded } });
+    await expect(executeMarketplaceListingUpdate(database, "p1", PublishChannel.Ebay, "changed", adapter)).resolves.toMatchObject({ job: { status: PublishJobStatus.Succeeded } });
     expect(adapter.createCalls()).toBe(1);
   });
 
@@ -227,7 +227,7 @@ describe("marketplace publish duplicate-listing guard (Sprint 62B)", () => {
   it("treats an unknown/ambiguous external status as active and updates its persisted identity", async () => {
     const database = db(); let calls = 0; const adapter = makeAdapter({ createListing: async (_t, payload) => { calls += 1; return { externalListingId: "weird-1", externalStatus: "under_review", raw: { title: payload.title } }; }, createCalls: () => calls }); await connect(database, PublishChannel.Ebay, adapter); await product(database);
     await executePublish(database, "p1", PublishChannel.Ebay, "first", adapter);
-    await expect(executePublish(database, "p1", PublishChannel.Ebay, "second", adapter)).resolves.toMatchObject({ job: { status: PublishJobStatus.Succeeded } });
+    await expect(executeMarketplaceListingUpdate(database, "p1", PublishChannel.Ebay, "second", adapter)).resolves.toMatchObject({ job: { status: PublishJobStatus.Succeeded } });
     expect(adapter.createCalls()).toBe(1);
   });
 
