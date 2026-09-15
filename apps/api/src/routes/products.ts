@@ -10,8 +10,8 @@ import { handleRouteError } from "./errorHandler";
 import { getPublishPreview, getPublishValidation } from "../services/publishing";
 import { executePublish, executePublishBatch, listExternalListings, endExternalListing } from "../services/marketplacePublishing";
 import { publishRequestSchema, executePublishBatchRequestSchema } from "../validation/publishing";
-import { approveMarketplacePreparation, generateMarketplacePreparation, getCurrentMarketplacePreparation } from "../services/marketplacePreparation";
-import { approveMarketplacePreparationSchema, generateMarketplacePreparationSchema, getMarketplacePreparationQuerySchema } from "../validation/marketplacePreparation";
+import { approveMarketplacePreparation, generateMarketplacePreparation, getCurrentMarketplacePreparation, rejectMarketplacePreparation } from "../services/marketplacePreparation";
+import { approveMarketplacePreparationSchema, generateMarketplacePreparationSchema, getMarketplacePreparationQuerySchema, rejectMarketplacePreparationSchema } from "../validation/marketplacePreparation";
 import { addProductMarketingTag, listProductMarketingTags, removeProductMarketingTag } from "../services/marketingTags";
 import { addProductMarketingTagSchema } from "../validation/marketingTags";
 import { acceptCanonicalProductProposal, generateCanonicalProductProposal, getCurrentCanonicalProductProposal } from "../services/canonicalProductProposal";
@@ -141,6 +141,15 @@ router.post("/:id/marketplace-preparation/approve", requirePermission("products.
   try {
     const input = approveMarketplacePreparationSchema.parse(req.body ?? {});
     res.json(await approveMarketplacePreparation(db, req.params.id, input, req.adminUser!.id));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.post("/:id/marketplace-preparation/reject", requirePermission("products.publish"), async (req: AuthedRequest, res) => {
+  try {
+    const input = rejectMarketplacePreparationSchema.parse(req.body ?? {});
+    res.json(await rejectMarketplacePreparation(db, req.params.id, input.channel, input.expectedProposalUpdatedAt, req.adminUser!.id));
   } catch (err) {
     handleRouteError(err, res);
   }
