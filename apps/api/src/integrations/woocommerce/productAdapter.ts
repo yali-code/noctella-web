@@ -1,18 +1,6 @@
-import type { Product, ProductPhoto } from "@noctella/shared";
+import type { Product, ProductPhoto, WooCommercePublishPayload } from "@noctella/shared";
 
-export interface WooCommerceProductDraft {
-  sku: string;
-  name: string;
-  slug: string;
-  type: "simple";
-  regular_price?: string;
-  description: string;
-  short_description: string;
-  manage_stock: true;
-  stock_quantity: number;
-  images: Array<{ src: string; alt: string }>;
-  meta_data: Array<{ key: string; value: string }>;
-}
+export type WooCommerceProductDraft = WooCommercePublishPayload;
 
 export function buildWooCommerceProductDraft(
   product: Product,

@@ -56,6 +56,14 @@ const CHANNEL_FIELDS: Record<PublishChannel, Array<{ key: string; label: string;
     { key: "metaDescription", label: "Meta description", multiline: true },
     { key: "focusKeyword", label: "Focus keyword" },
   ],
+  [PublishChannel.WooCommerce]: [
+    { key: "title", label: "Product name" },
+    { key: "description", label: "Long description", multiline: true },
+    { key: "shortDescription", label: "Short description", multiline: true },
+    { key: "seoTitle", label: "SEO title" },
+    { key: "metaDescription", label: "Meta description", multiline: true },
+    { key: "focusKeyword", label: "Focus keyword" },
+  ],
 };
 
 function suggestionText(preparation: MarketplacePreparation, key: string): string {

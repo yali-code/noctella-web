@@ -22,6 +22,14 @@ const CHANNEL_FIELDS: Record<PublishChannel, readonly (keyof MarketplacePreparat
     "suggestedMetaDescription",
     "suggestedFocusKeyword",
   ],
+  [PublishChannel.WooCommerce]: [
+    "suggestedTitle",
+    "suggestedDescription",
+    "suggestedShortDescription",
+    "suggestedSeoTitle",
+    "suggestedMetaDescription",
+    "suggestedFocusKeyword",
+  ],
 };
 
 const ARRAY_FIELDS = new Set<keyof MarketplacePreparationProposal>(["suggestedTags"]);

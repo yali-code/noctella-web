@@ -503,11 +503,27 @@ export interface PublishPayload {
   metadata: Record<string, string | string[] | number | boolean | undefined>;
 }
 
+export interface WooCommercePublishPayload {
+  sku: string;
+  name: string;
+  slug: string;
+  type: "simple";
+  regular_price?: string;
+  description: string;
+  short_description: string;
+  manage_stock: true;
+  stock_quantity: number;
+  images: Array<{ src: string; alt: string }>;
+  meta_data: Array<{ key: string; value: string }>;
+}
+
+export type MarketplacePublishPayload = PublishPayload | WooCommercePublishPayload;
+
 export interface PublishPreview {
   productId: ID;
   channel: PublishChannel;
   validation: PublishValidation;
-  payload?: PublishPayload;
+  payload?: MarketplacePublishPayload;
 }
 
 export enum MarketplaceConnectionStatus {
@@ -533,9 +549,9 @@ export type MarketplaceApiErrorType = "Validation" | "Authentication" | "Authori
 export interface MarketplaceApiError { type: MarketplaceApiErrorType; code?: string; message: string; retryable: boolean; }
 export interface MarketplaceCredentialMetadata { status: MarketplaceConnectionStatus; tokenExpiresAt?: string; scopes?: string[]; externalAccountId?: string; }
 export interface MarketplaceConnection extends Timestamps { id: ID; channel: PublishChannel; accountLabel: string; externalAccountId?: string; tokenExpiresAt?: string; scopes?: string[]; status: MarketplaceConnectionStatus; lastError?: string; }
-export interface PublishJob extends Timestamps { id: ID; productId: ID; channel: PublishChannel; status: PublishJobStatus; idempotencyKey: string; payloadSnapshot: PublishPayload; externalListingId?: string; externalListingUrl?: string; attemptCount: number; lastError?: string; completedAt?: string; }
+export interface PublishJob extends Timestamps { id: ID; productId: ID; channel: PublishChannel; status: PublishJobStatus; idempotencyKey: string; payloadSnapshot: MarketplacePublishPayload; externalListingId?: string; externalListingUrl?: string; attemptCount: number; lastError?: string; completedAt?: string; }
 export interface PublishAttempt { id: ID; publishJobId: ID; attemptNumber: number; requestSnapshot: unknown; responseSnapshot?: unknown; errorCode?: string; errorMessage?: string; createdAt: string; }
-export interface ExternalListing { id: ID; productId: ID; channel: PublishChannel; connectionId: ID; externalListingId: string; externalListingUrl?: string; externalStatus: string; payloadSnapshot: PublishPayload; publishedAt: string; updatedAt: string; }
+export interface ExternalListing { id: ID; productId: ID; channel: PublishChannel; connectionId: ID; externalListingId: string; externalListingUrl?: string; externalStatus: string; payloadSnapshot: MarketplacePublishPayload; publishedAt: string; updatedAt: string; }
 export type ProductLifecycleAction = "pause" | "relist";
 export type ProductLifecycleOperationStatus = "processing" | "succeeded" | "partially_failed" | "failed";
 export type ProductLifecycleTargetStatus = "pending" | "processing" | "succeeded" | "failed";

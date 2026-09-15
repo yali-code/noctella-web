@@ -11,6 +11,7 @@ describe("admin publishing helpers", () => {
   it("labels channels", () => {
     expect(channelLabel(PublishChannel.Ebay)).toBe("eBay");
     expect(channelLabel(PublishChannel.NoctellaWeb)).toBe("Noctella Web");
+    expect(channelLabel(PublishChannel.WooCommerce)).toBe("WooCommerce");
   });
 
   it("selects channel-specific draft title and price", () => {
@@ -28,6 +29,7 @@ describe("admin publishing helpers", () => {
     expect(requiresMarketplaceConnection(PublishChannel.Ebay)).toBe(true);
     expect(requiresMarketplaceConnection(PublishChannel.Etsy)).toBe(true);
     expect(requiresMarketplaceConnection(PublishChannel.NoctellaWeb)).toBe(false);
+    expect(requiresMarketplaceConnection(PublishChannel.WooCommerce)).toBe(true);
   });
 });
 

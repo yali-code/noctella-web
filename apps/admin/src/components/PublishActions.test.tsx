@@ -251,10 +251,10 @@ describe("PublishActions — post-publish canonical refresh", () => {
 });
 
 describe("PublishActions — connection guidance", () => {
-  it("shows a disconnected hint for eBay/Etsy when not connected, without exposing credentials", async () => {
+  it("shows a disconnected hint for connected marketplace channels when not connected, without exposing credentials", async () => {
     vi.spyOn(marketplacesLib.marketplaceApi, "listConnections").mockResolvedValue([]);
     render(<PublishActions productId="p1" isDirty={false} currentProductUpdatedAt="t" saveForPublish={alwaysOkSave()} onProductRefreshed={vi.fn()} />);
-    expect(await screen.findAllByText("(disconnected)")).toHaveLength(2); // eBay and Etsy, never Noctella Web
+    expect(await screen.findAllByText("(disconnected)")).toHaveLength(3); // eBay, Etsy, and WooCommerce; never Noctella Web
   });
 
   it("Noctella Web is never shown as requiring a marketplace connection", async () => {

@@ -1,7 +1,8 @@
-import { ListingStatus, ProductStatus, PublishChannel, type Product, type ProductImage, type ProductPhoto, type PublishPayload, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
+import { ListingStatus, ProductStatus, PublishChannel, type MarketplacePublishPayload, type Product, type ProductImage, type ProductPhoto, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { getProductById } from "./products";
 import { buildHistoricalPublishPayload } from "../integrations/productPublishingFoundation";
+import { buildWooCommerceProductDraft } from "../integrations/woocommerce/productAdapter";
 
 function issue(type: PublishValidationIssue["type"], severity: PublishValidationIssue["severity"], message: string, field?: string): PublishValidationIssue {
   return { type, severity, message, field };
@@ -61,7 +62,7 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
     required(product, [["ebayTitle", "eBay title"], ["ebayDescription", "eBay description"], ["ebayCategory", "eBay category"], ["ebayListingPriceEur", "eBay listing price"]], errors);
   } else if (channel === PublishChannel.Etsy) {
     required(product, [["etsyTitle", "Etsy title"], ["etsyDescription", "Etsy description"], ["etsyTags", "Etsy tags"], ["etsyListingPriceEur", "Etsy listing price"]], errors);
-  } else {
+  } else if (channel === PublishChannel.NoctellaWeb) {
     // Sprint 137: wooListingPriceEur is deliberately NOT in this required list - it is an
     // optional per-channel override, not an independent requirement. The effectivePriceEur
     // check above already enforces "wooListingPriceEur ?? priceEur" is a valid positive amount,
@@ -84,7 +85,8 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
  * intentionally-still-required (never nullable) type - a resolved payload must always carry a
  * real price.
  */
-export function buildPublishPayload(product: Product, images: ProductImage[], channel: PublishChannel): PublishPayload {
+export function buildPublishPayload(product: Product, images: ProductImage[], channel: PublishChannel): MarketplacePublishPayload {
+  if (channel === PublishChannel.WooCommerce) return buildWooCommerceProductDraft(product, images as unknown as ProductPhoto[]);
   return buildHistoricalPublishPayload(product, images, channel);
 }
 

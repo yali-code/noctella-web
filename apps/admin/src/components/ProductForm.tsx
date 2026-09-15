@@ -363,6 +363,7 @@ const AI_CHANNEL_FIELD_KEYS: Record<PublishChannel, Array<keyof ProductFormValue
   [PublishChannel.Ebay]: ["ebayTitle", "ebayDescription", "ebayConditionDescription", "ebayItemSpecifics"],
   [PublishChannel.Etsy]: ["etsyTitle", "etsyDescription", "etsyTags", "etsyMaterials", "etsyStyle", "etsyOccasion"],
   [PublishChannel.NoctellaWeb]: ["wooProductName", "wooLongDescription", "wooShortDescription", "wooSeoTitle", "wooMetaDescription", "wooFocusKeyword"],
+  [PublishChannel.WooCommerce]: ["wooProductName", "wooLongDescription", "wooShortDescription", "wooSeoTitle", "wooMetaDescription", "wooFocusKeyword"],
 };
 
 /** Maps a channel's owned ProductFormValues keys onto the corresponding field of the returned canonical Product (etsyTags is an array on Product, a comma-joined string in ProductFormValues - matches productToFormValues's own convention exactly). */

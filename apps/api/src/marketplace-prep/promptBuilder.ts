@@ -7,6 +7,7 @@ export const MARKETPLACE_PREPARATION_PROMPT_VERSION = "sprint110-v1";
 function channelLabel(channel: PublishChannel): string {
   if (channel === PublishChannel.Ebay) return "eBay";
   if (channel === PublishChannel.Etsy) return "Etsy";
+  if (channel === PublishChannel.WooCommerce) return "WooCommerce";
   return "Noctella Web (our own direct storefront)";
 }
 
