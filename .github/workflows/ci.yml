@@ -28,7 +28,8 @@ jobs:
       # STOREFRONT_SITE_URL) under Next's internally-forced NODE_ENV=production during the
       # build step, regardless of real deploy target - without this, the Build step fails here
       # even though this is just a CI validation build, not a real production deploy.
-      STOREFRONT_SITE_URL: http://localhost:3000
+      STOREFRONT_SITE_URL: https://storefront.example.test
+      NEXT_PUBLIC_API_BASE_URL: https://api.example.test
     steps:
       - name: Checkout
         uses: actions/checkout@v7

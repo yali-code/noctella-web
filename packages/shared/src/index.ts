@@ -32,3 +32,4 @@ export * from "./invoiceCalculation";
 export * from "./numericValidation";
 
 export * from "./urls";
+export * from "./publicRuntimeConfig";

@@ -1,4 +1,4 @@
-import { resolveServiceUrl } from "@noctella/shared";
+import { resolvePublicApiBaseUrl, resolveServiceUrl } from "@noctella/shared";
 import type { PublicProduct } from "./types";
 
 export const SITE_DEFAULT_TITLE = "Noctella — Objects With A Past";
@@ -20,9 +20,12 @@ export const SITEMAP_STATIC_PATHS = ["/", "/shop", "/categories", "/collections"
  * headers, so it cannot be poisoned by a spoofed Host header.
  */
 export function getStorefrontSiteUrl(): string {
-  const raw = process.env.STOREFRONT_SITE_URL;
+  return resolveStorefrontSiteUrl(process.env.STOREFRONT_SITE_URL, process.env.NODE_ENV);
+}
+
+export function resolveStorefrontSiteUrl(raw: string | undefined, nodeEnv: string | undefined): string {
   if (!raw) {
-    if (process.env.NODE_ENV === "production") {
+    if (nodeEnv === "production") {
       throw new Error("STOREFRONT_SITE_URL is required in production but is not set");
     }
     return "http://localhost:3000";
@@ -31,10 +34,13 @@ export function getStorefrontSiteUrl(): string {
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`STOREFRONT_SITE_URL must be a valid absolute URL (received "${raw}")`);
+    throw new Error("STOREFRONT_SITE_URL must be a valid absolute URL");
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`STOREFRONT_SITE_URL must use http:// or https:// (received "${raw}")`);
+    throw new Error("STOREFRONT_SITE_URL must use http:// or https://");
+  }
+  if (nodeEnv === "production" && (parsed.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname))) {
+    throw new Error("STOREFRONT_SITE_URL must be a non-local HTTPS origin in production");
   }
   return parsed.origin;
 }
@@ -66,7 +72,7 @@ export function shopCanonicalUrl(): string {
  * the API on every request; it does not affect the client component's own independent fetch.
  */
 export async function fetchPublicJson<T>(path: string): Promise<T | null> {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+  const apiBaseUrl = resolvePublicApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, process.env.NODE_ENV);
   try {
     const res = await fetch(`${apiBaseUrl}${path}`, { next: { revalidate: 60 } });
     if (!res.ok) return null;
@@ -79,7 +85,7 @@ export async function fetchPublicJson<T>(path: string): Promise<T | null> {
 /** Resolves an API-relative asset URL (e.g. "/images/product-photos/x.webp") to an absolute URL. */
 export function resolveAbsoluteImageUrl(value?: string | null): string | undefined {
   if (!value) return undefined;
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+  const apiBaseUrl = resolvePublicApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL, process.env.NODE_ENV);
   return resolveServiceUrl(value, apiBaseUrl);
 }
 
