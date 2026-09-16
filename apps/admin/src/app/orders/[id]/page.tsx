@@ -29,7 +29,7 @@ import {
   shipShipment,
   type ShipmentRow,
 } from "@/lib/shipments";
-import { resolveApiAssetUrl } from "@/lib/api";
+import { API_BASE_URL, resolveApiAssetUrl } from "@/lib/api";
 export default function OrderDetailPage({ params }: { params: { id: string } }) {
   const [order, setOrder] = useState<OrderWithItems | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,10 +87,10 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
         setOrder(loaded);
         setCodSettleAmount(loaded.totalAmount.toFixed(2));
         loadShipments(loaded.id);
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${loaded.id}/sale-reversal/readiness`).then((r) => r.ok ? r.json() : null).then(setReversal).catch(() => setReversal(null));
+        fetch(`${API_BASE_URL}/api/orders/${loaded.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
+        fetch(`${API_BASE_URL}/api/orders/${loaded.id}/returns`).then((r) => r.ok ? r.json() : []).then(setReturns).catch(() => setReturns([]));
+        fetch(`${API_BASE_URL}/api/orders/${loaded.id}/refunds`).then((r) => r.ok ? r.json() : []).then(setRefunds).catch(() => setRefunds([]));
+        fetch(`${API_BASE_URL}/api/orders/${loaded.id}/sale-reversal/readiness`).then((r) => r.ok ? r.json() : null).then(setReversal).catch(() => setReversal(null));
         setErpBridgeError(null);
         loadInvoiceAndSalesBridge(loaded.id);
         fetch(`/api/erp/finance/orders/${loaded.id}`).then((r) => r.ok ? r.json() : Promise.reject(new Error("finance"))).then(setFinanceBridge).catch(() => { setFinanceBridge(null); setErpBridgeError("Unable to load ERP sales, invoice, and finance data."); });
@@ -219,7 +219,7 @@ export default function OrderDetailPage({ params }: { params: { id: string } }) 
       // rather than constructing an optimistic Completed order locally.
       const refreshed = await getOrder(order.id);
       setOrder(refreshed);
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"}/api/orders/${refreshed.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
+      fetch(`${API_BASE_URL}/api/orders/${refreshed.id}/complete-sale/readiness`).then((r) => r.ok ? r.json() : null).then((r) => setReadiness(r ? readinessSummary(r) : null)).catch(() => setReadiness(null));
     } catch (err) {
       setCompleteSaleError(err instanceof Error ? err.message : "Failed to complete sale");
     } finally {
