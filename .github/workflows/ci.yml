@@ -23,13 +23,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    env:
-      # Sprint 73: the Storefront's next build evaluates root layout metadata (which reads
-      # STOREFRONT_SITE_URL) under Next's internally-forced NODE_ENV=production during the
-      # build step, regardless of real deploy target - without this, the Build step fails here
-      # even though this is just a CI validation build, not a real production deploy.
-      STOREFRONT_SITE_URL: https://storefront.example.test
-      NEXT_PUBLIC_API_BASE_URL: https://api.example.test
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -59,6 +52,11 @@ jobs:
 
       - name: Build
         run: npm run build --workspaces --if-present
+        env:
+          # Next.js forces NODE_ENV=production while building. These safe non-production origins
+          # exercise the production fail-closed contract without changing the Test step's runtime.
+          STOREFRONT_SITE_URL: https://storefront.example.test
+          NEXT_PUBLIC_API_BASE_URL: https://api.example.test
 
       - name: Lint
         run: npm run lint --workspaces --if-present
