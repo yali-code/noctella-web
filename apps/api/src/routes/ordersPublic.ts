@@ -5,6 +5,11 @@ import { createCashOnDeliveryOrderSchema, createOrderSchema } from "../validatio
 import { shippingQuoteRequestSchema } from "../validation/shipping";
 import { codOrderRateLimit } from "../middleware/codRateLimit";
 import { handleRouteError } from "./errorHandler";
+import { customerToken, requireCustomerOrigin } from "./customerAuth";
+import { resolveCustomerSession } from "../services/customerIdentity";
+import { eq } from "drizzle-orm";
+import { orders } from "../db/schema";
+import { ConflictError } from "../services/errors";
 
 /**
  * Sprint 64C: guest checkout order creation only - the exact route the storefront calls
@@ -14,6 +19,15 @@ import { handleRouteError } from "./errorHandler";
  * administrative router - no duplicated business logic.
  */
 const router = Router();
+
+async function assertDraftOwner(draftId: string, customerId: string | undefined) {
+  const [existing] = await db.select({ customerId: orders.customerId }).from(orders).where(eq(orders.orderDraftId, draftId)).limit(1);
+  if (existing && existing.customerId !== (customerId ?? null)) throw new ConflictError("Order draft is unavailable");
+}
+async function assertResultOwner(orderId: string, customerId: string | undefined) {
+  const [created] = await db.select({ customerId: orders.customerId }).from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!created || created.customerId !== (customerId ?? null)) throw new ConflictError("Order draft is unavailable");
+}
 
 /** Sprint 134: public, non-mutating shipping-options quote - advisory only, see services/orders.ts::getShippingOptions. */
 router.post("/shipping-options", async (req, res) => {
@@ -29,7 +43,13 @@ router.post("/shipping-options", async (req, res) => {
 router.post("/cod", codOrderRateLimit, async (req, res) => {
   try {
     const input = createCashOnDeliveryOrderSchema.parse(req.body);
-    res.status(201).json(await createCashOnDeliveryOrder(db, input));
+    const identity = await resolveCustomerSession(db, customerToken(req));
+    if (identity) requireCustomerOrigin(req, res, () => undefined);
+    if (res.headersSent) return;
+    await assertDraftOwner(input.orderDraftId, identity?.customerId);
+    const result = await createCashOnDeliveryOrder(db, { ...input, customerId: identity?.customerId });
+    await assertResultOwner(result.id, identity?.customerId);
+    res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res);
   }
@@ -38,7 +58,12 @@ router.post("/cod", codOrderRateLimit, async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const input = createOrderSchema.parse(req.body);
-    const order = await createOrder(db, input, { pricingContext: "noctella_web" });
+    const identity = await resolveCustomerSession(db, customerToken(req));
+    if (identity) requireCustomerOrigin(req, res, () => undefined);
+    if (res.headersSent) return;
+    await assertDraftOwner(input.orderDraftId, identity?.customerId);
+    const order = await createOrder(db, { ...input, customerId: identity?.customerId }, { pricingContext: "noctella_web" });
+    await assertResultOwner(order.id, identity?.customerId);
     res.status(201).json(order);
   } catch (err) {
     handleRouteError(err, res);

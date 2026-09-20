@@ -71,7 +71,7 @@ export async function createOrder(db:DbClient,input:CreateOrderInput,options:{ e
 
   return result;
 }
-export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDeliveryOrderInput):Promise<OrderWithItems>{ const result=await createCashOnDeliveryOrderUseCase(uow(db),undefined,undefined,undefined,orderDriver(),durableSync).execute(input) as unknown as OrderWithItems; await dispatchDueStockSyncOutboxEvents(db,"cod-post-commit",Math.max(1,(result.items as unknown[]).length)).catch(()=>undefined); return result; }
+export async function createCashOnDeliveryOrder(db:DbClient,input:CreateCashOnDeliveryOrderInput & { customerId?: string }):Promise<OrderWithItems>{ const result=await createCashOnDeliveryOrderUseCase(uow(db),undefined,undefined,undefined,orderDriver(),durableSync).execute(input) as unknown as OrderWithItems; await dispatchDueStockSyncOutboxEvents(db,"cod-post-commit",Math.max(1,(result.items as unknown[]).length)).catch(()=>undefined); return result; }
 /**
  * Sprint 134: public, non-mutating shipping-options quote - delegates entirely to the canonical
  * Use Case (getShippingOptionsUseCase), which reads products through the same repository method

@@ -17,14 +17,18 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({ push: vi.fn() }),
 }));
+vi.mock("@/lib/api", async (original) => ({
+  ...await original<typeof import("@/lib/api")>(),
+  customerApi: { get: vi.fn().mockRejectedValue(new Error("signed out")), post: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}));
 
 afterEach(cleanup);
 
 describe("Sprint 156 launch-safe header", () => {
-  it("removes Account from desktop and mobile while preserving customer navigation and keyboard behavior", () => {
+  it("offers Account in desktop and mobile while preserving customer navigation and keyboard behavior", () => {
     render(<Header />);
     const desktop = screen.getByRole("navigation", { name: "Main navigation" });
-    expect(within(desktop).queryByRole("link", { name: "Account" })).toBeNull();
+    expect(within(desktop).getByRole("link", { name: "Account" }).getAttribute("href")).toBe("/account");
     expect(within(desktop).getByRole("link", { name: /Wishlist/ })).toBeTruthy();
     expect(within(desktop).getByRole("link", { name: /Cart/ })).toBeTruthy();
     expect(within(desktop).getByRole("searchbox")).toBeTruthy();
@@ -32,7 +36,7 @@ describe("Sprint 156 launch-safe header", () => {
     const trigger = screen.getByRole("button", { name: "Toggle navigation menu" });
     fireEvent.click(trigger);
     const mobile = screen.getByRole("navigation", { name: "Mobile navigation" });
-    expect(within(mobile).queryByRole("link", { name: "Account" })).toBeNull();
+    expect(within(mobile).getByRole("link", { name: "Account" }).getAttribute("href")).toBe("/account");
     expect(within(mobile).getByRole("link", { name: /Wishlist/ })).toBeTruthy();
     expect(within(mobile).getByRole("link", { name: /Cart/ })).toBeTruthy();
     expect(within(mobile).getByRole("searchbox")).toBeTruthy();
@@ -44,14 +48,14 @@ describe("Sprint 156 launch-safe header", () => {
 });
 
 describe("Sprint 156 customer trust routes", () => {
-  it("presents /account as guest-commerce help without account-system affordances", () => {
+  it("presents working account entry points while preserving guest checkout", () => {
     const { container } = render(<AccountPage />);
     expect(screen.getByRole("heading", { name: "Customer Account" })).toBeTruthy();
     expect(screen.getByText(/guest checkout/i)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Customer Support at support@noctella.com/i }).getAttribute("href")).toBe("/contact");
-    expect(screen.getByRole("link", { name: "Browse the shop" }).getAttribute("href")).toBe("/shop");
+    expect(within(screen.getByRole("navigation", { name: "Account options" })).getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Continue with Google" })).toBeTruthy();
     expect(container.textContent).not.toMatch(/placeholder|sprint 1/i);
-    expect(container.textContent).not.toMatch(/log[ -]?in|register/i);
+    expect(screen.getByRole("link", { name: "Guest checkout" }).getAttribute("href")).toBe("/checkout");
   });
 
   it("provides an actionable support channel without an unfinished form promise", () => {

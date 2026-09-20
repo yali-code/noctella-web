@@ -5,6 +5,8 @@ import aiDraftsRouter from "./routes/aiDrafts";
 import aiProductIntakesRouter from "./routes/aiProductIntakes";
 import analyticsRouter from "./routes/analytics";
 import authRouter from "./routes/auth";
+import { createCustomerAuthRouter } from "./routes/customerAuth";
+import { createCustomerAccountRouter } from "./routes/customerAccount";
 import categoriesRouter from "./routes/categories";
 import shippingMethodsRouter from "./routes/shippingMethods";
 import collectionsRouter from "./routes/collections";
@@ -137,6 +139,9 @@ app.use("/api/public/collections", publicCollectionsRouter);
 // PUBLIC: login only. /logout and /me require requireAuth internally (see routes/auth.ts) -
 // this router can't be uniformly gated at the mount level since it mixes public and protected.
 app.use("/api/auth", authRouter);
+// Customer sessions are resolved inside their own router, never by the Admin gate below.
+app.use("/api/customer-auth", createCustomerAuthRouter(db));
+app.use("/api/customer-account", createCustomerAccountRouter(db));
 
 // PUBLIC: guest checkout, called directly by the anonymous storefront (no admin session).
 // Sprint 64C: split out of the administrative orders/payments routers (mounted below, behind
