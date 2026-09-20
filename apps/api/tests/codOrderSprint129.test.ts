@@ -136,6 +136,35 @@ describe("Sprint 129 COD order flow", () => {
     expect(await db.select().from(schema.backgroundJobs).where(eq(schema.backgroundJobs.productId, p.id))).toHaveLength(jobsBefore);
   });
 
+  it("Packet J links authenticated COD to the server-resolved Customer and denies cross-account draft replay", async () => {
+    const identity = await import("../src/services/customerIdentity");
+    const messages: string[] = [];
+    const sender = { sendVerification: async (_email: string, link: string) => { messages.push(link); }, sendPasswordReset: async () => undefined };
+    process.env.STOREFRONT_APP_ORIGIN = "https://storefront.example.test";
+    try {
+      for (const email of ["packet-j-a@example.test", "packet-j-b@example.test"]) {
+        await identity.registerCustomer(db, sender, { email, password: "strong-pass-123", name: email, termsAccepted: true });
+        await identity.verifyCustomerEmail(db, new URL(messages.at(-1)!).searchParams.get("token")!);
+      }
+      const a = await identity.loginCustomer(db, "packet-j-a@example.test", "strong-pass-123");
+      const b = await identity.loginCustomer(db, "packet-j-b@example.test", "strong-pass-123");
+      const aCustomer = (await identity.resolveCustomerSession(db, a.raw))!.customerId;
+      const firstProduct = await product("packet-j-a");
+      const body = intent("packet-j-auth-cod", [firstProduct.id]);
+      const placed = await request(app).post("/api/orders/cod").set("X-Forwarded-For", "10.0.129.199").set("Cookie", `noctella_customer_session=${a.raw}`).send(body);
+      expect(placed.status).toBe(201);
+      const [stored] = await db.select().from(schema.orders).where(eq(schema.orders.id, placed.body.id));
+      expect(stored.customerId).toBe(aCustomer);
+      const crossReplay = await request(app).post("/api/orders/cod").set("X-Forwarded-For", "10.0.129.200").set("Cookie", `noctella_customer_session=${b.raw}`).send(body);
+      expect(crossReplay.status).toBe(409);
+      const guestProduct = await product("packet-j-guest");
+      const guest = await postCod("10.0.129.201", { ...intent("packet-j-guest-cod", [guestProduct.id]), guestEmail: "packet-j-a@example.test" });
+      expect(guest.status).toBe(201);
+      const [guestStored] = await db.select().from(schema.orders).where(eq(schema.orders.id, guest.body.id));
+      expect(guestStored.customerId).toBeNull();
+    } finally { delete process.env.STOREFRONT_APP_ORIGIN; }
+  });
+
   it("restores inventory once on cancellation and enqueues synchronization only after commit", async () => {
     const p = await product("cancel");
     const created = await postCod("10.0.129.31", intent("cod-cancel", [p.id]));

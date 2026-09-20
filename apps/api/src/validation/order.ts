@@ -10,7 +10,7 @@ import {
 import { z } from "zod";
 
 /** Sprint 134: countryCode is additive/optional - existing callers that never send it are unaffected. Required string fields are trimmed before the length check so whitespace-only values (" ") are rejected, not merely absent values. */
-const addressSchema = z.object({
+export const addressSchema = z.object({
   fullName: z.string().trim().min(1),
   line1: z.string().trim().min(1),
   line2: z.string().optional(),

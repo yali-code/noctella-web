@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { customerApi } from "./api";
 import type { Address as CheckoutAddress } from "./checkout";
 import type { OrderDraft } from "./orderDraft";
 import type { PaymentSelection } from "./paymentSelection";
@@ -51,7 +51,7 @@ export function buildCreateOrderPayload(draft: OrderDraft, payment: PaymentSelec
 }
 
 export function createOrderFromPaidPayment(draft: OrderDraft, payment: PaymentSelection): Promise<CreateOrderResult> {
-  return api.post<CreateOrderResult>("/api/orders", buildCreateOrderPayload(draft, payment));
+  return customerApi.post<CreateOrderResult>("/api/orders", buildCreateOrderPayload(draft, payment));
 }
 
 /** Sprint 134: shippingMethodId/expectedShippingAmountEur are non-authoritative - the server always independently re-resolves the actual charged amount (see routes/ordersPublic.ts). */
@@ -69,7 +69,7 @@ export function buildCashOnDeliveryOrderPayload(draft: OrderDraft, shipping?: { 
 }
 
 export function createCashOnDeliveryOrder(draft: OrderDraft, shipping?: { shippingMethodId: string; expectedShippingAmountEur: number }): Promise<CreateOrderResult> {
-  return api.post<CreateOrderResult>("/api/orders/cod", buildCashOnDeliveryOrderPayload(draft, shipping));
+  return customerApi.post<CreateOrderResult>("/api/orders/cod", buildCashOnDeliveryOrderPayload(draft, shipping));
 }
 
 function isValidCreatedOrder(value: unknown): value is CreateOrderResult {

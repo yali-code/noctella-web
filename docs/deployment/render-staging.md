@@ -1,5 +1,26 @@
 # Render Staging Deployment Runbook
 
+## Packet J Customer accounts (configuration and smoke test; not a deployment authorization)
+
+Before enabling registration in staging, set the API-only `CUSTOMER_EMAIL_RESEND_API_KEY`,
+`CUSTOMER_EMAIL_FROM` (on a verified sender domain), and optional
+`CUSTOMER_EMAIL_FROM_NAME`. Confirm `STOREFRONT_APP_ORIGIN` is the single canonical HTTPS
+Storefront origin used in verification/reset links. For optional Google sign-in, set the
+API-only `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`; register that
+exact HTTPS callback in the Google OAuth client. Never expose the secret as `NEXT_PUBLIC_*`.
+Customer session cookies require HTTPS in production and use a separate HttpOnly cookie from
+Admin. Without email configuration, registration cannot deliver verification messages; without
+Google configuration, Google sign-in fails closed while email/password and guest checkout remain
+available.
+
+Staging smoke steps: register and verify using staging mail only; sign in/out; request and consume
+a reset link; confirm prior sessions are revoked; create/edit/delete a saved address; prefill and
+select it at checkout; place one authenticated and one guest COD order; confirm My Orders shows
+only the authenticated Customer's linked order. Check that a Customer cookie cannot access Admin
+and that an Admin cookie cannot access Customer APIs. Exercise Google with a staging OAuth client
+only after credentials and redirect are configured. No production identity or provider credentials
+are needed for local automated tests.
+
 Scope: the approved Render staging environment defined in `render.yaml`, Frankfurt region, six
 services (API, Admin, Storefront, background-job Cron, database-backup Cron, product-photo-backup
 Cron). This is **RC staging infrastructure, not

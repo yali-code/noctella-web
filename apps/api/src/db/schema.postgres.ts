@@ -737,9 +737,80 @@ export const customers = pgTable("customers", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
+export const customerProfiles = pgTable("customer_profiles", {
+  id: text("id").primaryKey().notNull(),
+  erpReferenceId: text("erp_reference_id"),
+  marketplaceBuyerId: text("marketplace_buyer_id"),
+  email: text("email"),
+  phone: text("phone"),
+  vatNumber: text("vat_number"),
+  name: text("name"),
+  status: text("status").notNull().default("Active"),
+  source: text("source").notNull().default("ERP"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [index("idx_customer_profiles_email").on(table.email)]);
 export const customerAddresses = pgTable("customer_addresses", {
   id: text("id").primaryKey().notNull(),
+  customerId: text("customer_id"),
+  type: text("type"),
+  name: text("name"),
+  line1: text("line1"),
+  line2: text("line2"),
+  city: text("city"),
+  region: text("region"),
+  postalCode: text("postal_code"),
+  country: text("country"),
+  countryCode: text("country_code"),
+  fingerprint: text("fingerprint"),
+  createdAt: text("created_at"),
+  updatedAt: text("updated_at"),
 });
+
+// Packet J identity tables are separate from the canonical business Customer.
+export const customerAccounts = pgTable("customer_accounts", {
+  id: text("id").primaryKey().notNull(),
+  customerId: text("customer_id").notNull().unique(),
+  normalizedEmail: text("normalized_email").notNull().unique(),
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: text("email_verified_at"),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+export const customerSessions = pgTable("customer_sessions", {
+  id: text("id").primaryKey().notNull(),
+  accountId: text("account_id").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  revokedAt: text("revoked_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_customer_sessions_account").on(table.accountId), index("idx_customer_sessions_expiry").on(table.expiresAt)]);
+export const customerSecurityTokens = pgTable("customer_security_tokens", {
+  id: text("id").primaryKey().notNull(),
+  accountId: text("account_id").notNull(),
+  purpose: text("purpose").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_customer_security_tokens_account").on(table.accountId, table.purpose), index("idx_customer_security_tokens_expiry").on(table.expiresAt)]);
+export const customerAuthProviders = pgTable("customer_auth_providers", {
+  id: text("id").primaryKey().notNull(),
+  accountId: text("account_id").notNull(),
+  provider: text("provider").notNull(),
+  subject: text("subject").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [uniqueIndex("idx_customer_auth_providers_subject").on(table.provider, table.subject), uniqueIndex("idx_customer_auth_providers_account").on(table.accountId, table.provider)]);
+export const customerOAuthAttempts = pgTable("customer_oauth_attempts", {
+  id: text("id").primaryKey().notNull(),
+  stateHash: text("state_hash").notNull().unique(),
+  nonce: text("nonce").notNull(),
+  codeVerifier: text("code_verifier").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_customer_oauth_attempts_expiry").on(table.expiresAt)]);
 
 export const customerConsents = pgTable("customer_consents", {
   id: text("id").primaryKey().notNull(),

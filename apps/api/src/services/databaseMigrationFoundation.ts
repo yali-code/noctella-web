@@ -15,6 +15,8 @@ requiredSprint24Tables.push("ai_product_intakes");
 requiredSprint24Tables.push("ai_intake_photos");
 // Sprint 93: AI Intake Field Review foundation - genuinely new table, registered for the same reason.
 requiredSprint24Tables.push("ai_intake_proposals");
+// Packet J: include identity tables in the existing structural migration audit.
+requiredSprint24Tables.push("customer_profiles", "customer_accounts", "customer_sessions", "customer_security_tokens", "customer_auth_providers", "customer_oauth_attempts");
 export type Difference = { table?: string; column?: string; kind: string; message: string };
 export type ParityResult = { status: "PASS"|"FAIL"; blocking: Difference[]; warnings: Difference[]; tables: { name: string; sqlite: boolean; postgres: boolean; columns: number }[]; checksum: string };
 function schemaSql(){ return fs.readFileSync(path.join(__dirname,"../db/schema.sql"),"utf8") + "\n" + fs.readFileSync(path.join(__dirname,"../db/schema.sqlite.ts"),"utf8"); }

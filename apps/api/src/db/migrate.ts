@@ -22,6 +22,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensurePurchasingTables(sqlite);
   ensureSalesFinanceBridgeTables(sqlite);
   ensureCustomerBridgeTables(sqlite);
+  ensureCustomerAccountTables(sqlite);
   ensureSprint25OutboxTables(sqlite);
   ensurePaymentColumns(sqlite);
   ensureAuthTables(sqlite);
@@ -39,6 +40,26 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketingTagsTables(sqlite);
   ensureCanonicalProductAiProposalsTable(sqlite);
   ensureProductLifecycleFoundation(sqlite);
+}
+
+/** Additive Packet J identity storage; business Customer and Admin sessions remain separate. */
+function ensureCustomerAccountTables(sqlite: Database.Database): void {
+  const addressColumns = new Set((sqlite.prepare("PRAGMA table_info(customer_addresses)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!addressColumns.has("country_code")) sqlite.exec("ALTER TABLE customer_addresses ADD COLUMN country_code TEXT");
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS customer_accounts (id TEXT PRIMARY KEY, customer_id TEXT NOT NULL UNIQUE REFERENCES customer_profiles(id), normalized_email TEXT NOT NULL UNIQUE, password_hash TEXT, email_verified_at TEXT, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS customer_sessions (id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES customer_accounts(id), token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, revoked_at TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_customer_sessions_account ON customer_sessions(account_id);
+CREATE INDEX IF NOT EXISTS idx_customer_sessions_expiry ON customer_sessions(expires_at);
+CREATE TABLE IF NOT EXISTS customer_security_tokens (id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES customer_accounts(id), purpose TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, consumed_at TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_customer_security_tokens_account ON customer_security_tokens(account_id, purpose);
+CREATE INDEX IF NOT EXISTS idx_customer_security_tokens_expiry ON customer_security_tokens(expires_at);
+CREATE TABLE IF NOT EXISTS customer_auth_providers (id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES customer_accounts(id), provider TEXT NOT NULL, subject TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_auth_providers_subject ON customer_auth_providers(provider, subject);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_auth_providers_account ON customer_auth_providers(account_id, provider);
+CREATE TABLE IF NOT EXISTS customer_oauth_attempts (id TEXT PRIMARY KEY, state_hash TEXT NOT NULL UNIQUE, nonce TEXT NOT NULL, code_verifier TEXT NOT NULL, expires_at TEXT NOT NULL, consumed_at TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_customer_oauth_attempts_expiry ON customer_oauth_attempts(expires_at);
+  `);
 }
 
 /** Sprint 149 Checkpoint 1: additive, rerunnable local Pause foundation. */

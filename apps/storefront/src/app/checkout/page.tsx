@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { resolveApiAssetUrl } from "@/lib/api";
+import { customerApi, resolveApiAssetUrl } from "@/lib/api";
 import { cartEurSubtotal, cartUsdSubtotal } from "@/lib/cart";
 import { CartFreshnessBlocker, useCartFreshness } from "@/components/CartFreshness";
 import {
@@ -24,10 +24,41 @@ export default function CheckoutPage() {
   const cartItems = freshness.items;
   const [draft, setDraft] = useState<CheckoutDraft>(emptyCheckoutDraft);
   const [errors, setErrors] = useState<CheckoutFormErrors>({});
+  const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; type: string; fullName: string; line1: string; line2?: string; city: string; region?: string; postalCode: string; country: string; countryCode: string }>>([]);
+  const [saveAddress, setSaveAddress] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [accountNotice, setAccountNotice] = useState("");
 
   useEffect(() => {
     setDraft(getCheckoutDraft());
+    void (async () => {
+      try {
+        const [profile, addresses] = await Promise.all([
+          customerApi.get<{ email: string; name: string | null; phone: string | null }>("/api/customer-account/profile"),
+          customerApi.get<{ items: typeof savedAddresses }>("/api/customer-account/addresses"),
+        ]);
+        setSavedAddresses(addresses.items);
+        setAuthenticated(true);
+        setDraft((current) => {
+          const preferred = addresses.items.find((item) => item.type === "Shipping" && item.line1 && item.city && item.postalCode && item.country && /^[A-Z]{2}$/i.test(item.countryCode ?? ""));
+          const parts = (profile.name ?? "").trim().split(/\s+/);
+          return {
+            ...current,
+            contact: { ...current.contact, email: current.contact.email || profile.email, phone: current.contact.phone || profile.phone || "" },
+            customer: { ...current.customer, firstName: current.customer.firstName || parts[0] || "", lastName: current.customer.lastName || parts.slice(1).join(" ") },
+            shippingAddress: preferred && !current.shippingAddress.line1 ? { line1: preferred.line1, line2: preferred.line2 ?? "", city: preferred.city, state: preferred.region ?? "", postalCode: preferred.postalCode, country: preferred.country, countryCode: preferred.countryCode } : current.shippingAddress,
+          };
+        });
+      } catch { /* Anonymous checkout remains fully usable. */ }
+    })();
   }, []);
+
+  function selectSavedAddress(id: string, target: "shipping" | "billing") {
+    const selected = savedAddresses.find((item) => item.id === id);
+    if (!selected) return;
+    const value: Address = { line1: selected.line1, line2: selected.line2 ?? "", city: selected.city, state: selected.region ?? "", postalCode: selected.postalCode, country: selected.country, countryCode: selected.countryCode };
+    setDraft((current) => target === "shipping" ? { ...current, shippingAddress: value } : { ...current, billingSameAsShipping: false, billingAddress: value });
+  }
 
   function updateContact(field: "email" | "phone", value: string) {
     setDraft((prev) => ({ ...prev, contact: { ...prev.contact, [field]: value } }));
@@ -52,12 +83,23 @@ export default function CheckoutPage() {
     setDraft((prev) => ({ ...prev, billingSameAsShipping: checked }));
   }
 
-  function handleContinue(e: React.FormEvent) {
+  async function handleContinue(e: React.FormEvent) {
     e.preventDefault();
     const validationErrors = validateCheckoutDraft(draft);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
+    if (saveAddress) {
+      try {
+        await customerApi.post("/api/customer-account/addresses", {
+          type: "Shipping", fullName: `${draft.customer.firstName} ${draft.customer.lastName}`.trim(),
+          line1: draft.shippingAddress.line1, line2: draft.shippingAddress.line2,
+          city: draft.shippingAddress.city, region: draft.shippingAddress.state,
+          postalCode: draft.shippingAddress.postalCode, country: draft.shippingAddress.country,
+          countryCode: draft.shippingAddress.countryCode,
+        });
+      } catch { setAccountNotice("Your address could not be saved. Please retry or turn off Save address to continue."); return; }
+    }
     saveCheckoutDraft(draft);
     router.push("/checkout/review");
   }
@@ -135,7 +177,14 @@ export default function CheckoutPage() {
           </Section>
 
           <Section title="Shipping Address">
+            {savedAddresses.some((item) => item.type === "Shipping") && <label>Use a saved shipping address
+              <select defaultValue="" onChange={(event) => selectSavedAddress(event.target.value, "shipping")}>
+                <option value="">Enter manually</option>
+                {savedAddresses.filter((item) => item.type === "Shipping").map((item) => <option key={item.id} value={item.id}>{item.line1}, {item.city}</option>)}
+              </select>
+            </label>}
             <AddressFields address={draft.shippingAddress} errors={errors.shippingAddress} onChange={updateShipping} />
+            {authenticated && <label><input type="checkbox" checked={saveAddress} onChange={(event) => setSaveAddress(event.target.checked)} /> Save this address to my account</label>}
           </Section>
 
           <Section title="Billing">
@@ -148,11 +197,19 @@ export default function CheckoutPage() {
               Billing address same as shipping
             </label>
             {!draft.billingSameAsShipping && (
+              <>
+              {savedAddresses.some((item) => item.type === "Billing") && <label>Use a saved billing address
+                <select defaultValue="" onChange={(event) => selectSavedAddress(event.target.value, "billing")}>
+                  <option value="">Enter manually</option>
+                  {savedAddresses.filter((item) => item.type === "Billing").map((item) => <option key={item.id} value={item.id}>{item.line1}, {item.city}</option>)}
+                </select>
+              </label>}
               <AddressFields
                 address={draft.billingAddress ?? emptyAddress}
                 errors={errors.billingAddress}
                 onChange={updateBilling}
               />
+              </>
             )}
           </Section>
 
@@ -166,6 +223,7 @@ export default function CheckoutPage() {
             </Field>
           </Section>
 
+          {accountNotice && <p role="alert">{accountNotice}</p>}
           <button type="submit" style={primaryButtonStyle}>
             Continue to Review
           </button>
