@@ -423,6 +423,20 @@ export const marketplaceConnections = pgTable("marketplace_connections", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [uniqueIndex("idx_marketplace_connections_channel_account").on(table.channel, table.accountLabel)]);
+export const instagramPublishAttempts = pgTable("instagram_publish_attempts", {
+  id: text("id").primaryKey().notNull(),
+  connectionId: text("connection_id").notNull().references(() => marketplaceConnections.id),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  caption: text("caption").notNull(),
+  mediaUrl: text("media_url").notNull(),
+  containerId: text("container_id"),
+  publishedMediaId: text("published_media_id"),
+  status: text("status").notNull(),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+}, (table) => [index("idx_instagram_attempts_connection").on(table.connectionId, table.createdAt)]);
 
 export const publishJobs = pgTable("publish_jobs", {
   id: text("id").primaryKey().notNull(),
