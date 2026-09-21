@@ -14,6 +14,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketplaceColumns(sqlite);
   ensureOrderColumns(sqlite);
   ensureMarketplacePublishTables(sqlite);
+  ensureInstagramPublishAttempts(sqlite);
   ensureMarketplaceSyncTables(sqlite);
   ensureStockSyncTables(sqlite);
   ensureShippingTables(sqlite);
@@ -40,6 +41,27 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketingTagsTables(sqlite);
   ensureCanonicalProductAiProposalsTable(sqlite);
   ensureProductLifecycleFoundation(sqlite);
+}
+
+/** Additive only. No migration is executed by creating this source file. */
+function ensureInstagramPublishAttempts(sqlite: Database.Database): void {
+  sqlite.exec(`
+CREATE TABLE IF NOT EXISTS instagram_publish_attempts (
+  id TEXT PRIMARY KEY,
+  connection_id TEXT NOT NULL REFERENCES marketplace_connections(id),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  caption TEXT NOT NULL,
+  media_url TEXT NOT NULL,
+  container_id TEXT,
+  published_media_id TEXT,
+  status TEXT NOT NULL,
+  last_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  published_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_instagram_attempts_connection ON instagram_publish_attempts(connection_id, created_at);
+  `);
 }
 
 /** Additive Packet J identity storage; business Customer and Admin sessions remain separate. */
