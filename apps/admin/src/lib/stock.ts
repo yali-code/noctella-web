@@ -14,9 +14,10 @@ export async function listStockProducts(page = 1, pageSize = 50): Promise<Pagina
   return api.get<PaginatedResult<ProductListItem>>(`/api/products?page=${page}&pageSize=${pageSize}`);
 }
 
-export async function listStockMovements(productId?: string): Promise<PaginatedResult<StockMovement>> {
+export async function listStockMovements(productId?: string, page = 1): Promise<PaginatedResult<StockMovement>> {
   const params = new URLSearchParams({ pageSize: "100" });
   if (productId) params.set("productId", productId);
+  if (page !== 1) params.set("page", String(page));
   return api.get<PaginatedResult<StockMovement>>(`/api/stock-movements?${params.toString()}`);
 }
 

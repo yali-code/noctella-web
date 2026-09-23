@@ -1,4 +1,19 @@
 import { ApiError } from "./api";
+import type { Purchase, PurchaseLine, PurchaseAllocation, Supplier, LandedCostSummary } from "@noctella/shared";
+
+export interface ProductPurchaseHistory {
+  productId: string;
+  items: Array<{
+    purchase: Purchase;
+    supplier: Supplier | null;
+    purchaseLine: PurchaseLine;
+    allocation: PurchaseAllocation | null;
+    landedCost?: LandedCostSummary["lines"][number];
+    receiptStatus: string;
+    sourceReferences: Pick<Purchase, "erpReferenceId" | "externalReference" | "invoiceReferenceNumber">;
+    dates: Pick<Purchase, "orderedAt" | "receivedAt">;
+  }>;
+}
 export const allocationMethodLabels: Record<string,string> = { Equal:"Equal split", ByItemCost:"By item cost", ByQuantity:"By quantity", ByWeight:"By weight", Manual:"Manual" };
 export function redactSafeError(input: unknown) { return JSON.stringify(input ?? {}).replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+/gi,"[redacted-email]").replace(/\b\+?[0-9][0-9 .-]{7,}\b/g,"[redacted-phone]"); }
 export function mapSupplier(row:any){ return { id:row.id, name:row.name, status:row.status, type:row.supplierType, location:[row.countryCode,row.city].filter(Boolean).join(" / "), erpReferenceId:row.erpReferenceId ?? "—", purchaseCount:row.purchaseCount ?? 0, lastPurchase:row.lastPurchaseAt ?? "—", href:`/suppliers/${row.id}` }; }
@@ -40,6 +55,7 @@ async function erpPost<T>(path: string, idempotencyKey: string, payload: unknown
 }
 
 export const purchasingApi = {
+  productPurchaseHistory: (id: string) => erpGet<ProductPurchaseHistory>(`/api/erp/products/${encodeURIComponent(id)}/purchase-history`),
   suppliers: (q="") => erpGet<any>(`/api/erp/suppliers${q?`?${q}`:""}`),
   supplier: (id:string) => erpGet<any>(`/api/erp/suppliers/${id}`),
   purchases: (q="") => erpGet<any>(`/api/erp/purchases${q?`?${q}`:""}`),
