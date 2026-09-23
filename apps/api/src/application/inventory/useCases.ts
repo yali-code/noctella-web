@@ -343,12 +343,13 @@ export const createInitializeInventoryUseCase = (
             repositories.inventoryRepositories.stockMovements.append({
               id: ctx.idGenerator.newId(), productId: input.productId,
               type: StockMovementType.ManualAdjustment, quantityDelta: input.quantity,
-              stockBefore: p.stockQuantity, stockAfter: input.quantity,
+              // Initialization records the full opening balance, not a change to the Product's pre-populated quantity.
+              stockBefore: 0, stockAfter: input.quantity,
               orderId: null, orderItemId: null, note: input.note ?? null,
               idempotencyKey: input.idempotencyKey ?? null, createdAt: t, updatedAt: t,
             }),
             () => {
-              meta = { before: p.stockQuantity, after: input.quantity, time: t };
+              meta = { before: 0, after: input.quantity, time: t };
               return inv(state);
             },
           ));
@@ -405,7 +406,8 @@ export function initializeInventoryInTransactionUseCase(
           (state) => chain(repositories.stockMovements.append({
             id: ctx.idGenerator.newId(), productId: input.productId,
             type: StockMovementType.ManualAdjustment, quantityDelta: input.quantity,
-            stockBefore: p.stockQuantity, stockAfter: input.quantity,
+            // Product creation has already persisted the quantity; its opening audit balance still starts at zero.
+            stockBefore: 0, stockAfter: input.quantity,
             orderId: null, orderItemId: null, note: input.note ?? null,
             idempotencyKey: input.idempotencyKey ?? null, createdAt: t, updatedAt: t,
           }), (created) => Object.freeze({ inventory: inv(state), movement: movement(created), replayed: false })),

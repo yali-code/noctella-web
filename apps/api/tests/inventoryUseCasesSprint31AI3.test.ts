@@ -8,6 +8,36 @@ function ctx(seed:P={}){ const products=new Map<string,P>(); const movements:P[]
 const base={id:"p1",sku:"SKU1",title:"T",slug:"t",type:ProductType.UniqueItem,status:ProductStatus.Draft,stockQuantity:5,priceEur:10,purchaseCost:null,purchaseCurrency:"EUR",categoryId:null,collectionId:null,createdAt:t,updatedAt:t,marketplace:Object.freeze({})};
 
 describe("Sprint 31A-I3 inventory use cases",()=>{
+ test.each([0, 1, 7])("standalone initialization audits quantity %s from zero and replays without mutation", async (quantity) => {
+   const x = ctx({ product: { ...base, stockQuantity: 1 } });
+   const publish = vi.fn(async () => {});
+   const input = { productId: "p1", quantity, note: "initial stock", idempotencyKey: "initial" };
+   const initialize = uc.createInitializeInventoryUseCase({ ...x.c, eventPublisher: { publish } });
+   await expect(initialize.execute(input)).resolves.toMatchObject({ quantity });
+   expect(x.products.get("p1").stockQuantity).toBe(quantity);
+   expect(x.movements).toHaveLength(1);
+   expect(x.movements[0]).toMatchObject({ type: StockMovementType.ManualAdjustment, stockBefore: 0, quantityDelta: quantity, stockAfter: quantity, note: input.note, idempotencyKey: input.idempotencyKey });
+   expect(x.movements[0].stockBefore + x.movements[0].quantityDelta).toBe(x.movements[0].stockAfter);
+   expect(publish).toHaveBeenCalledWith(expect.objectContaining({ name: "inventory.stock.initialized", payload: expect.objectContaining({ stockBefore: 0, quantityDelta: quantity, stockAfter: quantity }) }));
+   const original = { ...x.movements[0] };
+   await expect(initialize.execute(input)).resolves.toMatchObject({ quantity });
+   expect(x.movements).toEqual([original]);
+   expect(x.products.get("p1").stockQuantity).toBe(quantity);
+   expect(x.repos.inventory.create).toHaveBeenCalledTimes(1);
+ });
+ test.each([0, 1, 7])("transaction initialization audits pre-populated quantity %s from zero and replays without mutation", async (quantity) => {
+   const x = ctx({ product: { ...base, stockQuantity: quantity } });
+   const input = { productId: "p1", quantity, note: "Product creation stock quantity", idempotencyKey: "product-create-stock:p1" };
+   const first = await uc.initializeInventoryInTransactionUseCase(x.c, x.repos, input);
+   expect(first).toMatchObject({ replayed: false, inventory: { quantity }, movement: { type: StockMovementType.ManualAdjustment, stockBefore: 0, quantityDelta: quantity, stockAfter: quantity, note: input.note, idempotencyKey: input.idempotencyKey } });
+   expect(first.movement.stockBefore + first.movement.quantityDelta).toBe(first.movement.stockAfter);
+   expect(x.products.get("p1").stockQuantity).toBe(quantity);
+   const replay = await uc.initializeInventoryInTransactionUseCase(x.c, x.repos, input);
+   expect(replay).toMatchObject({ replayed: true, inventory: { quantity }, movement: first.movement });
+   expect(x.movements).toEqual([first.movement]);
+   expect(x.repos.inventory.updateWithVersion).toHaveBeenCalledTimes(1);
+   expect(x.products.get("p1").stockQuantity).toBe(quantity);
+ });
  test("create product minimum",async()=>{const x=ctx(); await expect(uc.createProductUseCase(x.c).execute({sku:"SKU1",title:"T",slug:"t",type:ProductType.UniqueItem,status:ProductStatus.Draft,priceEur:1})).resolves.toMatchObject({id:"id-1",purchaseCurrency:"EUR"}); expect(x.uow.run).toHaveBeenCalledTimes(1);});
  test("create product generated ID and clock",async()=>{const x=ctx(); const p=await uc.createProductUseCase(x.c).execute({sku:"SKU1",title:"T",slug:"t",type:"unique",status:ProductStatus.Draft,priceEur:1}); expect(p).toMatchObject({id:"id-1",createdAt:t,updatedAt:t});});
  test("marketplace metadata optional",async()=>{const x=ctx(); const p=await uc.createProductUseCase(x.c).execute({sku:"SKU1",title:"T",slug:"t",type:"unique",status:ProductStatus.Draft,priceEur:1}); expect(p.marketplace.ebayTitle).toBeNull();});
