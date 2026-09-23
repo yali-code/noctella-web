@@ -17,6 +17,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      // Tests execute server components outside Next's react-server module condition.
+      "server-only": "next/dist/compiled/server-only/empty.js",
       "@": path.resolve(__dirname, "./src"),
     },
   },
