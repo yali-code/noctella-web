@@ -2,7 +2,8 @@
 
 import { useParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { createStockAdjustment, listStockMovements } from "@/lib/stock";
+import { createStockAdjustment } from "@/lib/stock";
+import { allStockMovements } from "@/lib/stockDashboard";
 import type { StockMovement } from "@noctella/shared";
 
 export default function ProductStockPage() {
@@ -12,7 +13,7 @@ export default function ProductStockPage() {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => listStockMovements(productId).then((res) => setItems(res.items)).catch((err) => setError(err.message)), [productId]);
+  const load = useCallback(() => allStockMovements(productId).then(setItems).catch((err) => setError(err.message)), [productId]);
   useEffect(() => { load(); }, [load]);
 
   async function submit(event: FormEvent) {

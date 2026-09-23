@@ -61,6 +61,9 @@ describe("erp purchasing bridge network behavior (Sprint 57B)", () => {
     expect(fetchSpy).toHaveBeenCalledWith("/api/erp/purchases/p1");
     await purchasingApi.landed("p1");
     expect(fetchSpy).toHaveBeenCalledWith("/api/erp/purchases/p1/landed-cost");
+    await purchasingApi.productPurchaseHistory("p/1");
+    expect(fetchSpy).toHaveBeenLastCalledWith("/api/erp/products/p%2F1/purchase-history");
+    expect(fetchSpy.mock.calls.at(-1)).toHaveLength(1); // No client-side credential/header argument.
   });
 
   it("createSupplier posts a command envelope to the same-origin proxy with a generated idempotency key", async () => {
