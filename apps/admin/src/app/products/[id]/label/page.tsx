@@ -88,6 +88,15 @@ export default function ProductLabelPage({ params }: { params: { id: string } })
     <div>
       <style>{`
         @media print {
+          .noctella-admin-sidebar { display: none !important; }
+          .noctella-admin-shell {
+            display: block !important;
+            min-height: 0 !important;
+          }
+          .noctella-admin-main {
+            flex: none !important;
+            padding: 0 !important;
+          }
           .noctella-label-screen-only { display: none !important; }
           .noctella-label-print {
             position: fixed;
@@ -96,7 +105,8 @@ export default function ProductLabelPage({ params }: { params: { id: string } })
             width: 60mm;
             height: 40mm;
             margin: 0;
-            padding: 3mm;
+            padding: 3mm !important;
+            box-sizing: border-box;
           }
         }
       `}</style>

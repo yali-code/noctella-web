@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { ApiError, api } from "@/lib/api";
 import ProductLabelPage from "./page";
+import { AdminShell } from "@/components/layout/AdminShell";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/products/product-9/label" }));
+vi.mock("@/components/auth/LogoutControl", () => ({ LogoutControl: () => null }));
 
 const barcodeCalls: unknown[][] = [];
 vi.mock("jsbarcode", () => ({
@@ -58,6 +62,54 @@ function categoriesWithSlug(slug: string) {
 }
 
 describe("Product Stock Label page (Sprint 137)", () => {
+  it("isolates label printing from the shared Admin shell without changing screen layout", async () => {
+    mockLoads();
+    const { container } = render(<AdminShell><ProductLabelPage params={{ id: "product-9" }} /></AdminShell>);
+    await screen.findByText("Canon Camera");
+
+    const sidebar = screen.getByRole("navigation");
+    const main = screen.getByRole("main");
+    const shell = main.parentElement!;
+    expect(sidebar).toHaveClass("noctella-admin-sidebar");
+    expect(sidebar).toBeVisible();
+    expect(main).toHaveStyle({ padding: "32px", flex: "1" });
+    expect(shell).toHaveStyle({ display: "flex", minHeight: "100vh" });
+
+    // jsdom does not paginate print output; verify the actual print CSS rules
+    // against the rendered shared shell, including overrides of its inline styles.
+    const sheet = container.querySelector("style")!.sheet!;
+    expect(sheet.cssRules).toHaveLength(1);
+    const print = sheet.cssRules[0] as CSSMediaRule;
+    expect(print.conditionText).toBe("print");
+    const rules = Array.from(print.cssRules) as CSSStyleRule[];
+    function ruleFor(element: Element) {
+      const rule = rules.find((rule) => element.matches(rule.selectorText));
+      expect(rule).toBeDefined();
+      return rule!.style;
+    }
+    function important(element: Element, property: string, value: string) {
+      const style = ruleFor(element);
+      expect(style.getPropertyValue(property)).toBe(value);
+      expect(style.getPropertyPriority(property)).toBe("important");
+    }
+    important(sidebar, "display", "none");
+    important(shell, "display", "block");
+    important(shell, "min-height", "0px");
+    important(main, "flex", "0 0 auto");
+    important(main, "padding", "0px");
+    for (const element of container.querySelectorAll(".noctella-label-screen-only")) {
+      important(element, "display", "none");
+    }
+    const label = screen.getByRole("img", { name: "Barcode for SKU NOC-000123" }).parentElement!;
+    const labelStyle = ruleFor(label);
+    expect(labelStyle.getPropertyValue("position")).toBe("fixed");
+    expect(labelStyle.getPropertyValue("width")).toBe("60mm");
+    expect(labelStyle.getPropertyValue("height")).toBe("40mm");
+    expect(labelStyle.getPropertyValue("box-sizing")).toBe("border-box");
+    important(label, "padding", "3mm");
+    expect(label).not.toContainElement(sidebar);
+  });
+
   it("fetches fresh authoritative Product data from GET /api/products/:id - never trusts stale local state", async () => {
     const getSpy = mockLoads();
     render(<ProductLabelPage params={{ id: "product-9" }} />);

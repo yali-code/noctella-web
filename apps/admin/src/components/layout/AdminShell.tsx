@@ -19,9 +19,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div className="noctella-admin-shell" style={{ display: "flex", minHeight: "100vh" }}>
       <nav
-        className="noctella-panel"
+        className="noctella-panel noctella-admin-sidebar"
         style={{
           width: 240,
           flexShrink: 0,
@@ -51,7 +51,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </ul>
         <LogoutControl />
       </nav>
-      <main style={{ flex: 1, padding: 32 }}>{children}</main>
+      <main className="noctella-admin-main" style={{ flex: 1, padding: 32 }}>{children}</main>
     </div>
   );
 }
