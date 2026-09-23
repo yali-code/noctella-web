@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AiIntakeFieldDecision, AiProductIntakeStatus, ProductStatus, ProductType } from "@noctella/shared";
+import { AiIntakeFieldDecision, AiProductIntakeStatus, ProductStatus, ProductType, StockMovementType } from "@noctella/shared";
 import {
   AiIntakeApplyIntakeNotOpenError,
   AiIntakeApplyPhotoSetStaleError,
@@ -186,6 +186,39 @@ describe("AI Intake Stock Acceptance (Sprint 106)", () => {
       const movements = await db.select().from(stockMovements);
       expect(movements).toHaveLength(1);
       expect(movements[0].productId).toBe(result.product.id);
+      expect(movements[0]).toMatchObject({
+        type: StockMovementType.ManualAdjustment,
+        quantityDelta: 1, stockBefore: 0, stockAfter: 1,
+        note: "Product creation stock quantity",
+        idempotencyKey: `product-create-stock:${result.product.id}`,
+      });
+      expect(movements[0].stockBefore + movements[0].quantityDelta).toBe(movements[0].stockAfter);
+      expect((await db.select().from(products))[0].stockQuantity).toBe(1);
+      const replay = await acceptAiIntakeIntoStock(db as any, intakeId, validRequest({ expectedProposalUpdatedAt: proposal.updatedAt }) as any, "admin-3");
+      expect(replay.created).toBe(false);
+      expect(replay.product).toMatchObject({ id: result.product.id, stockQuantity: 1 });
+      expect(await db.select().from(stockMovements)).toEqual(movements);
+    });
+
+    it("explicit initial lot quantity is audited from zero and remains unchanged on replay", async () => {
+      const proposal = await readyIntake();
+      const request = validRequest({ expectedProposalUpdatedAt: proposal.updatedAt, type: ProductType.LotItem, stockQuantity: 7 });
+      const result = await acceptAiIntakeIntoStock(db as any, intakeId, request as any, "admin-3");
+      expect(result.product.stockQuantity).toBe(7);
+      expect((await db.select().from(products))[0].stockQuantity).toBe(7);
+      const movements = await db.select().from(stockMovements);
+      expect(movements).toHaveLength(1);
+      expect(movements[0]).toMatchObject({
+        productId: result.product.id, type: StockMovementType.ManualAdjustment,
+        quantityDelta: 7, stockBefore: 0, stockAfter: 7,
+        note: "Product creation stock quantity",
+        idempotencyKey: `product-create-stock:${result.product.id}`,
+      });
+      expect(movements[0].stockBefore + movements[0].quantityDelta).toBe(movements[0].stockAfter);
+      const replay = await acceptAiIntakeIntoStock(db as any, intakeId, request as any, "admin-3");
+      expect(replay.created).toBe(false);
+      expect(replay.product).toMatchObject({ id: result.product.id, stockQuantity: 7 });
+      expect(await db.select().from(stockMovements)).toEqual(movements);
     });
 
     it("Sprint 138: stockQuantity omitted for a non-UniqueItem type also defaults to 1, never 0", async () => {

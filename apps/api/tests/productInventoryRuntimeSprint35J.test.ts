@@ -33,7 +33,12 @@ describe("Sprint 35J product write Inventory runtime migration", () => {
     const movements = await db.select().from(schema.stockMovements);
     expect(product.stockQuantity).toBe(4);
     expect(movements).toHaveLength(1);
-    expect(movements[0]).toMatchObject({ productId: product.id, stockAfter: 4 });
+    expect(movements[0]).toMatchObject({
+      productId: product.id, type: "manual_adjustment", stockBefore: 0, quantityDelta: 4, stockAfter: 4,
+      note: "Product creation stock quantity", idempotencyKey: `product-create-stock:${product.id}`,
+    });
+    expect(movements[0].stockBefore + movements[0].quantityDelta).toBe(movements[0].stockAfter);
+    expect((await db.select().from(schema.products).where(eq(schema.products.id, product.id)))[0].stockQuantity).toBe(4);
   });
 
   test("metadata-only update creates no movement", async () => {
