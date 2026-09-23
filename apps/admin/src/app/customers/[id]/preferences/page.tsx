@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-import { customerApi } from "../../../../lib/erpCustomerBridge";
+import { customerApi } from "../../../../lib/server/erpCustomerServer";
 export default async function CustomerPreferencesPage({params}:{params:{id:string}}){
   let p: any = null;
   let error: string | null = null;

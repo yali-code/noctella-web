@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
-import { customerApi, mapCustomer } from "../../lib/erpCustomerBridge";
+import { mapCustomer } from "../../lib/erpCustomerBridge";
+import { customerApi } from "../../lib/server/erpCustomerServer";
 export default async function CustomersPage(){
   let data: any = { items: [] };
   let error: string | null = null;

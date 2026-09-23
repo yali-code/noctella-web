@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
-import { customerApi, mapTimelineItem } from "../../../../lib/erpCustomerBridge";
+import { mapTimelineItem } from "../../../../lib/erpCustomerBridge";
+import { customerApi } from "../../../../lib/server/erpCustomerServer";
 export default async function CustomerTimelinePage({params}:{params:{id:string}}){
   let data: any = { items: [] };
   let error: string | null = null;

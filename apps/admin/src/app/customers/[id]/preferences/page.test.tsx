@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import * as bridge from "@/lib/erpCustomerBridge";
+import * as bridge from "@/lib/server/erpCustomerServer";
 import CustomerPreferencesPage from "./page";
 
 afterEach(() => vi.restoreAllMocks());
