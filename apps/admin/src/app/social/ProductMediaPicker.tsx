@@ -52,7 +52,7 @@ export function ProductMediaPicker({ productId, mediaIds, onChange }: {
     <div style={grid}>{photos.map((photo) => <label key={photo.id} className="noctella-panel" style={{ padding: 12, outline: mediaIds.includes(photo.id) ? "2px solid var(--noctella-bright-star-gold)" : undefined }}>
       <img src={resolveApiAssetUrl(photo.thumbnailUrl || photo.url)} alt={photo.altText || selected?.title || "Product photo"} style={{ width: "100%", height: 150, objectFit: "contain" }} />
       <input type="checkbox" aria-label={`Select photo ${photo.id}`} checked={mediaIds.includes(photo.id)} disabled={!mediaIds.includes(photo.id) && mediaIds.length >= 10}
-        onChange={() => onChange(productId, mediaIds.includes(photo.id) ? mediaIds.filter((id) => id !== photo.id) : [...mediaIds, photo.id])} /> Selected
+        onChange={() => onChange(productId, mediaIds.includes(photo.id) ? mediaIds.filter((id) => id !== photo.id) : [...mediaIds, photo.id])} /> {mediaIds.includes(photo.id) ? "Selected" : "Select"}
     </label>)}</div>
     <p>{mediaIds.length} photos selected (maximum 10).</p>
   </section>;

@@ -63,6 +63,24 @@ describe("Social Manager", () => {
     expect(socialContentApi.transition).not.toHaveBeenCalled();
     expect(screen.queryByLabelText(/account/i)).not.toBeInTheDocument();
   });
+  it("keeps the photo label and count in sync when selecting and deselecting", async () => {
+    render(<ContentEditor initialProductId="p1" />);
+    const checkbox = await screen.findByRole("checkbox", { name: "Select photo photo1" });
+    const card = checkbox.closest("label");
+    expect(checkbox).not.toBeChecked();
+    expect(card).toHaveTextContent(/^Select$/);
+    expect(screen.getByText("0 photos selected (maximum 10).")).toBeInTheDocument();
+
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(card).toHaveTextContent(/^Selected$/);
+    expect(screen.getByText("1 photos selected (maximum 10).")).toBeInTheDocument();
+
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(card).toHaveTextContent(/^Select$/);
+    expect(screen.getByText("0 photos selected (maximum 10).")).toBeInTheDocument();
+  });
   it("edits a draft and submits the saved version explicitly", async () => {
     render(<ContentEditor id="content1" />);
     fireEvent.change(await screen.findByLabelText("Caption"), { target: { value: "Edited caption" } });
