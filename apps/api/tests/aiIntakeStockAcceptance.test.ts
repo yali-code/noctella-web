@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { stockAcceptanceSchema } from "../src/validation/aiIntakeStockAcceptance";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AiIntakeFieldDecision, AiProductIntakeStatus, ProductStatus, ProductType, StockMovementType } from "@noctella/shared";
@@ -20,7 +21,7 @@ import { stockAcceptanceUseCase, type StockAcceptanceInput } from "../src/use-ca
 import { createAiIntakeApplyTransactionCapabilityForDb } from "../src/services/aiIntakeApplyTransactionCapabilityForDb";
 import type { AiIntakeGenerationProvider } from "../src/ai-intake/types";
 import type { AiIntakePhotoStorage } from "../src/services/aiIntakePhotoStorage";
-import { products, stockMovements, productPhotos, productSkuSequence } from "../src/db/schema";
+import { products, stockMovements, productPhotos, productSkuSequence, productErpMetadata, outboxEvents, suppliers, purchases, purchaseLines, purchaseReceipts } from "../src/db/schema";
 import * as sqliteSchema from "../src/db/schema.sqlite";
 import { ensureSchema } from "../src/db/migrate";
 import { createTestDb } from "./testDb";
@@ -83,6 +84,80 @@ describe("AI Intake Stock Acceptance (Sprint 106)", () => {
     const generated = await generateIntakeProposal(db as any, intakeId, stubProvider(suggestions));
     return updateProposalFieldReview(db as any, intakeId, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
   }
+
+  describe("optional operational acquisition", () => {
+    const metadata = { purchaseSource: "Kleinanzeigen", auctionHouse: "Example Auction", invoiceReferenceNumber: "REF-123", provenance: "Private collection", previousOwner: "Estate seller" };
+
+    it.each([1, 7])("commits acquisition with one coherent opening movement for quantity %i", async (quantity) => {
+      const proposal = await readyIntake();
+      const result = await acceptAiIntakeIntoStock(db, intakeId, validRequest({
+        expectedProposalUpdatedAt: proposal.updatedAt, priceEur: undefined,
+        type: quantity === 1 ? ProductType.UniqueItem : ProductType.LotItem,
+        stockQuantity: quantity === 1 ? undefined : quantity, purchaseCost: 25, ...metadata,
+      }), "admin-3");
+      expect(result.product).toMatchObject({ purchaseCost: 25, purchaseCurrency: "EUR", stockQuantity: quantity, priceEur: null });
+      const rows = await db.select().from(productErpMetadata);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ productId: result.product.id, ...metadata });
+      expect(Object.fromEntries(Object.entries(rows[0]).filter(([key, value]) => value != null && !["productId", "createdAt", "updatedAt"].includes(key)))).toEqual(metadata);
+      const movements = await db.select().from(stockMovements);
+      expect(movements).toHaveLength(1);
+      expect(movements[0]).toMatchObject({ type: StockMovementType.ManualAdjustment, stockBefore: 0, quantityDelta: quantity, stockAfter: quantity, note: "Product creation stock quantity", idempotencyKey: `product-create-stock:${result.product.id}` });
+      expect(movements[0].stockBefore + movements[0].quantityDelta).toBe(movements[0].stockAfter);
+      for (const table of [suppliers, purchases, purchaseLines, purchaseReceipts]) expect(await db.select().from(table)).toHaveLength(0);
+    });
+
+    it("does not invent acquisition data when omitted", async () => {
+      const proposal = await readyIntake();
+      const result = await acceptAiIntakeIntoStock(db, intakeId, validRequest({ expectedProposalUpdatedAt: proposal.updatedAt, priceEur: undefined }), "admin-3");
+      expect(result.product).toMatchObject({ stockQuantity: 1, purchaseCost: undefined, priceEur: null });
+      expect((await db.select().from(products))[0]).toMatchObject({ purchaseCost: null, purchaseCurrency: null });
+      expect(await db.select().from(productErpMetadata)).toHaveLength(0);
+      expect(await db.select().from(stockMovements)).toHaveLength(1);
+    });
+
+    it("accepts zero purchase cost and only the supplied metadata", async () => {
+      const proposal = await readyIntake();
+      const result = await acceptAiIntakeIntoStock(db, intakeId, validRequest({ expectedProposalUpdatedAt: proposal.updatedAt, purchaseCost: 0, purchaseSource: "Gift" }), "admin-3");
+      expect(result.product).toMatchObject({ purchaseCost: 0, purchaseCurrency: "EUR" });
+      expect((await db.select().from(productErpMetadata))[0]).toMatchObject({ purchaseSource: "Gift", auctionHouse: null, invoiceReferenceNumber: null, provenance: null, previousOwner: null });
+    });
+
+    it("keeps the strict trimmed contract and rejects negative cost, blank strings, SKU and unknown fields", () => {
+      const base = { categoryId, type: ProductType.UniqueItem, expectedProposalUpdatedAt: "version" };
+      expect(stockAcceptanceSchema.parse({ ...base, purchaseCost: 0, purchaseSource: "  Gift  " })).toEqual({ ...base, purchaseCost: 0, purchaseSource: "Gift" });
+      for (const invalid of [{ purchaseCost: -1 }, { sku: "CLIENT" }, { unknown: true }, ...Object.keys(metadata).map((key) => ({ [key]: "  " }))]) {
+        expect(stockAcceptanceSchema.safeParse({ ...base, ...invalid }).success).toBe(false);
+      }
+      expect(stockAcceptanceSchema.parse(base)).toEqual(base);
+    });
+
+    it("replays Applied intake without duplicating or overwriting acquisition, stock or SKU", async () => {
+      const proposal = await readyIntake();
+      const request = validRequest({ expectedProposalUpdatedAt: proposal.updatedAt, purchaseCost: 25, ...metadata });
+      const first = await acceptAiIntakeIntoStock(db, intakeId, request, "admin-3");
+      const tables = [products, productSkuSequence, stockMovements, productErpMetadata, outboxEvents];
+      const before = await Promise.all(tables.map((table) => db.select().from(table)));
+      const replay = await acceptAiIntakeIntoStock(db, intakeId, { ...request, purchaseCost: 99, purchaseSource: "Changed", provenance: "Changed" }, "admin-4");
+      expect(replay).toMatchObject({ created: false, product: { id: first.product.id, purchaseCost: 25 } });
+      expect(await Promise.all(tables.map((table) => db.select().from(table)))).toEqual(before);
+    });
+
+    it("rolls acquisition, Product/Inventory, movement, SKU, outbox and Applied transition back on outbox failure", async () => {
+      const proposal = await readyIntake();
+      const beforeIntake = await getIntakeById(db, intakeId);
+      const beforeSequence = await db.select().from(productSkuSequence);
+      sqlite.exec("CREATE TRIGGER fail_acquisition_outbox AFTER INSERT ON outbox_events BEGIN SELECT RAISE(ABORT, 'forced acquisition failure'); END");
+      const request = validRequest({ expectedProposalUpdatedAt: proposal.updatedAt, purchaseCost: 25, ...metadata });
+      await expect(acceptAiIntakeIntoStock(db, intakeId, request, "admin-3")).rejects.toThrow("forced acquisition failure");
+      for (const table of [products, stockMovements, productErpMetadata, outboxEvents]) expect(await db.select().from(table)).toHaveLength(0);
+      expect(await db.select().from(productSkuSequence)).toEqual(beforeSequence);
+      expect(await getIntakeById(db, intakeId)).toEqual(beforeIntake);
+      sqlite.exec("DROP TRIGGER fail_acquisition_outbox");
+      const result = await acceptAiIntakeIntoStock(db, intakeId, request, "admin-3");
+      expect(result.product.sku).toBe("NOC-000001");
+    });
+  });
 
   describe("happy path", () => {
     it("creates exactly one canonical Product with a system-generated sequential SKU, Draft status", async () => {

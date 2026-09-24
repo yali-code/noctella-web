@@ -47,6 +47,12 @@ export interface StockAcceptanceFieldInput {
   /** Sprint 137: optional - the warehouse must not be required to enter a sales price. */
   priceEur?: number;
   stockQuantity?: number;
+  purchaseCost?: number;
+  purchaseSource?: string;
+  auctionHouse?: string;
+  invoiceReferenceNumber?: string;
+  provenance?: string;
+  previousOwner?: string;
   brand?: string;
   model?: string;
   manufacturer?: string;
@@ -198,6 +204,7 @@ export async function stockAcceptanceUseCase(capability: AiIntakeApplyTransactio
               // undefined-to-null mapping in repositories/product-write/drizzle.ts).
               ...(input.priceEur !== undefined ? { priceEur: input.priceEur } : {}),
               status: ProductStatus.Draft,
+              ...(input.purchaseCost !== undefined ? { purchaseCost: input.purchaseCost, purchaseCurrency: "EUR" } : {}),
               // Sprint 138: an omitted warehouse quantity must still supply an explicit value
               // downstream, matching the canonical Product/Inventory quantity default of 1 -
               // never 0. Explicit (not omitted) so createProductWithInventoryInTransactionUseCase
@@ -226,7 +233,12 @@ export async function stockAcceptanceUseCase(capability: AiIntakeApplyTransactio
               inventoryRepositories: ctx.inventoryRepositories,
             } as Parameters<typeof createProductWithInventoryInTransactionUseCase>[0];
 
-            return chain(createProductWithInventoryInTransactionUseCase(repositories, inventoryCtx, candidate), (createResult) => {
+            const erpMetadata = Object.fromEntries(
+              (["purchaseSource", "auctionHouse", "invoiceReferenceNumber", "provenance", "previousOwner"] as const)
+                .map((key) => [key, input[key]])
+                .filter(([, value]) => value !== undefined),
+            );
+            return chain(createProductWithInventoryInTransactionUseCase(repositories, inventoryCtx, candidate, erpMetadata), (createResult) => {
               const now = new Date().toISOString();
               // Sprint 140: durable AiSalesPreparationRequested Outbox intent, inserted atomically inside
               // this SAME locked transaction via the already-exposed ctx.tx/ctx.schema/ctx.execution - never

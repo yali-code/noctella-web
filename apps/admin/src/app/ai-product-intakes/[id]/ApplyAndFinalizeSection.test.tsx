@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import { api, ApiError } from "@/lib/api";
@@ -33,6 +33,42 @@ function mockCategories() {
 }
 
 describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Acceptance)", () => {
+  it.each(["25", "0"])("keeps acquisition collapsed and sends trimmed fields once with purchase cost %s", async (cost) => {
+    const user = userEvent.setup();
+    mockCategories();
+    const accept = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock").mockReturnValue(new Promise(() => {}));
+    render(<ApplyAndFinalizeSection intakeId="intake-1" intake={intake()} photos={[]} proposal={proposal} onIntakeChanged={vi.fn()} onPhotosReload={vi.fn()} />);
+    await screen.findByText("Category One");
+    const summary = screen.getByText("Acquisition (optional)");
+    expect(summary.closest("details")).not.toHaveAttribute("open");
+    await user.click(summary);
+    await user.type(screen.getByLabelText("Purchase cost (€)"), cost);
+    const fields = { "Purchase source": "Kleinanzeigen", "Auction house": "Example Auction", "Invoice / reference": "REF-123", Provenance: "Private collection", "Previous owner": "Estate seller" };
+    for (const [label, value] of Object.entries(fields)) fireEvent.change(screen.getByLabelText(label), { target: { value: `  ${value}  ` } });
+    await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+    await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
+    expect(screen.getByRole("button", { name: "Accepting..." })).toBeDisabled();
+    expect(accept).toHaveBeenCalledTimes(1);
+    expect(accept.mock.calls[0][1]).toMatchObject({ purchaseCost: Number(cost), purchaseSource: "Kleinanzeigen", auctionHouse: "Example Auction", invoiceReferenceNumber: "REF-123", provenance: "Private collection", previousOwner: "Estate seller" });
+    expect(accept.mock.calls[0][1]).not.toHaveProperty("priceEur");
+    expect(screen.queryByPlaceholderText(/Price/i)).not.toBeInTheDocument();
+  });
+
+  it("rejects negative purchase cost before submitting", async () => {
+    const user = userEvent.setup();
+    mockCategories();
+    const accept = vi.spyOn(aiProductIntakesLib.aiProductIntakesApi, "acceptIntoStock");
+    render(<ApplyAndFinalizeSection intakeId="intake-1" intake={intake()} photos={[]} proposal={proposal} onIntakeChanged={vi.fn()} onPhotosReload={vi.fn()} />);
+    await screen.findByText("Category One");
+    await user.click(screen.getByText("Acquisition (optional)"));
+    await user.type(screen.getByLabelText("Purchase cost (€)"), "-1");
+    await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+    await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
+    expect(screen.getByText("Purchase cost must be a non-negative number.")).toBeInTheDocument();
+    expect(accept).not.toHaveBeenCalled();
+  });
   it("never renders a Price field - the warehouse must never enter a sales price", async () => {
     mockCategories();
     render(
@@ -144,12 +180,20 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
       />,
     );
     await screen.findByText("Category One");
+    await user.click(screen.getByText("Acquisition (optional)"));
+    for (const label of ["Purchase source", "Auction house", "Invoice / reference", "Provenance", "Previous owner"]) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value: "   " } });
+    }
     await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
     await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
     await waitFor(() => expect(acceptSpy).toHaveBeenCalled());
     const submitted = acceptSpy.mock.calls[0][1];
     expect("priceEur" in submitted).toBe(false);
+    const payload = JSON.parse(JSON.stringify(submitted));
+    for (const field of ["purchaseCost", "purchaseSource", "auctionHouse", "invoiceReferenceNumber", "provenance", "previousOwner"]) {
+      expect(payload).not.toHaveProperty(field);
+    }
   });
 
   it("Unique Item quantity: the quantity input is disabled (backend authority normalizes it to 1)", async () => {

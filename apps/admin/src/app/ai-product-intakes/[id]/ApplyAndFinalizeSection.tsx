@@ -57,6 +57,12 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
   const [categoryId, setCategoryId] = useState("");
   const [type, setType] = useState<string>(ProductType.UniqueItem);
   const [stockQuantity, setStockQuantity] = useState("");
+  const [purchaseCost, setPurchaseCost] = useState("");
+  const [purchaseSource, setPurchaseSource] = useState("");
+  const [auctionHouse, setAuctionHouse] = useState("");
+  const [invoiceReferenceNumber, setInvoiceReferenceNumber] = useState("");
+  const [provenance, setProvenance] = useState("");
+  const [previousOwner, setPreviousOwner] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [condition, setCondition] = useState("");
@@ -122,12 +128,23 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
   async function handleAcceptIntoStock() {
     if (!proposal) return;
     setError(null);
+    const cost = purchaseCost.trim() === "" ? undefined : Number(purchaseCost);
+    if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) {
+      setError("Purchase cost must be a non-negative number.");
+      return;
+    }
     setAccepting(true);
     try {
       const product = await aiProductIntakesApi.acceptIntoStock(intakeId, {
         categoryId,
         type,
         stockQuantity: stockQuantity ? Number(stockQuantity) : undefined,
+        purchaseCost: cost,
+        purchaseSource: toOptionalField(purchaseSource),
+        auctionHouse: toOptionalField(auctionHouse),
+        invoiceReferenceNumber: toOptionalField(invoiceReferenceNumber),
+        provenance: toOptionalField(provenance),
+        previousOwner: toOptionalField(previousOwner),
         brand: toOptionalField(brand),
         model: toOptionalField(model),
         condition: toOptionalField(condition),
@@ -204,6 +221,18 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
             <input placeholder="Brand (optional)" value={brand} onChange={(e) => setBrand(e.target.value)} style={inputStyle} />
             <input placeholder="Model (optional)" value={model} onChange={(e) => setModel(e.target.value)} style={inputStyle} />
             <input placeholder="Condition (optional)" value={condition} onChange={(e) => setCondition(e.target.value)} style={inputStyle} />
+
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--noctella-aged-bronze)" }}>Acquisition (optional)</summary>
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                <label>Purchase cost (€)<input type="number" min="0" step="any" value={purchaseCost} onChange={(e) => setPurchaseCost(e.target.value)} style={inputStyle} /></label>
+                <label>Purchase source<input placeholder="e.g. Kleinanzeigen, private seller, auction" value={purchaseSource} onChange={(e) => setPurchaseSource(e.target.value)} style={inputStyle} /></label>
+                <label>Auction house<input value={auctionHouse} onChange={(e) => setAuctionHouse(e.target.value)} style={inputStyle} /></label>
+                <label>Invoice / reference<input value={invoiceReferenceNumber} onChange={(e) => setInvoiceReferenceNumber(e.target.value)} style={inputStyle} /></label>
+                <label>Provenance<input value={provenance} onChange={(e) => setProvenance(e.target.value)} style={inputStyle} /></label>
+                <label>Previous owner<input value={previousOwner} onChange={(e) => setPreviousOwner(e.target.value)} style={inputStyle} /></label>
+              </div>
+            </details>
 
             <details>
               <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--noctella-aged-bronze)" }}>More details (optional)</summary>
