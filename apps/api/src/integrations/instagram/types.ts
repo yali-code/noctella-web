@@ -1,4 +1,4 @@
-export const INSTAGRAM_VAULT_ACCOUNT_ID = "17841427803152728";
+export const INSTAGRAM_VAULT_ACCOUNT_ID = "28693247390365627";
 export const INSTAGRAM_CHANNEL = "instagram";
 export const INSTAGRAM_ACCOUNT_LABEL = "vault";
 export const INSTAGRAM_SCOPES = ["instagram_business_basic", "instagram_business_content_publish"] as const;
