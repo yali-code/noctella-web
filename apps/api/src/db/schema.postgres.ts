@@ -1022,3 +1022,27 @@ export const productMarketingTags = pgTable("product_marketing_tags", {
   marketingTagId: text("marketing_tag_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [uniqueIndex("idx_product_marketing_tags_unique").on(table.productId, table.marketingTagId)]);
+
+export const socialContents = pgTable("social_contents", {
+  id: text("id").primaryKey(),
+  platform: text("platform").notNull().default("instagram"),
+  accountLabel: text("account_label").notNull().default("vault"),
+  contentType: text("content_type").notNull(),
+  status: text("status").notNull().default("draft"),
+  caption: text("caption").notNull().default(""),
+  productId: text("product_id").references(() => products.id, { onDelete: "set null" }),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_social_contents_queue").on(table.status, table.contentType, table.updatedAt)]);
+
+export const socialContentMedia = pgTable("social_content_media", {
+  id: text("id").primaryKey(),
+  contentId: text("content_id").notNull().references(() => socialContents.id, { onDelete: "cascade" }),
+  photoId: text("photo_id").references(() => productPhotos.id, { onDelete: "set null" }),
+  sortOrder: integer("sort_order").notNull(),
+}, (table) => [
+  uniqueIndex("idx_social_media_photo_unique").on(table.contentId, table.photoId),
+  uniqueIndex("idx_social_media_order_unique").on(table.contentId, table.sortOrder),
+  index("idx_social_content_media_photo").on(table.photoId),
+]);

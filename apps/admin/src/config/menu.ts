@@ -9,6 +9,7 @@ export const adminMenuItems: AdminMenuItem[] = [
   { label: "Products", href: "/products" },
   { label: "Pending Publish", href: "/ready-to-publish" },
   { label: "Marketplaces", href: "/marketplaces" },
+  { label: "Social Manager", href: "/social" },
   { label: "ERP Integration", href: "/erp-integration" },
   { label: "ERP Migration", href: "/erp-migration" },
   { label: "Database", href: "/database" },
