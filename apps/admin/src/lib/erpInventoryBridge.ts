@@ -10,3 +10,18 @@ export async function getErpProductWorkspace(id: string) { return api.get(`/api/
 export async function getErpLabelData(id: string) { return api.get(`/api/erp/products/${id}/label-data`); }
 export function mapPublishReadiness(summary: any) { return summary?.ready ? "Ready" : `Blocked: ${(summary?.missing ?? []).join(", ")}`; }
 export function mapRecentCommands(items: any[] = []) { return items.map(({ safeResultMetadata, requestChecksum, ...item }) => ({ ...item, metadata: safeResultMetadata ? "safe metadata available" : undefined, requestChecksum: requestChecksum ? "redacted" : undefined })); }
+
+export interface OperationalAcquisition {
+  purchaseSource?: string | null;
+  auctionHouse?: string | null;
+  invoiceReferenceNumber?: string | null;
+  provenance?: string | null;
+  previousOwner?: string | null;
+}
+
+/** Browser-only read through the same-origin proxy; ERP credentials stay on the server. */
+export async function getOperationalAcquisition(id: string): Promise<OperationalAcquisition> {
+  const response = await fetch(`/api/erp/products/${encodeURIComponent(id)}/workspace`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Operational acquisition could not be loaded.");
+  return response.json();
+}

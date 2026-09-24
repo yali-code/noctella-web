@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { StockMovement } from "@noctella/shared";
 import { api, resolveApiAssetUrl } from "@/lib/api";
 import { purchasingApi, type ProductPurchaseHistory } from "@/lib/erpPurchasingBridge";
+import { getOperationalAcquisition, type OperationalAcquisition } from "@/lib/erpInventoryBridge";
 import { allStockMovements, openingStockMovement, stockDate } from "@/lib/stockDashboard";
 import { buildProductCardSummary, formatEur } from "@/lib/productCardDomain";
 import type { Category, ProductDetail } from "@/lib/types";
@@ -17,15 +18,26 @@ export default function StockCardPage({ params }: { params: { productId: string 
   const [history, setHistory] = useState<ProductPurchaseHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [acquisition, setAcquisition] = useState<OperationalAcquisition | null>(null);
+  const [acquisitionError, setAcquisitionError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     setData(null); setHistory(null); setError(null); setHistoryError(null);
+    setAcquisition(null); setAcquisitionError(null);
     Promise.all([api.get<ProductDetail>(`/api/products/${encodeURIComponent(params.productId)}`), allStockMovements(params.productId)])
       .then(async ([product, movements]) => {
         const category = product.categoryId ? await api.get<Category>(`/api/categories/${encodeURIComponent(product.categoryId)}`) : null;
         if (active) setData({ product, movements, category });
       }).catch((err) => { if (active) setError(err.message); });
-    purchasingApi.productPurchaseHistory(params.productId).then((value) => { if (active) setHistory(value); })
+    purchasingApi.productPurchaseHistory(params.productId).then((value) => {
+      if (!active) return;
+      setHistory(value);
+      if (!value.items.length) {
+        getOperationalAcquisition(params.productId)
+          .then((metadata) => { if (active) setAcquisition(metadata); })
+          .catch(() => { if (active) setAcquisitionError("Operational acquisition could not be loaded. Please reload to try again."); });
+      }
+    })
       .catch(() => { if (active) setHistoryError("Purchase history could not be loaded. Please reload to try again."); });
     return () => { active = false; };
   }, [params.productId]);
@@ -64,7 +76,17 @@ export default function StockCardPage({ params }: { params: { productId: string 
       <h2>Acquisition</h2>
       <p>Product purchase cost (per unit): {cost(product.purchaseCost)}</p>
       {historyError ? <p role="alert">{historyError}</p> : !history ? <p role="status">Loading purchase history…</p> : !history.items.length ?
-        <dl style={details}><dt>Purchase source</dt><dd>Not recorded</dd><dt>Supplier</dt><dd>Not recorded</dd><dt>Purchase line price</dt><dd>Not recorded</dd></dl> :
+        <div>
+          <h3>Intake / Operational Acquisition</h3>
+          {acquisitionError ? <p role="alert">{acquisitionError}</p> : !acquisition ? <p role="status">Loading operational acquisition…</p> :
+            <dl style={details}>
+              <dt>Purchase source</dt><dd>{recorded(acquisition.purchaseSource)}</dd>
+              <dt>Auction house</dt><dd>{recorded(acquisition.auctionHouse)}</dd>
+              <dt>Invoice / reference</dt><dd>{recorded(acquisition.invoiceReferenceNumber)}</dd>
+              <dt>Provenance</dt><dd>{recorded(acquisition.provenance)}</dd>
+              <dt>Previous owner</dt><dd>{recorded(acquisition.previousOwner)}</dd>
+            </dl>}
+        </div> :
         history.items.map((entry) => <article key={entry.purchaseLine.id} style={{ borderTop: "1px solid var(--noctella-antique-gold)", marginTop: 16 }}>
           <h3>Purchase {entry.purchase.id} · Line {entry.purchaseLine.id}</h3>
           <dl style={details}>

@@ -14,6 +14,14 @@ import { erpCommandExecutions, productErpMetadata, products, stockMovements } fr
 function commandChecksum(commandType: string, entityId: string | undefined, payload: any) { return createHash("sha256").update(JSON.stringify({ commandType, entityId, payload })).digest("hex"); }
 
 describe("ERP inventory bridge", () => {
+  it("projects operational acquisition without performing any writes", async () => {
+    const metadata = { purchaseSource: "Kleinanzeigen", auctionHouse: "Example Auction", invoiceReferenceNumber: "REF-123", provenance: "Private collection", previousOwner: "Estate seller" };
+    const product = await createProduct(db, { sku: "ACQUISITION", title: "Intake item", categoryId, type: ProductType.UniqueItem, status: ProductStatus.Draft, purchaseCost: 25, stockQuantity: 1 } as any, metadata);
+    const sqlite = (db as any).$client;
+    const before = sqlite.prepare("SELECT total_changes() AS count").get();
+    expect(await workspace(db, product.id)).toMatchObject({ ...metadata, purchaseCost: 25, physicalStock: 1 });
+    expect(sqlite.prepare("SELECT total_changes() AS count").get()).toEqual(before);
+  });
   let db: ReturnType<typeof createTestDb>; let categoryId = "";
   const env = (commandType:string, payload:any, key="idem-1") => ({ commandId:`cmd-${key}`, requestId:`req-${key}`, commandType, entityType:"Product", idempotencyKey:key, payload, createdAt:new Date().toISOString() });
   beforeEach(async () => { db=createTestDb(); categoryId=(await createCategory(db,{ name:"Workspace", displayOrder:0, isActive:true })).id; });

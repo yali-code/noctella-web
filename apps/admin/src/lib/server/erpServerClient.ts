@@ -155,6 +155,10 @@ export function purchaseLandedCostPath(purchaseId: string): string {
   return `/api/erp/purchases/${encodeURIComponent(purchaseId)}/landed-cost`;
 }
 
+export function productWorkspacePath(productId: string): string {
+  return `/api/erp/products/${encodeURIComponent(productId)}/workspace`;
+}
+
 export function productPurchaseHistoryPath(productId: string): string {
   return `/api/erp/products/${encodeURIComponent(productId)}/purchase-history`;
 }

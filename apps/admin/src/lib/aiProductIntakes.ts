@@ -39,6 +39,12 @@ export interface StockAcceptanceInput {
   /** Sprint 137: optional - the warehouse must never be required to enter a sales price. */
   priceEur?: number;
   stockQuantity?: number;
+  purchaseCost?: number;
+  purchaseSource?: string;
+  auctionHouse?: string;
+  invoiceReferenceNumber?: string;
+  provenance?: string;
+  previousOwner?: string;
   brand?: string;
   model?: string;
   manufacturer?: string;
