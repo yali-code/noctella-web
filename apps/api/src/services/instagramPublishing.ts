@@ -68,11 +68,11 @@ export async function publishInstagramImage(
       .where(and(eq(instagramPublishAttempts.id, id), eq(instagramPublishAttempts.status, from)))
       .returning({ id: instagramPublishAttempts.id }).all().length === 1;
   const result = async () => (await getInstagramPublishAttempt(db, id))!;
-  const adapter = new InstagramPublishingAdapter(client, pause);
+  const adapter = new InstagramPublishingAdapter(client, pause, env);
   let containerId = existing?.containerId;
   if (!containerId) {
     try {
-      containerId = await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, mediaUrl, input.caption);
+      containerId = await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, input.imageUrl, input.caption);
       if (!transition("pending", { containerId, status: "container_created" })) return result();
     } catch (error) {
       transition("pending", { status: "failed", lastError: safeKind(error) });

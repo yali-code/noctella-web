@@ -1,11 +1,24 @@
 import { InstagramClient } from "./InstagramClient";
 import { InstagramClientError } from "./types";
+import { prepareInstagramImage } from "./mediaPreparation";
+import { productPhotoStaticPath } from "../../services/photoStorage";
+import { validateInstagramMediaUrl } from "../../config/instagramConfig";
 
-/** Provider-only operations; the service owns durable state and idempotency. */
+/** Publishing asset preparation and provider operations; the service owns durable state and idempotency. */
 export class InstagramPublishingAdapter {
-  constructor(private readonly client: InstagramClient, private readonly pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))) {}
+  constructor(private readonly client: InstagramClient, private readonly pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), private readonly env: NodeJS.ProcessEnv = process.env) {}
 
-  createImageContainer(accountId: string, imageUrl: string, caption: string) {
+  async createImageContainer(accountId: string, imageUrl: string, caption: string) {
+    const validated = validateInstagramMediaUrl(imageUrl, this.env);
+    const url = new URL(imageUrl);
+    const rawPath = imageUrl.match(/^https:\/\/[^/]+(\/[^?#]*)/i)?.[1] ?? "";
+    if (/\.webp$/i.test(rawPath) || /\.webp$/i.test(url.pathname)) {
+      // Preserve the raw path for traversal checks instead of URL's normalized pathname.
+      if (!rawPath.startsWith(`${productPhotoStaticPath}/`)) throw new InstagramClientError("invalid_media", false);
+      imageUrl = await prepareInstagramImage({ url: rawPath }, url.origin, this.env);
+    } else {
+      imageUrl = validated;
+    }
     return this.client.createImageContainer(accountId, imageUrl, caption);
   }
 
