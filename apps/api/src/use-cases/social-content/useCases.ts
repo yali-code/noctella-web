@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SOCIAL_CONTENT_TYPES, type SocialContent } from "@noctella/shared";
 import { BadRequestError, SocialContentGenerationConflictError, SocialGenerationProviderError } from "../../services/errors";
-import { socialDraftSchema, socialHashtagsSchema, socialId, type SocialDraft } from "../../validation/socialContent";
+import { socialDraftSchema, socialGeneratedResultSchema, socialId, type SocialDraft } from "../../validation/socialContent";
 import type { SocialContentRepository, SocialGenerationMetadata, SocialWork } from "../../repositories/social-content/types";
 import { acquireSocialGenerationGuard } from "./generationGuard";
 
@@ -11,13 +11,9 @@ const requestIdSchema = z.string().uuid().refine((value) => value === value.toLo
 const identitySchema = z.object({ productId: socialId, requestId: requestIdSchema });
 const identifier = z.string().trim().min(1).max(128);
 // Internal only: never mounted as an HTTP request schema. Revalidate at the domain boundary.
-const generatedDraftSchema = identitySchema.extend({
+const generatedDraftSchema = socialGeneratedResultSchema.extend({
+  ...identitySchema.shape,
   contentType: z.enum(SOCIAL_CONTENT_TYPES),
-  caption: z.string().max(2200).refine((value) => !!value.trim(), "Generated caption is required"),
-  hashtags: socialHashtagsSchema,
-  concept: z.string().trim().min(1).max(1000),
-  media: z.array(z.object({ photoId: socialId, editorialAltText: z.string().trim().min(1).max(1000) }).strict()).min(1).max(10)
-    .refine((items) => new Set(items.map((item) => item.photoId)).size === items.length, "Duplicate media IDs"),
   aiProvider: identifier,
   aiModel: identifier,
   aiPromptVersion: identifier,
@@ -25,7 +21,6 @@ const generatedDraftSchema = identitySchema.extend({
   sourceProductUpdatedAt: z.string().min(1),
 }).strict();
 export const socialGenerationRequestSchema = identitySchema.extend({ contentType: z.enum(SOCIAL_CONTENT_TYPES) }).strict();
-const providerOutputSchema = generatedDraftSchema.pick({ caption: true, hashtags: true, concept: true, media: true });
 export type GeneratedSocialDraftInput = z.input<typeof generatedDraftSchema>;
 
 export function validateEditorialAltTextSelection(input: Pick<SocialDraft, "mediaIds" | "mediaEditorialAltTexts">): void {
@@ -124,7 +119,7 @@ export async function generateSocialContentUseCase(repo: SocialContentRepository
       const provider = getProvider();
       // Snapshot trusted configuration before calling the provider; never accept provenance in output.
       const metadata = { aiProvider: provider.provider, aiModel: provider.model, aiPromptVersion: provider.promptVersion };
-      const output = providerOutputSchema.parse(await provider.generate({
+      const output = socialGeneratedResultSchema.parse(await provider.generate({
         ...structuredClone(snapshot), contentType: input.contentType, platform: "instagram", accountLabel: "vault",
       }));
       if (output.media.some((photo) => !snapshot.photos.some((ready) => ready.id === photo.photoId))) throw new SocialGenerationProviderError();

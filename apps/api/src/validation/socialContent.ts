@@ -5,6 +5,13 @@ export const socialId = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
 const hashtag = z.string().transform((value) => value.trim().normalize("NFC").replace(/^#/, "").toLowerCase().normalize("NFC"))
   .pipe(z.string().min(1).max(50).regex(/^[\p{L}\p{N}_]+$/u));
 export const socialHashtagsSchema = z.array(hashtag).max(10).transform((values) => [...new Set(values)]);
+export const socialGeneratedResultSchema = z.object({
+  caption: z.string().max(2200).refine((value) => !!value.trim(), "Generated caption is required"),
+  hashtags: socialHashtagsSchema,
+  concept: z.string().trim().min(1).max(1000),
+  media: z.array(z.object({ photoId: socialId, editorialAltText: z.string().trim().min(1).max(1000) }).strict()).min(1).max(10)
+    .refine((items) => new Set(items.map((item) => item.photoId)).size === items.length, "Duplicate media IDs"),
+}).strict();
 const editorialAltTexts = z.array(z.object({ photoId: socialId, editorialAltText: z.string().max(1000) }).strict()).max(10)
   .refine((items) => new Set(items.map((item) => item.photoId)).size === items.length, "Duplicate editorial alt-text photo IDs");
 export const socialDraftSchema = z.object({
