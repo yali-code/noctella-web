@@ -1030,17 +1030,26 @@ export const socialContents = pgTable("social_contents", {
   contentType: text("content_type").notNull(),
   status: text("status").notNull().default("draft"),
   caption: text("caption").notNull().default(""),
+  hashtags: text("hashtags"),
+  concept: text("concept"),
+  aiProvider: text("ai_provider"),
+  aiModel: text("ai_model"),
+  aiPromptVersion: text("ai_prompt_version"),
+  aiGeneratedAt: timestamp("ai_generated_at", { withTimezone: true }),
+  aiRequestId: text("ai_request_id"),
+  aiSourceProductId: text("ai_source_product_id"),
   productId: text("product_id").references(() => products.id, { onDelete: "set null" }),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-}, (table) => [index("idx_social_contents_queue").on(table.status, table.contentType, table.updatedAt)]);
+}, (table) => [index("idx_social_contents_queue").on(table.status, table.contentType, table.updatedAt), uniqueIndex("idx_social_contents_ai_request_unique").on(table.aiRequestId)]);
 
 export const socialContentMedia = pgTable("social_content_media", {
   id: text("id").primaryKey(),
   contentId: text("content_id").notNull().references(() => socialContents.id, { onDelete: "cascade" }),
   photoId: text("photo_id").references(() => productPhotos.id, { onDelete: "set null" }),
   sortOrder: integer("sort_order").notNull(),
+  editorialAltText: text("editorial_alt_text"),
 }, (table) => [
   uniqueIndex("idx_social_media_photo_unique").on(table.contentId, table.photoId),
   uniqueIndex("idx_social_media_order_unique").on(table.contentId, table.sortOrder),

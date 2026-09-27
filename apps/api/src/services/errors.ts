@@ -549,6 +549,13 @@ export class SalesEnrichmentProviderInvalidResponseError extends Error {
   }
 }
 
+export class SocialContentGenerationConflictError extends ConflictError {
+  constructor(reason: "in_progress" | "request_mismatch" | "stale_product") {
+    super({ in_progress: "Social content generation is already in progress.", request_mismatch: "Request ID belongs to another source product.", stale_product: "Product changed since generation. Reload before continuing." }[reason]);
+    this.name = "SocialContentGenerationConflictError";
+  }
+}
+
 /**
  * Sprint 148: thrown when a second canonical Product AI proposal generate request for the same
  * productId arrives while an earlier attempt is still in flight - see

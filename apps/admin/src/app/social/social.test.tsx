@@ -13,8 +13,8 @@ import { ContentEditor } from "./ContentEditor";
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 const product = { id: "p1", sku: "NOC-000008", title: "Collectible" };
-const photo = { id: "photo1", productId: "p1", url: "/images/product-photos/photo.webp", thumbnailUrl: "/images/product-photos/photo-thumb.webp", altText: "Collectible photo", processingStatus: "Ready" };
-const record: SocialContent = { id: "content1", platform: "instagram", accountLabel: "vault", contentType: "post", status: "draft", caption: "A collectible", productId: "p1", product, media: [photo], missingMediaCount: 0, version: 1, createdAt: "2026-09-24T10:00:00Z", updatedAt: "2026-09-24T10:00:00Z" };
+const photo = { id: "photo1", productId: "p1", url: "/images/product-photos/photo.webp", thumbnailUrl: "/images/product-photos/photo-thumb.webp", altText: "Collectible photo", editorialAltText: null, processingStatus: "Ready" };
+const record: SocialContent = { id: "content1", platform: "instagram", accountLabel: "vault", contentType: "post", status: "draft", caption: "A collectible", hashtags: null, concept: null, aiProvider: null, aiModel: null, aiPromptVersion: null, aiGeneratedAt: null, aiRequestId: null, aiSourceProductId: null, productId: "p1", product, media: [photo], missingMediaCount: 0, version: 1, createdAt: "2026-09-24T10:00:00Z", updatedAt: "2026-09-24T10:00:00Z" };
 beforeEach(() => {
   push.mockReset();
   vi.spyOn(api, "get").mockImplementation(async (path) => (path.startsWith("/api/products?") ? { items: [product], total: 1 } : { ...product, photos: [photo] }) as any);
