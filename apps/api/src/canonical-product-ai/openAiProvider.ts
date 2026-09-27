@@ -10,8 +10,7 @@ import {
 } from "./openAiOutputSchema";
 import type { CanonicalProductProposalGenerationRequest, CanonicalProductProposalGenerationResult, CanonicalProductProposalProvider } from "./types";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const REQUEST_TIMEOUT_MS = 30_000;
+import { requestStructuredResponse } from "../ai/structuredResponse";
 
 export interface CanonicalProductProposalOpenAiProviderConfig {
   apiKey: string;
@@ -80,45 +79,11 @@ export class OpenAiCanonicalProductProposalProvider implements CanonicalProductP
       },
     };
 
-    let res: Response;
-    try {
-      res = await fetch(OPENAI_RESPONSES_URL, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${this.config.apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-    } catch {
-      // Network-level failure (DNS, connection refused, timeout) - never the raw error (may embed
-      // connection details), a fixed safe message only.
-      throw new CanonicalProductProposalProviderUnavailableError();
-    }
-
-    if (res.status === 401 || res.status === 403) {
-      throw new CanonicalProductProposalProviderAuthenticationError();
-    }
-    if (!res.ok) {
-      // Covers rate limiting (429) and any provider-side 5xx - never the raw response body (may
-      // include upstream error text), a fixed safe message only.
-      throw new CanonicalProductProposalProviderUnavailableError();
-    }
-
-    let parsedBody: unknown;
-    try {
-      parsedBody = await res.json();
-    } catch {
-      throw new CanonicalProductProposalProviderInvalidResponseError();
-    }
-
-    const outputText = extractOutputText(parsedBody);
-    if (outputText === null) throw new CanonicalProductProposalProviderInvalidResponseError();
-
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(outputText);
-    } catch {
-      throw new CanonicalProductProposalProviderInvalidResponseError();
-    }
+    const parsedJson = await requestStructuredResponse(this.config.apiKey, body, {
+      authentication: CanonicalProductProposalProviderAuthenticationError,
+      unavailable: CanonicalProductProposalProviderUnavailableError,
+      invalid: CanonicalProductProposalProviderInvalidResponseError,
+    });
 
     const validated = buildCanonicalProductProposalOpenAiResponseZodSchema().safeParse(parsedJson);
     if (!validated.success) throw new CanonicalProductProposalProviderInvalidResponseError();
@@ -132,31 +97,4 @@ export class OpenAiCanonicalProductProposalProvider implements CanonicalProductP
       },
     };
   }
-}
-
-/**
- * Mirrors ai-intake/openAiProvider.ts's / marketplace-prep/openAiProvider.ts's extractOutputText
- * exactly - the real raw Responses API REST response shape (`output[]` -> message item ->
- * `content[]` -> `output_text`-typed content item -> `text` string), never the SDK-only
- * convenience field. Returns null (never throws) for any shape that does not match.
- */
-function extractOutputText(body: unknown): string | null {
-  if (!body || typeof body !== "object") return null;
-  const record = body as Record<string, unknown>;
-  if (!Array.isArray(record.output)) return null;
-
-  for (const item of record.output) {
-    if (!item || typeof item !== "object") continue;
-    const message = item as Record<string, unknown>;
-    if (message.type !== "message") continue;
-    const content = message.content;
-    if (!Array.isArray(content)) continue;
-    for (const contentItem of content) {
-      if (!contentItem || typeof contentItem !== "object") continue;
-      const c = contentItem as Record<string, unknown>;
-      if (c.type === "output_text" && typeof c.text === "string") return c.text;
-    }
-  }
-
-  return null;
 }

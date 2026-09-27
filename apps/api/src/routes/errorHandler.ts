@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { ZodError } from "zod";
 import { formatZodError } from "../validation/common";
 import {
+  SocialGenerationProviderError,
   AiDraftRegenerationRequiredError,
   AiDraftReviewConflictError,
   AiIntakeApplyIntakeNotOpenError,
@@ -53,6 +54,10 @@ const INVENTORY_ERROR_STATUS: Record<InventoryErrorCategory, number> = {
 };
 
 export function handleRouteError(err: unknown, res: Response): void {
+  if (err instanceof SocialGenerationProviderError) {
+    res.status(502).json({ error: err.message, code: "SOCIAL_GENERATION_PROVIDER_FAILED" });
+    return;
+  }
   if (err instanceof ZodError) {
     res.status(400).json({ error: "Validation failed", details: formatZodError(err) });
     return;

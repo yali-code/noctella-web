@@ -1,3 +1,7 @@
+export class SocialGenerationProviderError extends Error {
+  constructor() { super("Social content generation is unavailable or returned an unusable response. Try again."); }
+}
+
 export class NotFoundError extends Error {
   constructor(message = "Resource not found") {
     super(message);

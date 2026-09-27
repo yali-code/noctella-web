@@ -1,4 +1,5 @@
 import type { SocialContent, SocialContentType } from "@noctella/shared";
+import type { SocialGenerationContext } from "../../social-content/provider";
 
 // Generator effects preserve synchronous SQLite transactions and asynchronous PG queries.
 export type SocialWork<T> = Generator<any, T, any>;
@@ -26,6 +27,7 @@ export interface SocialDraftInsert {
   generation: SocialGenerationMetadata | null;
 }
 export interface SocialContentRepository {
+  readGenerationContext(tx: any, productId: string): SocialWork<Pick<SocialGenerationContext, "product" | "photos"> | null>;
   transaction<T>(work: (tx: any) => SocialWork<T>): Promise<T>;
   readProduct(tx: any, id: string): SocialWork<{ id: string; updatedAt: string | Date } | undefined>;
   readPhotos(tx: any, ids: string[]): SocialWork<Array<{ id: string; productId: string; processingStatus: string }>>;

@@ -4,11 +4,18 @@ import { createRequireAuth, requirePermission } from "../auth/permissions";
 import { requireAdminOriginForMutations } from "../auth/csrf";
 import { createSocialContentService } from "../services/socialContent";
 import { handleRouteError } from "./errorHandler";
+import { generateSocialContent } from "../services/socialContentGeneration";
+import { socialGenerationRequestSchema } from "../use-cases/social-content/useCases";
+import { createSocialGenerationProvider, type SocialGenerationProvider } from "../social-content/provider";
 
-export function createSocialContentRouter(db: DbClient) {
+export function createSocialContentRouter(db: DbClient, providerFactory: () => SocialGenerationProvider = createSocialGenerationProvider) {
   const router = Router();
   const service = createSocialContentService(db);
   router.use(requireAdminOriginForMutations, createRequireAuth(db));
+  router.post("/generate", requirePermission("products.edit"), async (req, res) => {
+    try { res.status(201).json(await generateSocialContent(db, socialGenerationRequestSchema.parse(req.body), providerFactory)); }
+    catch (error) { handleRouteError(error, res); }
+  });
   router.get("/", requirePermission("products.view"), async (req, res) => {
     try { res.json(await service.list(req.query)); } catch (error) { handleRouteError(error, res); }
   });
