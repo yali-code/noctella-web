@@ -55,7 +55,7 @@ export function createSocialContentService(db: DbClient, driver = process.env.DA
       });
     },
     create: (value: unknown) => createSocialDraftUseCase(repository, value),
-    // Internal checkpoint boundary only; no generation HTTP route or provider transport.
+    // Internal persistence boundary; provider generation has its own orchestration service.
     createGenerated: (value: GeneratedSocialDraftInput) => createGeneratedSocialDraftUseCase(repository, value),
     async edit(id: string, value: unknown) {
       socialId.parse(id);

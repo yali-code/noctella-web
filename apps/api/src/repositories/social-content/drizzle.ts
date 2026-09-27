@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { SocialContent } from "@noctella/shared";
 import type { DbClient } from "../../db/client";
 import * as sqlite from "../../db/schema.sqlite";
@@ -54,6 +54,15 @@ export function createSocialContentRepository(db: DbClient, driver = process.env
   }
   return {
     transaction, detail, replaceMedia,
+    *readGenerationContext(tx, productId) {
+      const [product] = yield tx.select({ id: products.id, sku: products.sku, title: products.title, description: products.description, updatedAt: products.updatedAt })
+        .from(products).where(eq(products.id, productId));
+      if (!product) return null;
+      const ready = yield tx.select({ id: photos.id, altText: photos.altText, width: photos.width, height: photos.height })
+        .from(photos).where(and(eq(photos.productId, productId), eq(photos.processingStatus, "Ready")))
+        .orderBy(desc(photos.isPrimary), asc(photos.sortOrder), asc(photos.id)).limit(10);
+      return { product: { ...product, updatedAt: iso(product.updatedAt) }, photos: ready };
+    },
     *readProduct(tx, id) {
       let query = tx.select({ id: products.id, updatedAt: products.updatedAt }).from(products).where(eq(products.id, id));
       if (!sync) query = query.for("share");

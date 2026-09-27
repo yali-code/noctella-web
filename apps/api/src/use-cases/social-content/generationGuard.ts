@@ -4,7 +4,7 @@ const requests = new Set<string>();
 const products = new Set<string>();
 
 /** Process-local only. The DB unique index prevents duplicates across instances,
- * but cannot prevent duplicate future provider work/billing across instances. */
+ * but cannot prevent duplicate provider work/billing across instances. */
 export function acquireSocialGenerationGuard(requestId: string, productId: string): () => void {
   if (requests.has(requestId) || products.has(productId)) throw new SocialContentGenerationConflictError("in_progress");
   requests.add(requestId);

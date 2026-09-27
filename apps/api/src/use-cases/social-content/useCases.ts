@@ -1,7 +1,8 @@
+import type { SocialGenerationProvider } from "../../social-content/provider";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { SOCIAL_CONTENT_TYPES, type SocialContent } from "@noctella/shared";
-import { BadRequestError, SocialContentGenerationConflictError } from "../../services/errors";
+import { BadRequestError, SocialContentGenerationConflictError, SocialGenerationProviderError } from "../../services/errors";
 import { socialDraftSchema, socialHashtagsSchema, socialId, type SocialDraft } from "../../validation/socialContent";
 import type { SocialContentRepository, SocialGenerationMetadata, SocialWork } from "../../repositories/social-content/types";
 import { acquireSocialGenerationGuard } from "./generationGuard";
@@ -23,6 +24,8 @@ const generatedDraftSchema = identitySchema.extend({
   aiGeneratedAt: z.string().datetime(),
   sourceProductUpdatedAt: z.string().min(1),
 }).strict();
+export const socialGenerationRequestSchema = identitySchema.extend({ contentType: z.enum(SOCIAL_CONTENT_TYPES) }).strict();
+const providerOutputSchema = generatedDraftSchema.pick({ caption: true, hashtags: true, concept: true, media: true });
 export type GeneratedSocialDraftInput = z.input<typeof generatedDraftSchema>;
 
 export function validateEditorialAltTextSelection(input: Pick<SocialDraft, "mediaIds" | "mediaEditorialAltTexts">): void {
@@ -76,6 +79,11 @@ export async function createGeneratedSocialDraftUseCase(repo: SocialContentRepos
   if (completed) return replay(completed, identity.productId);
   const input = generatedDraftSchema.parse(value);
   const release = acquireSocialGenerationGuard(input.requestId, input.productId);
+  try { return await persistGenerated(repo, input); } finally { release(); }
+}
+
+async function persistGenerated(repo: SocialContentRepository, input: z.output<typeof generatedDraftSchema>): Promise<SocialContent> {
+  const lookup = () => repo.transaction(function* (tx) { return yield* repo.findByRequest(tx, input.requestId); });
   try {
     return await repo.transaction(function* (tx) {
       const existing = yield* repo.findByRequest(tx, input.requestId);
@@ -95,7 +103,36 @@ export async function createGeneratedSocialDraftUseCase(repo: SocialContentRepos
       if (winner) return replay(winner, input.productId);
     }
     throw error;
-  } finally {
-    release();
   }
+}
+
+/** Ownership spans provider work and persistence; provider I/O never runs in a DB transaction. */
+export async function generateSocialContentUseCase(repo: SocialContentRepository, value: unknown, getProvider: () => SocialGenerationProvider): Promise<SocialContent> {
+  const input = socialGenerationRequestSchema.parse(value);
+  const lookup = () => repo.transaction(function* (tx) { return yield* repo.findByRequest(tx, input.requestId); });
+  const completed = await lookup();
+  if (completed) return replay(completed, input.productId);
+  const release = acquireSocialGenerationGuard(input.requestId, input.productId);
+  try {
+    const existing = await lookup();
+    if (existing) return replay(existing, input.productId);
+    const snapshot = await repo.transaction(function* (tx) { return yield* repo.readGenerationContext(tx, input.productId); });
+    if (!snapshot) throw new BadRequestError("Selected product does not exist");
+    if (!snapshot.photos.length) throw new BadRequestError("At least one ready product photo is required");
+    let generated: z.output<typeof generatedDraftSchema>;
+    try {
+      const provider = getProvider();
+      // Snapshot trusted configuration before calling the provider; never accept provenance in output.
+      const metadata = { aiProvider: provider.provider, aiModel: provider.model, aiPromptVersion: provider.promptVersion };
+      const output = providerOutputSchema.parse(await provider.generate({
+        ...structuredClone(snapshot), contentType: input.contentType, platform: "instagram", accountLabel: "vault",
+      }));
+      if (output.media.some((photo) => !snapshot.photos.some((ready) => ready.id === photo.photoId))) throw new SocialGenerationProviderError();
+      generated = generatedDraftSchema.parse({ ...output, ...input, ...metadata,
+        aiGeneratedAt: new Date().toISOString(), sourceProductUpdatedAt: snapshot.product.updatedAt });
+    } catch {
+      throw new SocialGenerationProviderError();
+    }
+    return await persistGenerated(repo, generated);
+  } finally { release(); }
 }
