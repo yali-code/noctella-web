@@ -8,6 +8,7 @@ export interface SocialMediaPhoto {
   url: string;
   thumbnailUrl: string;
   altText: string | null;
+  editorialAltText: string | null;
 }
 export interface SocialContent {
   id: string;
@@ -16,6 +17,14 @@ export interface SocialContent {
   contentType: SocialContentType;
   status: SocialContentStatus;
   caption: string;
+  hashtags: string[] | null;
+  concept: string | null;
+  readonly aiProvider: string | null;
+  readonly aiModel: string | null;
+  readonly aiPromptVersion: string | null;
+  readonly aiGeneratedAt: string | null;
+  readonly aiRequestId: string | null;
+  readonly aiSourceProductId: string | null;
   productId: string | null;
   product: { id: string; title: string; sku: string } | null;
   media: SocialMediaPhoto[];
@@ -29,4 +38,7 @@ export interface SocialContentDraftInput {
   caption: string;
   productId: string | null;
   mediaIds: string[];
+  hashtags?: string[];
+  concept?: string | null;
+  mediaEditorialAltTexts?: Array<{ photoId: string; editorialAltText: string }>;
 }

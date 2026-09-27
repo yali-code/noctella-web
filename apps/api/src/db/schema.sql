@@ -735,6 +735,14 @@ CREATE TABLE IF NOT EXISTS social_contents (
  content_type TEXT NOT NULL CHECK (content_type IN ('post','reel','story')),
  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','ready_for_review','approved','rejected')),
  caption TEXT NOT NULL DEFAULT '',
+ hashtags TEXT,
+ concept TEXT,
+ ai_provider TEXT,
+ ai_model TEXT,
+ ai_prompt_version TEXT,
+ ai_generated_at TEXT,
+ ai_request_id TEXT,
+ ai_source_product_id TEXT,
  product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
  version INTEGER NOT NULL DEFAULT 1,
  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
@@ -746,6 +754,7 @@ CREATE TABLE IF NOT EXISTS social_content_media (
  content_id TEXT NOT NULL REFERENCES social_contents(id) ON DELETE CASCADE,
  photo_id TEXT REFERENCES product_photos(id) ON DELETE SET NULL,
  sort_order INTEGER NOT NULL,
+ editorial_alt_text TEXT,
  UNIQUE(content_id, photo_id),
  UNIQUE(content_id, sort_order)
 );

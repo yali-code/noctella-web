@@ -11,6 +11,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   const sqlPath = path.join(__dirname, "schema.sql");
   const sql = fs.readFileSync(sqlPath, "utf-8");
   sqlite.exec(sql);
+  ensureSocialContentAiColumns(sqlite);
   ensureMarketplaceColumns(sqlite);
   ensureOrderColumns(sqlite);
   ensureMarketplacePublishTables(sqlite);
@@ -41,6 +42,23 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketingTagsTables(sqlite);
   ensureCanonicalProductAiProposalsTable(sqlite);
   ensureProductLifecycleFoundation(sqlite);
+}
+
+/** Upgrade existing ETAP 2 tables before creating any index on new columns. */
+export function ensureSocialContentAiColumns(sqlite: Database.Database): void {
+  sqlite.transaction(() => {
+    const additions: Record<string, string[]> = {
+      social_contents: ["hashtags", "concept", "ai_provider", "ai_model", "ai_prompt_version", "ai_generated_at", "ai_request_id", "ai_source_product_id"],
+      social_content_media: ["editorial_alt_text"],
+    };
+    for (const [table, columns] of Object.entries(additions)) {
+      const existing = new Set((sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name));
+      for (const column of columns) {
+        if (!existing.has(column)) sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+      }
+    }
+    sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_social_contents_ai_request_unique ON social_contents(ai_request_id)");
+  })();
 }
 
 /** Additive only. No migration is executed by creating this source file. */
