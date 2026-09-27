@@ -75,6 +75,17 @@ it("keeps the default mock safe without credentials", async () => {
   expect(transport).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
 });
 
+it.each([undefined, ""])("requires explicit OpenAI selection even with credentials present: %s", async (selection) => {
+  vi.stubEnv("SOCIAL_CONTENT_AI_PROVIDER", selection);
+  const safe = createSocialGenerationProvider();
+  expect(safe.provider).toBe("mock");
+  expect(await safe.generate(context())).toEqual(await safe.generate(context()));
+  vi.stubEnv("SOCIAL_CONTENT_AI_PROVIDER", "openai");
+  expect(createSocialGenerationProvider()).toMatchObject({ provider: "openai", model: "test-model", promptVersion: "social-content-v1" });
+  // Construction verifies configuration without initiating paid provider work.
+  expect(transport).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+});
+
 it("sanitizes raw transport errors without leaking credentials and allows retry", async () => {
   const provider = createSocialGenerationProvider();
   transport.mockRejectedValueOnce(new Error("raw provider body fake-test-key"));
