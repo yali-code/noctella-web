@@ -10,6 +10,12 @@ import { InstagramClientError } from "./types";
 
 const inFlight = new Map<string, Promise<void>>();
 export const INSTAGRAM_IMAGE_RECIPE = "instagram-v1";
+// Output-affecting changes require a new recipe ID; existing definitions stay immutable.
+const imageRecipes = Object.freeze({
+  "instagram-v1": Object.freeze({ width: 1080, height: 1080 }),
+  "instagram-portrait-v1": Object.freeze({ width: 1080, height: 1350 }),
+});
+export type InstagramImageRecipe = keyof typeof imageRecipes;
 export interface PreparedInstagramImage {
   url: string;
   outputPath: string;
@@ -43,11 +49,11 @@ async function readRegularLocalFile(root: string, filename: string): Promise<Buf
   }
 }
 
-async function validDerivative(root: string, filename: string): Promise<boolean> {
+async function validDerivative(root: string, filename: string, recipe: typeof imageRecipes[InstagramImageRecipe]): Promise<boolean> {
   try {
     const bytes = await readRegularLocalFile(root, filename);
     const metadata = await sharp(bytes, { failOn: "error" }).metadata();
-    if (bytes.length > 8 * 1024 * 1024 || metadata.format !== "jpeg" || metadata.width !== 1080 || metadata.height !== 1080) throw invalid();
+    if (bytes.length > 8 * 1024 * 1024 || metadata.format !== "jpeg" || metadata.width !== recipe.width || metadata.height !== recipe.height) throw invalid();
     await sharp(bytes, { failOn: "error" }).raw().toBuffer();
     return true;
   } catch (error: any) {
@@ -71,8 +77,11 @@ export async function prepareInstagramImageAsset(
   publicOrigin: string,
   env: NodeJS.ProcessEnv = process.env,
   root: string = productPhotoStaticRoot,
+  recipeId: InstagramImageRecipe = INSTAGRAM_IMAGE_RECIPE,
 ): Promise<PreparedInstagramImage> {
   try {
+    if (typeof recipeId !== "string" || !Object.prototype.hasOwnProperty.call(imageRecipes, recipeId)) throw invalid();
+    const recipe = imageRecipes[recipeId];
     const prefix = `${productPhotoStaticPath}/`;
     if (typeof photo.url !== "string" || !photo.url.startsWith(prefix)) throw invalid();
     const filename = photo.url.slice(prefix.length);
@@ -84,18 +93,18 @@ export async function prepareInstagramImageAsset(
     if (source.length > PRODUCT_PHOTO_MAX_BYTES) throw invalid();
     // Version + source identity/content prevent stale reuse if a canonical file changes.
     const hash = createHash("sha256").update(filename).update("\0").update(source).digest("hex");
-    const derivative = `${INSTAGRAM_IMAGE_RECIPE}-${hash}.jpg`;
+    const derivative = `${recipeId}-${hash}.jpg`;
     const destination = productPhotoStorageSafety.safeJoin(root, derivative);
     const url = validateInstagramMediaUrl(`${origin.origin}${prefix}${derivative}`, env);
     let work = inFlight.get(destination);
     if (!work) {
       work = (async () => {
-        if (await validDerivative(root, derivative)) return;
+        if (await validDerivative(root, derivative, recipe)) return;
         const image = sharp(source, { failOn: "error", limitInputPixels: 40_000_000 });
         const metadata = await image.metadata();
         if (metadata.format !== "webp" || (metadata.pages ?? 1) !== 1) throw invalid();
         // Contain preserves the entire image and its proportions, including extreme ratios.
-        const bytes = await image.rotate().resize(1080, 1080, { fit: "contain", background: "#ffffff" })
+        const bytes = await image.rotate().resize(recipe.width, recipe.height, { fit: "contain", background: "#ffffff" })
           .flatten({ background: "#ffffff" }).toColourspace("srgb").jpeg({ quality: 90 }).toBuffer();
         if (bytes.length > 8 * 1024 * 1024) throw invalid();
         const temporary = productPhotoStorageSafety.safeJoin(root, `.instagram-${randomUUID()}.tmp`);
@@ -104,7 +113,7 @@ export async function prepareInstagramImageAsset(
           // Atomic, no-clobber publication: readers never see an incomplete JPEG.
           try { await link(temporary, destination); }
           catch (error: any) {
-            if (error?.code !== "EEXIST" || !await validDerivative(root, derivative)) throw error;
+            if (error?.code !== "EEXIST" || !await validDerivative(root, derivative, recipe)) throw error;
           }
         } finally {
           await unlink(temporary).catch(() => undefined);
@@ -114,7 +123,7 @@ export async function prepareInstagramImageAsset(
     }
     try { await work; }
     finally { if (inFlight.get(destination) === work) inFlight.delete(destination); }
-    return { url, outputPath: `${prefix}${derivative}`, sourceFingerprint: hash, recipeVersion: INSTAGRAM_IMAGE_RECIPE };
+    return { url, outputPath: `${prefix}${derivative}`, sourceFingerprint: hash, recipeVersion: recipeId };
   } catch {
     // Never surface Sharp/filesystem errors, paths, or supplied URL credentials.
     throw invalid();

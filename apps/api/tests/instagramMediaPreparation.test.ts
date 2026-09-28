@@ -3,8 +3,9 @@ import * as files from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { prepareInstagramImage } from "../src/integrations/instagram/mediaPreparation";
+import { prepareInstagramImage, prepareInstagramImageAsset, type InstagramImageRecipe } from "../src/integrations/instagram/mediaPreparation";
 import * as preparation from "../src/integrations/instagram/mediaPreparation";
 import { InstagramPublishingAdapter } from "../src/integrations/instagram/publishingAdapter";
 import { InstagramClient } from "../src/integrations/instagram/InstagramClient";
@@ -35,6 +36,8 @@ afterEach(async () => {
 describe("Instagram local canonical media preparation", () => {
   it("produces a real JPEG at the approved public path without stretching or changing the source", async () => {
     const url = await prepareInstagramImage(photo, origin, env, root);
+    const fingerprint = createHash("sha256").update("canonical.webp").update("\0").update(source).digest("hex");
+    expect(url).toBe(`${origin}/images/product-photos/instagram-v1-${fingerprint}.jpg`);
     expect(url).toMatch(/^https:\/\/api\.staging\.noctella\.com\/images\/product-photos\/instagram-v1-[a-f0-9]{64}\.jpg$/);
     expect(validateInstagramMediaUrl(url, env)).toBe(url);
     const bytes = await readFile(path.join(root, path.basename(url)));
@@ -64,6 +67,52 @@ describe("Instagram local canonical media preparation", () => {
     expect((await stat(file)).mtimeMs).toBe(before.mtimeMs);
     expect(await readFile(file)).toEqual(bytes);
     expect((await readdir(root)).sort()).toEqual(["canonical.webp", path.basename(file)].sort());
+  });
+
+  it("renders portrait with proportional containment and reuses it independently of square", async () => {
+    const square = await prepareInstagramImageAsset(photo, origin, env, root);
+    const results = await Promise.all([1, 2, 3].map(() => prepareInstagramImageAsset(photo, origin, env, root, "instagram-portrait-v1")));
+    expect(results).toEqual([results[0], results[0], results[0]]);
+    const portrait = results[0];
+    expect(portrait.sourceFingerprint).toBe(square.sourceFingerprint);
+    expect(portrait.recipeVersion).toBe("instagram-portrait-v1");
+    expect(portrait.outputPath).toBe(`/images/product-photos/instagram-portrait-v1-${square.sourceFingerprint}.jpg`);
+    expect(portrait.outputPath).not.toBe(square.outputPath);
+    expect(validateInstagramMediaUrl(portrait.url, env)).toBe(portrait.url);
+    const file = path.join(root, path.basename(portrait.outputPath));
+    const bytes = await readFile(file);
+    expect(await sharp(bytes).metadata()).toMatchObject({ format: "jpeg", width: 1080, height: 1350, space: "srgb" });
+    const { data, info } = await sharp(bytes).raw().toBuffer({ resolveWithObject: true });
+    const redRows: number[] = [];
+    for (let y = 0; y < info.height; y++) {
+      const offset = (y * info.width + 540) * info.channels;
+      if (data[offset] > 200 && data[offset + 1] < 50) redRows.push(y);
+    }
+    expect(redRows.length).toBeGreaterThanOrEqual(538);
+    expect(redRows.length).toBeLessThanOrEqual(542);
+    expect(redRows[0]).toBeGreaterThanOrEqual(404);
+    expect(redRows[0]).toBeLessThanOrEqual(406);
+    expect([...data.subarray(0, 3)]).toEqual([255, 255, 255]);
+    const before = await stat(file);
+    expect(await prepareInstagramImageAsset(photo, origin, env, root, "instagram-portrait-v1")).toEqual(portrait);
+    expect((await stat(file)).mtimeMs).toBe(before.mtimeMs);
+    expect(await readFile(file)).toEqual(bytes);
+    expect(await readFile(path.join(root, "canonical.webp"))).toEqual(source);
+    expect((await readdir(root)).sort()).toEqual(["canonical.webp", path.basename(square.outputPath), path.basename(portrait.outputPath)].sort());
+  });
+
+  it.each(["instagram-v1", "instagram-portrait-v1"] as const)("rejects a cached JPEG with the wrong dimensions for %s", async (recipe) => {
+    const asset = await prepareInstagramImageAsset(photo, origin, env, root, recipe);
+    const wrong = await sharp(source).resize(1080, recipe === "instagram-v1" ? 1350 : 1080).jpeg().toBuffer();
+    const file = path.join(root, path.basename(asset.outputPath));
+    await writeFile(file, wrong);
+    await expect(prepareInstagramImageAsset(photo, origin, env, root, recipe)).rejects.toMatchObject({ kind: "invalid_media" });
+    expect(await readFile(file)).toEqual(wrong);
+  });
+
+  it.each(["unknown", "../instagram-v1", "toString", "__proto__", null, { width: 1080, height: 1350 }])("rejects invalid recipe %j", async (recipe) => {
+    await expect(prepareInstagramImageAsset(photo, origin, env, root, recipe as InstagramImageRecipe)).rejects.toMatchObject({ kind: "invalid_media" });
+    expect(await readdir(root)).toEqual(["canonical.webp"]);
   });
 
   it("uses a different derivative for changed source bytes", async () => {
