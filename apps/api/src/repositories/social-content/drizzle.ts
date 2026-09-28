@@ -57,9 +57,9 @@ export function createSocialContentRepository(db: DbClient, driver = process.env
     *readSelectionRows(tx) {
       const ready = tx.select({ productId: photos.productId, total: count().as("ready_count") }).from(photos)
         .where(eq(photos.processingStatus, "Ready")).groupBy(photos.productId).as("ready");
-      return yield tx.select({ productId: products.id, title: products.title, productStatus: products.status,
+      return yield tx.select({ productId: products.id, title: products.title, productStatus: products.status, categoryId: products.categoryId, productType: products.type,
         readyPhotoCount: ready.total, contentId: contents.id, contentStatus: contents.status, activityAt: contents.updatedAt })
-        .from(products).innerJoin(ready, eq(ready.productId, products.id))
+        .from(products).leftJoin(ready, eq(ready.productId, products.id))
         // Preserve generation history even if a human later changes the draft's product reference.
         .leftJoin(contents, or(eq(contents.productId, products.id), eq(contents.aiSourceProductId, products.id)));
     },

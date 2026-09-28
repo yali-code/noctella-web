@@ -27,7 +27,7 @@ export interface SocialDraftInsert {
   generation: SocialGenerationMetadata | null;
 }
 export interface SocialContentRepository {
-  readSelectionRows(tx: any): SocialWork<Array<{ productId: string; title: string; productStatus: string; readyPhotoCount: number; contentId: string | null; contentStatus: string | null; activityAt: string | Date | null }>>;
+  readSelectionRows(tx: any): SocialWork<Array<{ productId: string; title: string; productStatus: string; categoryId: string | null; productType: string; readyPhotoCount: number | null; contentId: string | null; contentStatus: string | null; activityAt: string | Date | null }>>;
   readGenerationContext(tx: any, productId: string): SocialWork<Pick<SocialGenerationContext, "product" | "photos"> | null>;
   transaction<T>(work: (tx: any) => SocialWork<T>): Promise<T>;
   readProduct(tx: any, id: string): SocialWork<{ id: string; updatedAt: string | Date } | undefined>;
