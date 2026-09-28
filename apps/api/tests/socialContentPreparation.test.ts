@@ -9,14 +9,14 @@ import { createTestDb } from "./testDb";
 import * as schema from "../src/db/schema.sqlite";
 import { ensureSchema } from "../src/db/migrate";
 import { createSocialContentPreparationService } from "../src/services/socialContentPreparation";
-import { prepareInstagramImageAsset } from "../src/integrations/instagram/mediaPreparation";
+import { prepareInstagramImageAsset, type InstagramImageRecipe } from "../src/integrations/instagram/mediaPreparation";
 
 let db: ReturnType<typeof createTestDb>;
 let root: string;
 let source: Buffer;
 const origin = "https://api.staging.noctella.com";
-const render = (photo: { url: string }, publicOrigin: string) => prepareInstagramImageAsset(photo, publicOrigin,
-  { INSTAGRAM_MEDIA_ALLOWED_HOSTS: "api.staging.noctella.com" }, root);
+const render: typeof prepareInstagramImageAsset = (photo, publicOrigin, _env, _root, recipe) => prepareInstagramImageAsset(photo, publicOrigin,
+  { INSTAGRAM_MEDIA_ALLOWED_HOSTS: "api.staging.noctella.com" }, root, recipe);
 const service = (renderer: typeof prepareInstagramImageAsset = render) => createSocialContentPreparationService(db, "test-memory", renderer);
 const rows = () => db.select().from(schema.socialPreparedImages);
 beforeEach(async () => {
@@ -53,6 +53,23 @@ it("reuses one row and derivative across retries and concurrent preparations", a
   expect(await service().prepare("content", "photo", origin)).toEqual(results[0]);
   expect(await rows()).toHaveLength(1);
   expect((await readdir(root)).filter(name => name.endsWith(".jpg"))).toHaveLength(1);
+});
+it("persists square and portrait independently and reuses the correct recipe on retry", async () => {
+  const square = await service().prepare("content", "photo", origin);
+  const portrait = await service().prepare("content", "photo", origin, "instagram-portrait-v1");
+  expect(portrait.recipeVersion).toBe("instagram-portrait-v1");
+  expect(portrait.sourceFingerprint).toBe(square.sourceFingerprint);
+  expect(portrait.id).not.toBe(square.id);
+  expect(portrait.outputPath).not.toBe(square.outputPath);
+  expect(await service().prepare("content", "photo", origin, "instagram-portrait-v1")).toEqual(portrait);
+  expect(await service().prepare("content", "photo", origin)).toEqual(square);
+  expect(await rows()).toHaveLength(2);
+  expect((await readdir(root)).filter(name => name.endsWith(".jpg"))).toHaveLength(2);
+});
+it("invalid recipe persists no prepared-media row or derivative", async () => {
+  await expect(service().prepare("content", "photo", origin, "invalid" as InstagramImageRecipe)).rejects.toMatchObject({ kind: "invalid_media" });
+  expect(await rows()).toHaveLength(0);
+  expect(await readdir(root)).toEqual(["source.webp"]);
 });
 it("rejects a non-selected photo before rendering", async () => {
   const renderer = vi.fn(render);

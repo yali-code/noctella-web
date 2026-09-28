@@ -1,5 +1,5 @@
 import type { DbClient } from "../db/client";
-import { prepareInstagramImageAsset } from "../integrations/instagram/mediaPreparation";
+import { prepareInstagramImageAsset, INSTAGRAM_IMAGE_RECIPE, type InstagramImageRecipe } from "../integrations/instagram/mediaPreparation";
 import { createPreparedImageRepository } from "../repositories/social-content/preparedImages";
 import { ConflictError } from "./errors";
 
@@ -11,10 +11,10 @@ export function createSocialContentPreparationService(
 ) {
   const repository = createPreparedImageRepository(db, driver);
   return {
-    async prepare(contentId: string, photoId: string, publicOrigin: string) {
+    async prepare(contentId: string, photoId: string, publicOrigin: string, recipeId: InstagramImageRecipe = INSTAGRAM_IMAGE_RECIPE) {
       const before = await repository.transaction(function* (tx) { return yield* repository.source(tx, contentId, photoId); });
       // Filesystem work stays outside the DB transaction; retries validate/reuse the derivative.
-      const asset = await render({ url: before.url }, publicOrigin);
+      const asset = await render({ url: before.url }, publicOrigin, undefined, undefined, recipeId);
       return repository.transaction(function* (tx) {
         const current = yield* repository.source(tx, contentId, photoId);
         if (JSON.stringify(current) !== JSON.stringify(before)) throw new ConflictError("Selected media changed during preparation");
