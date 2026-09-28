@@ -759,3 +759,13 @@ CREATE TABLE IF NOT EXISTS social_content_media (
  UNIQUE(content_id, sort_order)
 );
 CREATE INDEX IF NOT EXISTS idx_social_content_media_photo ON social_content_media(photo_id);
+-- Successful preparations only; source identity survives ProductPhoto deletion.
+CREATE TABLE IF NOT EXISTS social_prepared_images (
+ id TEXT PRIMARY KEY NOT NULL,
+ content_id TEXT NOT NULL REFERENCES social_contents(id) ON DELETE CASCADE,
+ source_photo_id TEXT NOT NULL,
+ source_fingerprint TEXT NOT NULL,
+ recipe_version TEXT NOT NULL,
+ output_path TEXT NOT NULL,
+ UNIQUE(content_id, source_photo_id, source_fingerprint, recipe_version)
+);

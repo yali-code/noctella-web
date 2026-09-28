@@ -1055,3 +1055,15 @@ export const socialContentMedia = pgTable("social_content_media", {
   uniqueIndex("idx_social_media_order_unique").on(table.contentId, table.sortOrder),
   index("idx_social_content_media_photo").on(table.photoId),
 ]);
+
+/** Successful derivatives only. Immutable source ID deliberately has no photo FK. */
+export const socialPreparedImages = pgTable("social_prepared_images", {
+  id: text("id").primaryKey(),
+  contentId: text("content_id").notNull().references(() => socialContents.id, { onDelete: "cascade" }),
+  sourcePhotoId: text("source_photo_id").notNull(),
+  sourceFingerprint: text("source_fingerprint").notNull(),
+  recipeVersion: text("recipe_version").notNull(),
+  outputPath: text("output_path").notNull(),
+}, (table) => [
+  uniqueIndex("idx_social_prepared_images_identity").on(table.contentId, table.sourcePhotoId, table.sourceFingerprint, table.recipeVersion),
+]);

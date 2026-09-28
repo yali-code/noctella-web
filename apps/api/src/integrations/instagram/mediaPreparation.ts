@@ -9,6 +9,13 @@ import { validateInstagramMediaUrl } from "../../config/instagramConfig";
 import { InstagramClientError } from "./types";
 
 const inFlight = new Map<string, Promise<void>>();
+export const INSTAGRAM_IMAGE_RECIPE = "instagram-v1";
+export interface PreparedInstagramImage {
+  url: string;
+  outputPath: string;
+  sourceFingerprint: string;
+  recipeVersion: string;
+}
 const invalid = () => new InstagramClientError("invalid_media", false);
 
 async function readRegularLocalFile(root: string, filename: string): Promise<Buffer> {
@@ -56,6 +63,15 @@ export async function prepareInstagramImage(
   env: NodeJS.ProcessEnv = process.env,
   root: string = productPhotoStaticRoot,
 ): Promise<string> {
+  return (await prepareInstagramImageAsset(photo, publicOrigin, env, root)).url;
+}
+
+export async function prepareInstagramImageAsset(
+  photo: { url: string },
+  publicOrigin: string,
+  env: NodeJS.ProcessEnv = process.env,
+  root: string = productPhotoStaticRoot,
+): Promise<PreparedInstagramImage> {
   try {
     const prefix = `${productPhotoStaticPath}/`;
     if (typeof photo.url !== "string" || !photo.url.startsWith(prefix)) throw invalid();
@@ -68,7 +84,7 @@ export async function prepareInstagramImage(
     if (source.length > PRODUCT_PHOTO_MAX_BYTES) throw invalid();
     // Version + source identity/content prevent stale reuse if a canonical file changes.
     const hash = createHash("sha256").update(filename).update("\0").update(source).digest("hex");
-    const derivative = `instagram-v1-${hash}.jpg`;
+    const derivative = `${INSTAGRAM_IMAGE_RECIPE}-${hash}.jpg`;
     const destination = productPhotoStorageSafety.safeJoin(root, derivative);
     const url = validateInstagramMediaUrl(`${origin.origin}${prefix}${derivative}`, env);
     let work = inFlight.get(destination);
@@ -98,7 +114,7 @@ export async function prepareInstagramImage(
     }
     try { await work; }
     finally { if (inFlight.get(destination) === work) inFlight.delete(destination); }
-    return url;
+    return { url, outputPath: `${prefix}${derivative}`, sourceFingerprint: hash, recipeVersion: INSTAGRAM_IMAGE_RECIPE };
   } catch {
     // Never surface Sharp/filesystem errors, paths, or supplied URL credentials.
     throw invalid();
