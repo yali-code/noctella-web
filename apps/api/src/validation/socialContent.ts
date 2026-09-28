@@ -7,7 +7,7 @@ const hashtag = z.string().transform((value) => value.trim().normalize("NFC").re
 export const socialHashtagsSchema = z.array(hashtag).max(10).transform((values) => [...new Set(values)]);
 export const socialGeneratedResultSchema = z.object({
   caption: z.string().max(2200).refine((value) => !!value.trim(), "Generated caption is required"),
-  hashtags: socialHashtagsSchema,
+  hashtags: z.array(z.unknown()).max(5).pipe(socialHashtagsSchema),
   concept: z.string().trim().min(1).max(1000),
   media: z.array(z.object({ photoId: socialId, editorialAltText: z.string().trim().min(1).max(1000) }).strict()).min(1).max(10)
     .refine((items) => new Set(items.map((item) => item.photoId)).size === items.length, "Duplicate media IDs"),

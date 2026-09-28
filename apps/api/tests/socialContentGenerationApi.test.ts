@@ -134,7 +134,7 @@ it("uses the shared structured transport with server-owned metadata (mocked fetc
   vi.stubEnv("AI_INTAKE_OPENAI_API_KEY", "fake-test-key"); vi.stubEnv("AI_INTAKE_OPENAI_MODEL", "test-model");
   vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output()) }] }] }), { status: 200 }));
   const row = await generateSocialContent(db, input());
-  expect(row).toMatchObject({ aiProvider: "openai", aiModel: "test-model", aiPromptVersion: "social-content-v1" });
+  expect(row).toMatchObject({ aiProvider: "openai", aiModel: "test-model", aiPromptVersion: "social-content-v2" });
   const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
   expect(body.text.format).toMatchObject({ type: "json_schema", strict: true });
   expect(body.input[0].content[0].text).not.toContain("fake-test-key");
