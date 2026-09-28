@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { socialGeneratedResultSchema, socialHashtagsSchema } from "../src/validation/socialContent";
 import { requestStructuredResponse } from "../src/ai/structuredResponse";
 import { createSocialGenerationProvider, type SocialGenerationContext } from "../src/social-content/provider";
 
@@ -21,13 +22,16 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 it("uses existing transport, canonical metadata and server-owned prompt/model with validated output", async () => {
   const provider = createSocialGenerationProvider();
-  expect(provider).toMatchObject({ provider: "openai", model: "test-model", promptVersion: "social-content-v1" });
+  expect(provider).toMatchObject({ provider: "openai", model: "test-model", promptVersion: "social-content-v2" });
   expect(await provider.generate(context())).toEqual({ ...output(), hashtags: ["vintage"] });
   expect(transport).toHaveBeenCalledTimes(1);
   const body = transport.mock.calls[0][1] as any;
   expect(body.model).toBe("test-model");
   for (const phrase of ["English", "Instagram", "@noctella.vault", "vintage", "antique", "collectible", "testing status", "working condition", "dates", "materials", "origin", "rarity", "restoration", "supplied eligible photo IDs", "structured output"]) expect(body.instructions).toContain(phrase);
-  expect(JSON.parse(body.input[0].content[0].text)).toEqual({ ...context(), product: { id: "p1", sku: "NOC-1", title: "Vintage vase", description: "Stored ERP description" } });
+  expect(JSON.parse(body.input[0].content[0].text)).toEqual({ ...context(), product: { title: "Vintage vase", description: "Stored ERP description" } });
+  expect(body.input[0].content[0].text).not.toContain("NOC-1");
+  expect(body.text.format.schema.properties.hashtags.maxItems).toBe(5);
+  for (const phrase of ["SKU/internal IDs", "camera angle", "framing", "visible arrangement", "background", "lighting", "packaging position", "readable visual text", "MUST NOT imply image inspection", "Nova Vita ex Praeterito", "do not duplicate"]) expect(body.instructions).toContain(phrase);
   expect(body.text.format).toMatchObject({ type: "json_schema", strict: true });
   expect(JSON.stringify(body)).not.toContain("fake-test-key");
   expect(fetch).not.toHaveBeenCalled();
@@ -40,7 +44,7 @@ it("bounds whitelisted text and preserves the first ten offered photo IDs withou
   const before = structuredClone(value);
   await createSocialGenerationProvider().generate(value);
   const bounded = JSON.parse((transport.mock.calls[0][1] as any).input[0].content[0].text);
-  expect(bounded.product.title).toHaveLength(300); expect(bounded.product.description).toHaveLength(6000); expect(bounded.product.sku).toHaveLength(128);
+  expect(bounded.product.title).toHaveLength(300); expect(bounded.product.description).toHaveLength(6000); expect(bounded.product).not.toHaveProperty("sku"); expect(bounded.product).not.toHaveProperty("id");
   expect(bounded.photos).toHaveLength(10); expect(bounded.photos[0].altText).toHaveLength(1000);
   expect(bounded.photos.map((p: any) => p.id)).toEqual(value.photos.slice(0, 10).map((p) => p.id));
   expect(value).toEqual(before);
@@ -48,7 +52,7 @@ it("bounds whitelisted text and preserves the first ten offered photo IDs withou
 
 it.each([
   null, { ...output(), caption: "x".repeat(2201) }, { ...output(), caption: " " },
-  { ...output(), hashtags: Array(11).fill("tag") }, { ...output(), hashtags: ["x".repeat(51)] },
+  { ...output(), hashtags: Array(6).fill("tag") }, { ...output(), hashtags: ["x".repeat(51)] },
   { ...output(), concept: "x".repeat(1001) }, { ...output(), media: [] },
   { ...output(), media: [{ photoId: "photo1", editorialAltText: "x".repeat(1001) }] },
   { ...output(), media: [{ photoId: "foreign", editorialAltText: "alt" }] },
@@ -81,7 +85,7 @@ it.each([undefined, ""])("requires explicit OpenAI selection even with credentia
   expect(safe.provider).toBe("mock");
   expect(await safe.generate(context())).toEqual(await safe.generate(context()));
   vi.stubEnv("SOCIAL_CONTENT_AI_PROVIDER", "openai");
-  expect(createSocialGenerationProvider()).toMatchObject({ provider: "openai", model: "test-model", promptVersion: "social-content-v1" });
+  expect(createSocialGenerationProvider()).toMatchObject({ provider: "openai", model: "test-model", promptVersion: "social-content-v2" });
   // Construction verifies configuration without initiating paid provider work.
   expect(transport).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
 });
@@ -92,4 +96,11 @@ it("sanitizes raw transport errors without leaking credentials and allows retry"
   try { await provider.generate(context()); throw new Error("Expected failure"); }
   catch (error) { expect(String(error)).toContain("Social content generation is unavailable"); expect(String(error)).not.toMatch(/raw provider|fake-test-key/); }
   await expect(provider.generate(context())).resolves.toMatchObject({ caption: "A vintage vase" });
+});
+
+it("limits generated hashtags to five without changing the manual hashtag contract", () => {
+  const tags = ["one", "two", "three", "four", "five"];
+  expect(socialGeneratedResultSchema.safeParse({ ...output(), hashtags: tags }).success).toBe(true);
+  expect(socialGeneratedResultSchema.safeParse({ ...output(), hashtags: [...tags, "six"] }).success).toBe(false);
+  expect(socialHashtagsSchema.safeParse([...tags, "six"]).success).toBe(true);
 });
