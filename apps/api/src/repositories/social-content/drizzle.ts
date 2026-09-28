@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
 import type { SocialContent } from "@noctella/shared";
 import type { DbClient } from "../../db/client";
 import * as sqlite from "../../db/schema.sqlite";
@@ -54,6 +54,15 @@ export function createSocialContentRepository(db: DbClient, driver = process.env
   }
   return {
     transaction, detail, replaceMedia,
+    *readSelectionRows(tx) {
+      const ready = tx.select({ productId: photos.productId, total: count().as("ready_count") }).from(photos)
+        .where(eq(photos.processingStatus, "Ready")).groupBy(photos.productId).as("ready");
+      return yield tx.select({ productId: products.id, title: products.title, productStatus: products.status,
+        readyPhotoCount: ready.total, contentId: contents.id, contentStatus: contents.status, activityAt: contents.updatedAt })
+        .from(products).innerJoin(ready, eq(ready.productId, products.id))
+        // Preserve generation history even if a human later changes the draft's product reference.
+        .leftJoin(contents, or(eq(contents.productId, products.id), eq(contents.aiSourceProductId, products.id)));
+    },
     *readGenerationContext(tx, productId) {
       const [product] = yield tx.select({ id: products.id, sku: products.sku, title: products.title, description: products.description, updatedAt: products.updatedAt })
         .from(products).where(eq(products.id, productId));
