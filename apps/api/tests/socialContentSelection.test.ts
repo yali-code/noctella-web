@@ -7,8 +7,9 @@ let db: ReturnType<typeof createTestDb>;
 beforeEach(() => { db = createTestDb(); vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected provider call")); });
 afterEach(() => { vi.restoreAllMocks(); (db as any).$client.close(); });
 const select = () => selectNextSocialContentCandidate(db, "test-memory");
-async function product(id: string, ready = 1, status = "draft") {
-  await db.insert(schema.products).values({ id, sku: id, title: id, slug: id, type: "unique_item", status });
+async function product(id: string, ready = 1, status = "draft", categoryId?: string) {
+  if (categoryId) await db.insert(schema.categories).values({ id: categoryId, name: categoryId, slug: categoryId }).onConflictDoNothing();
+  await db.insert(schema.products).values({ id, sku: id, title: id, slug: id, type: "unique_item", status, categoryId });
   for (let i = 0; i < ready; i++) await photo(id, `${id}-${i}`, "Ready");
 }
 async function photo(productId: string, id: string, processingStatus: string) {
@@ -22,7 +23,7 @@ it("excludes missing/non-Ready media and selects a canonical product with Ready 
   await product("a", 0); await photo("a", "pending", "Processing");
   expect(await select()).toBeNull();
   await product("b");
-  expect(await select()).toEqual({ productId: "b", title: "b", readyPhotoCount: 1, latestSocialActivityAt: null, latestSocialStatus: null, reason: "never_used" });
+  expect(await select()).toEqual({ productId: "b", title: "b", readyPhotoCount: 1, latestSocialActivityAt: null, latestSocialStatus: null, reason: "never_used", classification: "type:unique_item", diversityPreferred: false });
 });
 it.each(["archived", "sold", "reserved", "returned"])("excludes %s stock", async (status) => {
   await product("a", 2, status); expect(await select()).toBeNull();
@@ -63,4 +64,40 @@ it("is repeatable and read-only with no draft creation or provider work", async 
   expect(await db.select().from(schema.socialContents)).toEqual([]);
   expect(await db.select().from(schema.socialContentMedia)).toEqual([]);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it("prefers another category over recent editorial history even on an archived no-media product", async () => {
+  await product("history", 0, "archived", "art"); await content("history", "recent", "approved");
+  await product("a", 3, "draft", "art"); await product("b", 1, "draft", "books");
+  expect(await select()).toMatchObject({ productId: "b", classification: "category:books", diversityPreferred: true });
+});
+
+it("falls back to core ranking when every candidate category is recent", async () => {
+  await product("a", 1, "draft", "art"); await product("b", 2, "draft", "art");
+  await product("history", 0, "archived", "art"); await content("history", "recent");
+  expect(await select()).toMatchObject({ productId: "b", diversityPreferred: false });
+});
+
+it("diversity cannot bypass Ready media or unresolved work", async () => {
+  await product("history", 0, "archived", "art"); await content("history", "recent");
+  await product("a", 1, "draft", "art"); await product("no-media", 0, "draft", "books");
+  await product("blocked", 1, "draft", "books"); await content("blocked", "active", "draft");
+  expect(await select()).toMatchObject({ productId: "a", diversityPreferred: false });
+});
+
+it("ages classifications out after three newer records rather than excluding them permanently", async () => {
+  await product("a", 1, "draft", "art"); await product("b", 3, "draft", "books");
+  await product("old", 0, "archived", "art"); await content("old", "old-record", "rejected", "2026-08-01 00:00:00");
+  await product("recent", 0, "archived", "books");
+  for (let i = 1; i <= 3; i++) await content("recent", `r${i}`, "rejected", `2026-09-0${i} 00:00:00`);
+  expect(await select()).toMatchObject({ productId: "a", diversityPreferred: true });
+});
+
+it("preserves never-used and oldest-activity ranking within an equally preferred category", async () => {
+  await product("history", 0, "archived", "art");
+  for (let i = 1; i <= 3; i++) await content("history", `r${i}`, "rejected", `2026-09-0${i} 00:00:00`);
+  await product("a", 3, "draft", "books"); await content("a", "ca", "rejected", "2026-08-02 00:00:00");
+  await product("b", 1, "draft", "books"); await content("b", "cb", "rejected", "2026-08-01 00:00:00");
+  expect(await select()).toMatchObject({ productId: "b", diversityPreferred: false });
+  await product("new", 1, "draft", "books"); expect(await select()).toMatchObject({ productId: "new" });
 });
