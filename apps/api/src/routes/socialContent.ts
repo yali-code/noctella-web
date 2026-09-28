@@ -3,6 +3,7 @@ import type { DbClient } from "../db/client";
 import { createRequireAuth, requirePermission } from "../auth/permissions";
 import { requireAdminOriginForMutations } from "../auth/csrf";
 import { createSocialContentService } from "../services/socialContent";
+import { selectNextSocialContentCandidate } from "../services/socialContentSelection";
 import { handleRouteError } from "./errorHandler";
 import { generateSocialContent } from "../services/socialContentGeneration";
 import { socialGenerationRequestSchema } from "../use-cases/social-content/useCases";
@@ -18,6 +19,9 @@ export function createSocialContentRouter(db: DbClient, providerFactory: () => S
   });
   router.get("/", requirePermission("products.view"), async (req, res) => {
     try { res.json(await service.list(req.query)); } catch (error) { handleRouteError(error, res); }
+  });
+  router.get("/next-candidate", requirePermission("products.edit"), async (_req, res) => {
+    try { res.json(await selectNextSocialContentCandidate(db)); } catch (error) { handleRouteError(error, res); }
   });
   router.get("/:id", requirePermission("products.view"), async (req, res) => {
     try { res.json(await service.get(req.params.id)); } catch (error) { handleRouteError(error, res); }
