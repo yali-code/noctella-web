@@ -3,6 +3,9 @@ import type { DbClient } from "../db/client";
 import { createRequireAuth, requirePermission } from "../auth/permissions";
 import { requireAdminOriginForMutations } from "../auth/csrf";
 import { createSocialContentService } from "../services/socialContent";
+import { createSocialContentPreparationService } from "../services/socialContentPreparation";
+import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
+import { socialId, socialPrepareImageSchema } from "../validation/socialContent";
 import { selectNextSocialContentCandidate } from "../services/socialContentSelection";
 import { handleRouteError } from "./errorHandler";
 import { generateSocialContent } from "../services/socialContentGeneration";
@@ -13,6 +16,15 @@ export function createSocialContentRouter(db: DbClient, providerFactory: () => S
   const router = Router();
   const service = createSocialContentService(db);
   router.use(requireAdminOriginForMutations, createRequireAuth(db));
+  router.post("/:id/prepare-image", requirePermission("products.edit"), async (req, res) => {
+    try {
+      const contentId = socialId.parse(req.params.id);
+      const input = socialPrepareImageSchema.parse(req.body);
+      const result = await createSocialContentPreparationService(db).prepare(contentId, input.photoId, resolvePublicApiOrigin(), input.recipe);
+      const { id, sourcePhotoId, sourceFingerprint, recipeVersion, outputPath } = result;
+      res.json({ id, contentId: result.contentId, sourcePhotoId, sourceFingerprint, recipeVersion, outputPath });
+    } catch (error) { handleRouteError(error, res); }
+  });
   router.post("/generate", requirePermission("products.edit"), async (req, res) => {
     try { res.status(201).json(await generateSocialContent(db, socialGenerationRequestSchema.parse(req.body), providerFactory)); }
     catch (error) { handleRouteError(error, res); }

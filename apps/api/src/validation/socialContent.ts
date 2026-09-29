@@ -2,6 +2,10 @@ import { z } from "zod";
 import { SOCIAL_CONTENT_STATUSES, SOCIAL_CONTENT_TYPES } from "@noctella/shared";
 
 export const socialId = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
+export const socialPrepareImageSchema = z.object({
+  photoId: socialId,
+  recipe: z.enum(["instagram-v1", "instagram-portrait-v1"]).default("instagram-v1"),
+}).strict();
 const hashtag = z.string().transform((value) => value.trim().normalize("NFC").replace(/^#/, "").toLowerCase().normalize("NFC"))
   .pipe(z.string().min(1).max(50).regex(/^[\p{L}\p{N}_]+$/u));
 export const socialHashtagsSchema = z.array(hashtag).max(10).transform((values) => [...new Set(values)]);
