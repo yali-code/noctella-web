@@ -31,6 +31,13 @@ export function createPreparedImageRepository(db: DbClient, driver: string) {
   const { socialContents: contents, socialContentMedia: media, productPhotos: photos, socialPreparedImages: prepared } = sync ? sqlite : postgres;
   return {
     transaction: createSocialContentRepository(db, driver).transaction,
+    *find(tx: any, contentId: string, id: string): SocialWork<SocialPreparedImage> {
+      let query = tx.select().from(prepared).where(and(eq(prepared.contentId, contentId), eq(prepared.id, id)));
+      if (!sync) query = query.for("share");
+      const [row] = yield query;
+      if (!row) throw new NotFoundError("Prepared image not found for content");
+      return row;
+    },
     *source(tx: any, contentId: string, photoId: string): SocialWork<PreparationSource> {
       let contentQuery = tx.select().from(contents).where(eq(contents.id, contentId));
       if (!sync) contentQuery = contentQuery.for("update");

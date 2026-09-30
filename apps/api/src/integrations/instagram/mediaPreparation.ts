@@ -23,6 +23,14 @@ export interface PreparedInstagramImage {
   recipeVersion: string;
 }
 const invalid = () => new InstagramClientError("invalid_media", false);
+function canonicalFilename(url: string): string {
+  const prefix = `${productPhotoStaticPath}/`;
+  if (typeof url !== "string" || !url.startsWith(prefix)) throw invalid();
+  const filename = url.slice(prefix.length);
+  if (!/^[a-zA-Z0-9_-][a-zA-Z0-9._-]*\.webp$/.test(filename) || filename.includes("..")) throw invalid();
+  return filename;
+}
+const sourceFingerprint = (filename: string, source: Buffer) => createHash("sha256").update(filename).update("\0").update(source).digest("hex");
 
 async function readRegularLocalFile(root: string, filename: string): Promise<Buffer> {
   const file = productPhotoStorageSafety.safeJoin(root, filename);
@@ -63,6 +71,30 @@ async function validDerivative(root: string, filename: string, recipe: typeof im
 }
 
 /** Local-only derivative; no ProductPhoto writes, HTTP reads, or credential handling. */
+export async function inspectPreparedInstagramImage(
+  photo: { url: string },
+  prepared: Pick<PreparedInstagramImage, "sourceFingerprint" | "recipeVersion" | "outputPath">,
+  root: string = productPhotoStaticRoot,
+): Promise<boolean> {
+  try {
+    if (!Object.prototype.hasOwnProperty.call(imageRecipes, prepared.recipeVersion)) return false;
+    const recipe = imageRecipes[prepared.recipeVersion as InstagramImageRecipe];
+    const filename = canonicalFilename(photo.url);
+    const source = await readRegularLocalFile(root, filename);
+    const fingerprint = sourceFingerprint(filename, source);
+    if (fingerprint !== prepared.sourceFingerprint) return false;
+    const derivative = `${prepared.recipeVersion}-${fingerprint}.jpg`;
+    if (prepared.outputPath !== `${productPhotoStaticPath}/${derivative}`) return false;
+    return await validDerivative(root, derivative, recipe);
+  } catch (error: any) {
+    // Missing/unsafe/undecodable assets are invalid. Other OS failures are infrastructure errors.
+    if (error?.code && !["ENOENT", "ENOTDIR", "ELOOP"].includes(error.code)) {
+      throw new Error("Prepared image inspection failed");
+    }
+    return false;
+  }
+}
+
 export async function prepareInstagramImage(
   photo: { url: string },
   publicOrigin: string,
@@ -83,16 +115,14 @@ export async function prepareInstagramImageAsset(
     if (typeof recipeId !== "string" || !Object.prototype.hasOwnProperty.call(imageRecipes, recipeId)) throw invalid();
     const recipe = imageRecipes[recipeId];
     const prefix = `${productPhotoStaticPath}/`;
-    if (typeof photo.url !== "string" || !photo.url.startsWith(prefix)) throw invalid();
-    const filename = photo.url.slice(prefix.length);
-    if (!/^[a-zA-Z0-9_-][a-zA-Z0-9._-]*\.webp$/.test(filename) || filename.includes("..")) throw invalid();
+    const filename = canonicalFilename(photo.url);
     const origin = new URL(publicOrigin);
     if (publicOrigin !== origin.origin) throw invalid();
     validateInstagramMediaUrl(`${origin.origin}${photo.url}`, env);
     const source = await readRegularLocalFile(root, filename);
     if (source.length > PRODUCT_PHOTO_MAX_BYTES) throw invalid();
     // Version + source identity/content prevent stale reuse if a canonical file changes.
-    const hash = createHash("sha256").update(filename).update("\0").update(source).digest("hex");
+    const hash = sourceFingerprint(filename, source);
     const derivative = `${recipeId}-${hash}.jpg`;
     const destination = productPhotoStorageSafety.safeJoin(root, derivative);
     const url = validateInstagramMediaUrl(`${origin.origin}${prefix}${derivative}`, env);
