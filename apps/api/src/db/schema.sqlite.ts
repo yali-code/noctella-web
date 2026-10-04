@@ -569,6 +569,7 @@ export const instagramPublishAttempts = sqliteTable("instagram_publish_attempts"
   id: text("id").primaryKey(),
   connectionId: text("connection_id").notNull().references(() => marketplaceConnections.id),
   idempotencyKey: text("idempotency_key").notNull().unique(),
+  approvalId: text("approval_id").references(() => socialContentApprovals.id, { onDelete: "restrict" }),
   caption: text("caption").notNull(),
   mediaUrl: text("media_url").notNull(),
   containerId: text("container_id"),
@@ -578,7 +579,10 @@ export const instagramPublishAttempts = sqliteTable("instagram_publish_attempts"
   createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
   publishedAt: text("published_at"),
-}, (table) => [index("idx_instagram_attempts_connection").on(table.connectionId, table.createdAt)]);
+}, (table) => [
+  index("idx_instagram_attempts_connection").on(table.connectionId, table.createdAt),
+  uniqueIndex("idx_instagram_attempts_approval_unique").on(table.approvalId),
+]);
 export const publishJobs = sqliteTable("publish_jobs", {
   id: text("id").primaryKey(), productId: text("product_id").notNull(), channel: text("channel").notNull(), status: text("status").notNull(), idempotencyKey: text("idempotency_key").notNull().unique(), payloadSnapshot: text("payload_snapshot").notNull(), externalListingId: text("external_listing_id"), externalListingUrl: text("external_listing_url"), attemptCount: integer("attempt_count").notNull().default(0), lastError: text("last_error"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), completedAt: text("completed_at"),
 }, (table) => [index("idx_publish_jobs_product").on(table.productId), index("idx_publish_jobs_channel").on(table.channel), index("idx_publish_jobs_status").on(table.status)]);

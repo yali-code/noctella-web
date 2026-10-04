@@ -80,6 +80,14 @@ CREATE TABLE IF NOT EXISTS instagram_publish_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_instagram_attempts_connection ON instagram_publish_attempts(connection_id, created_at);
   `);
+  sqlite.transaction(() => {
+    const columns = sqlite.prepare("PRAGMA table_info(instagram_publish_attempts)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "approval_id")) {
+      sqlite.exec("ALTER TABLE instagram_publish_attempts ADD COLUMN approval_id TEXT REFERENCES social_content_approvals(id) ON DELETE RESTRICT");
+    }
+    // Both supported databases permit multiple NULLs in a normal unique index.
+    sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_instagram_attempts_approval_unique ON instagram_publish_attempts(approval_id)");
+  })();
 }
 
 /** Additive Packet J identity storage; business Customer and Admin sessions remain separate. */

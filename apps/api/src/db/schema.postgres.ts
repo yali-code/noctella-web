@@ -427,6 +427,7 @@ export const instagramPublishAttempts = pgTable("instagram_publish_attempts", {
   id: text("id").primaryKey().notNull(),
   connectionId: text("connection_id").notNull().references(() => marketplaceConnections.id),
   idempotencyKey: text("idempotency_key").notNull().unique(),
+  approvalId: text("approval_id").references(() => socialContentApprovals.id, { onDelete: "restrict" }),
   caption: text("caption").notNull(),
   mediaUrl: text("media_url").notNull(),
   containerId: text("container_id"),
@@ -436,7 +437,10 @@ export const instagramPublishAttempts = pgTable("instagram_publish_attempts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
   publishedAt: timestamp("published_at", { withTimezone: true }),
-}, (table) => [index("idx_instagram_attempts_connection").on(table.connectionId, table.createdAt)]);
+}, (table) => [
+  index("idx_instagram_attempts_connection").on(table.connectionId, table.createdAt),
+  uniqueIndex("idx_instagram_attempts_approval_unique").on(table.approvalId),
+]);
 
 export const publishJobs = pgTable("publish_jobs", {
   id: text("id").primaryKey().notNull(),
