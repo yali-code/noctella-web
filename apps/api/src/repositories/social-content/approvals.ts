@@ -28,6 +28,14 @@ export function createSocialContentApprovalRepository(db: DbClient, driver: stri
   const { socialContentApprovals: approvals, socialPreparedImages: images } = sync ? sqlite : postgres;
   return {
     transaction: createSocialContentRepository(db, driver).transaction,
+    isRequestConflict(error: unknown): boolean {
+      let item = error as { code?: string; constraint?: string; message?: string; cause?: unknown } | undefined;
+      for (let depth = 0; item && depth < 4; depth++, item = item.cause as typeof item) {
+        if (item.code === "23505" && item.constraint === "idx_social_content_approvals_request_unique") return true;
+        if (item.code === "SQLITE_CONSTRAINT_UNIQUE" && item.message?.includes("social_content_approvals.request_id")) return true;
+      }
+      return false;
+    },
     *insert(tx: any, input: SocialContentApprovalInsert): SocialWork<SocialContentApproval> {
       if (!Number.isInteger(input.contentVersion) || input.contentVersion < 1) {
         throw new BadRequestError("Invalid reviewed content version");

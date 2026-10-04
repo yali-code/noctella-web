@@ -2,6 +2,11 @@ import { z } from "zod";
 import { SOCIAL_CONTENT_STATUSES, SOCIAL_CONTENT_TYPES } from "@noctella/shared";
 
 export const socialId = z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/);
+export const socialApprovalSchema = z.object({
+  preparedImageId: socialId,
+  expectedVersion: z.number().int().positive(),
+  requestId: z.string().uuid().refine((value) => value === value.toLowerCase(), "Canonical UUID required"),
+}).strict();
 export const socialPrepareImageSchema = z.object({
   photoId: socialId,
   recipe: z.enum(["instagram-v1", "instagram-portrait-v1"]).default("instagram-v1"),

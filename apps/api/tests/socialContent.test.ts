@@ -58,17 +58,17 @@ describe("Social Content editorial foundation", () => {
     await expect(service.edit(row.id, { ...draft, mediaIds: ["other"], expectedVersion: 2 })).rejects.toThrow();
     expect(await service.get(row.id)).toEqual(edited);
   });
-  it("explicitly submits and approves without touching products, photos, outbox or Instagram", async () => {
+  it("submits for review but rejects generic approval without touching products, photos, outbox or Instagram", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected provider call"));
     const before = await db.select().from(schema.productPhotos);
     const beforeProducts = await db.select().from(schema.products);
     let row = await service.create(draft);
-    await expect(service.transition(row.id, { status: "approved", expectedVersion: 1 })).rejects.toThrow("Invalid social content transition");
+    await expect(service.transition(row.id, { status: "approved", expectedVersion: 1 })).rejects.toThrow("Explicit prepared-image Human Approval");
     row = await service.transition(row.id, { status: "ready_for_review", expectedVersion: row.version });
     await expect(service.edit(row.id, { ...draft, expectedVersion: row.version })).rejects.toThrow("Only draft");
-    await expect(service.transition(row.id, { status: "approved", expectedVersion: 1 })).rejects.toThrow("Content changed");
-    row = await service.transition(row.id, { status: "approved", expectedVersion: row.version });
-    expect(row.status).toBe("approved");
+    await expect(service.transition(row.id, { status: "rejected", expectedVersion: 1 })).rejects.toThrow("Content changed");
+    await expect(service.transition(row.id, { status: "approved", expectedVersion: row.version })).rejects.toThrow("Explicit prepared-image Human Approval");
+    expect((await service.get(row.id)).status).toBe("ready_for_review");
     await expect(service.edit(row.id, { ...draft, expectedVersion: row.version })).rejects.toThrow("Only draft");
     await expect(service.transition(row.id, { status: "draft", expectedVersion: row.version })).rejects.toThrow("Invalid social content transition");
     expect(await db.select().from(schema.instagramPublishAttempts)).toHaveLength(0);
@@ -82,9 +82,10 @@ describe("Social Content editorial foundation", () => {
     row = await service.transition(row.id, { status: "ready_for_review", expectedVersion: 1 });
     await db.delete(schema.productPhotos).where(eq(schema.productPhotos.id, "photo1"));
     expect(await service.get(row.id)).toMatchObject({ missingMediaCount: 1 });
-    await expect(service.transition(row.id, { status: "approved", expectedVersion: row.version })).rejects.toThrow("no longer available");
+    await expect(service.transition(row.id, { status: "approved", expectedVersion: row.version })).rejects.toThrow("Explicit prepared-image Human Approval");
     row = await service.transition(row.id, { status: "rejected", expectedVersion: row.version });
     row = await service.transition(row.id, { status: "draft", expectedVersion: row.version });
+    await expect(service.transition(row.id, { status: "ready_for_review", expectedVersion: row.version })).rejects.toThrow("no longer available");
     row = await service.edit(row.id, { ...draft, mediaIds: ["photo2"], expectedVersion: row.version });
     expect(row.missingMediaCount).toBe(0);
     expect((await service.transition(row.id, { status: "ready_for_review", expectedVersion: row.version })).status).toBe("ready_for_review");
@@ -100,7 +101,7 @@ describe("Social Content editorial foundation", () => {
   it("rejects competing transitions using the reviewed version", async () => {
     let row = await service.create(draft);
     row = await service.transition(row.id, { status: "ready_for_review", expectedVersion: 1 });
-    const results = await Promise.allSettled([service.transition(row.id, { status: "approved", expectedVersion: row.version }), service.transition(row.id, { status: "rejected", expectedVersion: row.version })]);
+    const results = await Promise.allSettled([service.transition(row.id, { status: "rejected", expectedVersion: row.version }), service.transition(row.id, { status: "rejected", expectedVersion: row.version })]);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
   });
   it("rolls caption and media changes back if a media insert fails", async () => {
@@ -159,8 +160,8 @@ describe("Social Content Admin API", () => {
     await createAdminUser(db, { email: "owner@example.test", password: "safe-test-password-123", role: "owner" });
     const owner = await login(db, { email: "owner@example.test", password: "safe-test-password-123" });
     const approved = await request(app).post(`/social/${id}/status`).set("Cookie", `noctella_admin_session=${owner.rawToken}`).send({ status: "approved", expectedVersion: 2 });
-    expect(approved.status).toBe(200);
-    expect(approved.body.status).toBe("approved");
+    expect(approved.status).toBe(400);
+    expect(approved.body.error).toContain("Explicit prepared-image Human Approval");
     expect(JSON.stringify(approved.body)).not.toContain("token");
   });
 });

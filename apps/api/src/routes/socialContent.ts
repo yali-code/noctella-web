@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { DbClient } from "../db/client";
-import { createRequireAuth, requirePermission } from "../auth/permissions";
+import { createRequireAuth, requirePermission, type AuthedRequest } from "../auth/permissions";
 import { requireAdminOriginForMutations } from "../auth/csrf";
 import { createSocialContentService } from "../services/socialContent";
 import { createSocialContentPreparationService } from "../services/socialContentPreparation";
@@ -43,6 +43,10 @@ export function createSocialContentRouter(db: DbClient, providerFactory: () => S
   });
   router.patch("/:id", requirePermission("products.edit"), async (req, res) => {
     try { res.json(await service.edit(req.params.id, req.body)); } catch (error) { handleRouteError(error, res); }
+  });
+  router.post("/:id/approve", requirePermission("products.edit"), requirePermission("products.publish"), async (req: AuthedRequest, res) => {
+    try { res.json(await service.approve(req.params.id, req.body, req.adminUser!.id)); }
+    catch (error) { handleRouteError(error, res); }
   });
   router.post("/:id/status", requirePermission("products.edit"), (req, res, next) => {
     if (req.body?.status === "approved" || req.body?.status === "rejected") return requirePermission("products.publish")(req, res, next);
