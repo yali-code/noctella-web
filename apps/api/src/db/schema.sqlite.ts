@@ -881,3 +881,15 @@ export const socialPreparedImages = sqliteTable("social_prepared_images", {
 }, (table) => [
   uniqueIndex("idx_social_prepared_images_identity").on(table.contentId, table.sourcePhotoId, table.sourceFingerprint, table.recipeVersion),
 ]);
+/** Immutable Human Approval evidence; ordinary parent deletion is restricted. */
+export const socialContentApprovals = sqliteTable("social_content_approvals", {
+  id: text("id").primaryKey(),
+  requestId: text("request_id").notNull(),
+  contentId: text("content_id").notNull().references(() => socialContents.id, { onDelete: "restrict" }),
+  preparedImageId: text("prepared_image_id").notNull().references(() => socialPreparedImages.id, { onDelete: "restrict" }),
+  contentVersion: integer("content_version").notNull(),
+  approvedByAdminUserId: text("approved_by_admin_user_id").notNull().references(() => adminUsers.id, { onDelete: "restrict" }),
+  approvedAt: text("approved_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [
+  uniqueIndex("idx_social_content_approvals_request_unique").on(table.requestId),
+]);
