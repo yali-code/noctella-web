@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./testDb";
 import * as schema from "../src/db/schema.sqlite";
@@ -7,6 +9,9 @@ import { createSocialContentService } from "../src/services/socialContent";
 import { createSocialContentRepository } from "../src/repositories/social-content/drizzle";
 import { createGeneratedSocialDraftUseCase, type GeneratedSocialDraftInput } from "../src/use-cases/social-content/useCases";
 import { acquireSocialGenerationGuard } from "../src/use-cases/social-content/generationGuard";
+import { createSocialContentRouter } from "../src/routes/socialContent";
+import * as preparation from "../src/services/socialContentPreparation";
+import { createAdminUser, login } from "../src/services/adminAuth";
 
 let db: ReturnType<typeof createTestDb>;
 let service: ReturnType<typeof createSocialContentService>;
@@ -124,7 +129,26 @@ describe("Internal generated-draft persistence", () => {
     let row = await service.createGenerated(input);
     row = await service.edit(row.id, { ...manual, caption: "Human edit", expectedVersion: row.version });
     row = await service.transition(row.id, { status: "ready_for_review", expectedVersion: row.version });
-    row = await service.transition(row.id, { status: "approved", expectedVersion: row.version });
+    const originalFactory = preparation.createSocialContentPreparationService;
+    const render = vi.fn(() => { throw new Error("Approval must not render"); });
+    vi.spyOn(preparation, "createSocialContentPreparationService").mockImplementation((client) =>
+      originalFactory(client, "test-memory", render, vi.fn().mockResolvedValue(true)));
+    await db.insert(schema.socialPreparedImages).values({
+      id: "prepared", contentId: row.id, sourcePhotoId: "photo1", sourceFingerprint: "a".repeat(64),
+      recipeVersion: "instagram-v1", outputPath: "/images/product-photos/instagram-v1-test.jpg",
+    });
+    await createAdminUser(db, { email: "approver@example.test", password: "safe-test-password-123", role: "owner" });
+    const session = await login(db, { email: "approver@example.test", password: "safe-test-password-123" });
+    const app = express(); app.use(express.json()); app.use("/social", createSocialContentRouter(db));
+    const approved = await request(app).post(`/social/${row.id}/approve`)
+      .set("Cookie", `noctella_admin_session=${session.rawToken}`)
+      .send({ preparedImageId: "prepared", expectedVersion: row.version, requestId: randomUUID() });
+    expect(approved.status).toBe(200);
+    expect(approved.body).toMatchObject({ contentId: row.id, preparedImageId: "prepared", contentVersion: row.version });
+    const reviewedVersion = row.version;
+    row = await service.get(row.id);
+    expect(row).toMatchObject({ status: "approved", version: reviewedVersion + 1, caption: "Human edit" });
+    expect(render).not.toHaveBeenCalled();
     expect(await service.createGenerated(input)).toEqual(row);
     expect(await db.select().from(schema.socialContents)).toHaveLength(1);
     expect(await db.select().from(schema.instagramPublishAttempts)).toHaveLength(0);
