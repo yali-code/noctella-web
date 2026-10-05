@@ -7,6 +7,10 @@ export const socialApprovalSchema = z.object({
   expectedVersion: z.number().int().positive(),
   requestId: z.string().uuid().refine((value) => value === value.toLowerCase(), "Canonical UUID required"),
 }).strict();
+export const socialPublishIntentSchema = z.object({
+  approvalId: socialId,
+  requestId: socialApprovalSchema.shape.requestId,
+}).strict();
 export const socialPrepareImageSchema = z.object({
   photoId: socialId,
   recipe: z.enum(["instagram-v1", "instagram-portrait-v1"]).default("instagram-v1"),

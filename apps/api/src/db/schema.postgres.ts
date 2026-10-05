@@ -1083,3 +1083,15 @@ export const socialContentApprovals = pgTable("social_content_approvals", {
 }, (table) => [
   uniqueIndex("idx_social_content_approvals_request_unique").on(table.requestId),
 ]);
+
+/** Immutable publishing intent, independent of provider execution. */
+export const socialPublishIntents = pgTable("social_publish_intents", {
+  id: text("id").primaryKey(),
+  requestId: text("request_id").notNull(),
+  approvalId: text("approval_id").notNull().references(() => socialContentApprovals.id, { onDelete: "restrict" }),
+  requestedByAdminUserId: text("requested_by_admin_user_id").notNull().references(() => adminUsers.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [
+  uniqueIndex("idx_social_publish_intents_request_unique").on(table.requestId),
+  uniqueIndex("idx_social_publish_intents_approval_unique").on(table.approvalId),
+]);
