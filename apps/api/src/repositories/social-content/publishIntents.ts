@@ -23,6 +23,11 @@ export function createSocialPublishIntentRepository(db: DbClient, driver: string
   const { socialPublishIntents: intents } = driver === "sqlite" || driver === "test-memory" ? sqlite : postgres;
   return {
     transaction: createSocialContentRepository(db, driver).transaction,
+    *findById(tx: any, id: string): SocialWork<SocialPublishIntent | null> {
+      let query = tx.select().from(intents).where(eq(intents.id, id));
+      if (driver !== "sqlite" && driver !== "test-memory") query = query.for("share");
+      return result((yield query)[0]);
+    },
     *insert(tx: any, input: Insert): SocialWork<SocialPublishIntent | null> {
       const [row] = yield tx.insert(intents).values({
         id: randomUUID(), requestId: input.requestId, approvalId: input.approvalId,

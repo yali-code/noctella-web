@@ -11,6 +11,15 @@ export const socialPublishIntentSchema = z.object({
   approvalId: socialId,
   requestId: socialApprovalSchema.shape.requestId,
 }).strict();
+export const socialPublishScheduleSchema = z.object({
+  publishIntentId: socialId,
+  requestId: socialApprovalSchema.shape.requestId,
+  requestedPublicationAt: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/)
+    .datetime({ offset: true })
+    .refine((value) => Number.isFinite(Date.parse(value)), "Invalid absolute timestamp")
+    .transform((value) => new Date(value).toISOString()),
+}).strict();
 export const socialPrepareImageSchema = z.object({
   photoId: socialId,
   recipe: z.enum(["instagram-v1", "instagram-portrait-v1"]).default("instagram-v1"),
