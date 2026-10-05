@@ -4,16 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./testDb";
 import { marketplaceConnections, instagramPublishAttempts } from "../src/db/schema";
+import * as schema from "../src/db/schema.sqlite";
+import * as preparation from "../src/services/socialContentPreparation";
 import { InstagramClient } from "../src/integrations/instagram/InstagramClient";
 import { InstagramClientError, INSTAGRAM_SCOPES, INSTAGRAM_VAULT_ACCOUNT_ID, type InstagramTransport } from "../src/integrations/instagram/types";
 import { getInstagramConnection, upsertInstagramConnection } from "../src/integrations/instagram/connection";
 import { validateInstagramMediaUrl } from "../src/config/instagramConfig";
-import { publishInstagramImage } from "../src/services/instagramPublishing";
+import { publishInstagramImage as publishApprovedImage } from "../src/services/instagramPublishing";
 import { createInstagramRouter } from "../src/routes/instagram";
 import { createAdminUser, login } from "../src/services/adminAuth";
 
 const token = "test-only-secret-token";
-const env = { INSTAGRAM_API_VERSION: "v24.0", INSTAGRAM_ALLOWED_ACCOUNT_IDS: INSTAGRAM_VAULT_ACCOUNT_ID, INSTAGRAM_MEDIA_ALLOWED_HOSTS: "cdn.example.test", MARKETPLACE_REQUEST_TIMEOUT_MS: "100" } as NodeJS.ProcessEnv;
+const env = { PUBLIC_API_ORIGIN: "https://cdn.example.test", INSTAGRAM_API_VERSION: "v24.0", INSTAGRAM_ALLOWED_ACCOUNT_IDS: INSTAGRAM_VAULT_ACCOUNT_ID, INSTAGRAM_MEDIA_ALLOWED_HOSTS: "cdn.example.test", MARKETPLACE_REQUEST_TIMEOUT_MS: "100" } as NodeJS.ProcessEnv;
 const imageUrl = "https://cdn.example.test/photo.jpg";
 const response = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -34,11 +36,39 @@ function fakeTransport(options: { accountId?: string; status?: string; publishFa
 }
 
 const originalKey = process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY;
-beforeEach(() => { process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64"); });
+const originalPreparation = preparation.createSocialContentPreparationService;
+beforeEach(() => {
+  process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
+  vi.spyOn(preparation, "createSocialContentPreparationService").mockImplementation((db) =>
+    originalPreparation(db, "test-memory", vi.fn(() => { throw new Error("Must not prepare"); }), vi.fn().mockResolvedValue(true)));
+});
 afterEach(() => {
+  vi.restoreAllMocks();
   if (originalKey === undefined) delete process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY;
   else process.env.MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY = originalKey;
 });
+
+// Supply approved fixtures to the existing provider-state-machine regressions.
+function approvedInput(db: ReturnType<typeof createTestDb>, key: string, caption: string) {
+  const id = key;
+  db.insert(schema.adminUsers).values({ id: "publisher", email: "publisher@example.test", passwordHash: "test-only", role: "owner" }).onConflictDoNothing().run();
+  if (!db.select().from(schema.socialContentApprovals).where(eq(schema.socialContentApprovals.id, id)).get()) {
+    db.insert(schema.products).values({ id, sku: id, slug: id, title: id, type: "unique_item", status: "draft" }).run();
+    db.insert(schema.productPhotos).values({ id, productId: id, processingStatus: "Ready", url: "/images/product-photos/source.webp",
+      thumbnailUrl: "/thumb.webp", filename: "source.webp", mimeType: "image/webp", sizeBytes: 10, width: 100, height: 50 }).run();
+    db.insert(schema.socialContents).values({ id, productId: id, contentType: "post", caption, status: "approved", version: 2 }).run();
+    db.insert(schema.socialContentMedia).values({ id, contentId: id, photoId: id, sortOrder: 0 }).run();
+    db.insert(schema.socialPreparedImages).values({ id, contentId: id, sourcePhotoId: id, sourceFingerprint: "a".repeat(64),
+      recipeVersion: "instagram-v1", outputPath: "/images/product-photos/instagram-v1-test.jpg" }).run();
+    db.insert(schema.socialContentApprovals).values({ id, contentId: id, preparedImageId: id, contentVersion: 1,
+      requestId: id, approvedByAdminUserId: "publisher" }).run();
+  }
+  return { approvalId: id, idempotencyKey: key };
+}
+function publishInstagramImage(db: ReturnType<typeof createTestDb>, input: { imageUrl: string; caption: string; idempotencyKey: string },
+  transport?: InstagramTransport, config = env, pause?: (ms: number) => Promise<void>) {
+  return publishApprovedImage(db, approvedInput(db, input.idempotencyKey, input.caption), "publisher", transport, config, pause);
+}
 
 describe("Instagram Vault-only client and media policy", () => {
   it("uses Bearer authorization without token in URL and rejects a different account ID", async () => {
@@ -236,7 +266,7 @@ describe("Instagram connection and publish ownership", () => {
     const read = await request(app).get("/api/instagram/connection").set("Cookie", cookie);
     expect(read.status).toBe(200);
     expect(JSON.stringify(read.body)).not.toContain(token);
-    const published = await request(app).post("/api/instagram/publish").set("Cookie", cookie).send({ imageUrl, caption: "Safe caption", idempotencyKey: "ig-route-test-001" });
+    const published = await request(app).post("/api/instagram/publish").set("Cookie", cookie).send(approvedInput(db, "ig-route-test-001", "Safe caption"));
     expect(published.status).toBe(200);
     expect(published.body.status).toBe("published");
     expect(JSON.stringify(published.body)).not.toContain(token);

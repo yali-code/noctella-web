@@ -1,10 +1,11 @@
 import { Router } from "express";
 import type { DbClient } from "../db/client";
-import { createRequireAuth, requirePermission } from "../auth/permissions";
+import { createRequireAuth, requirePermission, type AuthedRequest } from "../auth/permissions";
 import { requireAdminOriginForMutations } from "../auth/csrf";
 import { getInstagramConnection, upsertInstagramConnection, verifyInstagramConnection } from "../integrations/instagram/connection";
 import { InstagramClientError, type InstagramTransport } from "../integrations/instagram/types";
 import { getInstagramPublishAttempt, publishInstagramImage } from "../services/instagramPublishing";
+import { handleRouteError } from "./errorHandler";
 
 function reject(error: unknown, res: import("express").Response): void {
   if (!(error instanceof InstagramClientError)) { res.status(500).json({ error: "Instagram operation failed" }); return; }
@@ -32,12 +33,13 @@ export function createInstagramRouter(db: DbClient, transport?: InstagramTranspo
   router.post("/connection/verify", requirePermission("marketplace.manage"), async (_req, res) => {
     try { res.json(await verifyInstagramConnection(db, transport, env)); } catch (error) { reject(error, res); }
   });
-  router.post("/publish", requirePermission("products.publish"), async (req, res) => {
+  router.post("/publish", requirePermission("products.publish"), async (req: AuthedRequest, res) => {
     try {
-      const { accountLabel, imageUrl, caption, idempotencyKey } = req.body ?? {};
-      if (typeof imageUrl !== "string" || typeof caption !== "string" || typeof idempotencyKey !== "string") throw new InstagramClientError("configuration", false);
-      res.json(await publishInstagramImage(db, { accountLabel, imageUrl, caption, idempotencyKey }, transport, env));
-    } catch (error) { reject(error, res); }
+      res.json(await publishInstagramImage(db, req.body, req.adminUser!.id, transport, env));
+    } catch (error) {
+      if (error instanceof InstagramClientError) reject(error, res);
+      else handleRouteError(error, res);
+    }
   });
   router.get("/attempts/:id", requirePermission("marketplace.view"), async (req, res) => {
     try {

@@ -1,14 +1,31 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import type { AdminRole } from "@noctella/shared";
 import type { DbClient } from "../db/client";
-import { instagramPublishAttempts } from "../db/schema";
+import * as sqlite from "../db/schema.sqlite";
+import * as postgres from "../db/schema.postgres";
+import { hasPermission } from "../auth/permissions";
+import { socialId } from "../validation/socialContent";
+import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
+import { createSocialContentRepository } from "../repositories/social-content/drizzle";
+import { createSocialContentApprovalRepository } from "../repositories/social-content/approvals";
+import { createPreparedImageRepository } from "../repositories/social-content/preparedImages";
+import { createSocialContentPreparationService } from "./socialContentPreparation";
+import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { assertVaultPolicy, validateInstagramMediaUrl } from "../config/instagramConfig";
 import { InstagramClient } from "../integrations/instagram/InstagramClient";
 import { loadInstagramCredential } from "../integrations/instagram/connection";
 import { InstagramPublishingAdapter } from "../integrations/instagram/publishingAdapter";
 import { InstagramClientError, INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_VAULT_ACCOUNT_ID, type InstagramTransport } from "../integrations/instagram/types";
 
-function publicAttempt(row: typeof instagramPublishAttempts.$inferSelect) {
+type Attempt = typeof sqlite.instagramPublishAttempts.$inferSelect | typeof postgres.instagramPublishAttempts.$inferSelect;
+export const instagramPublishSchema = z.object({
+  approvalId: socialId,
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/),
+}).strict();
+
+function publicAttempt(row: Attempt) {
   return {
     id: row.id, connectionId: row.connectionId, status: row.status,
     containerId: row.containerId, publishedMediaId: row.publishedMediaId,
@@ -16,16 +33,12 @@ function publicAttempt(row: typeof instagramPublishAttempts.$inferSelect) {
   };
 }
 
-async function attemptByKey(db: DbClient, idempotencyKey: string) {
-  const [row] = await db.select().from(instagramPublishAttempts).where(eq(instagramPublishAttempts.idempotencyKey, idempotencyKey)).limit(1);
-  return row;
-}
-
 function safeKind(error: unknown): string {
   return error instanceof InstagramClientError ? error.kind : "unknown";
 }
 
 export async function getInstagramPublishAttempt(db: DbClient, id: string) {
+  const { instagramPublishAttempts } = process.env.DATABASE_DRIVER === "postgres" ? postgres : sqlite;
   const [row] = await db.select().from(instagramPublishAttempts).where(eq(instagramPublishAttempts.id, id)).limit(1);
   return row ? publicAttempt(row) : null;
 }
@@ -33,74 +46,145 @@ export async function getInstagramPublishAttempt(db: DbClient, id: string) {
 /** No network call in tests unless an injected transport explicitly simulates it. */
 export async function publishInstagramImage(
   db: DbClient,
-  input: { accountLabel?: string; imageUrl: string; caption: string; idempotencyKey: string },
+  value: unknown,
+  actorId: string,
   transport?: InstagramTransport,
   env: NodeJS.ProcessEnv = process.env,
   pause?: (ms: number) => Promise<void>,
 ) {
+  const input = instagramPublishSchema.parse(value);
+  socialId.parse(actorId);
   assertVaultPolicy(env);
-  if ((input.accountLabel ?? INSTAGRAM_ACCOUNT_LABEL) !== INSTAGRAM_ACCOUNT_LABEL ||
-      !/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey) ||
-      typeof input.caption !== "string" || input.caption.length > 2200) throw new InstagramClientError("configuration", false);
-  const mediaUrl = validateInstagramMediaUrl(input.imageUrl, env);
-  const { row: connection, accessToken } = await loadInstagramCredential(db, input.accountLabel);
-  const existing = await attemptByKey(db, input.idempotencyKey);
-  if (existing) {
-    if (existing.connectionId !== connection.id || existing.caption !== input.caption || existing.mediaUrl !== mediaUrl) throw new InstagramClientError("configuration", false);
-    if (!existing.containerId || !["container_created", "processing", "ready"].includes(existing.status)) return publicAttempt(existing);
-  }
-  const client = new InstagramClient(accessToken, transport, env);
-  await client.verifyAccount();
-  const now = new Date().toISOString();
-  const id = existing?.id ?? `igp_${randomUUID()}`;
-  if (!existing) {
-    try {
-      db.insert(instagramPublishAttempts).values({ id, connectionId: connection.id, idempotencyKey: input.idempotencyKey, caption: input.caption, mediaUrl, status: "pending", createdAt: now, updatedAt: now }).run();
-    } catch {
-      const winner = await attemptByKey(db, input.idempotencyKey);
-      if (!winner || winner.connectionId !== connection.id || winner.caption !== input.caption || winner.mediaUrl !== mediaUrl) throw new InstagramClientError("configuration", false);
-      return publicAttempt(winner);
+  const driver = env.DATABASE_DRIVER ?? process.env.DATABASE_DRIVER ?? "sqlite";
+  const sync = driver === "sqlite" || driver === "test-memory";
+  const { instagramPublishAttempts, socialContents, adminUsers, marketplaceConnections } = sync ? sqlite : postgres;
+  const { transaction } = createSocialContentRepository(db, driver);
+  const approvals = createSocialContentApprovalRepository(db, driver);
+  const prepared = createPreparedImageRepository(db, driver);
+  const now = () => sync ? new Date().toISOString() : new Date();
+  function* authorizeActor(tx: any): Generator<any, void, any> {
+    const [actor] = yield tx.select().from(adminUsers).where(eq(adminUsers.id, actorId));
+    if (!actor || actor.status !== "active" || !hasPermission(actor.role as AdminRole, "products.publish")) {
+      throw new InstagramClientError("authorization", false);
     }
   }
+  function* resolveAttempt(tx: any): Generator<any, Attempt | undefined, any> {
+    const [existing] = yield tx.select().from(instagramPublishAttempts).where(eq(instagramPublishAttempts.idempotencyKey, input.idempotencyKey));
+    if (existing) {
+      if (existing.approvalId !== input.approvalId) throw new ConflictError("Publishing key is bound to different or historical approval");
+      return existing;
+    }
+    const [consumed] = yield tx.select().from(instagramPublishAttempts).where(eq(instagramPublishAttempts.approvalId, input.approvalId));
+    if (consumed) throw new ConflictError("Approval already has a publishing attempt");
+  }
+  const existing = await transaction(function* (tx) { yield* authorizeActor(tx); return yield* resolveAttempt(tx); });
+  const resumable = (row: Attempt) => !!row.containerId && ["container_created", "processing", "ready"].includes(row.status);
+  if (existing && !resumable(existing)) return publicAttempt(existing);
 
-  const transition = (from: string, values: Partial<typeof instagramPublishAttempts.$inferInsert>) =>
-    db.update(instagramPublishAttempts).set({ ...values, updatedAt: new Date().toISOString() })
+  function* snapshot(tx: any) {
+    const approval = yield* approvals.find(tx, input.approvalId);
+    if (!approval) throw new NotFoundError("Human Approval not found");
+    let query = tx.select().from(socialContents).where(eq(socialContents.id, approval.contentId));
+    if (!sync) query = query.for("update");
+    const [content] = yield query;
+    if (!content) throw new NotFoundError("Social content not found");
+    if (content.status !== "approved" || content.version !== approval.contentVersion + 1) throw new ConflictError("Approved content changed");
+    if (content.platform !== "instagram" || content.accountLabel !== INSTAGRAM_ACCOUNT_LABEL) throw new BadRequestError("Unsupported publishing target");
+    if (typeof content.caption !== "string" || !content.caption.trim() || content.caption.length > 2200) throw new BadRequestError("Invalid approved caption");
+    const image = yield* prepared.find(tx, approval.contentId, approval.preparedImageId);
+    const source = yield* prepared.source(tx, approval.contentId, image.sourcePhotoId);
+    return { approval, content, image, source };
+  }
+  const before = await transaction(snapshot);
+  await createSocialContentPreparationService(db, driver).validatePreparedImageCurrent(before.approval.contentId, before.image.id);
+  const mediaUrl = validateInstagramMediaUrl(resolvePublicApiOrigin(env) + before.image.outputPath, env);
+  // Local credential resolution makes no provider request.
+  const { row: connection, accessToken } = await loadInstagramCredential(db);
+  let authorized: { row: Attempt; created: boolean };
+  try {
+    authorized = await transaction(function* (tx) {
+      yield* authorizeActor(tx);
+      const current = yield* snapshot(tx);
+      if (JSON.stringify(before) !== JSON.stringify(current)) throw new ConflictError("Approved media changed before publishing authorization");
+      let connectionQuery = tx.select().from(marketplaceConnections).where(eq(marketplaceConnections.id, connection.id));
+      if (!sync) connectionQuery = connectionQuery.for("share");
+      const [liveConnection] = yield connectionQuery;
+      if (!liveConnection || liveConnection.status !== "connected" || liveConnection.channel !== "instagram" ||
+          liveConnection.accountLabel !== INSTAGRAM_ACCOUNT_LABEL || liveConnection.externalAccountId !== INSTAGRAM_VAULT_ACCOUNT_ID ||
+          liveConnection.encryptedAccessToken !== connection.encryptedAccessToken) throw new ConflictError("Instagram connection changed");
+      const row = yield* resolveAttempt(tx);
+      if (row) {
+        if (row.connectionId !== connection.id || row.caption !== current.content.caption || row.mediaUrl !== mediaUrl) throw new ConflictError("Publishing snapshot changed");
+        return { row, created: false };
+      }
+      const [inserted] = yield tx.insert(instagramPublishAttempts).values({
+        id: `igp_${randomUUID()}`, approvalId: input.approvalId, connectionId: connection.id,
+        idempotencyKey: input.idempotencyKey, caption: current.content.caption, mediaUrl,
+        status: "pending", createdAt: now(), updatedAt: now(),
+      }).returning();
+      return { row: inserted as Attempt, created: true };
+    });
+  } catch (error) {
+    // A uniqueness race must be resolved after PostgreSQL rolls back the failed transaction.
+    let item = error as { code?: string; cause?: unknown } | undefined;
+    let unique = false;
+    for (let depth = 0; item && depth < 4; depth++, item = item.cause as typeof item) {
+      if (item.code === "23505" || item.code === "SQLITE_CONSTRAINT_UNIQUE") unique = true;
+    }
+    if (!unique) throw error;
+    const winner = await transaction(function* (tx) { return yield* resolveAttempt(tx); });
+    if (!winner) throw error;
+    return publicAttempt(winner); // Never acquire container-creation ownership by losing a race.
+  }
+  const attempt = authorized.row;
+  if (!authorized.created && !resumable(attempt)) return publicAttempt(attempt);
+  const id = attempt.id;
+  const transition = (from: string, values: Record<string, unknown>) =>
+    transaction(function* (tx) { return (yield tx.update(instagramPublishAttempts).set({ ...values, updatedAt: now() })
       .where(and(eq(instagramPublishAttempts.id, id), eq(instagramPublishAttempts.status, from)))
-      .returning({ id: instagramPublishAttempts.id }).all().length === 1;
-  const result = async () => (await getInstagramPublishAttempt(db, id))!;
+      .returning({ id: instagramPublishAttempts.id })).length === 1; });
+  const result = () => transaction(function* (tx) {
+    return publicAttempt((yield tx.select().from(instagramPublishAttempts).where(eq(instagramPublishAttempts.id, id)))[0]);
+  });
+  const client = new InstagramClient(accessToken, transport, env);
+  try { await client.verifyAccount(); }
+  catch (error) {
+    if (authorized.created) await transition("pending", { status: "failed", lastError: safeKind(error) });
+    throw error;
+  }
   const adapter = new InstagramPublishingAdapter(client, pause, env);
-  let containerId = existing?.containerId;
+  let containerId = attempt.containerId;
   if (!containerId) {
     try {
-      containerId = await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, input.imageUrl, input.caption);
-      if (!transition("pending", { containerId, status: "container_created" })) return result();
+      containerId = await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, attempt.mediaUrl, attempt.caption);
+      if (!await transition("pending", { containerId, status: "container_created" })) return result();
     } catch (error) {
-      transition("pending", { status: "failed", lastError: safeKind(error) });
+      await transition("pending", { status: "failed", lastError: safeKind(error) });
       return result();
     }
   }
 
-  if (existing?.status !== "ready") {
-    transition("container_created", { status: "processing" });
+  if (attempt.status !== "ready") {
+    await transition("container_created", { status: "processing" });
     try {
       const ready = await adapter.waitForReady(containerId);
       if (!ready) return result();
-      transition("processing", { status: "ready", lastError: null });
+      await transition("processing", { status: "ready", lastError: null });
     } catch (error) {
-      if (error instanceof InstagramClientError && error.kind === "invalid_media") transition("processing", { status: "failed", lastError: safeKind(error) });
-      else transition("processing", { lastError: safeKind(error) });
+      if (error instanceof InstagramClientError && error.kind === "invalid_media") await transition("processing", { status: "failed", lastError: safeKind(error) });
+      else await transition("processing", { lastError: safeKind(error) });
       return result();
     }
   }
 
   // This is the sole publish claim. Concurrent pollers may check readiness, but only one
   // can cross ready -> publishing; a crashed/unknown publish is never automatically retried.
-  if (!transition("ready", { status: "publishing" })) return result();
+  if (!await transition("ready", { status: "publishing" })) return result();
   try {
     const publishedMediaId = await adapter.publishContainer(INSTAGRAM_VAULT_ACCOUNT_ID, containerId);
-    transition("publishing", { status: "published", publishedMediaId, publishedAt: new Date().toISOString(), lastError: null });
+    await transition("publishing", { status: "published", publishedMediaId, publishedAt: now(), lastError: null });
   } catch (error) {
-    transition("publishing", { status: "reconciliation_required", lastError: safeKind(error) });
+    await transition("publishing", { status: "reconciliation_required", lastError: safeKind(error) });
   }
   return result();
 }
