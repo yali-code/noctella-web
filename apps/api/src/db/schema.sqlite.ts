@@ -909,3 +909,16 @@ export const socialPublishIntents = sqliteTable("social_publish_intents", {
   uniqueIndex("idx_social_publish_intents_request_unique").on(table.requestId),
   uniqueIndex("idx_social_publish_intents_approval_unique").on(table.approvalId),
 ]);
+
+/** Canonical requested time only; no execution state. */
+export const socialPublishSchedules = sqliteTable("social_publish_schedules", {
+  id: text("id").primaryKey(),
+  requestId: text("request_id").notNull(),
+  publishIntentId: text("publish_intent_id").notNull().references(() => socialPublishIntents.id, { onDelete: "restrict" }),
+  requestedPublicationAt: text("requested_publication_at").notNull(),
+  requestedByAdminUserId: text("requested_by_admin_user_id").notNull().references(() => adminUsers.id, { onDelete: "restrict" }),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [
+  uniqueIndex("idx_social_publish_schedules_request_unique").on(table.requestId),
+  uniqueIndex("idx_social_publish_schedules_intent_unique").on(table.publishIntentId),
+]);
