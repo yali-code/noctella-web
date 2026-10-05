@@ -3,6 +3,7 @@ import type { DbClient } from "../db/client";
 import { createRequireAuth, requirePermission, type AuthedRequest } from "../auth/permissions";
 import { requireAdminOriginForMutations } from "../auth/csrf";
 import { createSocialContentService } from "../services/socialContent";
+import { createSocialPublishIntentService } from "../services/socialPublishIntents";
 import { createSocialContentPreparationService } from "../services/socialContentPreparation";
 import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
 import { socialId, socialPrepareImageSchema } from "../validation/socialContent";
@@ -16,6 +17,10 @@ export function createSocialContentRouter(db: DbClient, providerFactory: () => S
   const router = Router();
   const service = createSocialContentService(db);
   router.use(requireAdminOriginForMutations, createRequireAuth(db));
+  router.post("/publish-intents", requirePermission("products.publish"), async (req: AuthedRequest, res) => {
+    try { res.status(201).json(await createSocialPublishIntentService(db).create(req.body, req.adminUser!.id)); }
+    catch (error) { handleRouteError(error, res); }
+  });
   router.post("/:id/prepare-image", requirePermission("products.edit"), async (req, res) => {
     try {
       const contentId = socialId.parse(req.params.id);
