@@ -10,7 +10,7 @@ import { createOrder } from "../src/services/orders";
 import { createPaymentSession } from "../src/payments/paymentRepository";
 import { createManualStockAdjustment } from "../src/services/stockMovements";
 import { manualStockAdjustmentSchema } from "../src/validation/stockMovement";
-import { cancelJob, enqueueJob, executeJob } from "../src/services/backgroundJobs";
+import { cancelJob, claimJobs, enqueueJob, executeJob } from "../src/services/backgroundJobs";
 import { createStockSyncConflict, resolveStockSyncConflict, syncExternalListingStock } from "../src/services/stockSync";
 import type { MarketplaceAdapter } from "../src/services/marketplaceAdapters";
 
@@ -106,8 +106,9 @@ describe("stock sync outbound behavior", () => {
     expect((await database.select().from(schema.backgroundJobs)).length).toBeGreaterThan(0);
 
     const job = await enqueueJob(database, { type: BackgroundJobType.StockSyncListing, externalListingId: seeded.listingId, idempotencyKey: "job-once", payload: { externalListingId: seeded.listingId } });
-    await executeJob(database, { ...(job as any), status: BackgroundJobStatus.Processing });
-    await executeJob(database, { ...(job as any), status: BackgroundJobStatus.Processing });
+    const claimed = (await claimJobs(database, "test-worker", 100)).find((row: any) => row.id === job.id)!;
+    await executeJob(database, claimed);
+    await executeJob(database, claimed);
     expect((await database.select().from(schema.backgroundJobs).where(eq(schema.backgroundJobs.id, job.id)))[0].status).toBe(BackgroundJobStatus.Succeeded);
     expect(global.fetch).not.toHaveBeenCalled();
     await cancelJob(database, job.id);
