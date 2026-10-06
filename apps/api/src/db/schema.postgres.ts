@@ -1109,3 +1109,16 @@ export const socialPublishSchedules = pgTable("social_publish_schedules", {
   uniqueIndex("idx_social_publish_schedules_request_unique").on(table.requestId),
   uniqueIndex("idx_social_publish_schedules_intent_unique").on(table.publishIntentId),
 ]);
+
+/** Durable handoff identity only; nullable execution references are reserved for later attachment. */
+export const socialPublishScheduleExecutions = pgTable("social_publish_schedule_executions", {
+  id: text("id").primaryKey().notNull(),
+  scheduleId: text("schedule_id").notNull().references(() => socialPublishSchedules.id, { onDelete: "restrict" }),
+  backgroundJobId: text("background_job_id").references(() => backgroundJobs.id, { onDelete: "restrict" }),
+  instagramAttemptId: text("instagram_attempt_id").references(() => instagramPublishAttempts.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [
+  uniqueIndex("idx_social_schedule_executions_schedule_unique").on(table.scheduleId),
+  uniqueIndex("idx_social_schedule_executions_job_unique").on(table.backgroundJobId),
+  uniqueIndex("idx_social_schedule_executions_attempt_unique").on(table.instagramAttemptId),
+]);
