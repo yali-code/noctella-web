@@ -72,7 +72,7 @@ it("additively upgrades historical rows and preserves bindings on repeat initial
   `);
   const before = client.prepare("SELECT * FROM instagram_publish_attempts").get();
   ensureSchema(client);
-  expect(client.prepare("SELECT * FROM instagram_publish_attempts").get()).toEqual({ ...before, approval_id: null });
+  expect(client.prepare("SELECT * FROM instagram_publish_attempts").get()).toEqual({ ...before, approval_id: null, provider_entry_state: null });
   db.insert(schema.instagramPublishAttempts).values(attempt("bound", "approval")).run();
   ensureSchema(client);
   expect(db.select().from(schema.instagramPublishAttempts).where(eq(schema.instagramPublishAttempts.id, "bound")).get()?.approvalId).toBe("approval");

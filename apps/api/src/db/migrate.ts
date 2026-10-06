@@ -85,6 +85,10 @@ CREATE INDEX IF NOT EXISTS idx_instagram_attempts_connection ON instagram_publis
     if (!columns.some((column) => column.name === "approval_id")) {
       sqlite.exec("ALTER TABLE instagram_publish_attempts ADD COLUMN approval_id TEXT REFERENCES social_content_approvals(id) ON DELETE RESTRICT");
     }
+    // NULL preserves historical uncertainty; only new application inserts establish safety.
+    if (!columns.some((column) => column.name === "provider_entry_state")) {
+      sqlite.exec("ALTER TABLE instagram_publish_attempts ADD COLUMN provider_entry_state TEXT CHECK (provider_entry_state IN ('unclaimed', 'claimed'))");
+    }
     // Both supported databases permit multiple NULLs in a normal unique index.
     sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_instagram_attempts_approval_unique ON instagram_publish_attempts(approval_id)");
   })();

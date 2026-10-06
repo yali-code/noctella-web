@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { AdminRole } from "@noctella/shared";
 import type { DbClient } from "../db/client";
@@ -79,7 +79,8 @@ export async function publishInstagramImage(
   }
   const existing = await transaction(function* (tx) { yield* authorizeActor(tx); return yield* resolveAttempt(tx); });
   const resumable = (row: Attempt) => !!row.containerId && ["container_created", "processing", "ready"].includes(row.status);
-  if (existing && !resumable(existing)) return publicAttempt(existing);
+  const unstarted = (row: Attempt) => row.status === "pending" && row.providerEntryState === "unclaimed" && !row.containerId;
+  if (existing && !resumable(existing) && !unstarted(existing)) return publicAttempt(existing);
 
   function* snapshot(tx: any) {
     const approval = yield* approvals.find(tx, input.approvalId);
@@ -120,7 +121,7 @@ export async function publishInstagramImage(
       const [inserted] = yield tx.insert(instagramPublishAttempts).values({
         id: `igp_${randomUUID()}`, approvalId: input.approvalId, connectionId: connection.id,
         idempotencyKey: input.idempotencyKey, caption: current.content.caption, mediaUrl,
-        status: "pending", createdAt: now(), updatedAt: now(),
+        status: "pending", providerEntryState: "unclaimed", createdAt: now(), updatedAt: now(),
       }).returning();
       return { row: inserted as Attempt, created: true };
     });
@@ -137,7 +138,7 @@ export async function publishInstagramImage(
     return publicAttempt(winner); // Never acquire container-creation ownership by losing a race.
   }
   const attempt = authorized.row;
-  if (!authorized.created && !resumable(attempt)) return publicAttempt(attempt);
+  if (!resumable(attempt) && !unstarted(attempt)) return publicAttempt(attempt);
   const id = attempt.id;
   const transition = (from: string, values: Record<string, unknown>) =>
     transaction(function* (tx) { return (yield tx.update(instagramPublishAttempts).set({ ...values, updatedAt: now() })
@@ -147,14 +148,24 @@ export async function publishInstagramImage(
     return publicAttempt((yield tx.select().from(instagramPublishAttempts).where(eq(instagramPublishAttempts.id, id)))[0]);
   });
   const client = new InstagramClient(accessToken, transport, env);
-  try { await client.verifyAccount(); }
-  catch (error) {
-    if (authorized.created) await transition("pending", { status: "failed", lastError: safeKind(error) });
-    throw error;
-  }
+  // GET /me is repeatable. Failure leaves unclaimed evidence intact, and must not
+  // overwrite another invocation's claim while this preflight was in flight.
+  await client.verifyAccount();
   const adapter = new InstagramPublishingAdapter(client, pause, env);
   let containerId = attempt.containerId;
   if (!containerId) {
+    const claimed = await transaction(function* (tx) {
+      yield* authorizeActor(tx);
+      const current = yield* snapshot(tx);
+      if (JSON.stringify(before) !== JSON.stringify(current)) throw new ConflictError("Approved media changed before provider entry");
+      return (yield tx.update(instagramPublishAttempts).set({ providerEntryState: "claimed", updatedAt: now() })
+        .where(and(eq(instagramPublishAttempts.id, id), eq(instagramPublishAttempts.status, "pending"),
+          eq(instagramPublishAttempts.providerEntryState, "unclaimed"), isNull(instagramPublishAttempts.containerId)))
+        .returning({ id: instagramPublishAttempts.id })).length === 1;
+    });
+    // Irreversible claim: no lease, timeout, or replay can supersede this owner.
+    // A crash after commit remains ambiguous until container identity is durable.
+    if (!claimed) return result();
     try {
       containerId = await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, attempt.mediaUrl, attempt.caption);
       if (!await transition("pending", { containerId, status: "container_created" })) return result();
