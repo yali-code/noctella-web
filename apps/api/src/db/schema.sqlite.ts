@@ -570,6 +570,7 @@ export const instagramPublishAttempts = sqliteTable("instagram_publish_attempts"
   connectionId: text("connection_id").notNull().references(() => marketplaceConnections.id),
   idempotencyKey: text("idempotency_key").notNull().unique(),
   approvalId: text("approval_id").references(() => socialContentApprovals.id, { onDelete: "restrict" }),
+  providerEntryState: text("provider_entry_state"),
   caption: text("caption").notNull(),
   mediaUrl: text("media_url").notNull(),
   containerId: text("container_id"),
