@@ -585,6 +585,7 @@ export const backgroundJobs = pgTable("background_jobs", {
   runAfter: timestamp("run_after", { withTimezone: true }).notNull(),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   lockedBy: text("locked_by"),
+  claimToken: text("claim_token"),
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),

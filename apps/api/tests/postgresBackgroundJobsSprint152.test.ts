@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { BackgroundJobStatus, BackgroundJobType, PublishChannel } from "@noctella/shared";
@@ -13,8 +15,41 @@ let jobs: typeof import("../src/services/backgroundJobs");
 beforeAll(async () => { if (postgresTestConfigured) jobs = await import("../src/services/backgroundJobs"); });
 const suite = describe.skipIf(!postgresTestConfigured);
 const migration = "0024_sprint152_background_jobs_runtime_parity.sql";
+const claimMigration = fs.readFileSync(path.join(__dirname, "../src/db/postgres-migrations/0038_background_job_claim_fencing.sql"), "utf8");
+async function createClaimDb() {
+  const h = await createPostgresTestDb(migration);
+  await h.pool.query(claimMigration);
+  return h;
+}
+it("defines nullable PostgreSQL claim identity without default or backfill", () => {
+  expect(schema.backgroundJobs.claimToken.notNull).toBe(false);
+  expect(schema.backgroundJobs.claimToken.hasDefault).toBe(false);
+  expect(claimMigration.replace(/--[^\n]*/g, "").trim()).toBe("ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS claim_token TEXT;");
+});
 
 suite("Sprint 152 real PostgreSQL background jobs", () => {
+  it("adds nullable claim evidence without backfill and fences replacement ownership", async () => {
+    const h = await createPostgresTestDb(migration);
+    try {
+      await h.pool.query("INSERT INTO background_jobs(id,type,status,payload_snapshot,idempotency_key,run_after) VALUES ('historical','test','processing','{}','historical',now())");
+      const before = (await h.pool.query("SELECT * FROM background_jobs")).rows[0];
+      await h.pool.query(claimMigration); await h.pool.query(claimMigration);
+      expect((await h.pool.query("SELECT * FROM background_jobs")).rows[0]).toEqual({ ...before, claim_token: null });
+      expect((await h.pool.query("SELECT is_nullable,column_default FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='background_jobs' AND column_name='claim_token'")).rows).toEqual([{ is_nullable: "YES", column_default: null }]);
+      expect(await jobs.completeJob(h.db as any, "historical", null as any)).toBe(false);
+      const time = "2030-01-01T00:00:00.000Z";
+      await jobs.retryJob(h.db as any, "historical");
+      const [first] = await jobs.claimJobs(h.db as any, "same-worker", 1, time);
+      await jobs.recoverStaleJobs(h.db as any, time);
+      const [replacement] = await jobs.claimJobs(h.db as any, "same-worker", 1, time);
+      expect(replacement.claimToken).not.toBe(first.claimToken);
+      const protectedRow = (await h.pool.query("SELECT * FROM background_jobs")).rows[0];
+      expect(await jobs.completeJob(h.db as any, first.id, first.claimToken)).toBe(false);
+      expect(await jobs.failJob(h.db as any, first.id, { type: "Temporary" }, first.claimToken)).toBe(false);
+      expect((await h.pool.query("SELECT * FROM background_jobs")).rows[0]).toEqual(protectedRow);
+      expect(await jobs.completeJob(h.db as any, replacement.id, replacement.claimToken)).toBe(true);
+    } finally { await h.close(); }
+  });
   it("repairs an empty legacy stub, exposes the complete schema and indexes, and reapplies safely", async () => {
     const h = await createPostgresTestDb("0023_sprint151_orders_shipping_snapshot_parity.sql");
     try {
@@ -103,7 +138,7 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
   });
 
   it("enqueues native JSON/timestamps idempotently and rethrows unrelated insert failures", async () => {
-    const h = await createPostgresTestDb(migration);
+    const h = await createClaimDb();
     try {
       const runAfter = "2026-08-26T10:00:00.000Z";
       const first = await jobs.enqueueJob(h.db as any, { type: BackgroundJobType.StockSyncListing, channel: PublishChannel.Ebay, productId: "p1", payload: { nested: { ok: true }, values: [1, null, "1"] }, idempotencyKey: "idem", runAfter });
@@ -120,7 +155,7 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
   });
 
   it("claims due jobs once across concurrent workers and completes with normalized timestamps", async () => {
-    const h = await createPostgresTestDb(migration);
+    const h = await createClaimDb();
     try {
       await jobs.enqueueJob(h.db as any, { type: BackgroundJobType.StockSyncListing, payload: {}, idempotencyKey: "due", runAfter: "2026-08-26T09:00:00.000Z" });
       await jobs.enqueueJob(h.db as any, { type: BackgroundJobType.StockSyncListing, payload: {}, idempotencyKey: "future", runAfter: "2026-08-27T09:00:00.000Z" });
@@ -128,7 +163,8 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
       expect([...one, ...two]).toHaveLength(1);
       const claimed = [...one, ...two][0];
       expect(claimed).toMatchObject({ status: BackgroundJobStatus.Processing }); expect(claimed.lockedAt).toMatch(/Z$/); expect(["worker-1","worker-2"]).toContain(claimed.lockedBy);
-      await jobs.completeJob(h.db as any, claimed.id);
+      expect(claimed.claimToken).toEqual(expect.any(String));
+      await jobs.completeJob(h.db as any, claimed.id, claimed.claimToken);
       const [completed] = await jobs.listJobs(h.db as any, { status: BackgroundJobStatus.Succeeded });
       expect(completed).toMatchObject({ status: BackgroundJobStatus.Succeeded, lockedAt: null, lockedBy: null }); expect(completed.completedAt).toMatch(/Z$/);
       expect((await h.db.select().from(schema.backgroundJobs).where(eq(schema.backgroundJobs.idempotencyKey, "future")))[0].status).toBe(BackgroundJobStatus.Pending);
@@ -136,13 +172,16 @@ suite("Sprint 152 real PostgreSQL background jobs", () => {
   });
 
   it("persists retry/dead-letter state and recovers only stale locks", async () => {
-    const h = await createPostgresTestDb(migration);
+    const h = await createClaimDb();
     try {
       const retry = await jobs.enqueueJob(h.db as any, { type: BackgroundJobType.StockSyncListing, payload: {}, idempotencyKey: "retry", maxAttempts: 2 });
-      await jobs.failJob(h.db as any, retry.id, { type: "Temporary", message: "safe failure", retryable: true });
+      const [firstClaim] = await jobs.claimJobs(h.db as any, "worker", 1);
+      await jobs.failJob(h.db as any, retry.id, { type: "Temporary", message: "safe failure", retryable: true }, firstClaim.claimToken);
       let [row] = await jobs.listJobs(h.db as any, { status: BackgroundJobStatus.RetryPending });
       expect(row).toMatchObject({ attemptCount: 1, lastError: "Temporary: safe failure", lockedAt: null, lockedBy: null }); expect(row.runAfter).toMatch(/Z$/);
-      await jobs.failJob(h.db as any, retry.id, { type: "Temporary", message: "safe failure", retryable: true });
+      const [secondClaim] = await jobs.claimJobs(h.db as any, "worker", 1, row.runAfter);
+      expect(secondClaim.claimToken).not.toBe(firstClaim.claimToken);
+      await jobs.failJob(h.db as any, retry.id, { type: "Temporary", message: "safe failure", retryable: true }, secondClaim.claimToken);
       [row] = await jobs.listJobs(h.db as any, { status: BackgroundJobStatus.DeadLetter });
       expect(row.attemptCount).toBe(2); expect(row.completedAt).toMatch(/Z$/);
 
