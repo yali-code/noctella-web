@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import pg from "pg";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -67,6 +69,7 @@ describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
 
   it("executes a due stock-sync listing job and durably records a normalized conflict", async () => {
     harness = await createPostgresTestDb();
+    await harness.pool.query(fs.readFileSync(path.join(__dirname, "../src/db/postgres-migrations/0038_background_job_claim_fencing.sql"), "utf8"));
     const now = new Date();
     await harness.db.insert(schema.externalListings).values({ id: "listing-missing-product", productId: "missing-product", channel: "ebay", connectionId: "missing-connection", externalListingId: "external-1", externalStatus: "active", payloadSnapshot: {}, publishedAt: now, updatedAt: now });
     const job = await backgroundJobs.enqueueJob(harness.db as any, { type: "stock_sync_listing", channel: "ebay", productId: "missing-product", externalListingId: "listing-missing-product", payload: { externalListingId: "listing-missing-product" }, idempotencyKey: "sprint153:stock-sync" });
@@ -80,6 +83,7 @@ describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
 
   it("persists snapshot, auto-resolved conflict, and audit through actual background dispatch", async () => {
     harness = await createPostgresTestDb();
+    await harness.pool.query(fs.readFileSync(path.join(__dirname, "../src/db/postgres-migrations/0038_background_job_claim_fencing.sql"), "utf8"));
     const now = new Date();
     await harness.db.insert(schema.products).values({ id: "p-stock", sku: "SPRINT153", title: "Stock sync", slug: "sprint153", type: "unique", status: "active", stockQuantity: 3, createdAt: now, updatedAt: now });
     await harness.db.insert(schema.marketplaceConnections).values({ id: "conn-stock", channel: "ebay", accountLabel: "Sprint 153", encryptedAccessToken: encryptCredential("token"), status: "connected", createdAt: now, updatedAt: now });
