@@ -44,6 +44,7 @@ import { getReadiness } from "./services/readiness";
 import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photoStorage";
 import { enqueueChannelStockSync, enqueueProductStockSync, STOCK_SYNC_CHANNELS } from "./services/stockSync";
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
+import { createSocialPublishScheduleExecutionService } from "./services/socialPublishScheduleExecutions";
 import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
 import { dispatchDueAiSalesPreparationOutboxEvents } from "./services/aiSalesPreparationOutbox";
@@ -190,6 +191,9 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     // applied only to this call; the other three domains' own batchSize behavior above is unchanged.
     const cleanupBatchSize = Math.min(batchSize, MAX_CLEANUP_BATCH_SIZE);
     const aiIntakeCleanup = await runAiIntakeCleanupForScheduler(db, { batchSize: cleanupBatchSize });
+    // ETAP 5.7F: same reuse for due social schedules. Discovery only establishes the durable
+    // handoff + job; a later run executes it. No attempt, credential or provider entry here.
+    const socialSchedules = await createSocialPublishScheduleExecutionService(db).discover(batchSize);
     res.json({
       processed,
       photoOutboxProcessed: photoOutboxResults.length,
@@ -197,6 +201,10 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
       aiSalesPreparationOutboxProcessed: aiSalesPreparationOutboxResults.length,
       stockSyncOutboxProcessed: stockSyncOutboxResults.length,
       aiIntakeCleanup,
+      socialScheduleDiscovery: {
+        enqueued: socialSchedules.filter((row) => row.outcome === "enqueued").length,
+        rejected: socialSchedules.filter((row) => row.outcome === "rejected").length,
+      },
     });
   } catch (e) {
     next(e);
