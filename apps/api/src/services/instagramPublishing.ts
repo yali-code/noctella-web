@@ -43,7 +43,11 @@ export async function getInstagramPublishAttempt(db: DbClient, id: string) {
   return row ? publicAttempt(row) : null;
 }
 
-/** No network call in tests unless an injected transport explicitly simulates it. */
+/**
+ * No network call in tests unless an injected transport explicitly simulates it.
+ * `bindAttempt` runs inside the attempt authorization transaction; when supplied, the
+ * durable attempt is established and bound only, and the provider is never entered.
+ */
 export async function publishInstagramImage(
   db: DbClient,
   value: unknown,
@@ -51,6 +55,7 @@ export async function publishInstagramImage(
   transport?: InstagramTransport,
   env: NodeJS.ProcessEnv = process.env,
   pause?: (ms: number) => Promise<void>,
+  bindAttempt?: (tx: any, attemptId: string) => Generator<any, void, any>,
 ) {
   const input = instagramPublishSchema.parse(value);
   socialId.parse(actorId);
@@ -116,6 +121,7 @@ export async function publishInstagramImage(
       const row = yield* resolveAttempt(tx);
       if (row) {
         if (row.connectionId !== connection.id || row.caption !== current.content.caption || row.mediaUrl !== mediaUrl) throw new ConflictError("Publishing snapshot changed");
+        if (bindAttempt) yield* bindAttempt(tx, row.id);
         return { row, created: false };
       }
       const [inserted] = yield tx.insert(instagramPublishAttempts).values({
@@ -123,6 +129,7 @@ export async function publishInstagramImage(
         idempotencyKey: input.idempotencyKey, caption: current.content.caption, mediaUrl,
         status: "pending", providerEntryState: "unclaimed", createdAt: now(), updatedAt: now(),
       }).returning();
+      if (bindAttempt) yield* bindAttempt(tx, inserted.id);
       return { row: inserted as Attempt, created: true };
     });
   } catch (error) {
@@ -138,7 +145,7 @@ export async function publishInstagramImage(
     return publicAttempt(winner); // Never acquire container-creation ownership by losing a race.
   }
   const attempt = authorized.row;
-  if (!resumable(attempt) && !unstarted(attempt)) return publicAttempt(attempt);
+  if (bindAttempt || (!resumable(attempt) && !unstarted(attempt))) return publicAttempt(attempt);
   const id = attempt.id;
   const transition = (from: string, values: Record<string, unknown>) =>
     transaction(function* (tx) { return (yield tx.update(instagramPublishAttempts).set({ ...values, updatedAt: now() })

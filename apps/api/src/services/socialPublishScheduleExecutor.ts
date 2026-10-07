@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { DbClient } from "../db/client";
 import * as sqlite from "../db/schema.sqlite";
@@ -7,20 +7,26 @@ import { socialId } from "../validation/socialContent";
 import { createSocialContentRepository } from "../repositories/social-content/drizzle";
 import { createSocialPublishIntentRepository } from "../repositories/social-content/publishIntents";
 import { SOCIAL_PUBLISH_SCHEDULE_JOB_TYPE } from "../repositories/social-content/publishScheduleExecutions";
-import { INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_CHANNEL, INSTAGRAM_VAULT_ACCOUNT_ID } from "../integrations/instagram/types";
+import { InstagramClientError, INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_CHANNEL, INSTAGRAM_VAULT_ACCOUNT_ID } from "../integrations/instagram/types";
 import { createSocialPublishValidation } from "./socialPublishValidation";
 import { createSocialContentPreparationService } from "./socialContentPreparation";
+import { publishInstagramImage } from "./instagramPublishing";
 import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from "./errors";
 
 const payloadSchema = z.object({ scheduleId: socialId }).strict();
+const ownershipLost = Symbol("ownershipLost");
 
-/** Local validation only. Returned IDs are not a durable grant to publish. */
+/**
+ * Validates the canonical chain, then establishes and binds the one approval-bound
+ * Instagram attempt for this execution. The provider is never entered here.
+ */
 export function createSocialPublishScheduleExecutor(
   db: DbClient, driver = process.env.DATABASE_DRIVER ?? "sqlite", now: () => number = Date.now,
+  env: NodeJS.ProcessEnv = process.env,
 ) {
   const sync = driver === "sqlite" || driver === "test-memory";
   const { backgroundJobs: jobs, socialPublishScheduleExecutions: executions, socialPublishSchedules: schedules,
-    marketplaceConnections: connections, products } = sync ? sqlite : postgres;
+    marketplaceConnections: connections, products, instagramPublishAttempts: attempts } = sync ? sqlite : postgres;
   const repository = createSocialContentRepository(db, driver);
   const intents = createSocialPublishIntentRepository(db, driver);
   const validation = createSocialPublishValidation(db, driver);
@@ -68,12 +74,43 @@ export function createSocialPublishScheduleExecutor(
         const current = await snapshot();
         if (!current) return null;
         if (JSON.stringify(before) !== JSON.stringify(current)) throw new ConflictError("Schedule execution state changed");
+        const approvalId = current.approved.approval.id;
+        // Server-owned identity: one execution can only ever resolve this one keyed attempt.
+        const idempotencyKey = `social-publish-execution:${current.execution.id}`;
+        const bind = function* (tx: any, attemptId: string): Generator<any, void, any> {
+          let jobQuery = tx.select({ id: jobs.id }).from(jobs)
+            .where(and(eq(jobs.id, jobId), eq(jobs.status, "processing"), eq(jobs.claimToken, originalClaimToken)));
+          if (!sync) jobQuery = jobQuery.for("share");
+          if (!(yield jobQuery)[0]) throw ownershipLost;
+          let executionQuery = tx.select().from(executions).where(and(eq(executions.id, current.execution.id),
+            eq(executions.scheduleId, current.schedule.id), eq(executions.backgroundJobId, jobId)));
+          if (!sync) executionQuery = executionQuery.for("update");
+          const [execution] = yield executionQuery;
+          if (!execution) throw new ConflictError("Schedule job binding changed");
+          if (execution.instagramAttemptId === attemptId) return;
+          if (execution.instagramAttemptId) throw new ConflictError("Schedule execution is bound to another attempt");
+          const bound = yield tx.update(executions).set({ instagramAttemptId: attemptId })
+            .where(and(eq(executions.id, execution.id), isNull(executions.instagramAttemptId))).returning({ id: executions.id });
+          if (bound.length !== 1) throw new ConflictError("Schedule execution attempt binding changed");
+        };
+        // Attempt creation and binding share one transaction behind the original claim; no provider entry.
+        await publishInstagramImage(db, { approvalId, idempotencyKey }, current.schedule.requestedByAdminUserId, undefined, env, undefined, bind);
+        // Terminal or lost-race resolutions skip the hook; bind the exact keyed attempt under the same fence.
+        const instagramAttemptId = await repository.transaction(function* (tx) {
+          const [attempt] = yield tx.select({ id: attempts.id, approvalId: attempts.approvalId }).from(attempts)
+            .where(eq(attempts.idempotencyKey, idempotencyKey));
+          if (!attempt || attempt.approvalId !== approvalId) throw new ConflictError("Execution attempt unavailable");
+          yield* bind(tx, attempt.id);
+          return attempt.id as string;
+        });
         return { executionId: current.execution.id, scheduleId: current.schedule.id, backgroundJobId: jobId,
-          publishIntentId: current.intent.id, approvalId: current.approved.approval.id,
-          contentId: current.approved.content.id, preparedImageId: current.approved.image.id, connectionId: current.connection.id };
+          publishIntentId: current.intent.id, approvalId, contentId: current.approved.content.id,
+          preparedImageId: current.approved.image.id, connectionId: current.connection.id, instagramAttemptId };
       } catch (error) {
+        if (error === ownershipLost) return null;
         const type = error instanceof BadRequestError ? "Validation" : error instanceof ConflictError ? "Conflict"
-          : error instanceof NotFoundError ? "NotFound" : error instanceof UnauthorizedError ? "Authorization" : "Temporary";
+          : error instanceof NotFoundError ? "NotFound" : error instanceof UnauthorizedError ? "Authorization"
+          : error instanceof InstagramClientError && !error.retryable ? "Permanent" : "Temporary";
         // Existing job failure machinery consumes these fields; never persist raw errors/paths.
         throw { type, message: "Social schedule execution validation failed", retryable: type === "Temporary" };
       }
