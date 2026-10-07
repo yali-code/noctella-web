@@ -471,8 +471,11 @@ Instagram publishing configuration*): `INSTAGRAM_API_VERSION`, `INSTAGRAM_MEDIA_
 closed without contacting Instagram. Check the sanitized Admin readiness panel
 (`GET /api/instagram/publishing-readiness`); it never returns values.
 
-Staging smoke tests must not publish to the real Vault account. Leave the Instagram connection
-unset in staging unless a real publication has been explicitly authorized.
+The connection is managed at Admin → Social Manager → Instagram connection (`/social/instagram`).
+Storing or verifying it calls Instagram's read-only account check. Staging smoke tests must not
+publish to the real Vault account. Leave the Instagram connection unset in staging unless a real
+publication has been explicitly authorized. Without it, scheduled posts fail closed at the
+credential boundary, which safely exercises discovery and the worker.
 
 ## Explicit non-goals and risks
 

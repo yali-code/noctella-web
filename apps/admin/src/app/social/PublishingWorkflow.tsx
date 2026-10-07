@@ -82,7 +82,7 @@ function ApprovedSteps({ approval, busy, publishAt, setPublishAt, run }: {
     {approval.intent && <><h4>4. Schedule</h4>
       {approval.schedule ? <p>Scheduled for: {when(approval.schedule.requestedPublicationAt)}</p> : <>
         <label>Publication time <input style={control} type="datetime-local" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} /></label>
-        <p>The hourly scheduler picks up due posts, so publication can happen up to about an hour after this time.</p>
+        <p>Scheduled publishing runs on an hourly scheduler, so actual publication may occur after the requested time (typically within about an hour).</p>
         <button style={control} disabled={busy || !publishAt}
           onClick={() => run(() => socialContentApi.schedulePublication(approval.intent!.id, new Date(publishAt).toISOString()))}>Schedule publication</button>
       </>}</>}
