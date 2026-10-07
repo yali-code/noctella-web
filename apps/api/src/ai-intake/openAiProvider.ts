@@ -28,6 +28,17 @@ const OPENAI_SYSTEM_PROMPT_ADDENDUM =
   "Never invent or guess a maker, model, material, date, provenance, or any other fact that is not " +
   "clearly evidenced - leave a field null/unknown rather than fabricate it. " +
   "Write concise, marketplace-neutral draft text only. " +
+  "suggestedTitle: whenever the type of object is reasonably identifiable from the photos, always write a " +
+  "concise, marketplace-neutral descriptive title (roughly 4-12 words) naming what is visibly shown - the object " +
+  "type plus clearly visible distinguishing features such as form, colour, set contents, or an included case. " +
+  "If the exact brand, model, maker, or date cannot be confirmed, do not leave the title null - use a conservative " +
+  "generic descriptive title instead (for example \"Vintage Technical Drawing Pen Nib Set with Case\" when that is " +
+  "what the photos show) and never add unconfirmed specifics to it. " +
+  "suggestedKeywords: whenever the object type is reasonably identifiable, provide about 5-10 short descriptive " +
+  "search keywords drawn only from visible evidence (object type, visible features, colours, visibly evident " +
+  "materials, style) - never photo filenames or file extensions, and never unconfirmed brand, model, maker, or date claims. " +
+  "Returning null for suggestedTitle or suggestedKeywords is exceptional - only when no photos are supplied or the " +
+  "photos genuinely do not show an identifiable object - not the normal result. " +
   "If a category list is provided, choose the single best-fitting category id from that exact list " +
   "only, or null if none genuinely fits - never invent a category id or name. " +
   "A suggested EUR price is a rough recommendation only, never a certain valuation - leave it null " +

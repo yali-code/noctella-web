@@ -77,7 +77,7 @@ describe("POST /api/ai-product-intakes/:id/generate", () => {
       expect(res.body[field].value).toBeNull();
     }
     expect(res.body.providerName).toBe("mock-intake-v1");
-    expect(res.body.promptVersion).toBe("sprint92-v1");
+    expect(res.body.promptVersion).toBe("intake-v2-title-keywords");
     expect(res.body.stale).toBe(false);
   });
 

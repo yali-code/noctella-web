@@ -218,6 +218,58 @@ describe("OpenAiIntakeGenerationProvider (Sprint 101)", () => {
     expect(result.proposal.confidenceScore).toBeUndefined();
   });
 
+  describe("title/keywords generation (intake-v2-title-keywords)", () => {
+    it("instructs the model to produce a conservative visible-evidence title and keywords, with null exceptional, keeping anti-fabrication rules", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({}));
+      await provider().generate(fakeRequest(1));
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      const instructions: string = body.instructions;
+      expect(instructions).toContain("suggestedTitle: whenever the type of object is reasonably identifiable");
+      expect(instructions).toContain("use a conservative generic descriptive title");
+      expect(instructions).toContain("never add unconfirmed specifics");
+      expect(instructions).toContain("suggestedKeywords: whenever the object type is reasonably identifiable");
+      expect(instructions).toContain("never photo filenames");
+      expect(instructions).toContain("is exceptional");
+      expect(instructions).toContain("Never invent or guess a maker, model, material, date, provenance");
+      expect(instructions).toContain("never create or modify a Product");
+    });
+
+    it("keeps title/keywords present-but-nullable in the strict structured-output schema", async () => {
+      const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(structuredOutputResponse({}));
+      await provider().generate(fakeRequest(1));
+      const format = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string).text.format;
+      expect(format.strict).toBe(true);
+      expect(format.schema.required).toEqual(expect.arrayContaining(["suggestedTitle", "suggestedKeywords", "suggestedDescription"]));
+      expect(format.schema.properties.suggestedTitle.type).toEqual(["string", "null"]);
+      expect(format.schema.properties.suggestedKeywords.type).toEqual(["array", "null"]);
+    });
+
+    it("maps a normal title + description + keywords response from a photo intake", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        structuredOutputResponse({
+          suggestedTitle: "Vintage Technical Drawing Pen Nib Set with Case",
+          suggestedDescription: "A set of drawing pen nibs in a fitted case.",
+          suggestedKeywords: ["drawing pen", "nib set", "technical drawing", "fitted case"],
+        }),
+      );
+      const result = await provider().generate(fakeRequest(2));
+      expect(result.proposal.suggestedTitle).toBe("Vintage Technical Drawing Pen Nib Set with Case");
+      expect(result.proposal.suggestedDescription).toBe("A set of drawing pen nibs in a fitted case.");
+      expect(result.proposal.suggestedKeywords).toEqual(["drawing pen", "nib set", "technical drawing", "fitted case"]);
+      expect(result.metadata.promptVersion).toBe("intake-v2-title-keywords");
+    });
+
+    it("genuinely unidentifiable evidence: null title/keywords remain valid and map to undefined (no fallback text injected)", async () => {
+      vi.spyOn(global, "fetch").mockResolvedValue(
+        structuredOutputResponse({ suggestedTitle: null, suggestedKeywords: null, suggestedDescription: "Blurred photo; object not identifiable." }),
+      );
+      const result = await provider().generate(fakeRequest(1));
+      expect(result.proposal.suggestedTitle).toBeUndefined();
+      expect(result.proposal.suggestedKeywords).toBeUndefined();
+      expect(result.proposal.suggestedDescription).toBe("Blurred photo; object not identifiable.");
+    });
+  });
+
   describe("Sprint 106: expanded AI Full Product Analysis fields", () => {
     it("maps a successful response's twelve expanded fields into the AiIntakeProposal contract unchanged", async () => {
       vi.spyOn(global, "fetch").mockResolvedValue(
