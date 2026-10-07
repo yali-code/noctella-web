@@ -173,6 +173,14 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     return;
   }
   try {
+    // ETAP 7: due social schedules are discovered BEFORE the job runner, so a job enqueued here
+    // (pending, runAfter = enqueue time) is claimable by the normal claim-fenced runner in this
+    // same request. Discovery only establishes the durable handoff + job: no attempt, credential
+    // or provider entry. Its failure must not block the other scheduled domains below.
+    let socialSchedules: Awaited<ReturnType<ReturnType<typeof createSocialPublishScheduleExecutionService>["discover"]>> = [];
+    let socialScheduleDiscoveryFailed = false;
+    try { socialSchedules = await createSocialPublishScheduleExecutionService(db).discover(batchSize); }
+    catch { socialScheduleDiscoveryFailed = true; }
     const processed = await runDueJobs(db, workerId, batchSize);
     // Sprint 71: reuses this same scheduler trigger for the product-photo outbox (promotion,
     // delete, temp-cleanup) instead of adding a second cron/endpoint for it.
@@ -191,9 +199,6 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     // applied only to this call; the other three domains' own batchSize behavior above is unchanged.
     const cleanupBatchSize = Math.min(batchSize, MAX_CLEANUP_BATCH_SIZE);
     const aiIntakeCleanup = await runAiIntakeCleanupForScheduler(db, { batchSize: cleanupBatchSize });
-    // ETAP 5.7F: same reuse for due social schedules. Discovery only establishes the durable
-    // handoff + job; a later run executes it. No attempt, credential or provider entry here.
-    const socialSchedules = await createSocialPublishScheduleExecutionService(db).discover(batchSize);
     res.json({
       processed,
       photoOutboxProcessed: photoOutboxResults.length,
@@ -204,6 +209,7 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
       socialScheduleDiscovery: {
         enqueued: socialSchedules.filter((row) => row.outcome === "enqueued").length,
         rejected: socialSchedules.filter((row) => row.outcome === "rejected").length,
+        failed: socialScheduleDiscoveryFailed,
       },
     });
   } catch (e) {
