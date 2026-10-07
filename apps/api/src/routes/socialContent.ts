@@ -6,6 +6,7 @@ import { createSocialContentService } from "../services/socialContent";
 import { createSocialPublishIntentService } from "../services/socialPublishIntents";
 import { createSocialPublishScheduleService } from "../services/socialPublishSchedules";
 import { createSocialContentPreparationService } from "../services/socialContentPreparation";
+import { createSocialPublishingChainService } from "../services/socialPublishingChain";
 import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
 import { socialId, socialPrepareImageSchema } from "../validation/socialContent";
 import { selectNextSocialContentCandidate } from "../services/socialContentSelection";
@@ -44,6 +45,10 @@ export function createSocialContentRouter(db: DbClient, providerFactory: () => S
   });
   router.get("/next-candidate", requirePermission("products.edit"), async (_req, res) => {
     try { res.json(await selectNextSocialContentCandidate(db)); } catch (error) { handleRouteError(error, res); }
+  });
+  // Read-only operator view of the durable publishing chain; never enqueues, claims or publishes.
+  router.get("/:id/publishing-chain", requirePermission("products.view"), async (req, res) => {
+    try { res.json(await createSocialPublishingChainService(db).get(req.params.id)); } catch (error) { handleRouteError(error, res); }
   });
   router.get("/:id", requirePermission("products.view"), async (req, res) => {
     try { res.json(await service.get(req.params.id)); } catch (error) { handleRouteError(error, res); }

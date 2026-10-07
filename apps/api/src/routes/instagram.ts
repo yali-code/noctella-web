@@ -5,6 +5,7 @@ import { requireAdminOriginForMutations } from "../auth/csrf";
 import { getInstagramConnection, upsertInstagramConnection, verifyInstagramConnection } from "../integrations/instagram/connection";
 import { InstagramClientError, type InstagramTransport } from "../integrations/instagram/types";
 import { getInstagramPublishAttempt, publishInstagramImage } from "../services/instagramPublishing";
+import { getInstagramPublishingReadiness } from "../services/instagramPublishingReadiness";
 import { handleRouteError } from "./errorHandler";
 
 function reject(error: unknown, res: import("express").Response): void {
@@ -21,6 +22,10 @@ export function createInstagramRouter(db: DbClient, transport?: InstagramTranspo
 
   router.get("/connection", requirePermission("marketplace.view"), async (_req, res) => {
     try { res.json(await getInstagramConnection(db)); } catch (error) { reject(error, res); }
+  });
+  // Local-only, sanitized configuration readiness: key names and states, never values or provider calls.
+  router.get("/publishing-readiness", requirePermission("marketplace.view"), async (_req, res) => {
+    try { res.json(await getInstagramPublishingReadiness(db, env)); } catch (error) { reject(error, res); }
   });
   router.post("/connection", requirePermission("marketplace.manage"), async (req, res) => {
     try {

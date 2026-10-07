@@ -5,6 +5,7 @@ import { SOCIAL_CONTENT_TYPES, type SocialContent, type SocialContentDraftInput,
 import { socialContentApi } from "@/lib/socialContent";
 import { ApiError, resolveApiAssetUrl } from "@/lib/api";
 import { ProductMediaPicker } from "./ProductMediaPicker";
+import { PublishingWorkflow } from "./PublishingWorkflow";
 import { control, grid, panel, statusLabel } from "./styles";
 
 export function ContentEditor({ id, initialProductId = null, initialMediaIds = [] }: { id?: string; initialProductId?: string | null; initialMediaIds?: string[] }) {
@@ -58,9 +59,11 @@ export function ContentEditor({ id, initialProductId = null, initialMediaIds = [
     {!editable && record && <section className="noctella-panel" style={panel}><h3>{record.product ? `${record.product.sku} · ${record.product.title}` : "No selected product"}</h3>
       {!record.media.length && <p>No media available.</p>}<div style={grid}>{record.media.map((photo) => <img key={photo.id} src={resolveApiAssetUrl(photo.url)} alt={photo.altText || "Selected product photo"} style={{ width: "100%", height: 180, objectFit: "contain" }} />)}</div>
     </section>}
+    {/* Human Approval requires a prepared image, so approval lives in the explicit publishing workflow. */}
+    {record && (record.status === "ready_for_review" || record.status === "approved") && <PublishingWorkflow record={record} onRecordChange={setRecord} />}
     <div style={{ display: "flex", gap: 12 }}>
       {editable && <><button style={control} disabled={busy} onClick={() => act()}>Save draft</button><button style={control} disabled={busy || !input.caption.trim() || !input.mediaIds.length} onClick={() => act("ready_for_review")}>Submit for review</button></>}
-      {record?.status === "ready_for_review" && <><button style={control} disabled={busy} onClick={() => act("approved")}>Approve</button><button style={control} disabled={busy} onClick={() => act("rejected")}>Reject</button></>}
+      {record?.status === "ready_for_review" && <button style={control} disabled={busy} onClick={() => act("rejected")}>Reject</button>}
       {record?.status === "rejected" && <button style={control} disabled={busy} onClick={() => act("draft")}>Return to draft</button>}
     </div>
   </section>;

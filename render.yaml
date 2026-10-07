@@ -110,6 +110,18 @@ services:
         sync: false
       - key: AI_INTAKE_OPENAI_API_KEY
         sync: false
+      # Scheduled Instagram publishing (ETAP 6). Operator-entered; if any required value is missing
+      # or invalid, scheduled posts fail closed without contacting Instagram. Check the sanitized
+      # Admin readiness view (GET /api/instagram/publishing-readiness). See the staging runbook.
+      - key: INSTAGRAM_API_VERSION
+        sync: false
+      - key: INSTAGRAM_MEDIA_ALLOWED_HOSTS
+        sync: false
+      - key: PUBLIC_API_ORIGIN
+        sync: false
+      # Optional: defaults to the single fixed Vault account; any other value fails closed.
+      - key: INSTAGRAM_ALLOWED_ACCOUNT_IDS
+        sync: false
       # Sprint 124: API-owned off-disk SQLite backup. These values are consulted only when the
       # authenticated backup operation runs, not during normal API startup. Retention is owned by
       # the destination lifecycle policy outside the application.

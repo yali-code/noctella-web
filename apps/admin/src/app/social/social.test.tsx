@@ -23,7 +23,15 @@ beforeEach(() => {
   vi.spyOn(socialContentApi, "create").mockResolvedValue(record);
   vi.spyOn(socialContentApi, "edit").mockResolvedValue({ ...record, version: 2 });
   vi.spyOn(socialContentApi, "transition").mockImplementation(async (_id, status, version) => ({ ...record, status, version: version + 1 }));
+  vi.spyOn(socialContentApi, "publishingChain").mockResolvedValue(emptyChain);
+  vi.spyOn(socialContentApi, "publishingReadiness").mockResolvedValue(readyConfig);
+  vi.spyOn(api, "post").mockRejectedValue(new Error("Unexpected direct API mutation"));
 });
+const emptyChain = { content: { id: "content1", status: "ready_for_review", version: 3 }, preparedImages: [], approvals: [] };
+const readyConfig = { ready: true, mediaOriginAllowed: true, connection: "connected", missingConfiguration: [], checks: {} };
+const prepared = { id: "prep1", sourcePhotoId: "photo1", recipeVersion: "instagram-v1", outputPath: "/images/product-photos/prep1.jpg" };
+const approvalStep = { id: "approval1", preparedImageId: "prep1", contentVersion: 3, approvedAt: "2026-09-24T11:00:00Z", current: true,
+  intent: null, schedule: null, execution: null, job: null, attempt: null };
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("Social Manager", () => {
@@ -87,9 +95,11 @@ describe("Social Manager", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
     await waitFor(() => expect(socialContentApi.edit).toHaveBeenCalledWith("content1", expect.objectContaining({ caption: "Edited caption" }), 1));
     await waitFor(() => expect(socialContentApi.transition).toHaveBeenCalledWith("content1", "ready_for_review", 2));
-    expect(await screen.findByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Prepare image" })).toBeInTheDocument();
+    // Status-only approval is rejected by the API; approval is the explicit prepared-image step.
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
-  it.each([["Approve", "approved"], ["Reject", "rejected"]] as const)("requires the explicit %s action", async (label, status) => {
+  it.each([["Reject", "rejected"]] as const)("requires the explicit %s action", async (label, status) => {
     vi.mocked(socialContentApi.get).mockResolvedValue({ ...record, status: "ready_for_review", version: 3 });
     render(<ContentEditor id="content1" />);
     const action = await screen.findByRole("button", { name: label });
@@ -124,5 +134,71 @@ describe("Social Manager", () => {
     expect(screen.queryByText(/private internals/)).not.toBeInTheDocument();
     expect(socialContentApi.transition).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe("Scheduled publishing workflow", () => {
+  const noPublishNow = () => {
+    expect(screen.queryByRole("button", { name: /publish now/i })).not.toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+  };
+  it("prepares an image and approves it as separate explicit actions", async () => {
+    vi.mocked(socialContentApi.get).mockResolvedValue({ ...record, status: "ready_for_review", version: 3 });
+    const prepareImage = vi.spyOn(socialContentApi, "prepareImage").mockResolvedValue(prepared);
+    const approve = vi.spyOn(socialContentApi, "approve").mockResolvedValue({ id: "approval1" });
+    render(<ContentEditor id="content1" />);
+    expect(await screen.findByText("Prepare an image before approval.")).toBeInTheDocument();
+    vi.mocked(socialContentApi.publishingChain).mockResolvedValue({ ...emptyChain, preparedImages: [prepared] });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare image" }));
+    await waitFor(() => expect(prepareImage).toHaveBeenCalledWith("content1", "photo1"));
+    expect(approve).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Approve with prepared image" }));
+    await waitFor(() => expect(approve).toHaveBeenCalledWith("content1", "prep1", 3));
+    expect(socialContentApi.transition).not.toHaveBeenCalled();
+    noPublishNow();
+  });
+  it("records intent and schedule only through their own explicit steps", async () => {
+    vi.mocked(socialContentApi.get).mockResolvedValue({ ...record, status: "approved", version: 4 });
+    vi.mocked(socialContentApi.publishingChain).mockResolvedValue({ ...emptyChain, preparedImages: [prepared], approvals: [approvalStep] });
+    const createIntent = vi.spyOn(socialContentApi, "createPublishIntent").mockResolvedValue({ id: "intent1" });
+    const schedule = vi.spyOn(socialContentApi, "schedulePublication").mockResolvedValue({ id: "schedule1" });
+    render(<ContentEditor id="content1" />);
+    expect(await screen.findByRole("button", { name: "Create publish intent" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Schedule publication" })).not.toBeInTheDocument();
+    vi.mocked(socialContentApi.publishingChain).mockResolvedValue({ ...emptyChain, approvals: [{ ...approvalStep, intent: { id: "intent1", createdAt: "2026-09-24T11:05:00Z" } }] });
+    fireEvent.click(screen.getByRole("button", { name: "Create publish intent" }));
+    await waitFor(() => expect(createIntent).toHaveBeenCalledWith("approval1"));
+    expect(schedule).not.toHaveBeenCalled();
+    fireEvent.change(await screen.findByLabelText("Publication time"), { target: { value: "2030-01-02T10:30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Schedule publication" }));
+    await waitFor(() => expect(schedule).toHaveBeenCalledWith("intent1", new Date("2030-01-02T10:30").toISOString()));
+    noPublishNow();
+  });
+  it.each(["reconciliation_required", "publishing"])("shows %s as manual investigation with no action at all", async (status) => {
+    vi.mocked(socialContentApi.get).mockResolvedValue({ ...record, status: "approved", version: 4 });
+    vi.mocked(socialContentApi.publishingChain).mockResolvedValue({ ...emptyChain, approvals: [{ ...approvalStep,
+      intent: { id: "intent1", createdAt: "2026-09-24T11:05:00Z" }, schedule: { id: "schedule1", requestedPublicationAt: "2030-01-02T10:30:00Z", createdAt: "2026-09-24T11:06:00Z" },
+      execution: { id: "execution1", createdAt: "2030-01-02T11:00:00Z" },
+      job: { id: "job1", status: "failed", attemptCount: 1, maxAttempts: 5, lastError: "Conflict: Social schedule publishing failed", runAfter: "2030-01-02T11:00:00Z", completedAt: null, updatedAt: "2030-01-02T11:00:00Z" },
+      attempt: { id: "igp_1", origin: "scheduled", status, providerEntryState: "claimed", hasContainer: true, lastError: "provider", publishedAt: null, updatedAt: "2030-01-02T11:00:00Z", requiresManualReconciliation: true } }] });
+    render(<ContentEditor id="content1" />);
+    expect(await screen.findByText(/Requires manual investigation/)).toBeInTheDocument();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    noPublishNow();
+  });
+  it("shows missing configuration by name and never verifies the connection passively", async () => {
+    vi.mocked(socialContentApi.get).mockResolvedValue({ ...record, status: "approved", version: 4 });
+    vi.mocked(socialContentApi.publishingReadiness).mockResolvedValue({ ...readyConfig, ready: false, connection: "missing", missingConfiguration: ["INSTAGRAM_API_VERSION"] });
+    render(<ContentEditor id="content1" />);
+    expect(await screen.findByText(/Missing or invalid configuration: INSTAGRAM_API_VERSION/)).toBeInTheDocument();
+    expect(screen.getByText(/Not ready/)).toBeInTheDocument();
+    expect(screen.getByText("Instagram connection: missing")).toBeInTheDocument();
+    noPublishNow();
+  });
+  it("tolerates readiness being unavailable for the role", async () => {
+    vi.mocked(socialContentApi.get).mockResolvedValue({ ...record, status: "approved", version: 4 });
+    vi.mocked(socialContentApi.publishingReadiness).mockRejectedValue(new Error("forbidden"));
+    render(<ContentEditor id="content1" />);
+    expect(await screen.findByText(/not available for your role/)).toBeInTheDocument();
   });
 });

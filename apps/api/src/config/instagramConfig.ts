@@ -6,7 +6,7 @@ export function assertVaultPolicy(env: NodeJS.ProcessEnv = process.env): void {
   if (configured.length !== 1 || configured[0] !== INSTAGRAM_VAULT_ACCOUNT_ID) throw new InstagramClientError("configuration", false);
 }
 
-function allowedHosts(env: NodeJS.ProcessEnv): Set<string> {
+export function allowedHosts(env: NodeJS.ProcessEnv): Set<string> {
   // Configure only controlled, public media origins. Meta fetches the URL; DNS and
   // redirects at that origin remain an operational trust boundary, not an API fetch.
   const hosts = (env.INSTAGRAM_MEDIA_ALLOWED_HOSTS ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
