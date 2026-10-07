@@ -128,7 +128,10 @@ export function createSocialPublishScheduleExecutor(
           : error instanceof NotFoundError ? "NotFound" : error instanceof UnauthorizedError ? "Authorization"
           : error instanceof InstagramClientError && !error.retryable ? "Permanent" : "Temporary";
         // Existing job failure machinery consumes these fields; never persist raw errors/paths.
-        throw { type, message: "Social schedule execution validation failed", retryable: type === "Temporary" };
+        // Wording only: lets operators tell provider/publishing outcomes from canonical validation failures.
+        const message = error instanceof ProviderOutcomeError || error instanceof InstagramClientError
+          ? "Social schedule publishing failed" : "Social schedule execution validation failed";
+        throw { type, message, retryable: type === "Temporary" };
       }
     },
   };

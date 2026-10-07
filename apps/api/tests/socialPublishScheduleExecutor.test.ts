@@ -166,7 +166,7 @@ it("provider publish failure becomes reconciliation_required and never succeeds 
   publishFails = true;
   await runDueJobs(db, "worker", 1);
   expect(readAttempts()[0]).toMatchObject({ status: "reconciliation_required", containerId: "111" });
-  expect(readJob()).toMatchObject({ status: "failed", lastError: "Conflict: Social schedule execution validation failed" });
+  expect(readJob()).toMatchObject({ status: "failed", lastError: "Conflict: Social schedule publishing failed" });
   // Admin retry re-delivers the job, but the ambiguous publish is never repeated.
   await retryJob(db, job.id);
   await runDueJobs(db, "worker", 1);
@@ -206,7 +206,7 @@ it("credential failure fails closed: no attempt, no binding, job not succeeded",
   await retryJob(db, job.id);
   db.update(schema.marketplaceConnections).set({ encryptedAccessToken: null }).run();
   await runDueJobs(db, "worker", 1);
-  expect(readJob()).toMatchObject({ status: "failed", lastError: "Permanent: Social schedule execution validation failed" });
+  expect(readJob()).toMatchObject({ status: "failed", lastError: "Permanent: Social schedule publishing failed" });
   expect(readAttempts()).toEqual([]);
   expect(readExecution().instagramAttemptId).toBeNull();
 });

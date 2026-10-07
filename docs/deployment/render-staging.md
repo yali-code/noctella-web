@@ -462,6 +462,18 @@ verify only the **normal** case: a scheduler dispatch
 that finds pending work processes it correctly (steps 9 and 31 above), and a repeat dispatch is
 idempotent (step 31).
 
+## Scheduled Instagram publishing configuration (ETAP 6)
+
+Staging uses the same contract as production (see the production runbook section *Scheduled
+Instagram publishing configuration*): `INSTAGRAM_API_VERSION`, `INSTAGRAM_MEDIA_ALLOWED_HOSTS`,
+`PUBLIC_API_ORIGIN` (all required) and optional `INSTAGRAM_ALLOWED_ACCOUNT_IDS`, entered with
+`sync: false` on `noctella-staging-api`. Missing or invalid values make scheduled posts fail
+closed without contacting Instagram. Check the sanitized Admin readiness panel
+(`GET /api/instagram/publishing-readiness`); it never returns values.
+
+Staging smoke tests must not publish to the real Vault account. Leave the Instagram connection
+unset in staging unless a real publication has been explicitly authorized.
+
 ## Explicit non-goals and risks
 
 - **This staging setup uses SQLite and local product-photo storage on one persistent Render

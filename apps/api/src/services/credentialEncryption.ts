@@ -10,6 +10,9 @@ function key(): Buffer {
   return b;
 }
 
+/** Validates the key without returning it, for sanitized readiness reporting. */
+export function assertCredentialEncryptionKey(): void { key(); }
+
 export function encryptCredential(value: string): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(ALGO, key(), iv);

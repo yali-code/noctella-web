@@ -1,7 +1,7 @@
 import { resolveMarketplaceRequestTimeoutMs } from "../../config/marketplaceConfig";
 import { InstagramClientError, INSTAGRAM_VAULT_ACCOUNT_ID, type InstagramTransport } from "./types";
 
-function apiVersion(env: NodeJS.ProcessEnv): string {
+export function apiVersion(env: NodeJS.ProcessEnv): string {
   const value = env.INSTAGRAM_API_VERSION?.trim();
   if (!value || !/^v\d{1,2}\.\d{1,2}$/.test(value)) throw new InstagramClientError("configuration", false);
   return value;
