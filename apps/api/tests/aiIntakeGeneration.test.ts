@@ -140,6 +140,16 @@ describe("ai intake generation provider seam (Sprint 92)", () => {
       }
     });
 
+    it("bases suggestions on visible photo evidence and marks filenames as non-evidence, never keywords", () => {
+      const result = builder.build({
+        intakeId,
+        photos: [{ id: "p1", originalFilename: "IMG_0001.png", referenceId: "key-1.webp" }],
+      });
+      expect(result.systemPrompt).toContain("reasonably visible in the attached photos");
+      expect(result.systemPrompt).toContain("Do not invent details");
+      expect(result.userPrompt).toContain("never treat them as evidence and never use them as keywords");
+    });
+
     it("has no time or randomness dependence across repeated calls at different real timestamps", async () => {
       const context = { intakeId, photos: [] };
       const first = builder.build(context);
