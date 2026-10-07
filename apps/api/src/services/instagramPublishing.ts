@@ -47,6 +47,8 @@ export async function getInstagramPublishAttempt(db: DbClient, id: string) {
  * No network call in tests unless an injected transport explicitly simulates it.
  * `bindAttempt` runs inside the attempt authorization transaction; when supplied, the
  * durable attempt is established and bound only, and the provider is never entered.
+ * `fenceProviderEntry` runs inside the authorization and the unclaimed -> claimed
+ * transactions, so a caller that lost its own ownership cannot cross provider entry.
  */
 export async function publishInstagramImage(
   db: DbClient,
@@ -56,6 +58,7 @@ export async function publishInstagramImage(
   env: NodeJS.ProcessEnv = process.env,
   pause?: (ms: number) => Promise<void>,
   bindAttempt?: (tx: any, attemptId: string) => Generator<any, void, any>,
+  fenceProviderEntry?: (tx: any) => Generator<any, void, any>,
 ) {
   const input = instagramPublishSchema.parse(value);
   socialId.parse(actorId);
@@ -109,6 +112,7 @@ export async function publishInstagramImage(
   let authorized: { row: Attempt; created: boolean };
   try {
     authorized = await transaction(function* (tx) {
+      if (fenceProviderEntry) yield* fenceProviderEntry(tx);
       yield* authorizeActor(tx);
       const current = yield* snapshot(tx);
       if (JSON.stringify(before) !== JSON.stringify(current)) throw new ConflictError("Approved media changed before publishing authorization");
@@ -162,6 +166,7 @@ export async function publishInstagramImage(
   let containerId = attempt.containerId;
   if (!containerId) {
     const claimed = await transaction(function* (tx) {
+      if (fenceProviderEntry) yield* fenceProviderEntry(tx);
       yield* authorizeActor(tx);
       const current = yield* snapshot(tx);
       if (JSON.stringify(before) !== JSON.stringify(current)) throw new ConflictError("Approved media changed before provider entry");

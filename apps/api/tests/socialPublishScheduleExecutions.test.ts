@@ -156,3 +156,48 @@ it("additive initialization preserves canonical data without backfill and is rep
   const row = await create(); ensureSchema(client);
   expect(rows()).toEqual([row]); expect(evidence()).toEqual(before);
 });
+
+const discover = (limit = 10, at = now) => createSocialPublishScheduleExecutionService(db, "test-memory", () => at).discover(limit);
+const jobs = () => db.select().from(schema.backgroundJobs).all();
+it("discovery enqueues exactly-due and overdue schedules only, oldest first within the bound", async () => {
+  seed("-overdue"); seed("-future"); seed("-later");
+  db.update(schema.socialPublishSchedules).set({ requestedPublicationAt: new Date(now - 60_000).toISOString() }).where(eq(schema.socialPublishSchedules.id, "schedule-overdue")).run();
+  db.update(schema.socialPublishSchedules).set({ requestedPublicationAt: new Date(now + 1).toISOString() }).where(eq(schema.socialPublishSchedules.id, "schedule-future")).run();
+  expect(await discover(1)).toEqual([{ scheduleId: "schedule-overdue", outcome: "enqueued", backgroundJobId: jobs()[0].id }]);
+  expect((await discover()).map((row) => row.scheduleId)).toEqual(["schedule", "schedule-later"]);
+  expect(rows().map((row) => row.scheduleId).sort()).toEqual(["schedule", "schedule-later", "schedule-overdue"]);
+  // Discovery never executes: jobs stay pending, payload is scheduleId only, no attempts.
+  expect(jobs().every((job) => job.status === "pending" && Object.keys(JSON.parse(job.payloadSnapshot as string)).join() === "scheduleId")).toBe(true);
+  expect(db.select().from(schema.instagramPublishAttempts).all()).toEqual([]);
+});
+it("repeated and concurrent scans converge to one execution and one job per schedule", async () => {
+  await Promise.all([discover(), discover()]);
+  const [execution] = rows();
+  expect(rows()).toHaveLength(1);
+  expect(jobs().map((job) => job.id)).toEqual([execution.backgroundJobId]);
+  expect(await discover()).toEqual([]);
+  expect(rows()).toEqual([execution]);
+});
+it("discovery recovers a handoff created without a job by reusing it", async () => {
+  const handoff = await create();
+  expect(await discover()).toEqual([{ scheduleId: "schedule", outcome: "enqueued", backgroundJobId: jobs()[0].id }]);
+  expect(rows()).toEqual([{ ...handoff, backgroundJobId: jobs()[0].id }]);
+});
+it("an unbound job holding the execution key is never adopted; other schedules still progress", async () => {
+  const handoff = await create();
+  db.insert(schema.backgroundJobs).values({ id: "foreign", type: "social_publish_schedule", status: "pending", payloadSnapshot: '{"scheduleId":"schedule"}',
+    idempotencyKey: `social-publish-schedule:${handoff.id}`, runAfter: new Date(now).toISOString() }).run();
+  seed("-ok");
+  expect(await discover()).toEqual([
+    { scheduleId: "schedule", outcome: "rejected", reason: "Conflict" },
+    { scheduleId: "schedule-ok", outcome: "enqueued", backgroundJobId: expect.any(String) },
+  ]);
+  expect(rows().find((row) => row.scheduleId === "schedule")?.backgroundJobId).toBeNull();
+  expect(jobs()).toHaveLength(2);
+});
+it("stale approved content is not discovered and cannot pin the batch", async () => {
+  seed("-ok");
+  db.update(schema.socialContents).set({ version: 4 }).where(eq(schema.socialContents.id, "content")).run();
+  expect(await discover(1)).toEqual([{ scheduleId: "schedule-ok", outcome: "enqueued", backgroundJobId: expect.any(String) }]);
+  expect(rows().map((row) => row.scheduleId)).toEqual(["schedule-ok"]);
+});

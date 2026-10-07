@@ -7,7 +7,7 @@ import { socialId } from "../validation/socialContent";
 import { createSocialContentRepository } from "../repositories/social-content/drizzle";
 import { createSocialPublishIntentRepository } from "../repositories/social-content/publishIntents";
 import { SOCIAL_PUBLISH_SCHEDULE_JOB_TYPE } from "../repositories/social-content/publishScheduleExecutions";
-import { InstagramClientError, INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_CHANNEL, INSTAGRAM_VAULT_ACCOUNT_ID } from "../integrations/instagram/types";
+import { InstagramClientError, type InstagramTransport, INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_CHANNEL, INSTAGRAM_VAULT_ACCOUNT_ID } from "../integrations/instagram/types";
 import { createSocialPublishValidation } from "./socialPublishValidation";
 import { createSocialContentPreparationService } from "./socialContentPreparation";
 import { publishInstagramImage } from "./instagramPublishing";
@@ -15,14 +15,17 @@ import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError } from
 
 const payloadSchema = z.object({ scheduleId: socialId }).strict();
 const ownershipLost = Symbol("ownershipLost");
+const resumableStatuses = ["container_created", "processing", "ready"];
+class ProviderOutcomeError { constructor(readonly type: "Temporary" | "Permanent" | "Conflict") {} }
 
 /**
- * Validates the canonical chain, then establishes and binds the one approval-bound
- * Instagram attempt for this execution. The provider is never entered here.
+ * Validates the canonical chain, durably binds the one approval-bound Instagram attempt
+ * for this execution, and only then enters the existing publishing state machine for that
+ * same attempt, fenced by the original job claim.
  */
 export function createSocialPublishScheduleExecutor(
   db: DbClient, driver = process.env.DATABASE_DRIVER ?? "sqlite", now: () => number = Date.now,
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = process.env, transport?: InstagramTransport, pause?: (ms: number) => Promise<void>,
 ) {
   const sync = driver === "sqlite" || driver === "test-memory";
   const { backgroundJobs: jobs, socialPublishScheduleExecutions: executions, socialPublishSchedules: schedules,
@@ -77,11 +80,14 @@ export function createSocialPublishScheduleExecutor(
         const approvalId = current.approved.approval.id;
         // Server-owned identity: one execution can only ever resolve this one keyed attempt.
         const idempotencyKey = `social-publish-execution:${current.execution.id}`;
-        const bind = function* (tx: any, attemptId: string): Generator<any, void, any> {
+        const owned = function* (tx: any): Generator<any, void, any> {
           let jobQuery = tx.select({ id: jobs.id }).from(jobs)
             .where(and(eq(jobs.id, jobId), eq(jobs.status, "processing"), eq(jobs.claimToken, originalClaimToken)));
           if (!sync) jobQuery = jobQuery.for("share");
           if (!(yield jobQuery)[0]) throw ownershipLost;
+        };
+        const bind = function* (tx: any, attemptId: string): Generator<any, void, any> {
+          yield* owned(tx);
           let executionQuery = tx.select().from(executions).where(and(eq(executions.id, current.execution.id),
             eq(executions.scheduleId, current.schedule.id), eq(executions.backgroundJobId, jobId)));
           if (!sync) executionQuery = executionQuery.for("update");
@@ -103,12 +109,22 @@ export function createSocialPublishScheduleExecutor(
           yield* bind(tx, attempt.id);
           return attempt.id as string;
         });
+        // The binding above is committed. Only now does the existing state machine resolve the same
+        // keyed attempt and decide provider entry; the original claim fences unclaimed -> claimed.
+        const attempt = await publishInstagramImage(db, { approvalId, idempotencyKey }, current.schedule.requestedByAdminUserId,
+          transport, env, pause, undefined, owned);
+        if (attempt.id !== instagramAttemptId) throw new ConflictError("Execution attempt changed");
+        // Success requires publication. A durable container may resume; ambiguity never replays.
+        if (attempt.status !== "published") {
+          throw new ProviderOutcomeError(attempt.containerId && resumableStatuses.includes(attempt.status) ? "Temporary"
+            : attempt.status === "failed" ? "Permanent" : "Conflict");
+        }
         return { executionId: current.execution.id, scheduleId: current.schedule.id, backgroundJobId: jobId,
           publishIntentId: current.intent.id, approvalId, contentId: current.approved.content.id,
           preparedImageId: current.approved.image.id, connectionId: current.connection.id, instagramAttemptId };
       } catch (error) {
         if (error === ownershipLost) return null;
-        const type = error instanceof BadRequestError ? "Validation" : error instanceof ConflictError ? "Conflict"
+        const type = error instanceof ProviderOutcomeError ? error.type : error instanceof BadRequestError ? "Validation" : error instanceof ConflictError ? "Conflict"
           : error instanceof NotFoundError ? "NotFound" : error instanceof UnauthorizedError ? "Authorization"
           : error instanceof InstagramClientError && !error.retryable ? "Permanent" : "Temporary";
         // Existing job failure machinery consumes these fields; never persist raw errors/paths.
