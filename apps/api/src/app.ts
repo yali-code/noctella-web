@@ -61,6 +61,8 @@ import { createRequireAuth, requirePermission } from "./auth/permissions";
 import { requireAdminOriginForMutations } from "./auth/csrf";
 import { requireSchedulerAuth } from "./auth/machineAuth";
 import { runProfitabilitySnapshot } from "./services/analyticsSnapshots";
+import { collectEbayAnalytics } from "./services/ebayAnalytics";
+import { ExternalCollectorError } from "./use-cases/analytics/externalMetrics";
 import { parseConfiguredOrigins } from "./auth/originAllowlist";
 import { requestObservability } from "./middleware/requestObservability";
 
@@ -225,6 +227,22 @@ app.post("/api/background-jobs/analytics-snapshot", requireSchedulerAuth, (_req,
     const { run, replayed } = runProfitabilitySnapshot(db);
     res.json({ runId: run.id, status: run.status, observedAt: run.observedAt, metricCount: run.metricCount, replayed });
   } catch (error) {
+    handleRouteError(error, res);
+  }
+});
+// MACHINE AUTHENTICATED (Analytics Stage 3B): eBay Sell Analytics traffic-report collection - writes only
+// analytics_runs / analytics_metric_snapshots. Not scheduled until the owner completes eBay consent and a
+// controlled run succeeds. Responds with the failure kind only (never provider bodies or tokens).
+app.post("/api/background-jobs/analytics-ebay", requireSchedulerAuth, async (_req, res) => {
+  try {
+    const { run, replayed, warnings } = await collectEbayAnalytics(db);
+    res.json({ runId: run.id, status: run.status, observedAt: run.observedAt, metricCount: run.metricCount, replayed, warnings });
+  } catch (error) {
+    if (error instanceof ExternalCollectorError) {
+      const blocked = ["not_configured", "not_connected", "permission"].includes(error.kind);
+      res.status(blocked ? 409 : 503).json({ error: error.kind, detail: blocked ? error.message : undefined });
+      return;
+    }
     handleRouteError(error, res);
   }
 });

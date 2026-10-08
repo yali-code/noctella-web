@@ -98,7 +98,11 @@ services:
         sync: false
       - key: EBAY_CLIENT_ID
         sync: false
+      - key: EBAY_CLIENT_SECRET
+        sync: false
       - key: EBAY_REDIRECT_URI
+        sync: false
+      - key: EBAY_ANALYTICS_MARKETPLACE_ID
         sync: false
       - key: EBAY_WEBHOOK_SECRET
         sync: false
@@ -268,6 +272,31 @@ services:
     schedule: "30 4 * * *"
     buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
     startCommand: node apps/api/dist/scripts/runProductPhotoBackup.js
+    envVars:
+      - key: API_HOSTPORT
+        fromService:
+          name: noctella-staging-api
+          type: web
+          property: hostport
+      - key: SCHEDULER_AUTH_TOKEN
+        fromService:
+          name: noctella-staging-api
+          type: web
+          envVarKey: SCHEDULER_AUTH_TOKEN
+
+  # --- G. Internal analytics snapshot trigger (Analytics Phase 1G) ------------------------------
+  # One authenticated API call daily at 05:15 UTC; the API takes an idempotent internal profitability
+  # snapshot (same-day retries replay). No disk, database path or provider credentials here. eBay
+  # analytics collection is intentionally NOT scheduled until owner consent and a controlled run succeed.
+  - type: cron
+    name: noctella-staging-analytics-snapshot
+    runtime: node
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    schedule: "15 5 * * *"
+    buildCommand: npm ci --include=dev && npm run build -w packages/shared && npm run build -w apps/api
+    startCommand: node apps/api/dist/scripts/runAnalyticsSnapshot.js
     envVars:
       - key: API_HOSTPORT
         fromService:
