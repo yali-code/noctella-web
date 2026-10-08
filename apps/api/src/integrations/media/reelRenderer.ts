@@ -15,7 +15,8 @@ export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920, REEL_FPS = 30, REEL_DURATION
 
 export type CommandRunner = (command: string, args: readonly string[], timeoutMs: number) => Promise<void>;
 export const execRunner: CommandRunner = (command, args, timeoutMs) => new Promise((resolve, reject) => {
-  execFile(command, [...args], { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (error) => (error ? reject(error) : resolve()));
+  execFile(command, [...args], { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (error, _stdout, stderr) =>
+    (error ? reject(Object.assign(error, { stderr: String(stderr ?? "") })) : resolve()));
 });
 
 export interface ReelRenderInput {
@@ -101,12 +102,20 @@ export async function isFfmpegAvailable(env: NodeJS.ProcessEnv = process.env, ru
   try { await run(resolveFfmpegPath(env), ["-hide_banner", "-version"], 10_000); return true; } catch { return false; }
 }
 
+/** Bounded, single-line FFmpeg stderr tail (args contain only local paths/overlay text - no secrets). */
+function renderFailureDetail(error: unknown): string {
+  const raw = (error as { stderr?: unknown })?.stderr;
+  const stderr = typeof raw === "string" ? raw : "";
+  const tail = stderr.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(-600);
+  return tail ? `: ${tail}` : "";
+}
+
 export async function renderReel(input: ReelRenderInput, options: { env?: NodeJS.ProcessEnv; run?: CommandRunner } = {}): Promise<{ path: string; bytes: number }> {
   const run = options.run ?? execRunner;
   try {
     await run(resolveFfmpegPath(options.env), buildFfmpegArgs(input), 180_000);
-  } catch {
-    throw new Error("REEL_RENDER_FAILED");
+  } catch (error) {
+    throw new Error(`REEL_RENDER_FAILED${renderFailureDetail(error)}`);
   }
   const info = await stat(input.outputPath).catch(() => null);
   if (!info || info.size === 0 || !(await isMp4File(input.outputPath))) throw new Error("REEL_RENDER_INVALID_OUTPUT");
