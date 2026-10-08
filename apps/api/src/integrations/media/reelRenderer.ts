@@ -49,7 +49,9 @@ export function buildFfmpegArgs(input: ReelRenderInput): string[] {
   const parts: string[] = input.photoPaths.map((_, i) =>
     `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
     `zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${REEL_FPS},` +
-    `setsar=1,format=yuv420p,trim=duration=${segment.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
+    // xfade (FFmpeg 7.x) requires a declared constant frame rate on every input; setpts leaves it
+    // undefined ("current rate of 1/0 is invalid"), so re-assert fps + timebase after it.
+    `setsar=1,format=yuv420p,trim=duration=${segment.toFixed(3)},setpts=PTS-STARTPTS,fps=${REEL_FPS},settb=1/${REEL_FPS}[v${i}]`);
   let last = "v0";
   for (let i = 1; i < n; i += 1) {
     const out = `x${i}`;
