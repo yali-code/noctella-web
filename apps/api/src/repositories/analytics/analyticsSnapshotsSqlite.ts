@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import * as schema from "../../db/schema.sqlite";
 
 /**
@@ -39,6 +39,27 @@ export function createSqliteAnalyticsSnapshotRepository(db: any) {
 
   return Object.freeze({
     findRun,
+
+    /** Stage 3A: the connected marketplace connection for a channel (existing "connected" convention), or null. */
+    findConnectedConnection(channel: string): { id: string; encryptedAccessToken: string } | null {
+      const row = db.select({ id: schema.marketplaceConnections.id, encryptedAccessToken: schema.marketplaceConnections.encryptedAccessToken }).from(schema.marketplaceConnections).where(and(eq(schema.marketplaceConnections.channel, channel), eq(schema.marketplaceConnections.status, "connected"))).get();
+      return row?.encryptedAccessToken ? { id: row.id, encryptedAccessToken: row.encryptedAccessToken } : null;
+    },
+
+    /**
+     * Stage 3A: read-only listing -> product mapping from the existing external_listings table.
+     * A listing id mapped to more than one product is ambiguous and is never mapped (no guessing).
+     */
+    mapExternalListings(channel: string, externalListingIds: readonly string[]): Map<string, string> {
+      const ids = [...new Set(externalListingIds)];
+      const products = new Map<string, Set<string>>();
+      for (let i = 0; i < ids.length; i += 500) {
+        for (const row of db.select({ externalListingId: schema.externalListings.externalListingId, productId: schema.externalListings.productId }).from(schema.externalListings).where(and(eq(schema.externalListings.channel, channel), inArray(schema.externalListings.externalListingId, ids.slice(i, i + 500)))).all() as any[]) {
+          products.set(row.externalListingId, (products.get(row.externalListingId) ?? new Set()).add(row.productId));
+        }
+      }
+      return new Map([...products].filter(([, set]) => set.size === 1).map(([id, set]) => [id, [...set][0]!]));
+    },
 
     /**
      * Atomically records a completed run and its snapshots. Snapshot inserts are idempotent on the
@@ -90,7 +111,8 @@ export function createSqliteAnalyticsSnapshotRepository(db: any) {
 
     listProductHistory(productId: string, query: { metricKey?: string; from?: string; to?: string; limit: number }) {
       const t = schema.analyticsMetricSnapshots;
-      const filters = [eq(t.scopeType, "product"), eq(t.scopeId, productId)];
+      // Stage 3A: product history also includes external listing metrics mapped to this product.
+      const filters = [or(and(eq(t.scopeType, "product"), eq(t.scopeId, productId)), and(eq(t.scopeType, "external_listing"), sql`json_extract(${t.metadataJson}, '$.productId') = ${productId}`))!];
       if (query.metricKey) filters.push(eq(t.metricKey, query.metricKey));
       if (query.from) filters.push(gte(t.observedAt, query.from));
       if (query.to) filters.push(lte(t.observedAt, query.to));
