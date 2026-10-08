@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { MarketplaceWebhookEventType, PublishChannel, type MarketplaceApiError, type MarketplacePublishPayload, type PublishPayload, type ShipmentUpdateResult, type MarketplaceReturnResult } from "@noctella/shared";
 import { resolveMarketplaceRequestTimeoutMs } from "../config/marketplaceConfig";
+import { buildEbayAuthorizationUrl, exchangeEbayAuthorizationCode, refreshEbayAccessToken } from "../integrations/ebay/ebayOAuth";
 export type { MarketplacePublishPayload } from "@noctella/shared";
 
 export interface MarketplaceTokens { accessToken: string; refreshToken?: string; expiresAt?: string; scopes?: string[]; externalAccountId?: string; }
@@ -13,7 +14,8 @@ export interface ParsedMarketplaceWebhookEvent { externalEventId: string; eventT
 export interface MarketplaceAdapter {
   getAuthorizationUrl(state: string): string;
   exchangeAuthorizationCode(code: string): Promise<MarketplaceTokens>;
-  refreshAccessToken(refreshToken: string): Promise<MarketplaceTokens>;
+  /** Stage 3B: `scopes` = the stored consented scope set (eBay requires a subset of the original consent). */
+  refreshAccessToken(refreshToken: string, scopes?: readonly string[]): Promise<MarketplaceTokens>;
   verifyConnection(accessToken: string): Promise<{ externalAccountId?: string; raw?: unknown }>;
   createListing(accessToken: string, payload: MarketplacePublishPayload): Promise<AdapterListingResult>;
   updateListing(accessToken: string, externalListingId: string, payload: MarketplacePublishPayload): Promise<AdapterListingResult>;
@@ -53,8 +55,8 @@ abstract class HttpAdapter implements MarketplaceAdapter {
   protected clientId() { return this.env[`${this.prefix}_CLIENT_ID`] ?? ""; }
   protected redirect() { return this.env[`${this.prefix}_REDIRECT_URI`] ?? ""; }
   getAuthorizationUrl(state: string) { const u = new URL(this.prefix === "EBAY" ? "https://auth.ebay.com/oauth2/authorize" : "https://www.etsy.com/oauth/connect"); u.searchParams.set("client_id", this.clientId()); u.searchParams.set("redirect_uri", this.redirect()); u.searchParams.set("response_type", "code"); u.searchParams.set("state", state); return u.toString(); }
-  async exchangeAuthorizationCode(code: string) { return { accessToken: `exchanged-${code}`, refreshToken: `refresh-${code}`, expiresAt: new Date(Date.now()+3600_000).toISOString() }; }
-  async refreshAccessToken(refreshToken: string) { return { accessToken: `refreshed-${refreshToken}`, refreshToken, expiresAt: new Date(Date.now()+3600_000).toISOString() }; }
+  async exchangeAuthorizationCode(code: string): Promise<MarketplaceTokens> { return { accessToken: `exchanged-${code}`, refreshToken: `refresh-${code}`, expiresAt: new Date(Date.now()+3600_000).toISOString() }; }
+  async refreshAccessToken(refreshToken: string, _scopes?: readonly string[]): Promise<MarketplaceTokens> { return { accessToken: `refreshed-${refreshToken}`, refreshToken, expiresAt: new Date(Date.now()+3600_000).toISOString() }; }
   async verifyConnection(accessToken: string) { const raw = await requestJson(`${this.base()}/identity/v1/me`, { headers: { Authorization: `Bearer ${accessToken}` } }, this.timeout()); return { externalAccountId: String(raw.id ?? raw.account_id ?? ""), raw }; }
   async createListing(accessToken: string, payload: PublishPayload) { const raw = await requestJson(`${this.base()}/sell/listing`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { externalListingId: String(raw.id ?? raw.listing_id), externalListingUrl: typeof raw.url === "string" ? raw.url : undefined, externalStatus: String(raw.status ?? "active"), raw }; }
   async updateListing(accessToken: string, id: string, payload: PublishPayload) { const raw = await requestJson(`${this.base()}/sell/listing/${id}`, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type":"application/json" }, body: JSON.stringify(payload) }, this.timeout()); return { externalListingId: id, externalListingUrl: typeof raw.url === "string" ? raw.url : undefined, externalStatus: String(raw.status ?? "active"), raw }; }
@@ -83,7 +85,16 @@ abstract class HttpAdapter implements MarketplaceAdapter {
   normalizeReturnError(error: unknown): MarketplaceApiError { return this.normalizeError(error); }
   normalizeError(error: unknown): MarketplaceApiError { const e = error as { status?: number; message?: string; name?: string }; const type = e.name === "AbortError" ? "Timeout" : e.status === 401 ? "Authentication" : e.status === 403 ? "Authorization" : e.status === 429 ? "RateLimit" : e.status && e.status >= 500 ? "Temporary" : e.status && e.status >= 400 ? "Permanent" : "Unknown"; return { type, code: e.status ? String(e.status) : undefined, message: type, retryable: ["RateLimit","Timeout","Temporary","Unknown"].includes(type) }; }
 }
-export class EbayAdapter extends HttpAdapter { constructor(env=process.env){ super(env,"EBAY"); } }
+/**
+ * Stage 3B: eBay consent, authorization-code exchange and refresh are real (integrations/ebay/ebayOAuth.ts);
+ * the inherited stub token paths are no longer reachable for eBay. Listing/order endpoints are unchanged.
+ */
+export class EbayAdapter extends HttpAdapter {
+  constructor(env: Record<string, string | undefined> = process.env, private readonly fetchImpl: typeof fetch = fetch) { super(env, "EBAY"); }
+  override getAuthorizationUrl(state: string) { return buildEbayAuthorizationUrl(this.env, state); }
+  override async exchangeAuthorizationCode(code: string) { return exchangeEbayAuthorizationCode(this.env, code, this.fetchImpl); }
+  override async refreshAccessToken(refreshToken: string, scopes: readonly string[] = []) { return refreshEbayAccessToken(this.env, refreshToken, scopes, this.fetchImpl); }
+}
 export class EtsyAdapter extends HttpAdapter { constructor(env=process.env){ super(env,"ETSY"); } }
 export function getMarketplaceAdapter(channel: PublishChannel): MarketplaceAdapter { if (channel === PublishChannel.Ebay) return new EbayAdapter(); if (channel === PublishChannel.Etsy) return new EtsyAdapter(); throw new Error("Unsupported marketplace channel"); }
 

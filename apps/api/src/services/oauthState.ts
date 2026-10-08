@@ -23,7 +23,8 @@ export function verifyOAuthState(state: string, channel: string): { accountLabel
   const [encoded, signature] = state.split(".");
   if (!encoded || !signature) throw new Error("OAuth state mismatch");
   const expected = crypto.createHmac("sha256", stateSecret()).update(encoded).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error("OAuth state mismatch");
+  // Stage 3B hardening: timingSafeEqual throws on unequal lengths - reject as a plain mismatch instead.
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error("OAuth state mismatch");
   const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as { channel: string; accountLabel: string; exp: number };
   if (payload.channel !== channel) throw new Error("OAuth state mismatch");
   if (payload.exp < Date.now()) throw new Error("OAuth state expired");

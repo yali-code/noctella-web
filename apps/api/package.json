@@ -18,6 +18,7 @@
     "db:backup-check": "tsx src/scripts/dbBackupCheck.ts",
     "db:backup": "tsx src/scripts/runDatabaseBackup.ts",
     "analytics:snapshot": "tsx src/scripts/runAnalyticsSnapshot.ts",
+    "analytics:ebay": "tsx src/scripts/runEbayAnalytics.ts",
     "db:restore-verify": "tsx src/scripts/verifyDatabaseRestore.ts",
     "db:restore-materialize": "tsx src/scripts/materializeDatabaseRestore.ts",
     "photos:backup": "tsx src/scripts/runProductPhotoBackup.ts",

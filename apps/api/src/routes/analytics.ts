@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
 import { getProductAnalyticsHistory } from "../services/analyticsSnapshots";
+import { getEbayAnalyticsReadiness } from "../services/ebayAnalytics";
 import { getCatalogueProfitability } from "../services/productProfitability";
 import { catalogueProfitabilityQuerySchema } from "../use-cases/analytics/catalogueProfitability";
 import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitabilitySnapshots";
@@ -32,6 +33,15 @@ router.get("/profitability", (req, res) => {
 router.get("/profitability/:productId/history", (req, res) => {
   try {
     res.json(getProductAnalyticsHistory(db, req.params.productId, productMetricHistoryQuerySchema.parse(req.query)));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
+
+// Stage 3B: sanitized eBay Analytics readiness (booleans/status only - never token values).
+router.get("/ebay/readiness", (_req, res) => {
+  try {
+    res.json(getEbayAnalyticsReadiness(db));
   } catch (error) {
     handleRouteError(error, res);
   }

@@ -46,6 +46,20 @@ export function createSqliteAnalyticsSnapshotRepository(db: any) {
       return row?.encryptedAccessToken ? { id: row.id, encryptedAccessToken: row.encryptedAccessToken } : null;
     },
 
+    /** Stage 3B: sanitized connection facts for readiness - booleans/metadata only, never token values. */
+    findConnectionSummary(channel: string): { id: string; status: string; hasAccessToken: boolean; hasRefreshToken: boolean; tokenExpiresAt: string | null; scopes: string[] } | null {
+      const row = db.select().from(schema.marketplaceConnections).where(eq(schema.marketplaceConnections.channel, channel)).get();
+      if (!row) return null;
+      let scopes: string[] = [];
+      try { const parsed = JSON.parse(row.scopes ?? "[]"); if (Array.isArray(parsed)) scopes = parsed.map(String); } catch { scopes = []; }
+      return { id: row.id, status: row.status, hasAccessToken: Boolean(row.encryptedAccessToken), hasRefreshToken: Boolean(row.encryptedRefreshToken), tokenExpiresAt: row.tokenExpiresAt ?? null, scopes };
+    },
+
+    /** Stage 3B: every external listing id Noctella holds for a channel (read-only). */
+    listExternalListingIds(channel: string): string[] {
+      return [...new Set((db.select({ id: schema.externalListings.externalListingId }).from(schema.externalListings).where(eq(schema.externalListings.channel, channel)).all() as any[]).map((r) => String(r.id)))].sort();
+    },
+
     /**
      * Stage 3A: read-only listing -> product mapping from the existing external_listings table.
      * A listing id mapped to more than one product is ambiguous and is never mapped (no guessing).

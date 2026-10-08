@@ -11,7 +11,8 @@
  * and are only meaningful for "cumulative_lifetime" metrics.
  */
 export type ExternalWindowSemantics = "cumulative_lifetime" | "rolling_window" | "fixed_range" | "daily";
-export type ExternalMetricUnit = "count" | "percent" | "ratio" | "eur";
+/** "provider_defined": the provider does not document the scale (e.g. eBay traffic-report rates) - stored as given, never rescaled. */
+export type ExternalMetricUnit = "count" | "percent" | "ratio" | "eur" | "provider_defined";
 
 export interface ExternalMetricObservation {
   readonly entityType: "listing";
@@ -51,7 +52,7 @@ export interface ExternalAnalyticsCollector {
   collect(context: ExternalCollectorContext): Promise<ExternalCollectionResult>;
 }
 
-export type ExternalCollectorErrorKind = "authentication" | "permission" | "rate_limit" | "temporary" | "malformed_payload" | "not_connected";
+export type ExternalCollectorErrorKind = "authentication" | "permission" | "rate_limit" | "temporary" | "malformed_payload" | "not_connected" | "not_configured" | "request_rejected";
 
 /** Typed collector failure - the run is recorded as failed and no metric rows are written. */
 export class ExternalCollectorError extends Error {
