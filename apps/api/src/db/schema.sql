@@ -852,3 +852,112 @@ CREATE TABLE IF NOT EXISTS analytics_metric_snapshots (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_analytics_snapshots_identity_unique ON analytics_metric_snapshots(scope_type, scope_id, metric_namespace, metric_key, observed_at, source_type, source_reference);
 CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_scope_metric_time ON analytics_metric_snapshots(scope_type, scope_id, metric_key, observed_at);
 CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_run ON analytics_metric_snapshots(run_id);
+
+-- Analytics Stage 3 PR-2: experiment registry (advisory only - never executes changes).
+-- primary_metric is fixed at creation and never updated (no post-hoc winner selection).
+CREATE TABLE IF NOT EXISTS analytics_experiments (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  hypothesis TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  platform TEXT,
+  evidence_style TEXT NOT NULL,
+  normalization TEXT NOT NULL,
+  primary_metric TEXT NOT NULL,
+  primary_metric_direction TEXT NOT NULL,
+  min_relative_lift REAL NOT NULL,
+  guardrails_json TEXT NOT NULL,
+  scope_json TEXT NOT NULL,
+  min_duration_days INTEGER NOT NULL,
+  min_observations_per_variant INTEGER NOT NULL,
+  source_finding_id TEXT,
+  status TEXT NOT NULL,
+  started_at TEXT,
+  ended_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS analytics_experiment_variants (
+  id TEXT PRIMARY KEY,
+  experiment_id TEXT NOT NULL REFERENCES analytics_experiments(id) ON DELETE RESTRICT,
+  variant_key TEXT NOT NULL,
+  description TEXT NOT NULL,
+  is_control INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_experiment_variants_unique ON analytics_experiment_variants(experiment_id, variant_key);
+CREATE TABLE IF NOT EXISTS analytics_experiment_observations (
+  id TEXT PRIMARY KEY,
+  experiment_id TEXT NOT NULL REFERENCES analytics_experiments(id) ON DELETE RESTRICT,
+  observation_key TEXT NOT NULL,
+  variant_key TEXT NOT NULL,
+  metric_key TEXT NOT NULL,
+  value REAL NOT NULL,
+  sample_size INTEGER NOT NULL,
+  observed_at TEXT NOT NULL,
+  source_reference TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_experiment_observations_unique ON analytics_experiment_observations(experiment_id, observation_key);
+CREATE TABLE IF NOT EXISTS analytics_experiment_results (
+  experiment_id TEXT PRIMARY KEY REFERENCES analytics_experiments(id) ON DELETE RESTRICT,
+  result_state TEXT NOT NULL,
+  winning_variant TEXT,
+  confidence_level TEXT NOT NULL,
+  evidence_summary_json TEXT NOT NULL,
+  decided_at TEXT NOT NULL,
+  revalidate_by TEXT
+);
+
+-- Analytics Stage 3 PR-2: Knowledge Memory - source-backed findings with provenance. Findings are
+-- never silently overwritten: superseded/conflicting findings stay retrievable.
+CREATE TABLE IF NOT EXISTS knowledge_research_runs (
+  id TEXT PRIMARY KEY,
+  period_key TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  finding_count INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS knowledge_findings (
+  id TEXT PRIMARY KEY,
+  fingerprint TEXT NOT NULL UNIQUE,
+  first_run_id TEXT NOT NULL,
+  last_confirmed_run_id TEXT NOT NULL,
+  topic_domain TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  claim TEXT NOT NULL,
+  classification TEXT NOT NULL,
+  category TEXT,
+  brand TEXT,
+  product_id TEXT,
+  platform TEXT,
+  source_url TEXT NOT NULL,
+  source_domain TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_quality TEXT NOT NULL,
+  published_at TEXT,
+  collected_at TEXT NOT NULL,
+  last_confirmed_at TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  business_relevance TEXT NOT NULL,
+  status TEXT NOT NULL,
+  review_by TEXT NOT NULL,
+  evidence_excerpt TEXT,
+  supersedes_finding_id TEXT,
+  requires_noctella_verification INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_findings_domain ON knowledge_findings(topic_domain, status);
+CREATE TABLE IF NOT EXISTS knowledge_conflicts (
+  id TEXT PRIMARY KEY,
+  finding_a_id TEXT NOT NULL,
+  finding_b_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  noted_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_conflicts_pair ON knowledge_conflicts(finding_a_id, finding_b_id);
