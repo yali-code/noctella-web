@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ import { createAdminUser } from "../src/services/adminAuth";
 import * as preparation from "../src/services/socialContentPreparation";
 import * as publishing from "../src/services/instagramPublishing";
 import * as jobs from "../src/services/backgroundJobs";
-import { buildFfmpegArgs, renderReel, type CommandRunner } from "../src/integrations/media/reelRenderer";
+import { buildFfmpegArgs, partialReelPath, renderReel, type CommandRunner } from "../src/integrations/media/reelRenderer";
 import type { MediaCopyProvider } from "../src/integrations/media/mediaCopyProviders";
 import {
   approveMediaPlan, deterministicRequestId, editMediaPlanItem, generateMediaPlan, getMediaPlannerReadiness, MediaPlanningBlockedError,
@@ -55,6 +55,12 @@ function seedProducts(count: number) {
   db.insert(schema.products).values({ id: "sold", sku: "SOLD", title: "Sold", slug: "sold", type: "unique_item", status: "sold", stockQuantity: 0 }).run();
   db.insert(schema.products).values({ id: "nophoto", sku: "NOPHOTO", title: "No photo", slug: "nophoto", type: "unique_item", status: "published", stockQuantity: 1 }).run();
   db.insert(schema.productPhotos).values({ id: "ph-pending", productId: "nophoto", processingStatus: "Pending", url: "/images/product-photos/pending.webp", thumbnailUrl: "/x.webp", filename: "pending.webp", mimeType: "image/webp", sizeBytes: 1, width: 1, height: 1 }).run();
+}
+/** The explicit owner Render Reel action (fake ffmpeg). */
+async function renderReelOf(planId: string) {
+  const reelId = getLatestMediaPlan(db)!.items.find((i) => i.contentType === "REEL")!.id;
+  const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  try { return await renderPlanReel(db, planId, reelId, deps()); } finally { spy.mockRestore(); }
 }
 const productSnapshot = () => [db.select().from(schema.products).all(), db.select().from(schema.productPhotos).all()];
 
@@ -110,7 +116,8 @@ describe("Media Planning Agent - planning", () => {
     expect(reel).toMatchObject({ plannedAt: "2030-10-08T17:30:00.000Z", product: { id: "p-1" }, postFormat: "REEL" });
     expect(reel.photos.map((p) => p.id)).toEqual(["ph-1-0", "ph-1-1", "ph-1-2", "ph-1-3", "ph-1-4"]);
     expect(reel.hook).toBeTruthy();
-    expect(reel.reel).toMatchObject({ status: "RENDERED", previewPath: expect.stringContaining("/reel") });
+    // Rendering is deferred to the explicit Render Reel action: the new Reel starts PENDING.
+    expect(reel.reel).toEqual({ status: "PENDING", previewPath: null });
     expect(plan.items.some((i) => i.product.id === "sold" || i.product.id === "nophoto")).toBe(false);
   });
 
@@ -120,6 +127,18 @@ describe("Media Planning Agent - planning", () => {
     expect((await generateMediaPlan(db, { generatedBy: actorId }, deps({ copyProvider: good }))).items[0]!.caption).toMatch(/^Caption for SKU-/);
     const bad: MediaCopyProvider = { source: "fake-ai", generate: async () => { throw new Error("MEDIA_COPY_PROVIDER_INVALID_RESPONSE"); } };
     expect((await generateMediaPlan(db, { generatedBy: actorId }, deps({ copyProvider: bad }))).copySource).toBe("deterministic_fallback:MEDIA_COPY_PROVIDER_INVALID_RESPONSE");
+  });
+
+  it("plan generation never runs FFmpeg: no availability probe, no render, Reel PENDING, READY_FOR_REVIEW", async () => {
+    seedProducts(7);
+    const renderSpy = vi.fn(), probeSpy = vi.fn(async () => true);
+    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps({ render: renderSpy, ffmpegAvailable: probeSpy }));
+    expect(renderSpy).not.toHaveBeenCalled();
+    expect(probeSpy).not.toHaveBeenCalled();
+    expect(plan.status).toBe("READY_FOR_REVIEW");
+    expect(plan.items.filter((i) => i.contentType === "FEED_POST")).toHaveLength(4);
+    expect(plan.items.filter((i) => i.contentType === "REEL").map((i) => i.reel)).toEqual([{ status: "PENDING", previewPath: null }]);
+    expect(readdirSync(assetDir)).toEqual([]);
   });
 
   it("time recommendation is data-driven only with enough Noctella evidence", () => {
@@ -137,19 +156,61 @@ describe("Media Planning Agent - Reel renderer", () => {
     expect(filter).toContain("crop=1080:1920");
     expect(filter.match(/xfade=transition=fade/g)).toHaveLength(3);
     expect(filter).toContain("text='Look closer now'");
-    expect(args).toEqual(expect.arrayContaining(["-t", "8", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "/out.mp4"]));
+    expect(args).toEqual(expect.arrayContaining(["-t", "8", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart", "-an", "/out.mp4"]));
+    // PR #309 Linux normalization: constant fps + timebase on every xfade input.
+    expect(filter.match(/fps=30,settb=1\/30\[v\d\]/g)).toHaveLength(4);
+    // Memory safety: one decoder/filter/encoder thread, light preset, no lookahead/B-frames.
+    expect(args.slice(0, 6)).toEqual(["-y", "-hide_banner", "-loglevel", "error", "-filter_complex_threads", "1"]);
+    expect(args.filter((a, i) => a === "-threads" && args[i + 1] === "1")).toHaveLength(5);
+    expect(args).toEqual(expect.arrayContaining(["-filter_threads", "1", "-preset", "veryfast", "-x264-params", "rc-lookahead=0:sync-lookahead=0:ref=1:bframes=0"]));
+    expect(args).not.toContain("medium");
+    expect(args[args.indexOf("-c:v") + 1]).toBe("libx264");
 
-    const out = path.join(mkdtempSync(path.join(tmpdir(), "reel-")), "r.mp4");
-    expect(await renderReel({ photoPaths: ["/a.webp"], outputPath: out }, { run: fakeFfmpeg })).toEqual({ path: out, bytes: 24 });
+    const dir = mkdtempSync(path.join(tmpdir(), "reel-")), out = path.join(dir, "r.mp4");
+    const written: string[] = [];
+    expect(await renderReel({ photoPaths: ["/a.webp"], outputPath: out }, { run: async (c, a, t) => { written.push(a[a.length - 1]!); await fakeFfmpeg(c, a, t); } })).toEqual({ path: out, bytes: 24 });
+    expect(written).toEqual([partialReelPath(out)]); // FFmpeg writes a partial file, renamed only after validation
     expect(readFileSync(out).subarray(4, 8).toString("ascii")).toBe("ftyp");
+    expect(readdirSync(dir)).toEqual(["r.mp4"]);
     await expect(renderReel({ photoPaths: ["/a.webp"], outputPath: out }, { run: async (_c, a) => writeFileSync(a[a.length - 1]!, "not a video") })).rejects.toThrow("REEL_RENDER_INVALID_OUTPUT");
-    await expect(renderReel({ photoPaths: ["/a.webp"], outputPath: out }, { run: async () => { throw new Error("spawn ENOENT"); } })).rejects.toThrow("REEL_RENDER_FAILED");
+    await expect(renderReel({ photoPaths: ["/a.webp"], outputPath: out }, { run: async (_c, a) => { writeFileSync(a[a.length - 1]!, "half"); throw new Error("spawn ENOENT"); } })).rejects.toThrow("REEL_RENDER_FAILED");
+    expect(readdirSync(dir)).toEqual(["r.mp4"]); // failed/invalid partials are removed, never promoted
+    expect(readFileSync(out).subarray(4, 8).toString("ascii")).toBe("ftyp");
   });
 
-  it("without ffmpeg the Reel is never marked complete", async () => {
+  it("explicit render: RENDERED on success, RENDER_FAILED on failure, RENDERER_UNAVAILABLE without ffmpeg - with bounded logs", async () => {
     seedProducts(7);
-    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps({ ffmpegAvailable: async () => false }));
-    expect(plan.items.find((i) => i.contentType === "REEL")!.reel).toEqual({ status: "RENDERER_UNAVAILABLE", previewPath: null });
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    const reelId = plan.items.find((i) => i.contentType === "REEL")!.id;
+    const reelOf = (p: Awaited<ReturnType<typeof renderPlanReel>>) => p.items.find((i) => i.id === reelId)!.reel;
+
+    const renderSpy = vi.fn(async () => { throw new Error("REEL_RENDER_FAILED: x".padEnd(1000, "y")); });
+    expect(reelOf(await renderPlanReel(db, plan.id, reelId, deps({ render: renderSpy })))).toEqual({ status: "RENDER_FAILED", previewPath: null });
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+    expect(reelOf(await renderPlanReel(db, plan.id, reelId, deps({ ffmpegAvailable: async () => false })))).toEqual({ status: "RENDERER_UNAVAILABLE", previewPath: null });
+    expect(reelOf(await renderPlanReel(db, plan.id, reelId, deps()))).toMatchObject({ status: "RENDERED", previewPath: expect.stringContaining("/reel") });
+
+    const events = log.mock.calls.map((c) => JSON.parse(String(c[0])));
+    expect(events.map((e) => e.event)).toEqual(["reel_render_started", "reel_render_failed", "reel_render_started", "reel_render_completed"]);
+    expect(events[0]).toMatchObject({ planId: plan.id, itemId: reelId, photoCount: 5, width: 1080, height: 1920, fps: 30, duration: 8, ffmpegSource: expect.any(String) });
+    expect(events[1].reason.length).toBeLessThanOrEqual(300);
+    expect(events[3]).toMatchObject({ itemId: reelId, outputBytes: 24, elapsedMs: expect.any(Number) });
+  });
+
+  it("only one Reel render runs at a time (memory peak is never multiplied)", async () => {
+    seedProducts(7);
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    const reelId = plan.items.find((i) => i.contentType === "REEL")!.id;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const slow = deps({ render: async (input, options) => { await gate; return renderReel(input, { ...options, run: fakeFfmpeg }); } });
+    const first = renderPlanReel(db, plan.id, reelId, slow);
+    await new Promise((r) => setTimeout(r, 0));
+    await expect(renderPlanReel(db, plan.id, reelId, deps())).rejects.toThrow(/already running/);
+    release();
+    expect((await first).items.find((i) => i.id === reelId)!.reel!.status).toBe("RENDERED");
   });
 });
 
@@ -166,6 +227,7 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
     const reel = edited.items.find((i) => i.contentType === "REEL")!;
     expect(editMediaPlanItem(db, plan.id, reel.id, { expectedVersion: reel.version, photoIds: ["ph-1-0", "ph-1-1"] }, deps()).items.find((i) => i.id === reel.id)!.reel!.status).toBe("RENDER_REQUIRED");
 
+    await renderReelOf(plan.id);
     approveMediaPlan(db, plan.id, actorId, deps());
     expect(() => editMediaPlanItem(db, plan.id, item.id, { expectedVersion: 99, caption: "late" }, deps())).toThrow(/awaiting review/);
   });
@@ -182,6 +244,7 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
   it("approval + scheduling creates existing social-chain records idempotently and never publishes", async () => {
     seedProducts(7);
     const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    await renderReelOf(plan.id);
     approveMediaPlan(db, plan.id, actorId, deps());
     const scheduled = await scheduleMediaPlan(db, plan.id, actorId, deps());
 
@@ -215,6 +278,7 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
   it("a hand-off interrupted after content creation resumes without duplicating content", async () => {
     seedProducts(7);
     const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    await renderReelOf(plan.id);
     approveMediaPlan(db, plan.id, actorId, deps());
     render.mockRejectedValueOnce(new Error("disk full"));
     await expect(scheduleMediaPlan(db, plan.id, actorId, deps())).rejects.toThrow();
@@ -223,15 +287,27 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
     expect(db.select().from(schema.socialContents).all()).toHaveLength(5);
   });
 
-  it("a plan is not SCHEDULED at 4/5 (Reel not rendered fails closed) and becomes SCHEDULED at 5/5", async () => {
+  it("no rendered MP4 -> no approval and no Reel schedule (no image fallback); rendered Reel continues to 5/5", async () => {
     seedProducts(7);
-    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps({ ffmpegAvailable: async () => false }));
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    const reel = plan.items.find((i) => i.contentType === "REEL")!;
+    expect(() => approveMediaPlan(db, plan.id, actorId, deps())).toThrow(/Render the Reel before approving/);
+    await renderPlanReel(db, plan.id, reel.id, deps({ ffmpegAvailable: async () => false }));
+    expect(() => approveMediaPlan(db, plan.id, actorId, deps())).toThrow(/Render the Reel before approving/);
+    await expect(scheduleMediaPlan(db, plan.id, actorId, deps())).rejects.toThrow(/approved plan/);
+    expect(getLatestMediaPlan(db)!.status).toBe("READY_FOR_REVIEW");
+    expect(db.select().from(schema.socialContents).all()).toHaveLength(0);
+
+    await renderPlanReel(db, plan.id, reel.id, deps());
     approveMediaPlan(db, plan.id, actorId, deps());
+    // Defense in depth: a re-render that fails after approval still blocks the Reel hand-off (4/5).
+    await renderPlanReel(db, plan.id, reel.id, deps({ render: async () => { throw new Error("REEL_RENDER_FAILED"); } }));
     await expect(scheduleMediaPlan(db, plan.id, actorId, deps())).rejects.toThrow(/not rendered/);
     const partial = getLatestMediaPlan(db)!;
     expect(partial.status).toBe("APPROVED");
     expect(partial.items.filter((i) => i.status === "SCHEDULED")).toHaveLength(4);
-    const reel = partial.items.find((i) => i.contentType === "REEL")!;
+    expect(db.select().from(schema.socialContents).all().some((c) => c.contentType === "reel")).toBe(false);
     await renderPlanReel(db, plan.id, reel.id, deps());
     const done = await scheduleMediaPlan(db, plan.id, actorId, deps());
     expect(done.status).toBe("SCHEDULED");
@@ -258,6 +334,9 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
     const before = await getMediaPlannerReadiness(db, ready);
     expect(before).toMatchObject({ technicallyReady: true, ready: false, ffmpegAvailable: true, mediaAssetDirWritable: true, publicVideoDeliveryReady: true, instagramPublishingReady: true, blockers: ["NO_PLAN"] });
     const plan = await generateMediaPlan(db, { generatedBy: actorId }, ready);
+    // A generated plan with a PENDING Reel is workflow state, not an infrastructure failure.
+    expect(await getMediaPlannerReadiness(db, ready)).toMatchObject({ technicallyReady: true, ready: false, ffmpegAvailable: true, planStatus: "READY_FOR_REVIEW", reelAssetStatus: "PENDING", blockers: ["PLAN_READY_FOR_REVIEW", "REEL_PENDING"] });
+    await renderPlanReel(db, plan.id, plan.items.find((i) => i.contentType === "REEL")!.id, ready);
     approveMediaPlan(db, plan.id, actorId, ready);
     await scheduleMediaPlan(db, plan.id, actorId, ready);
     expect(await getMediaPlannerReadiness(db, ready)).toMatchObject({ ready: true, blockers: [], feedPostsScheduled: 4, reelScheduled: true, planStatus: "SCHEDULED" });

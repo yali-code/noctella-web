@@ -4,7 +4,7 @@ import path from "node:path";
 import type { DbClient } from "../db/client";
 import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
 import { createConfiguredMediaCopyProvider, DeterministicMediaCopyProvider, type MediaCopyProvider, type MediaCopyRequestItem } from "../integrations/media/mediaCopyProviders";
-import { isFfmpegAvailable, renderReel, resolveFfmpeg } from "../integrations/media/reelRenderer";
+import { isFfmpegAvailable, REEL_DURATION_SECONDS, REEL_FPS, REEL_HEIGHT, REEL_WIDTH, renderReel, resolveFfmpeg } from "../integrations/media/reelRenderer";
 import { mediaAssetDir, REEL_PUBLIC_PATH, reelFileName } from "../config/mediaAssets";
 import { validateInstagramMediaUrl } from "../config/instagramConfig";
 import { access, constants as fsConstants } from "node:fs/promises";
@@ -109,27 +109,42 @@ export function getLatestMediaPlan(db: DbClient) {
 
 // ---------------------------------------------------------------- generation
 
+/** One FFmpeg render per API process at a time: concurrent renders would multiply the memory peak. */
+let reelRenderInFlight = false;
+const logReel = (entry: Record<string, unknown>) => console.log(JSON.stringify(entry));
+
+/** Explicit owner action (never part of plan generation): renders the Reel MP4 from real ERP photos. */
 export async function renderPlanReel(db: DbClient, planId: string, itemId: string, deps: MediaPlannerDeps = {}) {
   const repo = createMediaPlanRepository(db);
   const plan = repo.getPlan(planId), item = repo.getItem(planId, itemId);
   if (!plan || !item || item.contentType !== "REEL") throw new NotFoundError("Reel plan item not found");
   if (!["DRAFT", "READY_FOR_REVIEW", "APPROVED"].includes(plan.status)) throw new ConflictError("Reel can only be rendered before scheduling");
   if (item.preparedImageId) throw new ConflictError("Reel asset is already registered with the Social Agent and cannot be re-rendered");
-  const env = envOf(deps);
-  if (!(await (deps.ffmpegAvailable ?? (() => isFfmpegAvailable(env)))())) { repo.patchItem(itemId, { reelAssetStatus: "RENDERER_UNAVAILABLE", reelAssetPath: null }); return getMediaPlan(db, planId); }
-  const product = repo.readPlannerProducts().find((p) => p.id === item.productId);
-  const photoPaths = parse<string[]>(item.photoIdsJson, []).map((id) => product?.photos.find((ph) => ph.id === id)?.url).map((url) => (url ? localPhotoPath(url) : null));
-  if (!photoPaths.length || photoPaths.some((p) => !p)) { repo.patchItem(itemId, { reelAssetStatus: "RENDER_FAILED", reelAssetPath: null }); return getMediaPlan(db, planId); }
-  const dir = mediaAssetDir(env);
-  await mkdir(dir, { recursive: true });
-  const outputPath = path.join(dir, reelFileName(itemId));
+  if (reelRenderInFlight) throw new ConflictError("A Reel render is already running; try again when it finishes");
+  reelRenderInFlight = true;
   try {
-    await (deps.render ?? renderReel)({ photoPaths: photoPaths as string[], outputPath, hookText: item.hook, finalText: item.finalFrameText, fontFile: env.REEL_FONT_FILE?.trim() || null }, { env });
-    repo.patchItem(itemId, { reelAssetStatus: "RENDERED", reelAssetPath: outputPath, updatedAt: nowOf(deps).toISOString() });
-  } catch {
-    repo.patchItem(itemId, { reelAssetStatus: "RENDER_FAILED", reelAssetPath: null });
+    const env = envOf(deps);
+    if (!(await (deps.ffmpegAvailable ?? (() => isFfmpegAvailable(env)))())) { repo.patchItem(itemId, { reelAssetStatus: "RENDERER_UNAVAILABLE", reelAssetPath: null }); return getMediaPlan(db, planId); }
+    const product = repo.readPlannerProducts().find((p) => p.id === item.productId);
+    const photoPaths = parse<string[]>(item.photoIdsJson, []).map((id) => product?.photos.find((ph) => ph.id === id)?.url).map((url) => (url ? localPhotoPath(url) : null));
+    if (!photoPaths.length || photoPaths.some((p) => !p)) { repo.patchItem(itemId, { reelAssetStatus: "RENDER_FAILED", reelAssetPath: null }); return getMediaPlan(db, planId); }
+    const dir = mediaAssetDir(env);
+    await mkdir(dir, { recursive: true });
+    const outputPath = path.join(dir, reelFileName(itemId));
+    const started = Date.now();
+    logReel({ event: "reel_render_started", planId, itemId, photoCount: photoPaths.length, width: REEL_WIDTH, height: REEL_HEIGHT, fps: REEL_FPS, duration: REEL_DURATION_SECONDS, ffmpegSource: resolveFfmpeg(env).source });
+    try {
+      const result = await (deps.render ?? renderReel)({ photoPaths: photoPaths as string[], outputPath, hookText: item.hook, finalText: item.finalFrameText, fontFile: env.REEL_FONT_FILE?.trim() || null }, { env });
+      repo.patchItem(itemId, { reelAssetStatus: "RENDERED", reelAssetPath: outputPath, updatedAt: nowOf(deps).toISOString() });
+      logReel({ event: "reel_render_completed", planId, itemId, elapsedMs: Date.now() - started, outputBytes: result.bytes });
+    } catch (error) {
+      repo.patchItem(itemId, { reelAssetStatus: "RENDER_FAILED", reelAssetPath: null });
+      logReel({ event: "reel_render_failed", planId, itemId, elapsedMs: Date.now() - started, reason: (error instanceof Error ? error.message : "error").slice(0, 300) });
+    }
+    return getMediaPlan(db, planId);
+  } finally {
+    reelRenderInFlight = false;
   }
-  return getMediaPlan(db, planId);
 }
 
 export async function generateMediaPlan(db: DbClient, input: { generatedBy: string; startDate?: string }, deps: MediaPlannerDeps = {}) {
@@ -163,7 +178,7 @@ export async function generateMediaPlan(db: DbClient, input: { generatedBy: stri
   const categories = new Set(drafts.map((d) => d.product.category ?? "uncategorised"));
   repo.insertPlan(
     { id: planId, startDate: dates[0]!, endDate: dates[dates.length - 1]!, timezone: timeZone, status: "DRAFT", generatedAt: t, generatedBy: input.generatedBy, copySource, timeRecommendation: recommendation.basis,
-      rationale: JSON.stringify({ selection: `${eligible.length} eligible products; ${FEED_POSTS} feed posts + 1 Reel over ${dates.length} days; ${categories.size} categories; no product repeated.`, time: recommendation.detail, format: "Feed posts are SINGLE_IMAGE: the Social Agent chain publishes one prepared image per post (carousel not supported yet).", reel: "Reel is rendered locally (ffmpeg) from real ERP photos and, after approval, published by the Social Agent chain as an Instagram Reel." }),
+      rationale: JSON.stringify({ selection: `${eligible.length} eligible products; ${FEED_POSTS} feed posts + 1 Reel over ${dates.length} days; ${categories.size} categories; no product repeated.`, time: recommendation.detail, format: "Feed posts are SINGLE_IMAGE: the Social Agent chain publishes one prepared image per post (carousel not supported yet).", reel: "Reel is rendered locally (ffmpeg) from real ERP photos on explicit request (Render Reel), must be rendered before approval, and is then published by the Social Agent chain as an Instagram Reel." }),
       createdAt: t, updatedAt: t },
     drafts.map((d, index) => {
       const c = copy[d.key]!;
@@ -175,8 +190,8 @@ export async function generateMediaPlan(db: DbClient, input: { generatedBy: stri
       };
     }),
   );
-  const reelItem = repo.listItems(planId).find((i: any) => i.contentType === "REEL");
-  if (reelItem) await renderPlanReel(db, planId, reelItem.id, deps);
+  // The Reel stays PENDING: rendering is a separate explicit owner action (FFmpeg never runs inside
+  // this request - its memory peak must not share the plan-generation request on a 512 MiB instance).
   repo.setPlanStatus(planId, ["DRAFT"], { status: "READY_FOR_REVIEW", updatedAt: nowOf(deps).toISOString() });
   return getMediaPlan(db, planId);
 }
@@ -218,6 +233,8 @@ export function approveMediaPlan(db: DbClient, planId: string, actorId: string, 
   const plan = repo.getPlan(planId);
   if (!plan) throw new NotFoundError("Media plan not found");
   if (plan.status === "APPROVED" || plan.status === "SCHEDULED") return getMediaPlan(db, planId); // idempotent
+  // Fail closed: no rendered MP4 -> no approval -> no Reel schedule -> no Instagram publish (never an image fallback).
+  if (repo.listItems(planId).some((i: any) => i.contentType === "REEL" && (i.reelAssetStatus !== "RENDERED" || !i.reelAssetPath))) throw new ConflictError("Render the Reel before approving the plan");
   const t = nowOf(deps).toISOString();
   if (!repo.setPlanStatus(planId, ["READY_FOR_REVIEW"], { status: "APPROVED", approvedAt: t, approvedByAdminUserId: actorId, updatedAt: t })) throw new ConflictError("Only a plan awaiting review can be approved");
   return getMediaPlan(db, planId);
@@ -313,6 +330,8 @@ export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerD
   const items: { contentType: string; status: string }[] = plan?.items ?? [];
   const feedScheduled = items.filter((i) => i.contentType === "FEED_POST" && i.status === "SCHEDULED").length;
   const reelScheduled = items.some((i) => i.contentType === "REEL" && i.status === "SCHEDULED");
+  // Workflow state, not infrastructure: a PENDING Reel never affects technicallyReady.
+  const reelAssetStatus: string | null = plan?.items.find((i: { contentType: string }) => i.contentType === "REEL")?.reel?.status ?? null;
   const technicalBlockers = [
     ...(eligible.length < MIN_ELIGIBLE_PRODUCTS ? [`INSUFFICIENT_ELIGIBLE_PRODUCTS:${eligible.length}/${MIN_ELIGIBLE_PRODUCTS}`] : []),
     ...(instagram?.ready ? [] : ["INSTAGRAM_PUBLISHING_NOT_READY"]),
@@ -324,6 +343,7 @@ export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerD
     ...technicalBlockers,
     ...(plan ? [] : ["NO_PLAN"]),
     ...(plan && !["APPROVED", "SCHEDULED"].includes(plan.status) ? [`PLAN_${plan.status}`] : []),
+    ...(plan && reelAssetStatus && reelAssetStatus !== "RENDERED" && plan.status !== "REJECTED" ? [`REEL_${reelAssetStatus}`] : []),
   ];
   return {
     eligibleProductCount: eligible.length,
@@ -344,6 +364,7 @@ export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerD
     planApproved: Boolean(plan && ["APPROVED", "SCHEDULED"].includes(plan.status)),
     feedPostsScheduled: feedScheduled,
     reelScheduled,
+    reelAssetStatus,
     technicallyReady: technicalBlockers.length === 0,
     ready: blockers.length === 0,
     blockers,

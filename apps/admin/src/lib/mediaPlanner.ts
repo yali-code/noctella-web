@@ -14,7 +14,7 @@ export interface MediaPlan {
 export interface MediaPlannerReadiness {
   eligibleProductCount: number; requiredProductCount: number; productsWithReadyPhotos: number; copyProvider: string; instagramConnectionReady: boolean; instagramPublishingReady: boolean;
   imagePublishingSupported: boolean; reelPublishingSupported: boolean; ffmpegAvailable: boolean; ffmpegSource: string; reelTextOverlayConfigured: boolean; mediaAssetDirWritable: boolean;
-  publicVideoDeliveryReady: boolean; planExists: boolean; planStatus: string | null; planApproved: boolean; feedPostsScheduled: number; reelScheduled: boolean; technicallyReady: boolean; ready: boolean; blockers: string[];
+  publicVideoDeliveryReady: boolean; planExists: boolean; planStatus: string | null; planApproved: boolean; feedPostsScheduled: number; reelScheduled: boolean; reelAssetStatus: string | null; technicallyReady: boolean; ready: boolean; blockers: string[];
 }
 export interface MediaPlanItemEdit { expectedVersion: number; productId?: string; photoIds?: string[]; heroPhotoId?: string; caption?: string; hashtags?: string[]; plannedAt?: string }
 
