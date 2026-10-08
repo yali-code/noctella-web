@@ -17,6 +17,7 @@ function ItemEditor({ plan, item, editable, onSaved, onError }: { plan: MediaPla
   const [plannedAt, setPlannedAt] = useState(toLocalInput(item.plannedAt));
   const [productId, setProductId] = useState(item.product.id);
   const [heroPhotoId, setHeroPhotoId] = useState(item.heroPhotoId);
+  const [rendering, setRendering] = useState(false);
   useEffect(() => { setCaption(item.caption); setHashtags(item.hashtags.join(" ")); setPlannedAt(toLocalInput(item.plannedAt)); setProductId(item.product.id); setHeroPhotoId(item.heroPhotoId); }, [item]);
   const save = async () => {
     try {
@@ -37,7 +38,7 @@ function ItemEditor({ plan, item, editable, onSaved, onError }: { plan: MediaPla
     {item.reel ? <div style={{ marginTop: 12 }}>
       <p>Reel: {statusLabel(item.reel.status ?? "pending")}{item.hook ? ` · hook “${item.hook}”` : ""}</p>
       {item.reel.previewPath ? <video src={resolveApiAssetUrl(item.reel.previewPath)} controls muted crossOrigin="use-credentials" style={{ maxHeight: 360 }} /> : null}
-      {editable && item.reel.status !== "RENDERED" ? <button type="button" style={control} onClick={async () => { try { onSaved(await mediaPlannerApi.renderReel(plan.id, item.id)); } catch (e) { onError(e instanceof Error ? e.message : "Render failed"); } }}>Render Reel</button> : null}
+      {editable && item.reel.status !== "RENDERED" ? <button type="button" style={control} disabled={rendering} onClick={async () => { setRendering(true); try { onSaved(await mediaPlannerApi.renderReel(plan.id, item.id)); } catch (e) { onError(e instanceof Error ? e.message : "Render failed"); } finally { setRendering(false); } }}>{rendering ? "Rendering Reel…" : "Render Reel"}</button> : null}
     </div> : null}
     <label>Product ID<input style={control} value={productId} disabled={!editable} onChange={(e) => setProductId(e.target.value)} /></label>
     <label>Caption<textarea style={{ ...control, width: "100%", minHeight: 100 }} value={caption} disabled={!editable} onChange={(e) => setCaption(e.target.value)} /></label>
@@ -59,23 +60,26 @@ export default function MediaPlannerPage() {
   useEffect(() => { void refresh(); }, [refresh]);
   const act = async (fn: () => Promise<MediaPlan>) => { setBusy(true); setError(null); try { setPlan(await fn()); setReadiness(await mediaPlannerApi.readiness()); } catch (e) { setError(e instanceof Error ? e.message : "Action failed"); } finally { setBusy(false); } };
   const editable = plan?.status === "READY_FOR_REVIEW";
+  // Approval fails closed server-side until the Reel MP4 is rendered; mirror it here.
+  const reelRendered = Boolean(plan?.items.every((i) => !i.reel || i.reel.status === "RENDERED"));
 
   return <section>
     <h2>Media Planner · 4-day Instagram plan</h2>
     {error ? <p role="alert">{error}</p> : null}
     {readiness ? <div className="card" style={panel}>
       <p>Eligible products: {readiness.eligibleProductCount}/{readiness.requiredProductCount} · Instagram publishing {readiness.instagramPublishingReady ? "ready" : "not ready"} · Reel renderer {readiness.ffmpegAvailable ? `ready (${readiness.ffmpegSource})` : "unavailable"} · Video delivery {readiness.publicVideoDeliveryReady ? "ready" : "not ready"} · Copy {readiness.copyProvider}</p>
-      <p>Scheduled: {readiness.feedPostsScheduled}/4 feed posts · Reel {readiness.reelScheduled ? "scheduled" : "not scheduled"} · {readiness.ready ? "Pilot ready" : readiness.technicallyReady ? "Technically ready" : "Not ready"}</p>
+      <p>Scheduled: {readiness.feedPostsScheduled}/4 feed posts · Reel {readiness.reelScheduled ? "scheduled" : `not scheduled${readiness.reelAssetStatus ? ` (${statusLabel(readiness.reelAssetStatus)})` : ""}`} · {readiness.ready ? "Pilot ready" : readiness.technicallyReady ? "Technically ready" : "Not ready"}</p>
       {readiness.blockers.length ? <p>Blockers: {readiness.blockers.map(statusLabel).join(", ")}</p> : <p>No blockers.</p>}
     </div> : null}
     <p>
       <button type="button" style={control} disabled={busy} onClick={() => act(() => mediaPlannerApi.generate())}>Generate new plan</button>{" "}
-      {plan && editable ? <><button type="button" style={control} disabled={busy} onClick={() => act(() => mediaPlannerApi.approve(plan.id))}>Approve plan</button>{" "}
+      {plan && editable ? <><button type="button" style={control} disabled={busy || !reelRendered} title={reelRendered ? undefined : "Render the Reel before approving"} onClick={() => act(() => mediaPlannerApi.approve(plan.id))}>Approve plan</button>{" "}
         <button type="button" style={control} disabled={busy} onClick={() => act(() => mediaPlannerApi.reject(plan.id))}>Reject plan</button></> : null}{" "}
       {plan && (plan.status === "APPROVED" || plan.status === "SCHEDULED") ? <button type="button" style={control} disabled={busy} onClick={() => act(() => mediaPlannerApi.schedule(plan.id))}>Hand off to Social Agent (schedule)</button> : null}
     </p>
     {plan ? <>
       <p>Plan {plan.startDate} → {plan.endDate} ({plan.timezone}) · status <strong>{statusLabel(plan.status)}</strong> · copy {plan.copySource} · {statusLabel(plan.timeRecommendation)}</p>
+      {editable && !reelRendered ? <p>Review the plan, then render the Reel - approval is available once the Reel is rendered.</p> : null}
       {Object.values(plan.rationale).map((line) => <p key={line}><small>{line}</small></p>)}
       {plan.items.map((item) => <ItemEditor key={item.id} plan={plan} item={item} editable={editable} onSaved={setPlan} onError={setError} />)}
     </> : <p>No plan yet.</p>}

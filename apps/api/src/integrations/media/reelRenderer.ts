@@ -1,17 +1,18 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { open, stat } from "node:fs/promises";
+import { open, rename, rm, stat } from "node:fs/promises";
 
 /**
  * Media Planning Agent: deterministic local Reel renderer (no AI video). Builds a vertical 9:16
  * 1080x1920 H.264/yuv420p MP4 (~8 s, 30 fps, faststart, silent) from REAL ERP photos with a slow
  * zoom per photo and crossfades. Opening hook / final frame text are burned in only when a font
  * file is configured (REEL_FONT_FILE); otherwise they remain plan metadata. Requires an ffmpeg
- * binary (FFMPEG_PATH or `ffmpeg` on PATH) - completion is never faked: the output must exist and
- * carry an MP4 `ftyp` signature.
+ * binary (FFMPEG_PATH, ffmpeg-static or `ffmpeg` on PATH) - completion is never faked: the output
+ * must exist and carry an MP4 `ftyp` signature. Settings are memory-bounded for a 512 MiB instance.
  */
 
 export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920, REEL_FPS = 30, REEL_DURATION_SECONDS = 8, REEL_TRANSITION_SECONDS = 0.5;
+export const REEL_X264_PARAMS = "rc-lookahead=0:sync-lookahead=0:ref=1:bframes=0";
 
 export type CommandRunner = (command: string, args: readonly string[], timeoutMs: number) => Promise<void>;
 export const execRunner: CommandRunner = (command, args, timeoutMs) => new Promise((resolve, reject) => {
@@ -44,8 +45,10 @@ export function buildFfmpegArgs(input: ReelRenderInput): string[] {
   const t = n > 1 ? Math.min(REEL_TRANSITION_SECONDS, D / (2 * n)) : 0;
   const segment = (D + (n - 1) * t) / n;
   const frames = Math.round(segment * REEL_FPS);
-  const args: string[] = ["-y", "-hide_banner", "-loglevel", "error"];
-  for (const p of input.photoPaths) args.push("-i", p);
+  // Memory safety (512 MiB API instance): FFmpeg/x264 otherwise size thread pools - and the frame
+  // buffers each thread holds - by host CPU count, so decoder/filter/encoder each get one thread.
+  const args: string[] = ["-y", "-hide_banner", "-loglevel", "error", "-filter_complex_threads", "1"];
+  for (const p of input.photoPaths) args.push("-threads", "1", "-i", p);
   const parts: string[] = input.photoPaths.map((_, i) =>
     `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
     `zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${REEL_FPS},` +
@@ -67,7 +70,9 @@ export function buildFfmpegArgs(input: ReelRenderInput): string[] {
     last = "final";
   }
   args.push("-filter_complex", parts.join(";"), "-map", `[${last}]`, "-t", String(D),
-    "-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", String(REEL_FPS), "-movflags", "+faststart", "-an", input.outputPath);
+    // x264 without lookahead / B-frames / extra references holds only a few frames in memory
+    // (measured 1080x1920 peak ~210 MiB vs ~660 MiB with default threads + preset medium).
+    "-filter_threads", "1", "-c:v", "libx264", "-threads", "1", "-preset", "veryfast", "-x264-params", REEL_X264_PARAMS, "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", String(REEL_FPS), "-movflags", "+faststart", "-an", input.outputPath);
   return args;
 }
 
@@ -112,14 +117,28 @@ function renderFailureDetail(error: unknown): string {
   return tail ? `: ${tail}` : "";
 }
 
+/** Sibling work file (never matches the public Reel name pattern, so it can never be served). */
+export const partialReelPath = (outputPath: string) => outputPath.replace(/(\.mp4)?$/i, ".partial.mp4");
+
+/**
+ * FFmpeg writes to a partial file that is validated (exists, non-empty, MP4 signature) and only then
+ * atomically renamed onto the final name; a stale or failed partial is always removed.
+ */
 export async function renderReel(input: ReelRenderInput, options: { env?: NodeJS.ProcessEnv; run?: CommandRunner } = {}): Promise<{ path: string; bytes: number }> {
   const run = options.run ?? execRunner;
+  const partial = partialReelPath(input.outputPath);
+  await rm(partial, { force: true });
   try {
-    await run(resolveFfmpegPath(options.env), buildFfmpegArgs(input), 180_000);
-  } catch (error) {
-    throw new Error(`REEL_RENDER_FAILED${renderFailureDetail(error)}`);
+    try {
+      await run(resolveFfmpegPath(options.env), buildFfmpegArgs({ ...input, outputPath: partial }), 180_000);
+    } catch (error) {
+      throw new Error(`REEL_RENDER_FAILED${renderFailureDetail(error)}`);
+    }
+    const info = await stat(partial).catch(() => null);
+    if (!info || info.size === 0 || !(await isMp4File(partial))) throw new Error("REEL_RENDER_INVALID_OUTPUT");
+    await rename(partial, input.outputPath);
+    return { path: input.outputPath, bytes: info.size };
+  } finally {
+    await rm(partial, { force: true });
   }
-  const info = await stat(input.outputPath).catch(() => null);
-  if (!info || info.size === 0 || !(await isMp4File(input.outputPath))) throw new Error("REEL_RENDER_INVALID_OUTPUT");
-  return { path: input.outputPath, bytes: info.size };
 }
