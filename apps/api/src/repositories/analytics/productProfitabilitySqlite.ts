@@ -1,93 +1,108 @@
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import * as schema from "../../db/schema.sqlite";
 import type { ProductProfitabilitySource, ProfitabilityPurchaseLineSource, ProfitabilitySaleSource } from "../../use-cases/analytics/productProfitability";
 
 /**
  * Analytics Phase 1B: read-only SQLite repository - SELECT statements only, no writes, no
  * transactions, no derived values. Loads exactly the canonical rows the pure projection
- * (use-cases/analytics/productProfitability.ts) needs for one product. Only completed sales
- * (orders with a sale_financials row) are loaded as sale attempts.
+ * (use-cases/analytics/productProfitability.ts) needs. Only completed sales (orders with a
+ * sale_financials row) are loaded as sale attempts.
+ *
+ * Phase 1D: batch-first - loadSources runs one bounded query per table (chunked IN lists) and
+ * assembles every product's source in memory, so a catalogue evaluation is not N+1. loadSource
+ * is the single-product view of the same code path; there is exactly one mapping implementation.
  */
+const IN_CHUNK = 500;
+
+function inChunks<T>(db: any, ids: readonly string[], query: (chunk: string[]) => any): T[] {
+  const unique = [...new Set(ids)];
+  const rows: T[] = [];
+  for (let i = 0; i < unique.length; i += IN_CHUNK) rows.push(...(query(unique.slice(i, i + IN_CHUNK)).all() as T[]));
+  return rows;
+}
+
+function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    const list = map.get(k);
+    if (list) list.push(row);
+    else map.set(k, [row]);
+  }
+  return map;
+}
+
 export function createSqliteProductProfitabilityReadRepository(db: any) {
-  return Object.freeze({
-    loadSource(productId: string): ProductProfitabilitySource | null {
-      const row = db
+  /** All products when `productIds` is omitted; otherwise only the given ids (unknown ids are skipped). */
+  function loadSources(productIds?: readonly string[]): ProductProfitabilitySource[] {
+    const productQuery = (where?: any) =>
+      db
         .select({ p: schema.products, noctellaId: schema.productErpMetadata.noctellaId, categoryName: schema.categories.name })
         .from(schema.products)
         .leftJoin(schema.productErpMetadata, eq(schema.productErpMetadata.productId, schema.products.id))
         .leftJoin(schema.categories, eq(schema.categories.id, schema.products.categoryId))
-        .where(eq(schema.products.id, productId))
-        .get();
-      if (!row) return null;
-      const p = row.p;
+        .where(where);
+    const productRows: any[] = productIds ? inChunks(db, productIds, (chunk) => productQuery(inArray(schema.products.id, chunk))) : productQuery().all();
+    if (productRows.length === 0) return [];
+    const ids = productRows.map((row) => row.p.id as string);
 
-      const lineRows: any[] = db
-        .select({ line: schema.purchaseLines, purchase: schema.purchases })
-        .from(schema.purchaseLines)
-        .innerJoin(schema.purchases, eq(schema.purchases.id, schema.purchaseLines.purchaseId))
-        .where(eq(schema.purchaseLines.productId, productId))
-        .all();
-      const purchaseLines: ProfitabilityPurchaseLineSource[] = lineRows.map(({ line, purchase }) => {
-        const allocation = db.select().from(schema.purchaseAllocations).where(eq(schema.purchaseAllocations.purchaseLineId, line.id)).get();
-        const receipt = db
-          .select({ receivedAt: schema.purchaseReceipts.receivedAt })
-          .from(schema.purchaseReceiptLines)
-          .innerJoin(schema.purchaseReceipts, eq(schema.purchaseReceipts.id, schema.purchaseReceiptLines.receiptId))
-          .where(and(eq(schema.purchaseReceiptLines.purchaseLineId, line.id), gt(schema.purchaseReceiptLines.quantityReceived, 0)))
-          .orderBy(asc(schema.purchaseReceipts.receivedAt))
-          .get();
-        return {
-          purchaseLineId: line.id,
-          purchaseId: purchase.id,
-          purchaseStatus: purchase.status,
-          purchaseCurrency: purchase.currency,
-          purchaseTotalCost: purchase.totalCost,
-          quantity: line.quantity,
-          unitPurchaseCost: line.unitPurchaseCost,
-          orderedAt: purchase.orderedAt,
-          purchaseReceivedAt: purchase.receivedAt,
-          firstReceiptAt: receipt?.receivedAt ?? null,
-          allocation: allocation
-            ? {
-                allocatedBuyerPremium: allocation.allocatedBuyerPremium,
-                allocatedShippingCost: allocation.allocatedShippingCost,
-                allocatedCustomsCost: allocation.allocatedCustomsCost,
-                allocatedPackagingCost: allocation.allocatedPackagingCost,
-                allocatedTaxVat: allocation.allocatedTaxVat,
-                allocatedMiscCost: allocation.allocatedMiscCost,
-                allocatedTotalCost: allocation.allocatedTotalCost,
-              }
-            : null,
-        };
-      });
+    // Purchasing: lines (+ purchase header), allocations, and first positive receipt per line.
+    const lineRows = inChunks<any>(db, ids, (chunk) =>
+      db.select({ line: schema.purchaseLines, purchase: schema.purchases }).from(schema.purchaseLines).innerJoin(schema.purchases, eq(schema.purchases.id, schema.purchaseLines.purchaseId)).where(inArray(schema.purchaseLines.productId, chunk)),
+    );
+    const lineIds = lineRows.map((row) => row.line.id as string);
+    const allocationByLine = new Map<string, any>();
+    for (const allocation of inChunks<any>(db, lineIds, (chunk) => db.select().from(schema.purchaseAllocations).where(inArray(schema.purchaseAllocations.purchaseLineId, chunk)))) {
+      if (!allocationByLine.has(allocation.purchaseLineId)) allocationByLine.set(allocation.purchaseLineId, allocation);
+    }
+    const firstReceiptByLine = new Map<string, string>();
+    for (const receipt of inChunks<any>(db, lineIds, (chunk) =>
+      db
+        .select({ purchaseLineId: schema.purchaseReceiptLines.purchaseLineId, receivedAt: schema.purchaseReceipts.receivedAt })
+        .from(schema.purchaseReceiptLines)
+        .innerJoin(schema.purchaseReceipts, eq(schema.purchaseReceipts.id, schema.purchaseReceiptLines.receiptId))
+        .where(and(inArray(schema.purchaseReceiptLines.purchaseLineId, chunk), gt(schema.purchaseReceiptLines.quantityReceived, 0))),
+    )) {
+      const current = firstReceiptByLine.get(receipt.purchaseLineId);
+      if (current === undefined || receipt.receivedAt < current) firstReceiptByLine.set(receipt.purchaseLineId, receipt.receivedAt);
+    }
+    const linesByProduct = groupBy(lineRows, (row) => row.line.productId);
 
-      const orderIds = [...new Set((db.select({ orderId: schema.orderItems.orderId }).from(schema.orderItems).where(eq(schema.orderItems.productId, productId)).all() as any[]).map((r) => r.orderId as string))];
-      const financials: any[] = orderIds.length ? db.select().from(schema.saleFinancials).where(inArray(schema.saleFinancials.orderId, orderIds)).all() : [];
-      const sales: ProfitabilitySaleSource[] = financials
-        .map((sf) => {
-          const order = db.select().from(schema.orders).where(eq(schema.orders.id, sf.orderId)).get();
-          const marketplaceOrder = db.select().from(schema.marketplaceOrders).where(eq(schema.marketplaceOrders.internalOrderId, sf.orderId)).get();
-          const returns = (db.select().from(schema.returnRequests).where(eq(schema.returnRequests.orderId, sf.orderId)).all() as any[]).map((r) => ({
-            status: r.status,
-            items: (db.select().from(schema.returnItems).where(eq(schema.returnItems.returnRequestId, r.id)).all() as any[]).map((item) => ({
-              orderItemId: item.orderItemId,
-              stockDisposition: item.stockDisposition,
-              quantityCompleted: item.quantityCompleted,
-            })),
-          }));
-          const reversal = db
-            .select({ id: schema.saleReversals.id })
-            .from(schema.saleReversals)
-            .where(and(eq(schema.saleReversals.orderId, sf.orderId), eq(schema.saleReversals.financialsReversed, true)))
-            .get();
-          return {
+    // Sales: only orders containing these products that have a sale_financials row.
+    const productItemRows = inChunks<any>(db, ids, (chunk) => db.select({ orderId: schema.orderItems.orderId, productId: schema.orderItems.productId }).from(schema.orderItems).where(inArray(schema.orderItems.productId, chunk)));
+    const financials = inChunks<any>(db, productItemRows.map((row) => row.orderId), (chunk) => db.select().from(schema.saleFinancials).where(inArray(schema.saleFinancials.orderId, chunk)));
+    const orderIds = financials.map((sf) => sf.orderId as string);
+    const byOrder = <T>(rows: T[], key: (row: T) => string) => groupBy(rows, key);
+    const orders = new Map(inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.orders).where(inArray(schema.orders.id, chunk))).map((o) => [o.id, o]));
+    const marketplaceOrders = new Map<string, any>();
+    for (const mo of inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.marketplaceOrders).where(inArray(schema.marketplaceOrders.internalOrderId, chunk)))) {
+      if (!marketplaceOrders.has(mo.internalOrderId)) marketplaceOrders.set(mo.internalOrderId, mo);
+    }
+    const linesByOrder = byOrder(inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.orderItems).where(inArray(schema.orderItems.orderId, chunk))), (l) => l.orderId);
+    const paymentsByOrder = byOrder(inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.payments).where(inArray(schema.payments.orderId, chunk))), (p) => p.orderId);
+    const shipmentsByOrder = byOrder(inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.shipments).where(inArray(schema.shipments.orderId, chunk))), (s) => s.orderId);
+    const refundsByOrder = byOrder(inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.refunds).where(inArray(schema.refunds.orderId, chunk))), (r) => r.orderId);
+    const returnRows = inChunks<any>(db, orderIds, (chunk) => db.select().from(schema.returnRequests).where(inArray(schema.returnRequests.orderId, chunk)));
+    const returnsByOrder = byOrder(returnRows, (r) => r.orderId);
+    const returnItemsByReturn = groupBy(inChunks<any>(db, returnRows.map((r) => r.id), (chunk) => db.select().from(schema.returnItems).where(inArray(schema.returnItems.returnRequestId, chunk))), (item) => item.returnRequestId);
+    const reversedOrders = new Set(
+      inChunks<any>(db, orderIds, (chunk) => db.select({ orderId: schema.saleReversals.orderId }).from(schema.saleReversals).where(and(inArray(schema.saleReversals.orderId, chunk), eq(schema.saleReversals.financialsReversed, true)))).map((r) => r.orderId),
+    );
+
+    const saleByOrder = new Map<string, ProfitabilitySaleSource>(
+      financials.map((sf) => {
+        const order = orders.get(sf.orderId);
+        const marketplaceOrder = marketplaceOrders.get(sf.orderId);
+        return [
+          sf.orderId,
+          {
             orderId: sf.orderId,
             orderDraftId: order?.orderDraftId ?? null,
             orderCurrency: order?.currency ?? sf.currency,
             orderCreatedAt: order?.createdAt ?? sf.completedAt,
             marketplaceChannel: marketplaceOrder?.channel ?? null,
             marketplaceOrderedAt: marketplaceOrder?.orderedAt ?? null,
-            lines: (db.select().from(schema.orderItems).where(eq(schema.orderItems.orderId, sf.orderId)).all() as any[]).map((l) => ({ orderItemId: l.id, productId: l.productId, quantity: l.quantity })),
+            lines: (linesByOrder.get(sf.orderId) ?? []).map((l) => ({ orderItemId: l.id, productId: l.productId, quantity: l.quantity })),
             saleFinancials: {
               grossRevenue: sf.grossRevenue,
               shippingCharged: sf.shippingCharged,
@@ -102,9 +117,9 @@ export function createSqliteProductProfitabilityReadRepository(db: any) {
               currency: sf.currency,
               completedAt: sf.completedAt,
             },
-            payments: (db.select().from(schema.payments).where(eq(schema.payments.orderId, sf.orderId)).all() as any[]).map((pay) => ({ status: pay.status, amount: pay.amount, currency: pay.currency })),
-            shipments: (db.select().from(schema.shipments).where(eq(schema.shipments.orderId, sf.orderId)).all() as any[]).map((s) => ({ status: s.status, shippingCost: s.shippingCost, currency: s.currency })),
-            refunds: (db.select().from(schema.refunds).where(eq(schema.refunds.orderId, sf.orderId)).all() as any[]).map((r) => ({
+            payments: (paymentsByOrder.get(sf.orderId) ?? []).map((pay) => ({ status: pay.status, amount: pay.amount, currency: pay.currency })),
+            shipments: (shipmentsByOrder.get(sf.orderId) ?? []).map((s) => ({ status: s.status, shippingCost: s.shippingCost, currency: s.currency })),
+            refunds: (refundsByOrder.get(sf.orderId) ?? []).map((r) => ({
               status: r.status,
               currency: r.currency,
               subtotalAmount: r.subtotalAmount,
@@ -114,12 +129,49 @@ export function createSqliteProductProfitabilityReadRepository(db: any) {
               marketplaceFeeAdjustment: r.marketplaceFeeAdjustment,
               paymentFeeAdjustment: r.paymentFeeAdjustment,
             })),
-            returns,
-            fullReversal: !!reversal,
-          };
-        })
-        .sort((a, b) => a.saleFinancials.completedAt.localeCompare(b.saleFinancials.completedAt));
+            returns: (returnsByOrder.get(sf.orderId) ?? []).map((r) => ({
+              status: r.status,
+              items: (returnItemsByReturn.get(r.id) ?? []).map((item) => ({ orderItemId: item.orderItemId, stockDisposition: item.stockDisposition, quantityCompleted: item.quantityCompleted })),
+            })),
+            fullReversal: reversedOrders.has(sf.orderId),
+          },
+        ];
+      }),
+    );
+    const orderIdsByProduct = groupBy(productItemRows, (row) => row.productId);
 
+    return productRows.map((row) => {
+      const p = row.p;
+      const purchaseLines: ProfitabilityPurchaseLineSource[] = (linesByProduct.get(p.id) ?? []).map(({ line, purchase }) => {
+        const allocation = allocationByLine.get(line.id);
+        return {
+          purchaseLineId: line.id,
+          purchaseId: purchase.id,
+          purchaseStatus: purchase.status,
+          purchaseCurrency: purchase.currency,
+          purchaseTotalCost: purchase.totalCost,
+          quantity: line.quantity,
+          unitPurchaseCost: line.unitPurchaseCost,
+          orderedAt: purchase.orderedAt,
+          purchaseReceivedAt: purchase.receivedAt,
+          firstReceiptAt: firstReceiptByLine.get(line.id) ?? null,
+          allocation: allocation
+            ? {
+                allocatedBuyerPremium: allocation.allocatedBuyerPremium,
+                allocatedShippingCost: allocation.allocatedShippingCost,
+                allocatedCustomsCost: allocation.allocatedCustomsCost,
+                allocatedPackagingCost: allocation.allocatedPackagingCost,
+                allocatedTaxVat: allocation.allocatedTaxVat,
+                allocatedMiscCost: allocation.allocatedMiscCost,
+                allocatedTotalCost: allocation.allocatedTotalCost,
+              }
+            : null,
+        };
+      });
+      const sales = [...new Set((orderIdsByProduct.get(p.id) ?? []).map((r) => r.orderId as string))]
+        .map((orderId) => saleByOrder.get(orderId))
+        .filter((sale): sale is ProfitabilitySaleSource => sale !== undefined)
+        .sort((a, b) => a.saleFinancials.completedAt.localeCompare(b.saleFinancials.completedAt));
       return {
         product: {
           id: p.id,
@@ -137,6 +189,13 @@ export function createSqliteProductProfitabilityReadRepository(db: any) {
         purchaseLines,
         sales,
       };
+    });
+  }
+
+  return Object.freeze({
+    loadSources,
+    loadSource(productId: string): ProductProfitabilitySource | null {
+      return loadSources([productId])[0] ?? null;
     },
   });
 }
