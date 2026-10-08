@@ -1,6 +1,13 @@
 import { z } from "zod";
 import type { ProductProfitability, ProfitabilityPolicy, ProfitStatus } from "./productProfitability";
-import type { AnalyticsInsight, InsightCode, InsightSeverity } from "./profitabilityInsights";
+import type { AnalyticsInsight, AnalyticsThresholds, InsightCode, InsightSeverity } from "./profitabilityInsights";
+
+/**
+ * Phase 1E: known, documented policy gaps surfaced in every catalogue response. No payment-fee
+ * NOT_APPLICABLE rule can be proven from current data (COD may carry courier fees), so a null
+ * payment fee stays UNKNOWN.
+ */
+export const ANALYTICS_POLICY_GAPS = ["PAYMENT_FEE_POLICY_INCOMPLETE"] as const;
 
 /**
  * Analytics Phase 1D: pure catalogue aggregation over already-evaluated Phase 1B projections and
@@ -10,7 +17,7 @@ import type { AnalyticsInsight, InsightCode, InsightSeverity } from "./profitabi
  */
 
 const PROFIT_STATUSES = ["COMPLETE", "PROVISIONAL", "INCOMPLETE", "NOT_SOLD"] as const;
-const INSIGHT_CODES = ["COST_BASIS_MISSING", "COST_BASIS_CONFLICT", "SHIPPING_COST_MISSING", "REVENUE_CASH_MISMATCH", "NEGATIVE_PROFIT", "PROFITABILITY_INCOMPLETE"] as const;
+const INSIGHT_CODES = ["COST_BASIS_MISSING", "COST_BASIS_CONFLICT", "SHIPPING_COST_MISSING", "REVENUE_CASH_MISMATCH", "NEGATIVE_PROFIT", "PROFITABILITY_INCOMPLETE", "LOW_MARGIN", "HIGH_MARGIN", "AGED_INVENTORY"] as const;
 export const CATALOGUE_SORTS = ["severity_desc", "inventory_age_desc", "known_profit_asc", "known_profit_desc", "roi_asc", "roi_desc"] as const;
 export type CatalogueSort = (typeof CATALOGUE_SORTS)[number];
 
@@ -88,6 +95,8 @@ export interface CatalogueProfitabilityResult {
     readonly filters: Readonly<Record<string, string>>;
     readonly policy: ProfitabilityPolicy;
     readonly provisionalPolicy: boolean;
+    readonly thresholds: AnalyticsThresholds;
+    readonly policyGaps: readonly (typeof ANALYTICS_POLICY_GAPS)[number][];
   };
 }
 
@@ -175,6 +184,7 @@ export function buildCatalogueProfitability(
   query: CatalogueProfitabilityQuery,
   generatedAt: Date,
   policy: ProfitabilityPolicy,
+  thresholds: AnalyticsThresholds,
 ): CatalogueProfitabilityResult {
   const all = evaluated.map(toCatalogueItem);
   const filtered = all.filter((item) => matches(item, query)).sort(comparator(query.sort));
@@ -194,6 +204,8 @@ export function buildCatalogueProfitability(
       filters,
       policy,
       provisionalPolicy: policy.inputVatPolicyProvisional || policy.revenuePolicyProvisional,
+      thresholds,
+      policyGaps: [...ANALYTICS_POLICY_GAPS],
     },
   };
 }

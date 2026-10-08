@@ -76,7 +76,7 @@ describe("Phase 1D catalogue profitability service", () => {
       sold: 3,
       notSold: 2,
       byProfitStatus: { COMPLETE: 0, PROVISIONAL: 2, INCOMPLETE: 1, NOT_SOLD: 2 },
-      productsWithInsight: { COST_BASIS_MISSING: 1, COST_BASIS_CONFLICT: 1, SHIPPING_COST_MISSING: 0, REVENUE_CASH_MISMATCH: 0, NEGATIVE_PROFIT: 1, PROFITABILITY_INCOMPLETE: 1 },
+      productsWithInsight: { COST_BASIS_MISSING: 1, COST_BASIS_CONFLICT: 1, SHIPPING_COST_MISSING: 0, REVENUE_CASH_MISMATCH: 0, NEGATIVE_PROFIT: 1, PROFITABILITY_INCOMPLETE: 1, LOW_MARGIN: 0, HIGH_MARGIN: 1, AGED_INVENTORY: 0 },
     });
     expect(result.meta).toMatchObject({ total: 5, returned: 5, sort: "severity_desc", provisionalPolicy: true, generatedAt: NOW.toISOString() });
   });
@@ -120,7 +120,7 @@ describe("Phase 1D catalogue profitability service", () => {
   });
 
   it.each([
-    ["severity_desc", ["p-5", "p-1", "p-2", "p-3", "p-4"]],
+    ["severity_desc", ["p-5", "p-1", "p-2", "p-4", "p-3"]],
     ["known_profit_asc", ["p-5", "p-4", "p-1", "p-2", "p-3"]],
     ["known_profit_desc", ["p-4", "p-5", "p-1", "p-2", "p-3"]],
     ["roi_asc", ["p-5", "p-4", "p-1", "p-2", "p-3"]],

@@ -72,10 +72,10 @@ const fact = (insight: AnalyticsInsight | undefined, path: string) => insight?.e
 const lossFinancials = { grossRevenue: 60, taxVat: 10 }; // 60 - 10 - 5 - 52 - 3 = -10
 
 describe("Phase 1C baseline", () => {
-  it("a fully known, conflict-free profitable sale produces no insights", () => {
+  it("a fully known, conflict-free profitable sale produces no Phase 1C problem insights (Phase 1E: only HIGH_MARGIN at 45.45%)", () => {
     const pp = project();
     expect(pp.profitStatus).toBe("PROVISIONAL");
-    expect(derive(pp)).toEqual([]);
+    expect(codes(derive(pp))).toEqual(["HIGH_MARGIN"]);
   });
 });
 

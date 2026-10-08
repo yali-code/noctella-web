@@ -1,7 +1,7 @@
 import type { DbClient } from "../db/client";
 import { createSqliteProductProfitabilityReadRepository } from "../repositories/analytics/productProfitabilitySqlite";
 import { buildCatalogueProfitability, type CatalogueProfitabilityQuery, type CatalogueProfitabilityResult } from "../use-cases/analytics/catalogueProfitability";
-import { deriveProfitabilityInsights, type AnalyticsInsight } from "../use-cases/analytics/profitabilityInsights";
+import { DEFAULT_ANALYTICS_THRESHOLDS, deriveProfitabilityInsights, type AnalyticsInsight, type AnalyticsThresholds } from "../use-cases/analytics/profitabilityInsights";
 import { projectProductProfitability, PROVISIONAL_PROFITABILITY_POLICY, type ProductProfitability, type ProfitabilityPolicy } from "../use-cases/analytics/productProfitability";
 import { NotFoundError } from "./errors";
 
@@ -27,8 +27,8 @@ export function getProductProfitability(
  * projection is the sole input; the pure use case derives insights from it. No writes, no
  * persistence, no delivery.
  */
-export function getProductProfitabilityInsights(db: DbClient, productId: string, now: Date = new Date()): AnalyticsInsight[] {
-  return deriveProfitabilityInsights(getProductProfitability(db, productId, now), now);
+export function getProductProfitabilityInsights(db: DbClient, productId: string, now: Date = new Date(), thresholds: AnalyticsThresholds = DEFAULT_ANALYTICS_THRESHOLDS): AnalyticsInsight[] {
+  return deriveProfitabilityInsights(getProductProfitability(db, productId, now), now, thresholds);
 }
 
 /**
@@ -41,12 +41,13 @@ export function getCatalogueProfitability(
   query: CatalogueProfitabilityQuery,
   now: Date = new Date(),
   policy: ProfitabilityPolicy = PROVISIONAL_PROFITABILITY_POLICY,
+  thresholds: AnalyticsThresholds = DEFAULT_ANALYTICS_THRESHOLDS,
 ): CatalogueProfitabilityResult {
   const evaluated = createSqliteProductProfitabilityReadRepository(db)
     .loadSources()
     .map((source) => {
       const profitability = projectProductProfitability(source, now, policy);
-      return { profitability, insights: deriveProfitabilityInsights(profitability, now) };
+      return { profitability, insights: deriveProfitabilityInsights(profitability, now, thresholds) };
     });
-  return buildCatalogueProfitability(evaluated, query, now, policy);
+  return buildCatalogueProfitability(evaluated, query, now, policy, thresholds);
 }
