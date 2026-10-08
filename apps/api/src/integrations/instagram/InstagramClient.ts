@@ -53,6 +53,12 @@ export class InstagramClient {
     return { id: INSTAGRAM_VAULT_ACCOUNT_ID, username: account.username };
   }
 
+  /** Analytics Stage 3: read-only media Insights (period is always lifetime per Meta). Raw body is returned for strict parsing. */
+  async getMediaInsights(mediaId: string, metrics: readonly string[]): Promise<Record<string, unknown>> {
+    if (!/^\d+$/.test(mediaId) || metrics.length === 0 || metrics.some((m) => !/^[a-z_]+$/.test(m))) throw new InstagramClientError("configuration", false);
+    return this.request(`/${mediaId}/insights?metric=${encodeURIComponent(metrics.join(","))}`, "GET");
+  }
+
   async createImageContainer(instagramAccountId: string, imageUrl: string, caption: string): Promise<string> {
     if (instagramAccountId !== INSTAGRAM_VAULT_ACCOUNT_ID) throw new InstagramClientError("authorization", false);
     const body = await this.request(`/${INSTAGRAM_VAULT_ACCOUNT_ID}/media`, "POST", { image_url: imageUrl, caption });

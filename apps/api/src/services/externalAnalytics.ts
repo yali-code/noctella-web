@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DbClient } from "../db/client";
 import { createSqliteAnalyticsSnapshotRepository } from "../repositories/analytics/analyticsSnapshotsSqlite";
-import { ExternalCollectorError, externalRunIdempotencyKey, normalizeExternalCollection, type ExternalAnalyticsCollector } from "../use-cases/analytics/externalMetrics";
+import { ExternalCollectorError, externalRunIdempotencyKey, normalizeExternalCollection, type ExternalAnalyticsCollector, type ExternalEntityLink } from "../use-cases/analytics/externalMetrics";
 import { decryptCredential } from "./credentialEncryption";
 
 /**
@@ -11,12 +11,16 @@ import { decryptCredential } from "./credentialEncryption";
  * connection + source + window/observation: a retry replays the completed run. A collector failure
  * records a failed run (typed kind only - never token or provider body) and writes no metrics.
  */
-export async function runExternalAnalyticsCollection(db: DbClient, collector: ExternalAnalyticsCollector, options: { now?: Date; collectedAt?: Date } = {}) {
+export async function runExternalAnalyticsCollection(
+  db: DbClient,
+  collector: ExternalAnalyticsCollector,
+  options: { now?: Date; collectedAt?: Date; resolveEntityLinks?: (entityIds: readonly string[]) => ReadonlyMap<string, ExternalEntityLink>; accountLabel?: string } = {},
+) {
   const now = options.now ?? new Date();
   const collectedAt = options.collectedAt ?? now;
   const platform = collector.platform;
   const repo = createSqliteAnalyticsSnapshotRepository(db);
-  const connection = repo.findConnectedConnection(platform);
+  const connection = repo.findConnectedConnection(platform, options.accountLabel);
   if (!connection) throw new ExternalCollectorError("not_connected", `No connected ${platform} marketplace connection`);
 
   const failureRun = { id: randomUUID(), runType: `external_${platform}_metrics`, sourceType: "external_platform", sourceReference: `${platform}.collector`, idempotencyKey: `external-failure:${platform}:${connection.id}:${collectedAt.toISOString()}`, observedAt: now.toISOString(), startedAt: collectedAt.toISOString() };
@@ -45,7 +49,9 @@ export async function runExternalAnalyticsCollection(db: DbClient, collector: Ex
 
   let normalized;
   try {
-    normalized = normalizeExternalCollection(result, connection.id, repo.mapExternalListings(platform, result.observations.map((o) => o.externalEntityId)));
+    const ids = result.observations.map((o) => o.externalEntityId);
+    // Social collectors supply their own deterministic link (publish chain / storefront URL); marketplaces use external_listings.
+    normalized = normalizeExternalCollection(result, connection.id, options.resolveEntityLinks ? new Map() : repo.mapExternalListings(platform, ids), options.resolveEntityLinks?.(ids) ?? new Map());
   } catch (error) {
     return fail(error instanceof ExternalCollectorError ? error : new ExternalCollectorError("malformed_payload", "Collector result could not be normalized"));
   }

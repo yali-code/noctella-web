@@ -19,6 +19,8 @@
     "db:backup": "tsx src/scripts/runDatabaseBackup.ts",
     "analytics:snapshot": "tsx src/scripts/runAnalyticsSnapshot.ts",
     "analytics:ebay": "tsx src/scripts/runEbayAnalytics.ts",
+    "analytics:instagram": "tsx src/scripts/runInstagramAnalytics.ts",
+    "analytics:pinterest": "tsx src/scripts/runPinterestAnalytics.ts",
     "db:restore-verify": "tsx src/scripts/verifyDatabaseRestore.ts",
     "db:restore-materialize": "tsx src/scripts/materializeDatabaseRestore.ts",
     "photos:backup": "tsx src/scripts/runProductPhotoBackup.ts",

@@ -15,7 +15,8 @@ export type ExternalWindowSemantics = "cumulative_lifetime" | "rolling_window" |
 export type ExternalMetricUnit = "count" | "percent" | "ratio" | "eur" | "provider_defined";
 
 export interface ExternalMetricObservation {
-  readonly entityType: "listing";
+  /** listing (marketplaces), media (Instagram), pin (Pinterest). Stored as scope_type external_<entityType>. */
+  readonly entityType: "listing" | "media" | "pin";
   readonly externalEntityId: string;
   /** Stable Noctella key, e.g. "listing_impressions". Stored in namespace = platform. */
   readonly metricKey: string;
@@ -62,8 +63,11 @@ export class ExternalCollectorError extends Error {
   }
 }
 
+/** Deterministic entity -> product link plus non-secret provenance (e.g. socialContentId, publishedAt). Never guessed. */
+export interface ExternalEntityLink { readonly productId: string | null; readonly context: Readonly<Record<string, unknown>> }
+
 export interface ExternalSnapshotRow {
-  readonly scopeType: "external_listing";
+  readonly scopeType: "external_listing" | "external_media" | "external_pin";
   readonly scopeId: string;
   readonly metricNamespace: string;
   readonly metricKey: string;
@@ -93,12 +97,13 @@ export function normalizeExternalCollection(
   result: ExternalCollectionResult,
   connectionId: string,
   productByListingId: ReadonlyMap<string, string>,
+  entityLinks: ReadonlyMap<string, ExternalEntityLink> = new Map(),
 ): { rows: ExternalSnapshotRow[]; warnings: string[] } {
   if (!result.platform || !result.sourceReference || Number.isNaN(new Date(result.observedAt).getTime())) {
     throw new ExternalCollectorError("malformed_payload", "Collector result is missing platform, source reference or a valid observedAt");
   }
   const warnings = [...result.warnings];
-  const unmapped = new Set<string>();
+  const unmapped = new Map<string, string>();
   const seen = new Set<string>();
   const rows: ExternalSnapshotRow[] = [];
   for (const o of result.observations) {
@@ -108,10 +113,11 @@ export function normalizeExternalCollection(
     const identity = `${o.externalEntityId}|${o.metricKey}`;
     if (seen.has(identity)) throw new ExternalCollectorError("malformed_payload", `Duplicate observation for ${o.metricKey} on one listing`);
     seen.add(identity);
-    const productId = productByListingId.get(o.externalEntityId) ?? null;
-    if (!productId) unmapped.add(o.externalEntityId);
+    const link = entityLinks.get(o.externalEntityId);
+    const productId = link?.productId ?? productByListingId.get(o.externalEntityId) ?? null;
+    if (!productId) unmapped.set(o.externalEntityId, o.entityType);
     rows.push({
-      scopeType: "external_listing",
+      scopeType: `external_${o.entityType}`,
       scopeId: `${result.platform}:${o.externalEntityId}`,
       metricNamespace: result.platform,
       metricKey: o.metricKey,
@@ -122,14 +128,15 @@ export function normalizeExternalCollection(
       metadata: {
         platform: result.platform,
         connectionId,
-        externalListingId: o.externalEntityId,
+        ...(o.entityType === "listing" ? { externalListingId: o.externalEntityId } : { externalEntityId: o.externalEntityId }),
         productId,
+        ...(link?.context ?? {}),
         providerMetric: o.providerMetric,
         windowSemantics: o.windowSemantics,
         window: result.window,
       },
     });
   }
-  for (const id of [...unmapped].sort()) warnings.push(`UNMAPPED_LISTING:${result.platform}:${id}`);
+  for (const [id, type] of [...unmapped].sort(([a], [b]) => a.localeCompare(b))) warnings.push(`UNMAPPED_${type.toUpperCase()}:${result.platform}:${id}`);
   return { rows, warnings };
 }
