@@ -29,6 +29,7 @@ import paymentsPublicRouter from "./routes/paymentsPublic";
 import publishJobsRouter from "./routes/publishJobs";
 import { createInstagramRouter } from "./routes/instagram";
 import { createSocialContentRouter } from "./routes/socialContent";
+import { createMediaPlannerRouter } from "./routes/mediaPlanner";
 import backgroundJobsRouter from "./routes/backgroundJobs";
 import stockSyncRouter from "./routes/stockSync";
 import productsRouter from "./routes/products";
@@ -277,6 +278,8 @@ app.use("/api/products", productsRouter);
 app.use("/api/publish-jobs", publishJobsRouter);
 app.use("/api/instagram", createInstagramRouter(db));
 app.use("/api/social/contents", createSocialContentRouter(db));
+// Media Planning Agent: proposes plans for owner approval; hands approved feed posts to the Social Agent chain.
+app.use("/api/media-planner", createMediaPlannerRouter());
 app.use("/api/background-jobs", backgroundJobsRouter);
 app.use("/api/stock-sync", stockSyncRouter);
 app.use("/api/marketplace-stock-sync", stockSyncRouter);

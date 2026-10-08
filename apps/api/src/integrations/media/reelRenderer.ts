@@ -1,0 +1,93 @@
+import { execFile } from "node:child_process";
+import { open, stat } from "node:fs/promises";
+
+/**
+ * Media Planning Agent: deterministic local Reel renderer (no AI video). Builds a vertical 9:16
+ * 1080x1920 H.264/yuv420p MP4 (~8 s, 30 fps, faststart, silent) from REAL ERP photos with a slow
+ * zoom per photo and crossfades. Opening hook / final frame text are burned in only when a font
+ * file is configured (REEL_FONT_FILE); otherwise they remain plan metadata. Requires an ffmpeg
+ * binary (FFMPEG_PATH or `ffmpeg` on PATH) - completion is never faked: the output must exist and
+ * carry an MP4 `ftyp` signature.
+ */
+
+export const REEL_WIDTH = 1080, REEL_HEIGHT = 1920, REEL_FPS = 30, REEL_DURATION_SECONDS = 8, REEL_TRANSITION_SECONDS = 0.5;
+
+export type CommandRunner = (command: string, args: readonly string[], timeoutMs: number) => Promise<void>;
+export const execRunner: CommandRunner = (command, args, timeoutMs) => new Promise((resolve, reject) => {
+  execFile(command, [...args], { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (error) => (error ? reject(error) : resolve()));
+});
+
+export interface ReelRenderInput {
+  readonly photoPaths: readonly string[];
+  readonly outputPath: string;
+  readonly hookText?: string | null;
+  readonly finalText?: string | null;
+  readonly fontFile?: string | null;
+}
+
+/** drawtext-safe text: letters, digits and basic punctuation only (no quotes/colons/backslashes). */
+export function overlayText(value: string | null | undefined): string | null {
+  const cleaned = (value ?? "").normalize("NFKC").replace(/[^\p{L}\p{N} .,!?&-]/gu, "").replace(/\s+/g, " ").trim().slice(0, 48);
+  return cleaned || null;
+}
+
+export function buildFfmpegArgs(input: ReelRenderInput): string[] {
+  const n = input.photoPaths.length;
+  if (n === 0) throw new Error("REEL_REQUIRES_PHOTOS");
+  const t = n > 1 ? REEL_TRANSITION_SECONDS : 0;
+  const segment = (REEL_DURATION_SECONDS + (n - 1) * t) / n;
+  const frames = Math.round(segment * REEL_FPS);
+  const args: string[] = ["-y", "-hide_banner", "-loglevel", "error"];
+  for (const p of input.photoPaths) args.push("-i", p);
+  const parts: string[] = input.photoPaths.map((_, i) =>
+    `[${i}:v]scale=${REEL_WIDTH}:${REEL_HEIGHT}:force_original_aspect_ratio=increase,crop=${REEL_WIDTH}:${REEL_HEIGHT},` +
+    `zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${REEL_WIDTH}x${REEL_HEIGHT}:fps=${REEL_FPS},` +
+    `setsar=1,format=yuv420p,trim=duration=${segment.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
+  let last = "v0";
+  for (let i = 1; i < n; i += 1) {
+    const out = `x${i}`;
+    parts.push(`[${last}][v${i}]xfade=transition=fade:duration=${t}:offset=${(i * (segment - t)).toFixed(3)}[${out}]`);
+    last = out;
+  }
+  const hook = overlayText(input.hookText), finalText = overlayText(input.finalText);
+  if (input.fontFile && (hook || finalText)) {
+    const font = input.fontFile.replace(/\\/g, "/").replace(/:/g, "\\:");
+    const draw = (text: string, from: number, to: number, y: string) => `drawtext=fontfile='${font}':text='${text}':fontcolor=white:fontsize=64:box=1:boxcolor=black@0.45:boxborderw=24:x=(w-text_w)/2:y=${y}:enable='between(t,${from},${to})'`;
+    const filters = [hook ? draw(hook, 0, 2.2, "h*0.12") : null, finalText ? draw(finalText, REEL_DURATION_SECONDS - 1.6, REEL_DURATION_SECONDS, "h*0.80") : null].filter(Boolean);
+    parts.push(`[${last}]${filters.join(",")}[final]`);
+    last = "final";
+  }
+  args.push("-filter_complex", parts.join(";"), "-map", `[${last}]`, "-t", String(REEL_DURATION_SECONDS),
+    "-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", String(REEL_FPS), "-movflags", "+faststart", "-an", input.outputPath);
+  return args;
+}
+
+/** MP4/ISO-BMFF signature: bytes 4..8 are "ftyp". */
+export async function isMp4File(path: string): Promise<boolean> {
+  const handle = await open(path, "r");
+  try {
+    const buffer = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(buffer, 0, 12, 0);
+    return bytesRead >= 8 && buffer.subarray(4, 8).toString("ascii") === "ftyp";
+  } finally { await handle.close(); }
+}
+
+export function resolveFfmpegPath(env: NodeJS.ProcessEnv = process.env): string {
+  return env.FFMPEG_PATH?.trim() || "ffmpeg";
+}
+
+export async function isFfmpegAvailable(env: NodeJS.ProcessEnv = process.env, run: CommandRunner = execRunner): Promise<boolean> {
+  try { await run(resolveFfmpegPath(env), ["-hide_banner", "-version"], 10_000); return true; } catch { return false; }
+}
+
+export async function renderReel(input: ReelRenderInput, options: { env?: NodeJS.ProcessEnv; run?: CommandRunner } = {}): Promise<{ path: string; bytes: number }> {
+  const run = options.run ?? execRunner;
+  try {
+    await run(resolveFfmpegPath(options.env), buildFfmpegArgs(input), 180_000);
+  } catch {
+    throw new Error("REEL_RENDER_FAILED");
+  }
+  const info = await stat(input.outputPath).catch(() => null);
+  if (!info || info.size === 0 || !(await isMp4File(input.outputPath))) throw new Error("REEL_RENDER_INVALID_OUTPUT");
+  return { path: input.outputPath, bytes: info.size };
+}
