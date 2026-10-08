@@ -118,7 +118,7 @@ export function createSqliteProductProfitabilityReadRepository(db: any) {
               completedAt: sf.completedAt,
             },
             payments: (paymentsByOrder.get(sf.orderId) ?? []).map((pay) => ({ status: pay.status, amount: pay.amount, currency: pay.currency })),
-            shipments: (shipmentsByOrder.get(sf.orderId) ?? []).map((s) => ({ status: s.status, shippingCost: s.shippingCost, currency: s.currency })),
+            shipments: (shipmentsByOrder.get(sf.orderId) ?? []).map((s) => ({ status: s.status, shippingCost: s.shippingCost, currency: s.currency, carrierCode: s.carrierCode })),
             refunds: (refundsByOrder.get(sf.orderId) ?? []).map((r) => ({
               status: r.status,
               currency: r.currency,

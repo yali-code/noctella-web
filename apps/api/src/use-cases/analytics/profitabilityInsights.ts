@@ -18,7 +18,26 @@ export type InsightCode =
   | "SHIPPING_COST_MISSING"
   | "REVENUE_CASH_MISMATCH"
   | "NEGATIVE_PROFIT"
-  | "PROFITABILITY_INCOMPLETE";
+  | "PROFITABILITY_INCOMPLETE"
+  | "LOW_MARGIN"
+  | "HIGH_MARGIN"
+  | "AGED_INVENTORY";
+
+/**
+ * Phase 1E: owner-configurable ANALYTICS POLICY thresholds (not accounting rules). Injectable so
+ * tests and a later persisted owner setting can replace the code defaults without touching the
+ * signal rules.
+ */
+export interface AnalyticsThresholds {
+  /** LOW_MARGIN fires for a final margin in [0, lowMarginPercent). Negative margins are NEGATIVE_PROFIT. */
+  readonly lowMarginPercent: number;
+  /** HIGH_MARGIN fires for a final margin >= highMarginPercent. */
+  readonly highMarginPercent: number;
+  /** AGED_INVENTORY fires for in-stock products whose purchase-recorded inventory age >= this. */
+  readonly agedInventoryDays: number;
+}
+
+export const DEFAULT_ANALYTICS_THRESHOLDS: AnalyticsThresholds = Object.freeze({ lowMarginPercent: 20, highMarginPercent: 40, agedInventoryDays: 90 });
 export type InsightEntityType = "product" | "sale_attempt";
 export type InsightSeverity = "info" | "warning" | "critical";
 /** Categorical and derived from data quality only - never a percentage. */
@@ -73,7 +92,11 @@ function financialConfidence(attempt: SaleAttemptProfitability): InsightConfiden
   return "HIGH";
 }
 
-export function deriveProfitabilityInsights(profitability: ProductProfitability, evaluatedAt: Date): AnalyticsInsight[] {
+export function deriveProfitabilityInsights(
+  profitability: ProductProfitability,
+  evaluatedAt: Date,
+  thresholds: AnalyticsThresholds = DEFAULT_ANALYTICS_THRESHOLDS,
+): AnalyticsInsight[] {
   const at = evaluatedAt.toISOString();
   const productId = profitability.productId;
   const insights: AnalyticsInsight[] = [];
@@ -141,8 +164,58 @@ export function deriveProfitabilityInsights(profitability: ProductProfitability,
     });
   }
 
+  // Current inventory only (inventoryAgeDays is null when nothing is in stock) and only with a
+  // purchase-recorded acquisition date - the product_created fallback is not an acquisition date.
+  if (profitability.inventoryAgeDays != null && profitability.acquisitionDateSource !== "product_created" && profitability.inventoryAgeDays >= thresholds.agedInventoryDays) {
+    productInsight("AGED_INVENTORY", {
+      severity: "warning",
+      title: "Inventory age exceeds the configured threshold",
+      recommendation: "Review this in-stock item; it has exceeded the configured inventory-age threshold.",
+      evidence: [
+        { fact: "inventoryAgeDays", value: profitability.inventoryAgeDays },
+        { fact: "acquisitionDate", value: profitability.acquisitionDate },
+        { fact: "acquisitionDateSource", value: profitability.acquisitionDateSource },
+        { fact: "threshold.agedInventoryDays", value: thresholds.agedInventoryDays },
+      ],
+      confidence: "HIGH",
+      routingTarget: "INVENTORY",
+    });
+  }
+
   for (const attempt of profitability.saleAttempts) {
     const prefix = `saleAttempts[${attempt.orderId}]`;
+
+    // marginPercent is only non-null when knownProfit is (every applicable component known, no
+    // blocking issue, item scope) - a partial/incomplete profit can never trigger these.
+    const margin = attempt.marginPercent;
+    const marginEvidence = (threshold: string, value: number): InsightEvidence[] => [
+      { fact: `${prefix}.marginPercent`, value: margin },
+      { fact: `${prefix}.knownProfit`, value: attempt.knownProfit },
+      { fact: `${prefix}.grossRevenue`, value: attempt.grossRevenue },
+      { fact: `${prefix}.costCharged`, value: attempt.costCharged },
+      { fact: `threshold.${threshold}`, value },
+      ...codeEvidence(prefix, attempt),
+    ];
+    if (margin != null && margin >= 0 && margin < thresholds.lowMarginPercent) {
+      attemptInsight("LOW_MARGIN", attempt.orderId, {
+        severity: "warning",
+        title: "Margin is below the configured threshold",
+        recommendation: "Review the pricing and acquisition cost of this sale; its margin is below the configured threshold.",
+        evidence: marginEvidence("lowMarginPercent", thresholds.lowMarginPercent),
+        confidence: financialConfidence(attempt),
+        routingTarget: "PRICING",
+      });
+    }
+    if (margin != null && margin >= thresholds.highMarginPercent) {
+      attemptInsight("HIGH_MARGIN", attempt.orderId, {
+        severity: "info",
+        title: "Margin is at or above the configured threshold",
+        recommendation: "Review this sale as a possible sourcing reference; its margin meets the configured high-margin threshold.",
+        evidence: marginEvidence("highMarginPercent", thresholds.highMarginPercent),
+        confidence: financialConfidence(attempt),
+        routingTarget: "SOURCING",
+      });
+    }
 
     if (attempt.issueCodes.includes("MISSING_OUTBOUND_SHIPPING")) {
       attemptInsight("SHIPPING_COST_MISSING", attempt.orderId, {
@@ -153,6 +226,7 @@ export function deriveProfitabilityInsights(profitability: ProductProfitability,
           { fact: `${prefix}.orderId`, value: attempt.orderId },
           { fact: `${prefix}.outboundShippingCost`, value: attempt.outboundShippingCost },
           { fact: `${prefix}.issueCode`, value: "MISSING_OUTBOUND_SHIPPING" },
+          ...attempt.issueCodes.filter((code) => code === "SHIPPING_COST_ZERO_AMBIGUOUS").map((code) => ({ fact: `${prefix}.issueCode`, value: code })),
         ],
         confidence: "MEDIUM",
         routingTarget: "OPERATIONS",

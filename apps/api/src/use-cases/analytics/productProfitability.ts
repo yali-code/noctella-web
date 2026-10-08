@@ -45,7 +45,7 @@ export const BLOCKING_ISSUE_CODES = [
   "REVERSAL_COST_RECOVERY_INCOMPLETE",
   "FX_ANALYTICS_GAP",
 ] as const;
-export const WARNING_ISSUE_CODES = ["ALLOCATION_AMBIGUOUS", "MISSING_CASH_COLLECTION_DATA"] as const;
+export const WARNING_ISSUE_CODES = ["ALLOCATION_AMBIGUOUS", "MISSING_CASH_COLLECTION_DATA", "SHIPPING_COST_ZERO_AMBIGUOUS"] as const;
 export const CONFLICT_CODES = ["COST_BASIS_CONFLICT", "REVENUE_CASH_MISMATCH"] as const;
 export const POLICY_FLAGS = ["VAT_POLICY_PROVISIONAL", "REVENUE_POLICY_PROVISIONAL"] as const;
 
@@ -122,7 +122,7 @@ export interface ProfitabilitySaleSource {
     readonly completedAt: string;
   };
   readonly payments: readonly { readonly status: string; readonly amount: number; readonly currency: string }[];
-  readonly shipments: readonly { readonly status: string; readonly shippingCost: number; readonly currency: string }[];
+  readonly shipments: readonly { readonly status: string; readonly shippingCost: number; readonly currency: string; readonly carrierCode?: string | null }[];
   readonly refunds: readonly {
     readonly status: string;
     readonly currency: string;
@@ -244,6 +244,8 @@ const isEur = (currency: string | null | undefined) => currency == null || curre
 const PENDING_REFUND_STATUSES = new Set(["draft", "pending", "submitted"]);
 const TERMINAL_RETURN_STATUSES = new Set(["completed", "cancelled", "rejected", "closed"]);
 const NON_INCURRED_SHIPMENT_STATUSES = new Set(["draft", "cancelled"]);
+/** CarrierCode.LocalPickup (packages/shared enums/shipping.ts): the buyer collects - no outbound carrier cost exists. */
+const LOCAL_PICKUP_CARRIER = "local_pickup";
 
 function daysBetween(fromIso: string, to: Date): number | null {
   const from = new Date(fromIso).getTime();
@@ -335,10 +337,14 @@ function deriveSaleAttempt(
 
   // Outbound shipping EXPENSE (never shippingCharged, which is revenue-side). shipments.shipping_cost
   // is NOT NULL DEFAULT 0, so a 0 is indistinguishable from "never entered" -> unknown, not free.
+  // Phase 1E: the only provable real zero is a CarrierCode.LocalPickup shipment (no outbound
+  // carrier). Any other zero stays unknown and is flagged SHIPPING_COST_ZERO_AMBIGUOUS.
   const incurred = sale.shipments.filter((s) => !NON_INCURRED_SHIPMENT_STATUSES.has(s.status));
-  const shippingKnown = incurred.length > 0 && incurred.every((s) => s.shippingCost > 0);
+  const provenZero = (s: (typeof incurred)[number]) => s.shippingCost === 0 && s.carrierCode === LOCAL_PICKUP_CARRIER;
+  const shippingKnown = incurred.length > 0 && incurred.every((s) => s.shippingCost > 0 || provenZero(s));
   const outboundShippingCost = shippingKnown ? money(incurred.reduce((total, s) => total + s.shippingCost, 0)) : null;
   if (!shippingKnown) issues.push("MISSING_OUTBOUND_SHIPPING");
+  if (incurred.some((s) => s.shippingCost === 0 && !provenZero(s))) issues.push("SHIPPING_COST_ZERO_AMBIGUOUS");
 
   // Only proven NOT_APPLICABLE rule: a sale with no marketplace origin (no marketplace_orders link
   // and no marketplace import draft id) cannot carry a marketplace commission or a promoted-listing
