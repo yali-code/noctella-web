@@ -1,5 +1,6 @@
 import type { DbClient } from "../db/client";
 import { createSqliteProductProfitabilityReadRepository } from "../repositories/analytics/productProfitabilitySqlite";
+import { deriveProfitabilityInsights, type AnalyticsInsight } from "../use-cases/analytics/profitabilityInsights";
 import { projectProductProfitability, PROVISIONAL_PROFITABILITY_POLICY, type ProductProfitability, type ProfitabilityPolicy } from "../use-cases/analytics/productProfitability";
 import { NotFoundError } from "./errors";
 
@@ -18,4 +19,13 @@ export function getProductProfitability(
   const source = createSqliteProductProfitabilityReadRepository(db).loadSource(productId);
   if (!source) throw new NotFoundError("Product not found");
   return projectProductProfitability(source, now, policy);
+}
+
+/**
+ * Analytics Phase 1C: read-only, advisory insights for one product - the Phase 1B profitability
+ * projection is the sole input; the pure use case derives insights from it. No writes, no
+ * persistence, no delivery.
+ */
+export function getProductProfitabilityInsights(db: DbClient, productId: string, now: Date = new Date()): AnalyticsInsight[] {
+  return deriveProfitabilityInsights(getProductProfitability(db, productId, now), now);
 }
