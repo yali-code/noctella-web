@@ -11,7 +11,8 @@ import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
 import { createSocialContentRepository } from "../repositories/social-content/drizzle";
 import { createSocialContentApprovalRepository } from "../repositories/social-content/approvals";
 import { createPreparedImageRepository } from "../repositories/social-content/preparedImages";
-import { createSocialContentPreparationService } from "./socialContentPreparation";
+import { createSocialContentPreparationService, INSTAGRAM_REEL_RECIPE } from "./socialContentPreparation";
+import { REEL_PUBLIC_PATH } from "../config/mediaAssets";
 import { BadRequestError, ConflictError, NotFoundError } from "./errors";
 import { assertVaultPolicy, validateInstagramMediaUrl } from "../config/instagramConfig";
 import { InstagramClient } from "../integrations/instagram/InstagramClient";
@@ -28,6 +29,8 @@ export const instagramPublishSchema = z.object({
 function publicAttempt(row: Attempt) {
   return {
     id: row.id, connectionId: row.connectionId, status: row.status,
+    // Media type is derived from the persisted, validated media URL: Reels are only ever published from the Reel path.
+    mediaType: (() => { try { return new URL(row.mediaUrl).pathname.startsWith(`${REEL_PUBLIC_PATH}/`) ? "REEL" : "IMAGE"; } catch { return "IMAGE"; } })(),
     containerId: row.containerId, publishedMediaId: row.publishedMediaId,
     lastError: row.lastError, createdAt: row.createdAt, updatedAt: row.updatedAt, publishedAt: row.publishedAt,
   };
@@ -105,6 +108,9 @@ export async function publishInstagramImage(
     return { approval, content, image, source };
   }
   const before = await transaction(snapshot);
+  // IMAGE vs REEL comes from the approved content; the approved asset must match - never fall back to an image post.
+  const isReel = before.content.contentType === "reel";
+  if (isReel !== (before.image.recipeVersion === INSTAGRAM_REEL_RECIPE)) throw new BadRequestError("Approved media does not match the content type");
   await createSocialContentPreparationService(db, driver).validatePreparedImageCurrent(before.approval.contentId, before.image.id);
   const mediaUrl = validateInstagramMediaUrl(resolvePublicApiOrigin(env) + before.image.outputPath, env);
   // Local credential resolution makes no provider request.
@@ -179,7 +185,9 @@ export async function publishInstagramImage(
     // A crash after commit remains ambiguous until container identity is durable.
     if (!claimed) return result();
     try {
-      containerId = await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, attempt.mediaUrl, attempt.caption);
+      containerId = isReel
+        ? await adapter.createReelContainer(INSTAGRAM_VAULT_ACCOUNT_ID, attempt.mediaUrl, attempt.caption)
+        : await adapter.createImageContainer(INSTAGRAM_VAULT_ACCOUNT_ID, attempt.mediaUrl, attempt.caption);
       if (!await transition("pending", { containerId, status: "container_created" })) return result();
     } catch (error) {
       await transition("pending", { status: "failed", lastError: safeKind(error) });

@@ -66,6 +66,14 @@ export class InstagramClient {
     return body.id;
   }
 
+  /** Reel container: media_type=REELS with a publicly retrievable HTTPS video_url (Instagram API with Instagram Login). */
+  async createReelContainer(instagramAccountId: string, videoUrl: string, caption: string): Promise<string> {
+    if (instagramAccountId !== INSTAGRAM_VAULT_ACCOUNT_ID) throw new InstagramClientError("authorization", false);
+    const body = await this.request(`/${INSTAGRAM_VAULT_ACCOUNT_ID}/media`, "POST", { media_type: "REELS", video_url: videoUrl, caption });
+    if (typeof body.id !== "string" || !body.id) throw new InstagramClientError("provider", false);
+    return body.id;
+  }
+
   async getContainerStatus(containerId: string): Promise<string> {
     if (!/^\d+$/.test(containerId)) throw new InstagramClientError("configuration", false);
     const body = await this.request(`/${containerId}?fields=status_code`, "GET");

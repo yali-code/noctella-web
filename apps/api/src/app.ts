@@ -58,6 +58,7 @@ import { runProductPhotoBackup } from "./services/productPhotoBackup";
 import { BackgroundJobType } from "@noctella/shared";
 import { eq } from "drizzle-orm";
 import { externalListings } from "./db/schema";
+import { createReelAssetRouter } from "./routes/reelAssets";
 import { createRequireAuth, requirePermission } from "./auth/permissions";
 import { requireAdminOriginForMutations } from "./auth/csrf";
 import { requireSchedulerAuth } from "./auth/machineAuth";
@@ -118,6 +119,8 @@ app.use("/api/webhooks", marketplaceSyncWebhookRouter);
 app.use(express.json());
 // PUBLIC: product photos back both the admin app and the public storefront.
 app.use(productPhotoStaticPath, express.static(productPhotoStaticRoot));
+// PUBLIC: approved Reel assets for Instagram ingestion (see routes/reelAssets.ts).
+app.use(createReelAssetRouter(db));
 
 // PUBLIC: process liveness only - proves the Node process is up and Express is accepting
 // connections. Does not check the database, migrations, or any business configuration.
