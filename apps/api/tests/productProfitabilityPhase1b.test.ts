@@ -75,8 +75,8 @@ describe("Phase 1B product profitability - cost basis (OD-1, OD-2)", () => {
     expect(r.cost.landedCostExInputVat).toBeNull();
   });
 
-  it("quantity > 1 allocation is never divided by guesswork -> ALLOCATION_AMBIGUOUS and fallback", () => {
-    const r = projectProductProfitability(source({ purchaseLines: [line({ quantity: 3 })], product: { purchaseCost: 47 } }), NOW);
+  it("several allocated lines are never averaged -> ALLOCATION_AMBIGUOUS and fallback (Phase 1F: a single quantity > 1 line is per-unit)", () => {
+    const r = projectProductProfitability(source({ purchaseLines: [line(), line({ purchaseLineId: "pl-2" })], product: { purchaseCost: 47 } }), NOW);
     expect(r.cost.costBasisSource).toBe("product_purchase_cost");
     expect(r.cost.issueCodes).toContain("ALLOCATION_AMBIGUOUS");
   });

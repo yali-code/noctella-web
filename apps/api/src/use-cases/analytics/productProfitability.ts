@@ -45,7 +45,7 @@ export const BLOCKING_ISSUE_CODES = [
   "REVERSAL_COST_RECOVERY_INCOMPLETE",
   "FX_ANALYTICS_GAP",
 ] as const;
-export const WARNING_ISSUE_CODES = ["ALLOCATION_AMBIGUOUS", "MISSING_CASH_COLLECTION_DATA", "SHIPPING_COST_ZERO_AMBIGUOUS"] as const;
+export const WARNING_ISSUE_CODES = ["ALLOCATION_AMBIGUOUS", "MISSING_CASH_COLLECTION_DATA", "SHIPPING_COST_ZERO_AMBIGUOUS", "FEE_ADJUSTMENT_SIGN_UNKNOWN"] as const;
 export const CONFLICT_CODES = ["COST_BASIS_CONFLICT", "REVENUE_CASH_MISMATCH"] as const;
 export const POLICY_FLAGS = ["VAT_POLICY_PROVISIONAL", "REVENUE_POLICY_PROVISIONAL"] as const;
 
@@ -154,14 +154,17 @@ export interface FeeValue { readonly amount: number | null; readonly status: Fee
 export interface ProductCostBasis {
   readonly costBasisSource: "purchase_allocation" | "product_purchase_cost" | "missing";
   readonly productPurchaseCost: number | null;
+  /** Per-unit purchase price (purchase_lines.unit_purchase_cost) of the valid allocated line. */
   readonly purchaseLineBaseCost: number | null;
+  /** Quantity of the valid allocated line. The allocated* components below are LINE totals. */
+  readonly allocationLineQuantity: number | null;
   readonly allocatedBuyerPremium: number | null;
   readonly allocatedInboundShipping: number | null;
   readonly allocatedCustoms: number | null;
   readonly allocatedPackaging: number | null;
   readonly allocatedPurchaseVat: number | null;
   readonly allocatedMisc: number | null;
-  /** allocated_total_cost of the single valid quantity-1 line (base + every allocated component incl. VAT). */
+  /** Per-unit: allocated_total_cost / line quantity of the single valid allocated line (base + every allocated component incl. VAT). */
   readonly allocationDerivedLandedCost: number | null;
   readonly landedCostInclInputVat: number | null;
   /** Only derivable from an allocation; unknown for a manual product cost of unknown composition. */
@@ -258,18 +261,21 @@ function deriveCostBasis(product: ProfitabilityProductSource, lines: readonly Pr
   const conflicts: ProfitabilityConflictCode[] = [];
   const candidates = lines.filter((line) => line.purchaseStatus !== "Cancelled");
   const allocated = candidates.filter((line) => line.allocation !== null);
-  // Only a single quantity-1 line gives a defensible per-unit cost: allocated_total_cost is a
-  // LINE total (quantity x unit + split components), and the existing purchase_cost sync applies
-  // the same quantity===1 restriction. Several allocated lines or quantity > 1 = lot costing,
-  // an unresolved owner decision - never guessed here.
-  const valid = allocated.length === 1 && allocated[0]!.quantity === 1 ? allocated[0]! : null;
-  if (!valid && allocated.length > 0) issues.push("ALLOCATION_AMBIGUOUS");
+  // allocated_total_cost is a LINE total (quantity x unit + split components). Phase 1F: a single
+  // allocated line yields a per-unit landed cost of total / line quantity - every unit of a line is
+  // the same product at the same unit_purchase_cost, every allocation method (Equal, ByItemCost,
+  // ByQuantity, ByWeight) splits components at line granularity only, and the existing purchasing
+  // landed-cost summary already defines landedUnitCost = total / quantity. Several allocated lines
+  // for one product (repeat purchases) remain ambiguous - never averaged or guessed.
+  const valid = allocated.length === 1 ? allocated[0]! : null;
+  if (allocated.length > 1) issues.push("ALLOCATION_AMBIGUOUS");
   if (valid && valid.purchaseTotalCost == null) issues.push("ALLOCATION_COMPONENTS_INCOMPLETE");
   if (!isEur(product.purchaseCurrency) || candidates.some((line) => !isEur(line.purchaseCurrency))) issues.push("FX_ANALYTICS_GAP");
 
   const a = valid?.allocation ?? null;
-  const allocationTotal = a ? money(a.allocatedTotalCost) : null;
-  const exVat = a ? money(a.allocatedTotalCost - (a.allocatedTaxVat ?? 0)) : null;
+  const lineQuantity = valid?.quantity ?? null;
+  const allocationTotal = a && lineQuantity ? money(a.allocatedTotalCost / lineQuantity) : null;
+  const exVat = a && lineQuantity ? money((a.allocatedTotalCost - (a.allocatedTaxVat ?? 0)) / lineQuantity) : null;
   const allocationCost = a ? (policy.inputVatInLandedCost === "include" ? allocationTotal : exVat) : null;
   const authoritative = allocationCost ?? product.purchaseCost;
   if (authoritative == null) issues.push("MISSING_COST_BASIS");
@@ -278,7 +284,8 @@ function deriveCostBasis(product: ProfitabilityProductSource, lines: readonly Pr
   const cost: ProductCostBasis = {
     costBasisSource: allocationCost != null ? "purchase_allocation" : product.purchaseCost != null ? "product_purchase_cost" : "missing",
     productPurchaseCost: product.purchaseCost,
-    purchaseLineBaseCost: valid ? money(valid.quantity * valid.unitPurchaseCost) : null,
+    purchaseLineBaseCost: valid ? money(valid.unitPurchaseCost) : null,
+    allocationLineQuantity: lineQuantity,
     allocatedBuyerPremium: a?.allocatedBuyerPremium ?? null,
     allocatedInboundShipping: a?.allocatedShippingCost ?? null,
     allocatedCustoms: a?.allocatedCustomsCost ?? null,
@@ -375,6 +382,9 @@ function deriveSaleAttempt(
   const refundComplete = refundReconciles && vatSplitKnown && marketplaceFeeAdjustment == null && paymentFeeAdjustment == null;
   const refundedExVat = refundComplete ? money(refundAmount - refundedTax) : null;
   if (!refundComplete) issues.push("REFUND_CALCULATION_INCOMPLETE");
+  // Phase 1F: refund fee adjustments are free nullable numbers with no validation, UI label or
+  // reader anywhere in the codebase, so their sign (credit vs extra expense) is unproven.
+  if (marketplaceFeeAdjustment != null || paymentFeeAdjustment != null) issues.push("FEE_ADJUSTMENT_SIGN_UNKNOWN");
 
   // Returns (OD-6): units restored to stock keep their landed cost in inventory, so they are not
   // charged to this attempt (and are charged again only if/when they resell - never twice).
