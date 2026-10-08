@@ -63,6 +63,7 @@ import { requireSchedulerAuth } from "./auth/machineAuth";
 import { runProfitabilitySnapshot } from "./services/analyticsSnapshots";
 import { collectEbayAnalytics } from "./services/ebayAnalytics";
 import { collectInstagramAnalytics, collectPinterestAnalytics } from "./services/socialAnalytics";
+import { ResearchProviderNotConfiguredError, runWebResearch } from "./services/analyticsIntelligence";
 import { ExternalCollectorError } from "./use-cases/analytics/externalMetrics";
 import { parseConfiguredOrigins } from "./auth/originAllowlist";
 import { requestObservability } from "./middleware/requestObservability";
@@ -252,6 +253,14 @@ const collectorRoute = (collect: () => Promise<{ run: { id: string; status: stri
 app.post("/api/background-jobs/analytics-ebay", requireSchedulerAuth, collectorRoute(() => collectEbayAnalytics(db)));
 app.post("/api/background-jobs/analytics-instagram", requireSchedulerAuth, collectorRoute(() => collectInstagramAnalytics(db)));
 app.post("/api/background-jobs/analytics-pinterest", requireSchedulerAuth, collectorRoute(() => collectPinterestAnalytics(db)));
+// Stage 3 PR-2: twice-monthly web research (1st/15th). Fails closed until an approved provider is activated.
+app.post("/api/background-jobs/analytics-research", requireSchedulerAuth, async (_req, res) => {
+  try { res.json(await runWebResearch(db)); }
+  catch (error) {
+    if (error instanceof ResearchProviderNotConfiguredError) { res.status(409).json({ error: error.code }); return; }
+    handleRouteError(error, res);
+  }
+});
 app.use("/api/background-jobs/product-photo-backup", createProductPhotoBackupRouter(() => runProductPhotoBackup(db)));
 
 // AUTHENTICATED ADMIN default: every route mounted below this line requires a valid admin

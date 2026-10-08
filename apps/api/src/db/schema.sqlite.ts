@@ -978,3 +978,46 @@ export const analyticsMetricSnapshots = sqliteTable("analytics_metric_snapshots"
   index("idx_analytics_snapshots_scope_metric_time").on(table.scopeType, table.scopeId, table.metricKey, table.observedAt),
   index("idx_analytics_snapshots_run").on(table.runId),
 ]);
+
+/** Analytics Stage 3 PR-2: experiment registry (see schema.sql). Advisory only. */
+export const analyticsExperiments = sqliteTable("analytics_experiments", {
+  id: text("id").primaryKey(), title: text("title").notNull(), hypothesis: text("hypothesis").notNull(), domain: text("domain").notNull(), platform: text("platform"),
+  evidenceStyle: text("evidence_style").notNull(), normalization: text("normalization").notNull(), primaryMetric: text("primary_metric").notNull(),
+  primaryMetricDirection: text("primary_metric_direction").notNull(), minRelativeLift: real("min_relative_lift").notNull(), guardrailsJson: text("guardrails_json").notNull(),
+  scopeJson: text("scope_json").notNull(), minDurationDays: integer("min_duration_days").notNull(), minObservationsPerVariant: integer("min_observations_per_variant").notNull(),
+  sourceFindingId: text("source_finding_id"), status: text("status").notNull(), startedAt: text("started_at"), endedAt: text("ended_at"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+export const analyticsExperimentVariants = sqliteTable("analytics_experiment_variants", {
+  id: text("id").primaryKey(), experimentId: text("experiment_id").notNull(), variantKey: text("variant_key").notNull(), description: text("description").notNull(),
+  isControl: integer("is_control", { mode: "boolean" }).notNull().default(false),
+}, (table) => [uniqueIndex("idx_experiment_variants_unique").on(table.experimentId, table.variantKey)]);
+export const analyticsExperimentObservations = sqliteTable("analytics_experiment_observations", {
+  id: text("id").primaryKey(), experimentId: text("experiment_id").notNull(), observationKey: text("observation_key").notNull(), variantKey: text("variant_key").notNull(),
+  metricKey: text("metric_key").notNull(), value: real("value").notNull(), sampleSize: integer("sample_size").notNull(), observedAt: text("observed_at").notNull(),
+  sourceReference: text("source_reference").notNull(), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [uniqueIndex("idx_experiment_observations_unique").on(table.experimentId, table.observationKey)]);
+export const analyticsExperimentResults = sqliteTable("analytics_experiment_results", {
+  experimentId: text("experiment_id").primaryKey(), resultState: text("result_state").notNull(), winningVariant: text("winning_variant"), confidenceLevel: text("confidence_level").notNull(),
+  evidenceSummaryJson: text("evidence_summary_json").notNull(), decidedAt: text("decided_at").notNull(), revalidateBy: text("revalidate_by"),
+});
+
+/** Analytics Stage 3 PR-2: Knowledge Memory (see schema.sql). Never an operational source of truth. */
+export const knowledgeResearchRuns = sqliteTable("knowledge_research_runs", {
+  id: text("id").primaryKey(), periodKey: text("period_key").notNull(), provider: text("provider").notNull(), idempotencyKey: text("idempotency_key").notNull().unique(),
+  status: text("status").notNull(), startedAt: text("started_at").notNull(), completedAt: text("completed_at"), findingCount: integer("finding_count").notNull().default(0),
+  error: text("error"), createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+export const knowledgeFindings = sqliteTable("knowledge_findings", {
+  id: text("id").primaryKey(), fingerprint: text("fingerprint").notNull().unique(), firstRunId: text("first_run_id").notNull(), lastConfirmedRunId: text("last_confirmed_run_id").notNull(),
+  topicDomain: text("topic_domain").notNull(), topic: text("topic").notNull(), claim: text("claim").notNull(), classification: text("classification").notNull(),
+  category: text("category"), brand: text("brand"), productId: text("product_id"), platform: text("platform"), sourceUrl: text("source_url").notNull(),
+  sourceDomain: text("source_domain").notNull(), sourceType: text("source_type").notNull(), sourceQuality: text("source_quality").notNull(), publishedAt: text("published_at"),
+  collectedAt: text("collected_at").notNull(), lastConfirmedAt: text("last_confirmed_at").notNull(), confidence: text("confidence").notNull(),
+  businessRelevance: text("business_relevance").notNull(), status: text("status").notNull(), reviewBy: text("review_by").notNull(), evidenceExcerpt: text("evidence_excerpt"),
+  supersedesFindingId: text("supersedes_finding_id"), requiresNoctellaVerification: integer("requires_noctella_verification", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [index("idx_knowledge_findings_domain").on(table.topicDomain, table.status)]);
+export const knowledgeConflicts = sqliteTable("knowledge_conflicts", {
+  id: text("id").primaryKey(), findingAId: text("finding_a_id").notNull(), findingBId: text("finding_b_id").notNull(), state: text("state").notNull(), notedAt: text("noted_at").notNull(),
+}, (table) => [uniqueIndex("idx_knowledge_conflicts_pair").on(table.findingAId, table.findingBId)]);

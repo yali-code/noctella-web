@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../db/client";
 import { getProductAnalyticsHistory } from "../services/analyticsSnapshots";
 import { getEbayAnalyticsReadiness } from "../services/ebayAnalytics";
+import { createExperiment, finalizeExperiment, getIntelligenceView, getKnowledgeView, getRoadmap, ingestResearchFindings, listExperimentsView, recordExperimentObservation, startExperiment, stopExperiment } from "../services/analyticsIntelligence";
 import { completePinterestConnect, getSocialAnalyticsReadiness, getSocialMetricHistory, getSocialPerformance, startPinterestConnect } from "../services/socialAnalytics";
 import { socialHistoryQuerySchema, socialPerformanceQuerySchema } from "../use-cases/analytics/socialPerformance";
 import { PinterestOAuthError } from "../integrations/pinterest/pinterestOAuth";
@@ -80,5 +81,20 @@ router.get("/social/pinterest/callback", requirePermission("marketplace.manage")
     handleRouteError(error, res);
   }
 });
+
+// Stage 3 PR-2: advisory intelligence. Reads need analytics.view; registry/research writes are
+// owner-level (settings.manage). Nothing here executes business changes.
+const knowledgeQuerySchema = z.object({ topicDomain: z.string().max(20).optional(), classification: z.string().max(30).optional(), status: z.string().max(20).optional() }).strict();
+router.get("/experiments", (_req, res) => { try { res.json(listExperimentsView(db)); } catch (error) { handleRouteError(error, res); } });
+router.get("/knowledge", (req, res) => { try { res.json(getKnowledgeView(db, knowledgeQuerySchema.parse(req.query))); } catch (error) { handleRouteError(error, res); } });
+router.get("/intelligence", (_req, res) => { try { res.json(getIntelligenceView(db)); } catch (error) { handleRouteError(error, res); } });
+router.get("/roadmap", (_req, res) => { try { res.json(getRoadmap(db)); } catch (error) { handleRouteError(error, res); } });
+router.post("/experiments", requirePermission("settings.manage"), (req, res) => { try { res.status(201).json(createExperiment(db, req.body)); } catch (error) { handleRouteError(error, res); } });
+router.post("/experiments/:id/start", requirePermission("settings.manage"), (req, res) => { try { res.json(startExperiment(db, req.params.id)); } catch (error) { handleRouteError(error, res); } });
+router.post("/experiments/:id/observations", requirePermission("settings.manage"), (req, res) => { try { res.json(recordExperimentObservation(db, req.params.id, req.body)); } catch (error) { handleRouteError(error, res); } });
+router.post("/experiments/:id/finalize", requirePermission("settings.manage"), (req, res) => { try { res.json(finalizeExperiment(db, req.params.id)); } catch (error) { handleRouteError(error, res); } });
+router.post("/experiments/:id/stop", requirePermission("settings.manage"), (req, res) => { try { res.json(stopExperiment(db, req.params.id)); } catch (error) { handleRouteError(error, res); } });
+const ingestSchema = z.object({ provider: z.string().regex(/^[a-z0-9_.-]{2,40}$/), periodKey: z.string().regex(/^\d{4}-\d{2}-H[12]$/).optional(), candidates: z.array(z.unknown()).min(1).max(500) }).strict();
+router.post("/knowledge/ingest", requirePermission("settings.manage"), (req, res) => { try { const body = ingestSchema.parse(req.body); res.json(ingestResearchFindings(db, { provider: body.provider, periodKey: body.periodKey, candidates: body.candidates })); } catch (error) { handleRouteError(error, res); } });
 
 export default router;
