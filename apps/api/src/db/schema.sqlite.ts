@@ -1021,3 +1021,23 @@ export const knowledgeFindings = sqliteTable("knowledge_findings", {
 export const knowledgeConflicts = sqliteTable("knowledge_conflicts", {
   id: text("id").primaryKey(), findingAId: text("finding_a_id").notNull(), findingBId: text("finding_b_id").notNull(), state: text("state").notNull(), notedAt: text("noted_at").notNull(),
 }, (table) => [uniqueIndex("idx_knowledge_conflicts_pair").on(table.findingAId, table.findingBId)]);
+
+/** Media Planning Agent (see schema.sql): owner-approved plans; execution stays in the Social Agent chain. */
+export const mediaPlans = sqliteTable("media_plans", {
+  id: text("id").primaryKey(), startDate: text("start_date").notNull(), endDate: text("end_date").notNull(), timezone: text("timezone").notNull(),
+  status: text("status").notNull(), generatedAt: text("generated_at").notNull(), generatedBy: text("generated_by").notNull(), copySource: text("copy_source").notNull(),
+  timeRecommendation: text("time_recommendation").notNull(), rationale: text("rationale").notNull(), approvedAt: text("approved_at"),
+  approvedByAdminUserId: text("approved_by_admin_user_id"), rejectedAt: text("rejected_at"), scheduledAt: text("scheduled_at"),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+export const mediaPlanItems = sqliteTable("media_plan_items", {
+  id: text("id").primaryKey(), planId: text("plan_id").notNull(), itemIndex: integer("item_index").notNull(), contentType: text("content_type").notNull(),
+  postFormat: text("post_format").notNull(), productId: text("product_id").notNull(), photoIdsJson: text("photo_ids_json").notNull(), heroPhotoId: text("hero_photo_id").notNull(),
+  plannedAt: text("planned_at").notNull(), timeBasis: text("time_basis").notNull(), caption: text("caption").notNull(), hashtagsJson: text("hashtags_json").notNull(),
+  hook: text("hook"), frameTextsJson: text("frame_texts_json"), finalFrameText: text("final_frame_text"), reelAssetPath: text("reel_asset_path"), reelAssetStatus: text("reel_asset_status"),
+  rationale: text("rationale").notNull(), status: text("status").notNull(), socialContentId: text("social_content_id"), preparedImageId: text("prepared_image_id"),
+  socialApprovalId: text("social_approval_id"), publishIntentId: text("publish_intent_id"), publishScheduleId: text("publish_schedule_id"),
+  version: integer("version").notNull().default(1),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [uniqueIndex("idx_media_plan_items_plan_index").on(table.planId, table.itemIndex)]);

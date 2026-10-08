@@ -961,3 +961,56 @@ CREATE TABLE IF NOT EXISTS knowledge_conflicts (
   noted_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_conflicts_pair ON knowledge_conflicts(finding_a_id, finding_b_id);
+
+-- Media Planning Agent: owner-approved content plans. The planner proposes; the owner approves;
+-- the existing Social Agent chain (social_contents -> approval -> intent -> schedule) executes.
+-- Plan rows never publish anything themselves.
+CREATE TABLE IF NOT EXISTS media_plans (
+  id TEXT PRIMARY KEY,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  timezone TEXT NOT NULL,
+  status TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  generated_by TEXT NOT NULL,
+  copy_source TEXT NOT NULL,
+  time_recommendation TEXT NOT NULL,
+  rationale TEXT NOT NULL,
+  approved_at TEXT,
+  approved_by_admin_user_id TEXT,
+  rejected_at TEXT,
+  scheduled_at TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS media_plan_items (
+  id TEXT PRIMARY KEY,
+  plan_id TEXT NOT NULL REFERENCES media_plans(id) ON DELETE RESTRICT,
+  item_index INTEGER NOT NULL,
+  content_type TEXT NOT NULL,
+  post_format TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  photo_ids_json TEXT NOT NULL,
+  hero_photo_id TEXT NOT NULL,
+  planned_at TEXT NOT NULL,
+  time_basis TEXT NOT NULL,
+  caption TEXT NOT NULL,
+  hashtags_json TEXT NOT NULL,
+  hook TEXT,
+  frame_texts_json TEXT,
+  final_frame_text TEXT,
+  reel_asset_path TEXT,
+  reel_asset_status TEXT,
+  rationale TEXT NOT NULL,
+  status TEXT NOT NULL,
+  social_content_id TEXT,
+  prepared_image_id TEXT,
+  social_approval_id TEXT,
+  publish_intent_id TEXT,
+  publish_schedule_id TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plan_items_plan_index ON media_plan_items(plan_id, item_index);
