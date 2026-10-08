@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 import * as schema from "../../db/schema.sqlite";
 
 /**
@@ -41,8 +41,10 @@ export function createSqliteAnalyticsSnapshotRepository(db: any) {
     findRun,
 
     /** Stage 3A: the connected marketplace connection for a channel (existing "connected" convention), or null. */
-    findConnectedConnection(channel: string): { id: string; encryptedAccessToken: string } | null {
-      const row = db.select({ id: schema.marketplaceConnections.id, encryptedAccessToken: schema.marketplaceConnections.encryptedAccessToken }).from(schema.marketplaceConnections).where(and(eq(schema.marketplaceConnections.channel, channel), eq(schema.marketplaceConnections.status, "connected"))).get();
+    findConnectedConnection(channel: string, accountLabel?: string): { id: string; encryptedAccessToken: string } | null {
+      const filters = [eq(schema.marketplaceConnections.channel, channel), eq(schema.marketplaceConnections.status, "connected")];
+      if (accountLabel) filters.push(eq(schema.marketplaceConnections.accountLabel, accountLabel));
+      const row = db.select({ id: schema.marketplaceConnections.id, encryptedAccessToken: schema.marketplaceConnections.encryptedAccessToken }).from(schema.marketplaceConnections).where(and(...filters)).get();
       return row?.encryptedAccessToken ? { id: row.id, encryptedAccessToken: row.encryptedAccessToken } : null;
     },
 
@@ -126,7 +128,7 @@ export function createSqliteAnalyticsSnapshotRepository(db: any) {
     listProductHistory(productId: string, query: { metricKey?: string; from?: string; to?: string; limit: number }) {
       const t = schema.analyticsMetricSnapshots;
       // Stage 3A: product history also includes external listing metrics mapped to this product.
-      const filters = [or(and(eq(t.scopeType, "product"), eq(t.scopeId, productId)), and(eq(t.scopeType, "external_listing"), sql`json_extract(${t.metadataJson}, '$.productId') = ${productId}`))!];
+      const filters = [or(and(eq(t.scopeType, "product"), eq(t.scopeId, productId)), and(like(t.scopeType, "external_%"), sql`json_extract(${t.metadataJson}, '$.productId') = ${productId}`))!];
       if (query.metricKey) filters.push(eq(t.metricKey, query.metricKey));
       if (query.from) filters.push(gte(t.observedAt, query.from));
       if (query.to) filters.push(lte(t.observedAt, query.to));

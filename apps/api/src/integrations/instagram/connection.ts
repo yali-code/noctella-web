@@ -5,7 +5,7 @@ import { marketplaceConnections } from "../../db/schema";
 import { assertVaultPolicy } from "../../config/instagramConfig";
 import { decryptCredential, encryptCredential } from "../../services/credentialEncryption";
 import { InstagramClient } from "./InstagramClient";
-import { InstagramClientError, INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_CHANNEL, INSTAGRAM_SCOPES, INSTAGRAM_VAULT_ACCOUNT_ID, type InstagramTransport } from "./types";
+import { InstagramClientError, INSTAGRAM_ACCOUNT_LABEL, INSTAGRAM_CHANNEL, INSTAGRAM_INSIGHTS_SCOPE, INSTAGRAM_SCOPES, INSTAGRAM_VAULT_ACCOUNT_ID, type InstagramTransport } from "./types";
 
 export function safeInstagramConnection(row: typeof marketplaceConnections.$inferSelect) {
   return {
@@ -36,7 +36,9 @@ export async function upsertInstagramConnection(db: DbClient, input: { accessTok
   const accountLabel = input.accountLabel ?? INSTAGRAM_ACCOUNT_LABEL;
   if (accountLabel !== INSTAGRAM_ACCOUNT_LABEL || typeof input.accessToken !== "string" || !input.accessToken ||
       input.accessToken.length > 8192 || input.accessToken !== input.accessToken.trim() ||
-      input.scopes.length !== INSTAGRAM_SCOPES.length || !INSTAGRAM_SCOPES.every((scope) => input.scopes.includes(scope))) throw new InstagramClientError("configuration", false);
+      // Exactly the publishing scopes, optionally plus the read-only insights scope - nothing else.
+      !INSTAGRAM_SCOPES.every((scope) => input.scopes.includes(scope)) || new Set(input.scopes).size !== input.scopes.length ||
+      input.scopes.some((scope) => !(INSTAGRAM_SCOPES as readonly string[]).includes(scope) && scope !== INSTAGRAM_INSIGHTS_SCOPE)) throw new InstagramClientError("configuration", false);
   if (input.tokenExpiresAt && (!Number.isFinite(Date.parse(input.tokenExpiresAt)) || Date.parse(input.tokenExpiresAt) <= Date.now())) throw new InstagramClientError("configuration", false);
   const client = new InstagramClient(input.accessToken, transport, env);
   const account = await client.verifyAccount();
