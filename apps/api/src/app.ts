@@ -60,6 +60,7 @@ import { externalListings } from "./db/schema";
 import { createRequireAuth, requirePermission } from "./auth/permissions";
 import { requireAdminOriginForMutations } from "./auth/csrf";
 import { requireSchedulerAuth } from "./auth/machineAuth";
+import { runProfitabilitySnapshot } from "./services/analyticsSnapshots";
 import { parseConfiguredOrigins } from "./auth/originAllowlist";
 import { requestObservability } from "./middleware/requestObservability";
 
@@ -217,6 +218,16 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
   }
 });
 app.use("/api/background-jobs/database-backup", createDatabaseBackupRouter(() => runDatabaseBackup(db)));
+// MACHINE AUTHENTICATED (Analytics Phase 1G): daily, idempotent internal analytics snapshot -
+// writes only analytics_runs / analytics_metric_snapshots. Triggered by scripts/runAnalyticsSnapshot.ts.
+app.post("/api/background-jobs/analytics-snapshot", requireSchedulerAuth, (_req, res) => {
+  try {
+    const { run, replayed } = runProfitabilitySnapshot(db);
+    res.json({ runId: run.id, status: run.status, observedAt: run.observedAt, metricCount: run.metricCount, replayed });
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
 app.use("/api/background-jobs/product-photo-backup", createProductPhotoBackupRouter(() => runProductPhotoBackup(db)));
 
 // AUTHENTICATED ADMIN default: every route mounted below this line requires a valid admin

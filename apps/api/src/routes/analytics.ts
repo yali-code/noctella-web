@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { requirePermission } from "../auth/permissions";
 import { db } from "../db/client";
+import { getProductAnalyticsHistory } from "../services/analyticsSnapshots";
 import { getCatalogueProfitability } from "../services/productProfitability";
 import { catalogueProfitabilityQuerySchema } from "../use-cases/analytics/catalogueProfitability";
+import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitabilitySnapshots";
 import { handleRouteError } from "./errorHandler";
 
 /**
@@ -20,6 +22,16 @@ router.get("/", (_req, res) => {
 router.get("/profitability", (req, res) => {
   try {
     res.json(getCatalogueProfitability(db, catalogueProfitabilityQuerySchema.parse(req.query)));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
+
+// Phase 1G: read-only stored metric history for one product (snapshots written by the scheduler-
+// triggered POST /api/background-jobs/analytics-snapshot, never by this router).
+router.get("/profitability/:productId/history", (req, res) => {
+  try {
+    res.json(getProductAnalyticsHistory(db, req.params.productId, productMetricHistoryQuerySchema.parse(req.query)));
   } catch (error) {
     handleRouteError(error, res);
   }

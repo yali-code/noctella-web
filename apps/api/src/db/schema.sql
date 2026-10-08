@@ -812,3 +812,43 @@ CREATE TABLE IF NOT EXISTS social_publish_schedule_executions (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_schedule_executions_schedule_unique ON social_publish_schedule_executions(schedule_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_schedule_executions_job_unique ON social_publish_schedule_executions(background_job_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_schedule_executions_attempt_unique ON social_publish_schedule_executions(instagram_attempt_id);
+
+-- Analytics Phase 1G: point-in-time analytics history. Operational tables remain canonical truth;
+-- these rows record what analytics knew at a point in time (observed_at) and when Noctella stored
+-- it (collected_at). SQLite only. Generic scope/namespace/key so later external platform metrics
+-- (eBay, Etsy, Instagram, Pinterest) fit without new tables.
+CREATE TABLE IF NOT EXISTS analytics_runs (
+  id TEXT PRIMARY KEY,
+  run_type TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_reference TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  metric_count INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS analytics_metric_snapshots (
+  id TEXT PRIMARY KEY,
+  run_id TEXT,
+  scope_type TEXT NOT NULL,
+  scope_id TEXT NOT NULL,
+  metric_namespace TEXT NOT NULL,
+  metric_key TEXT NOT NULL,
+  numeric_value REAL,
+  text_value TEXT,
+  value_state TEXT NOT NULL,
+  unit TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_reference TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  collected_at TEXT NOT NULL,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analytics_snapshots_identity_unique ON analytics_metric_snapshots(scope_type, scope_id, metric_namespace, metric_key, observed_at, source_type, source_reference);
+CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_scope_metric_time ON analytics_metric_snapshots(scope_type, scope_id, metric_key, observed_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_run ON analytics_metric_snapshots(run_id);

@@ -936,3 +936,45 @@ export const socialPublishScheduleExecutions = sqliteTable("social_publish_sched
   uniqueIndex("idx_social_schedule_executions_job_unique").on(table.backgroundJobId),
   uniqueIndex("idx_social_schedule_executions_attempt_unique").on(table.instagramAttemptId),
 ]);
+
+/**
+ * Analytics Phase 1G: point-in-time analytics history (see schema.sql). Never an operational
+ * source of truth. observedAt = the time the metric represents; collectedAt = when it was stored.
+ * numericValue is NULL whenever valueState is "unknown" or "not_applicable" - never zero-filled.
+ */
+export const analyticsRuns = sqliteTable("analytics_runs", {
+  id: text("id").primaryKey(),
+  runType: text("run_type").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceReference: text("source_reference").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  status: text("status").notNull(),
+  observedAt: text("observed_at").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  metricCount: integer("metric_count").notNull().default(0),
+  error: text("error"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+export const analyticsMetricSnapshots = sqliteTable("analytics_metric_snapshots", {
+  id: text("id").primaryKey(),
+  runId: text("run_id"),
+  scopeType: text("scope_type").notNull(),
+  scopeId: text("scope_id").notNull(),
+  metricNamespace: text("metric_namespace").notNull(),
+  metricKey: text("metric_key").notNull(),
+  numericValue: real("numeric_value"),
+  textValue: text("text_value"),
+  valueState: text("value_state").notNull(),
+  unit: text("unit").notNull(),
+  sourceType: text("source_type").notNull(),
+  sourceReference: text("source_reference").notNull(),
+  observedAt: text("observed_at").notNull(),
+  collectedAt: text("collected_at").notNull(),
+  metadataJson: text("metadata_json"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [
+  uniqueIndex("idx_analytics_snapshots_identity_unique").on(table.scopeType, table.scopeId, table.metricNamespace, table.metricKey, table.observedAt, table.sourceType, table.sourceReference),
+  index("idx_analytics_snapshots_scope_metric_time").on(table.scopeType, table.scopeId, table.metricKey, table.observedAt),
+  index("idx_analytics_snapshots_run").on(table.runId),
+]);

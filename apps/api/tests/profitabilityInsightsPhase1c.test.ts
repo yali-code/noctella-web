@@ -191,7 +191,7 @@ describe("Phase 1C confidence, keys, safety, routing", () => {
   it("financial outcome with a conflict or ALLOCATION_AMBIGUOUS is LOW", () => {
     const conflict = find(derive(project({ product: { purchaseCost: 40 }, sales: [sale({}, lossFinancials)] })), "NEGATIVE_PROFIT");
     expect(conflict?.confidence).toBe("LOW");
-    const ambiguous = find(derive(project({ purchaseLines: [line({ quantity: 3 })], sales: [sale({}, lossFinancials)] })), "NEGATIVE_PROFIT");
+    const ambiguous = find(derive(project({ purchaseLines: [line(), line({ purchaseLineId: "pl-2" })], sales: [sale({}, lossFinancials)] })), "NEGATIVE_PROFIT");
     expect(ambiguous?.confidence).toBe("LOW");
     expect(ambiguous!.evidence).toContainEqual({ fact: "saleAttempts[o-1].issueCode", value: "ALLOCATION_AMBIGUOUS" });
   });
