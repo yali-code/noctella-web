@@ -39,6 +39,10 @@ services:
         value: /var/data/noctella.sqlite
       - key: PRODUCT_PHOTO_DIR
         value: /var/data/product-photos
+      # Media Planner rendered Reels (MP4). Persistent disk so scheduled Reels survive restarts.
+      # ffmpeg comes from the repo-managed ffmpeg-static binary installed by npm ci (FFMPEG_PATH optional override).
+      - key: MEDIA_ASSET_DIR
+        value: /var/data/media-assets
       - key: ADMIN_APP_ORIGIN
         value: https://admin.staging.noctella.com
       - key: STOREFRONT_APP_ORIGIN

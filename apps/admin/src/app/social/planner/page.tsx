@@ -64,8 +64,8 @@ export default function MediaPlannerPage() {
     <h2>Media Planner · 4-day Instagram plan</h2>
     {error ? <p role="alert">{error}</p> : null}
     {readiness ? <div className="card" style={panel}>
-      <p>Eligible products: {readiness.eligibleProductCount}/{readiness.requiredProductCount} · Instagram publishing {readiness.socialPublishingReady ? "ready" : "not ready"} · Reel renderer {readiness.reelRendererReady ? "ready" : "unavailable"} · Scheduled items {readiness.scheduledItemCount}</p>
-      <p><small>{readiness.reelPublishing}</small></p>
+      <p>Eligible products: {readiness.eligibleProductCount}/{readiness.requiredProductCount} · Instagram publishing {readiness.instagramPublishingReady ? "ready" : "not ready"} · Reel renderer {readiness.ffmpegAvailable ? `ready (${readiness.ffmpegSource})` : "unavailable"} · Video delivery {readiness.publicVideoDeliveryReady ? "ready" : "not ready"} · Copy {readiness.copyProvider}</p>
+      <p>Scheduled: {readiness.feedPostsScheduled}/4 feed posts · Reel {readiness.reelScheduled ? "scheduled" : "not scheduled"} · {readiness.ready ? "Pilot ready" : readiness.technicallyReady ? "Technically ready" : "Not ready"}</p>
       {readiness.blockers.length ? <p>Blockers: {readiness.blockers.map(statusLabel).join(", ")}</p> : <p>No blockers.</p>}
     </div> : null}
     <p>

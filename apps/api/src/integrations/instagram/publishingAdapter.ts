@@ -3,6 +3,7 @@ import { InstagramClientError } from "./types";
 import { prepareInstagramImage } from "./mediaPreparation";
 import { productPhotoStaticPath } from "../../services/photoStorage";
 import { validateInstagramMediaUrl } from "../../config/instagramConfig";
+import { reelNameFromPublicPath } from "../../config/mediaAssets";
 
 /** Publishing asset preparation and provider operations; the service owns durable state and idempotency. */
 export class InstagramPublishingAdapter {
@@ -20,6 +21,13 @@ export class InstagramPublishingAdapter {
       imageUrl = validated;
     }
     return this.client.createImageContainer(accountId, imageUrl, caption);
+  }
+
+  async createReelContainer(accountId: string, videoUrl: string, caption: string) {
+    const validated = validateInstagramMediaUrl(videoUrl, this.env);
+    const rawPath = videoUrl.match(/^https:\/\/[^/]+(\/[^?#]*)/i)?.[1] ?? "";
+    if (!reelNameFromPublicPath(rawPath)) throw new InstagramClientError("invalid_media", false);
+    return this.client.createReelContainer(accountId, validated, caption);
   }
 
   async waitForReady(containerId: string): Promise<boolean> {

@@ -13,7 +13,7 @@ import { buildFfmpegArgs, renderReel, type CommandRunner } from "../src/integrat
 import type { MediaCopyProvider } from "../src/integrations/media/mediaCopyProviders";
 import {
   approveMediaPlan, deterministicRequestId, editMediaPlanItem, generateMediaPlan, getMediaPlannerReadiness, MediaPlanningBlockedError,
-  rejectMediaPlan, scheduleMediaPlan, type MediaPlannerDeps,
+  getLatestMediaPlan, rejectMediaPlan, renderPlanReel, scheduleMediaPlan, type MediaPlannerDeps,
 } from "../src/services/mediaPlanner";
 import { recommendPostingHours, zonedTimeToUtc } from "../src/use-cases/media-planning/planner";
 
@@ -63,6 +63,7 @@ beforeEach(async () => {
   vi.stubEnv("PUBLIC_API_ORIGIN", "https://api.example.test");
   db = createTestDb();
   assetDir = mkdtempSync(path.join(tmpdir(), "media-planner-"));
+  vi.stubEnv("MEDIA_ASSET_DIR", assetDir);
   render.mockReset().mockImplementation(async () => ({ sourceFingerprint: "f".repeat(64), recipeVersion: "instagram-v1", outputPath: "/images/product-photos/prepared.jpg", url: "https://api.example.test/prepared.jpg" }));
   inspect.mockReset().mockResolvedValue(true);
   vi.spyOn(preparation, "createSocialContentPreparationService").mockImplementation((client) => factory(client, "test-memory", render, inspect));
@@ -187,20 +188,24 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
     expect(scheduled.status).toBe("SCHEDULED");
     const feed = scheduled.items.filter((i) => i.contentType === "FEED_POST");
     expect(feed.every((i) => i.status === "SCHEDULED" && i.socialChain.publishScheduleId)).toBe(true);
-    expect(scheduled.items.find((i) => i.contentType === "REEL")!.status).toBe("MANUAL_PUBLISH_REQUIRED");
+    const reel = scheduled.items.find((i) => i.contentType === "REEL")!;
+    expect(reel).toMatchObject({ status: "SCHEDULED", socialChain: { publishScheduleId: expect.any(String) } });
+    const reelContent = db.select().from(schema.socialContents).all().find((c) => c.id === reel.socialChain.socialContentId)!;
+    expect(reelContent.contentType).toBe("reel");
+    expect(db.select().from(schema.socialPreparedImages).all().find((p) => p.contentId === reelContent.id)).toMatchObject({ recipeVersion: "instagram-reel-v1", outputPath: `/media/reels/reel-${reel.id}.mp4` });
     const counts = () => [schema.socialContents, schema.socialContentApprovals, schema.socialPublishIntents, schema.socialPublishSchedules].map((t) => db.select().from(t).all().length);
-    expect(counts()).toEqual([4, 4, 4, 4]);
+    expect(counts()).toEqual([5, 5, 5, 5]);
     const contents = db.select().from(schema.socialContents).all();
     expect(contents.every((c) => c.status === "approved" && c.concept?.startsWith("media-plan-item:"))).toBe(true);
     expect(contents[0]!.caption).toMatch(/#noctella/);
     const schedules = db.select().from(schema.socialPublishSchedules).all();
-    expect(schedules.map((s) => s.requestedPublicationAt).sort()).toEqual(feed.map((i) => i.plannedAt).sort());
-    expect(db.select().from(schema.socialContentApprovals).all().map((a) => a.requestId).sort()).toEqual(feed.map((i) => deterministicRequestId(i.id, "approval")).sort());
+    expect(schedules.map((s) => s.requestedPublicationAt).sort()).toEqual(scheduled.items.map((i) => i.plannedAt).sort());
+    expect(db.select().from(schema.socialContentApprovals).all().map((a) => a.requestId).sort()).toEqual(scheduled.items.map((i) => deterministicRequestId(i.id, "approval")).sort());
 
     // Repeat approval and scheduling: no duplicates anywhere.
     approveMediaPlan(db, plan.id, actorId, deps());
     await scheduleMediaPlan(db, plan.id, actorId, deps());
-    expect(counts()).toEqual([4, 4, 4, 4]);
+    expect(counts()).toEqual([5, 5, 5, 5]);
     expect(db.select().from(schema.backgroundJobs).all()).toHaveLength(0);
     expect(publishing.publishInstagramImage).not.toHaveBeenCalled();
     expect(jobs.enqueueJob).not.toHaveBeenCalled();
@@ -215,14 +220,46 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
     await expect(scheduleMediaPlan(db, plan.id, actorId, deps())).rejects.toThrow();
     expect(db.select().from(schema.socialContents).all()).toHaveLength(1);
     await scheduleMediaPlan(db, plan.id, actorId, deps());
-    expect(db.select().from(schema.socialContents).all()).toHaveLength(4);
+    expect(db.select().from(schema.socialContents).all()).toHaveLength(5);
+  });
+
+  it("a plan is not SCHEDULED at 4/5 (Reel not rendered fails closed) and becomes SCHEDULED at 5/5", async () => {
+    seedProducts(7);
+    const plan = await generateMediaPlan(db, { generatedBy: actorId }, deps({ ffmpegAvailable: async () => false }));
+    approveMediaPlan(db, plan.id, actorId, deps());
+    await expect(scheduleMediaPlan(db, plan.id, actorId, deps())).rejects.toThrow(/not rendered/);
+    const partial = getLatestMediaPlan(db)!;
+    expect(partial.status).toBe("APPROVED");
+    expect(partial.items.filter((i) => i.status === "SCHEDULED")).toHaveLength(4);
+    const reel = partial.items.find((i) => i.contentType === "REEL")!;
+    await renderPlanReel(db, plan.id, reel.id, deps());
+    const done = await scheduleMediaPlan(db, plan.id, actorId, deps());
+    expect(done.status).toBe("SCHEDULED");
+    expect(done.items.every((i) => i.status === "SCHEDULED")).toBe(true);
+    await expect(renderPlanReel(db, plan.id, reel.id, deps())).rejects.toThrow(/before scheduling|re-rendered/);
   });
 
   it("readiness reports counts and blockers without secrets", async () => {
     seedProducts(6);
     const empty = await getMediaPlannerReadiness(db, deps({ ffmpegAvailable: async () => false }));
-    expect(empty).toMatchObject({ eligibleProductCount: 6, requiredProductCount: 7, reelRendererReady: false, planExists: false, scheduledItemCount: 0 });
+    expect(empty).toMatchObject({ eligibleProductCount: 6, requiredProductCount: 7, ffmpegAvailable: false, planExists: false, feedPostsScheduled: 0, reelScheduled: false, reelPublishingSupported: true, technicallyReady: false, ready: false });
+    expect(empty.blockers).not.toContain("MANUAL_PUBLISH_REQUIRED");
     expect(empty.blockers).toEqual(expect.arrayContaining(["INSUFFICIENT_ELIGIBLE_PRODUCTS:6/7", "INSTAGRAM_PUBLISHING_NOT_READY", "REEL_RENDERER_UNAVAILABLE", "NO_PLAN"]));
     expect(JSON.stringify(empty)).not.toMatch(/token|secret|password/i);
+  });
+
+  it("readiness is fully ready only when inventory, Instagram, ffmpeg, asset dir, video delivery and a 5/5 scheduled plan are all in place", async () => {
+    vi.stubEnv("MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY", Buffer.alloc(32, 9).toString("base64"));
+    const { encryptCredential } = await import("../src/services/credentialEncryption");
+    const { INSTAGRAM_VAULT_ACCOUNT_ID } = await import("../src/integrations/instagram/types");
+    db.insert(schema.marketplaceConnections).values({ id: "ig", channel: "instagram", accountLabel: "vault", status: "connected", externalAccountId: INSTAGRAM_VAULT_ACCOUNT_ID, encryptedAccessToken: encryptCredential("test-only") }).run();
+    seedProducts(7);
+    const ready = deps({ env: { ...process.env, MEDIA_ASSET_DIR: assetDir, PUBLIC_API_ORIGIN: "https://api.example.test", INSTAGRAM_API_VERSION: "v24.0", INSTAGRAM_MEDIA_ALLOWED_HOSTS: "api.example.test", INSTAGRAM_ALLOWED_ACCOUNT_IDS: INSTAGRAM_VAULT_ACCOUNT_ID, DATABASE_DRIVER: "test-memory" } });
+    const before = await getMediaPlannerReadiness(db, ready);
+    expect(before).toMatchObject({ technicallyReady: true, ready: false, ffmpegAvailable: true, mediaAssetDirWritable: true, publicVideoDeliveryReady: true, instagramPublishingReady: true, blockers: ["NO_PLAN"] });
+    const plan = await generateMediaPlan(db, { generatedBy: actorId }, ready);
+    approveMediaPlan(db, plan.id, actorId, ready);
+    await scheduleMediaPlan(db, plan.id, actorId, ready);
+    expect(await getMediaPlannerReadiness(db, ready)).toMatchObject({ ready: true, blockers: [], feedPostsScheduled: 4, reelScheduled: true, planStatus: "SCHEDULED" });
   });
 });

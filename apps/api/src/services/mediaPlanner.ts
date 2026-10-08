@@ -4,7 +4,10 @@ import path from "node:path";
 import type { DbClient } from "../db/client";
 import { resolvePublicApiOrigin } from "../config/publicApiOrigin";
 import { createConfiguredMediaCopyProvider, DeterministicMediaCopyProvider, type MediaCopyProvider, type MediaCopyRequestItem } from "../integrations/media/mediaCopyProviders";
-import { isFfmpegAvailable, renderReel } from "../integrations/media/reelRenderer";
+import { isFfmpegAvailable, renderReel, resolveFfmpeg } from "../integrations/media/reelRenderer";
+import { mediaAssetDir, REEL_PUBLIC_PATH, reelFileName } from "../config/mediaAssets";
+import { validateInstagramMediaUrl } from "../config/instagramConfig";
+import { access, constants as fsConstants } from "node:fs/promises";
 import { createMediaPlanRepository } from "../repositories/media-planning/sqlite";
 import { createSqliteSocialAnalyticsRepository } from "../repositories/analytics/socialAnalyticsSqlite";
 import {
@@ -24,8 +27,8 @@ import { createSocialPublishScheduleService } from "./socialPublishSchedules";
  * The planner never publishes and never edits products: after explicit owner approval it hands
  * approved feed posts to the existing chain (social_contents -> social_content_approvals ->
  * social_publish_intents -> social_publish_schedules); the existing scheduler/executor publishes.
- * The existing chain publishes single images only, so feed posts are SINGLE_IMAGE and the Reel
- * (rendered MP4) is owner-approved but marked MANUAL_PUBLISH_REQUIRED.
+ * Feed posts are SINGLE_IMAGE; the Reel is the rendered MP4, registered as the content's prepared
+ * asset and published by the same chain as an Instagram Reel (carousel is not supported).
  */
 
 export class MediaPlanningBlockedError extends Error {
@@ -46,7 +49,7 @@ const driverOf = (deps: MediaPlannerDeps) => deps.driver ?? process.env.DATABASE
 const nowOf = (deps: MediaPlannerDeps) => (deps.now ?? (() => new Date()))();
 const envOf = (deps: MediaPlannerDeps) => deps.env ?? process.env;
 const timezoneOf = (env: NodeJS.ProcessEnv) => env.MEDIA_PLANNER_TIMEZONE?.trim() || DEFAULT_PLANNER_TIMEZONE;
-export const mediaAssetDir = (env: NodeJS.ProcessEnv = process.env) => env.MEDIA_ASSET_DIR?.trim() || path.resolve(process.cwd(), "uploads/media-assets");
+export { mediaAssetDir };
 const parse = <T>(json: string | null, fallback: T): T => { try { return json ? JSON.parse(json) : fallback; } catch { return fallback; } };
 
 /** Deterministic canonical UUID for a plan item + purpose: re-approval replays the same social-chain requests. */
@@ -111,6 +114,7 @@ export async function renderPlanReel(db: DbClient, planId: string, itemId: strin
   const plan = repo.getPlan(planId), item = repo.getItem(planId, itemId);
   if (!plan || !item || item.contentType !== "REEL") throw new NotFoundError("Reel plan item not found");
   if (!["DRAFT", "READY_FOR_REVIEW", "APPROVED"].includes(plan.status)) throw new ConflictError("Reel can only be rendered before scheduling");
+  if (item.preparedImageId) throw new ConflictError("Reel asset is already registered with the Social Agent and cannot be re-rendered");
   const env = envOf(deps);
   if (!(await (deps.ffmpegAvailable ?? (() => isFfmpegAvailable(env)))())) { repo.patchItem(itemId, { reelAssetStatus: "RENDERER_UNAVAILABLE", reelAssetPath: null }); return getMediaPlan(db, planId); }
   const product = repo.readPlannerProducts().find((p) => p.id === item.productId);
@@ -118,7 +122,7 @@ export async function renderPlanReel(db: DbClient, planId: string, itemId: strin
   if (!photoPaths.length || photoPaths.some((p) => !p)) { repo.patchItem(itemId, { reelAssetStatus: "RENDER_FAILED", reelAssetPath: null }); return getMediaPlan(db, planId); }
   const dir = mediaAssetDir(env);
   await mkdir(dir, { recursive: true });
-  const outputPath = path.join(dir, `reel-${itemId}.mp4`);
+  const outputPath = path.join(dir, reelFileName(itemId));
   try {
     await (deps.render ?? renderReel)({ photoPaths: photoPaths as string[], outputPath, hookText: item.hook, finalText: item.finalFrameText, fontFile: env.REEL_FONT_FILE?.trim() || null }, { env });
     repo.patchItem(itemId, { reelAssetStatus: "RENDERED", reelAssetPath: outputPath, updatedAt: nowOf(deps).toISOString() });
@@ -159,7 +163,7 @@ export async function generateMediaPlan(db: DbClient, input: { generatedBy: stri
   const categories = new Set(drafts.map((d) => d.product.category ?? "uncategorised"));
   repo.insertPlan(
     { id: planId, startDate: dates[0]!, endDate: dates[dates.length - 1]!, timezone: timeZone, status: "DRAFT", generatedAt: t, generatedBy: input.generatedBy, copySource, timeRecommendation: recommendation.basis,
-      rationale: JSON.stringify({ selection: `${eligible.length} eligible products; ${FEED_POSTS} feed posts + 1 Reel over ${dates.length} days; ${categories.size} categories; no product repeated.`, time: recommendation.detail, format: "Feed posts are SINGLE_IMAGE: the Social Agent chain publishes one prepared image per post (carousel not supported yet).", reel: "Reel is rendered locally from real ERP photos; the Social Agent chain cannot publish video yet, so it is MANUAL_PUBLISH_REQUIRED after approval." }),
+      rationale: JSON.stringify({ selection: `${eligible.length} eligible products; ${FEED_POSTS} feed posts + 1 Reel over ${dates.length} days; ${categories.size} categories; no product repeated.`, time: recommendation.detail, format: "Feed posts are SINGLE_IMAGE: the Social Agent chain publishes one prepared image per post (carousel not supported yet).", reel: "Reel is rendered locally (ffmpeg) from real ERP photos and, after approval, published by the Social Agent chain as an Instagram Reel." }),
       createdAt: t, updatedAt: t },
     drafts.map((d, index) => {
       const c = copy[d.key]!;
@@ -245,14 +249,17 @@ export async function scheduleMediaPlan(db: DbClient, planId: string, actorId: s
   const t = () => nowOf(deps).toISOString();
 
   for (const item of repo.listItems(planId)) {
-    if (item.status === "SCHEDULED" || item.status === "MANUAL_PUBLISH_REQUIRED") continue;
-    if (item.contentType === "REEL") { repo.patchItem(item.id, { status: "MANUAL_PUBLISH_REQUIRED", updatedAt: t() }); continue; }
+    if (item.status === "SCHEDULED") continue;
+    const isReel = item.contentType === "REEL";
+    // Fail closed: a Reel is only handed off with its completed, valid rendered MP4 - never as an image post.
+    if (isReel && (item.reelAssetStatus !== "RENDERED" || !item.reelAssetPath)) throw new ConflictError("Reel asset is not rendered; render the Reel before scheduling");
 
     const marker = `media-plan-item:${item.id}`;
     let contentId: string | null = item.socialContentId ?? repo.findSocialContentByConcept(marker);
     if (!contentId) {
       const hashtags: string[] = parse(item.hashtagsJson, []);
-      const created = await social.create({ contentType: "post", caption: `${item.caption}\n\n${hashtags.join(" ")}`.slice(0, 2200), productId: item.productId, mediaIds: [item.heroPhotoId], hashtags, concept: marker });
+      const mediaIds = isReel ? parse<string[]>(item.photoIdsJson, []) : [item.heroPhotoId];
+      const created = await social.create({ contentType: isReel ? "reel" : "post", caption: `${item.caption}\n\n${hashtags.join(" ")}`.slice(0, 2200), productId: item.productId, mediaIds, hashtags, concept: marker });
       contentId = created.id;
     }
     repo.patchItem(item.id, { socialContentId: contentId });
@@ -262,7 +269,10 @@ export async function scheduleMediaPlan(db: DbClient, planId: string, actorId: s
 
     let preparedImageId: string | null = item.preparedImageId;
     if (!preparedImageId) {
-      preparedImageId = (await createSocialContentPreparationService(db, driver).prepare(contentId, item.heroPhotoId, resolvePublicApiOrigin())).id;
+      const preparation = createSocialContentPreparationService(db, driver);
+      preparedImageId = (isReel
+        ? await preparation.prepareReel(contentId, item.heroPhotoId, item.reelAssetPath!)
+        : await preparation.prepare(contentId, item.heroPhotoId, resolvePublicApiOrigin())).id;
       repo.patchItem(item.id, { preparedImageId });
     }
 
@@ -279,7 +289,8 @@ export async function scheduleMediaPlan(db: DbClient, planId: string, actorId: s
     const schedule = await createSocialPublishScheduleService(db, driver, () => nowOf(deps).getTime()).create({ publishIntentId: intent.id, requestId: deterministicRequestId(item.id, "schedule"), requestedPublicationAt: item.plannedAt }, actorId);
     repo.patchItem(item.id, { publishScheduleId: schedule.id, status: "SCHEDULED", updatedAt: t() });
   }
-  repo.setPlanStatus(planId, ["APPROVED"], { status: "SCHEDULED", scheduledAt: t(), updatedAt: t() });
+  // SCHEDULED only when every item - all 4 feed posts AND the Reel - is in the Social Agent schedule.
+  if (repo.listItems(planId).every((i: any) => i.status === "SCHEDULED")) repo.setPlanStatus(planId, ["APPROVED"], { status: "SCHEDULED", scheduledAt: t(), updatedAt: t() });
   return getMediaPlan(db, planId);
 }
 
@@ -290,13 +301,27 @@ export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerD
   const rows = createMediaPlanRepository(db).readPlannerProducts();
   const eligible = eligibleProducts(rows, productPhotoStaticPath);
   const instagram = await getInstagramPublishingReadiness(db, env).catch(() => null);
+  const ffmpeg = resolveFfmpeg(env);
   const rendererReady = await (deps.ffmpegAvailable ?? (() => isFfmpegAvailable(env)))();
+  // Durable asset directory: creatable and writable (Render: MEDIA_ASSET_DIR=/var/data/media-assets).
+  const assetDir = mediaAssetDir(env);
+  const assetDirWritable = await mkdir(assetDir, { recursive: true }).then(() => access(assetDir, fsConstants.W_OK)).then(() => true, () => false);
+  // Instagram fetches video_url: PUBLIC_API_ORIGIN must be HTTPS and an allowed Instagram media host.
+  let publicVideoDeliveryReady = false;
+  try { validateInstagramMediaUrl(`${resolvePublicApiOrigin(env)}${REEL_PUBLIC_PATH}/${reelFileName("00000000-0000-4000-8000-000000000000")}`, env); publicVideoDeliveryReady = true; } catch { publicVideoDeliveryReady = false; }
   const plan = getLatestMediaPlan(db);
-  const scheduled = plan?.items.filter((i: { status: string }) => i.status === "SCHEDULED").length ?? 0;
-  const blockers = [
+  const items: { contentType: string; status: string }[] = plan?.items ?? [];
+  const feedScheduled = items.filter((i) => i.contentType === "FEED_POST" && i.status === "SCHEDULED").length;
+  const reelScheduled = items.some((i) => i.contentType === "REEL" && i.status === "SCHEDULED");
+  const technicalBlockers = [
     ...(eligible.length < MIN_ELIGIBLE_PRODUCTS ? [`INSUFFICIENT_ELIGIBLE_PRODUCTS:${eligible.length}/${MIN_ELIGIBLE_PRODUCTS}`] : []),
     ...(instagram?.ready ? [] : ["INSTAGRAM_PUBLISHING_NOT_READY"]),
     ...(rendererReady ? [] : ["REEL_RENDERER_UNAVAILABLE"]),
+    ...(assetDirWritable ? [] : ["MEDIA_ASSET_DIR_NOT_WRITABLE"]),
+    ...(publicVideoDeliveryReady ? [] : ["PUBLIC_VIDEO_DELIVERY_NOT_READY"]),
+  ];
+  const blockers = [
+    ...technicalBlockers,
     ...(plan ? [] : ["NO_PLAN"]),
     ...(plan && !["APPROVED", "SCHEDULED"].includes(plan.status) ? [`PLAN_${plan.status}`] : []),
   ];
@@ -304,15 +329,23 @@ export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerD
     eligibleProductCount: eligible.length,
     productsWithReadyPhotos: rows.filter((p) => p.photos.some((ph) => ph.processingStatus === "Ready")).length,
     requiredProductCount: MIN_ELIGIBLE_PRODUCTS,
+    copyProvider: createConfiguredMediaCopyProvider(env) ? "openai" : "deterministic",
     instagramConnectionReady: instagram?.connection === "connected",
-    socialPublishingReady: Boolean(instagram?.ready),
-    reelRendererReady: rendererReady,
+    instagramPublishingReady: Boolean(instagram?.ready),
+    imagePublishingSupported: true,
+    reelPublishingSupported: true,
+    ffmpegAvailable: rendererReady,
+    ffmpegSource: ffmpeg.source,
     reelTextOverlayConfigured: Boolean(env.REEL_FONT_FILE?.trim()),
-    reelPublishing: "MANUAL_PUBLISH_REQUIRED (Social Agent chain publishes single images only)",
+    mediaAssetDirWritable: assetDirWritable,
+    publicVideoDeliveryReady,
     planExists: Boolean(plan),
     planStatus: plan?.status ?? null,
     planApproved: Boolean(plan && ["APPROVED", "SCHEDULED"].includes(plan.status)),
-    scheduledItemCount: scheduled,
+    feedPostsScheduled: feedScheduled,
+    reelScheduled,
+    technicallyReady: technicalBlockers.length === 0,
+    ready: blockers.length === 0,
     blockers,
   };
 }

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { open, stat } from "node:fs/promises";
 
 /**
@@ -23,6 +24,10 @@ export interface ReelRenderInput {
   readonly hookText?: string | null;
   readonly finalText?: string | null;
   readonly fontFile?: string | null;
+  /** Overrides for tiny smoke renders only; production uses the 1080x1920 / 8 s defaults. */
+  readonly durationSeconds?: number;
+  readonly width?: number;
+  readonly height?: number;
 }
 
 /** drawtext-safe text: letters, digits and basic punctuation only (no quotes/colons/backslashes). */
@@ -34,14 +39,15 @@ export function overlayText(value: string | null | undefined): string | null {
 export function buildFfmpegArgs(input: ReelRenderInput): string[] {
   const n = input.photoPaths.length;
   if (n === 0) throw new Error("REEL_REQUIRES_PHOTOS");
-  const t = n > 1 ? REEL_TRANSITION_SECONDS : 0;
-  const segment = (REEL_DURATION_SECONDS + (n - 1) * t) / n;
+  const W = input.width ?? REEL_WIDTH, H = input.height ?? REEL_HEIGHT, D = input.durationSeconds ?? REEL_DURATION_SECONDS;
+  const t = n > 1 ? Math.min(REEL_TRANSITION_SECONDS, D / (2 * n)) : 0;
+  const segment = (D + (n - 1) * t) / n;
   const frames = Math.round(segment * REEL_FPS);
   const args: string[] = ["-y", "-hide_banner", "-loglevel", "error"];
   for (const p of input.photoPaths) args.push("-i", p);
   const parts: string[] = input.photoPaths.map((_, i) =>
-    `[${i}:v]scale=${REEL_WIDTH}:${REEL_HEIGHT}:force_original_aspect_ratio=increase,crop=${REEL_WIDTH}:${REEL_HEIGHT},` +
-    `zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${REEL_WIDTH}x${REEL_HEIGHT}:fps=${REEL_FPS},` +
+    `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
+    `zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${REEL_FPS},` +
     `setsar=1,format=yuv420p,trim=duration=${segment.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
   let last = "v0";
   for (let i = 1; i < n; i += 1) {
@@ -53,11 +59,11 @@ export function buildFfmpegArgs(input: ReelRenderInput): string[] {
   if (input.fontFile && (hook || finalText)) {
     const font = input.fontFile.replace(/\\/g, "/").replace(/:/g, "\\:");
     const draw = (text: string, from: number, to: number, y: string) => `drawtext=fontfile='${font}':text='${text}':fontcolor=white:fontsize=64:box=1:boxcolor=black@0.45:boxborderw=24:x=(w-text_w)/2:y=${y}:enable='between(t,${from},${to})'`;
-    const filters = [hook ? draw(hook, 0, 2.2, "h*0.12") : null, finalText ? draw(finalText, REEL_DURATION_SECONDS - 1.6, REEL_DURATION_SECONDS, "h*0.80") : null].filter(Boolean);
+    const filters = [hook ? draw(hook, 0, 2.2, "h*0.12") : null, finalText ? draw(finalText, Math.max(0, D - 1.6), D, "h*0.80") : null].filter(Boolean);
     parts.push(`[${last}]${filters.join(",")}[final]`);
     last = "final";
   }
-  args.push("-filter_complex", parts.join(";"), "-map", `[${last}]`, "-t", String(REEL_DURATION_SECONDS),
+  args.push("-filter_complex", parts.join(";"), "-map", `[${last}]`, "-t", String(D),
     "-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", String(REEL_FPS), "-movflags", "+faststart", "-an", input.outputPath);
   return args;
 }
@@ -72,8 +78,23 @@ export async function isMp4File(path: string): Promise<boolean> {
   } finally { await handle.close(); }
 }
 
+/**
+ * FFmpeg resolution: 1) explicit FFMPEG_PATH, 2) repo-managed ffmpeg-static binary (installed by
+ * npm ci, linux x64 on Render), 3) `ffmpeg` on PATH. Local overrides always win.
+ */
+export function resolveFfmpeg(env: NodeJS.ProcessEnv = process.env): { path: string; source: "FFMPEG_PATH" | "ffmpeg-static" | "PATH" } {
+  const explicit = env.FFMPEG_PATH?.trim();
+  if (explicit) return { path: explicit, source: "FFMPEG_PATH" };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const bundled: unknown = require("ffmpeg-static");
+    if (typeof bundled === "string" && existsSync(bundled)) return { path: bundled, source: "ffmpeg-static" };
+  } catch { /* not installed - fall through to PATH */ }
+  return { path: "ffmpeg", source: "PATH" };
+}
+
 export function resolveFfmpegPath(env: NodeJS.ProcessEnv = process.env): string {
-  return env.FFMPEG_PATH?.trim() || "ffmpeg";
+  return resolveFfmpeg(env).path;
 }
 
 export async function isFfmpegAvailable(env: NodeJS.ProcessEnv = process.env, run: CommandRunner = execRunner): Promise<boolean> {
