@@ -1,5 +1,6 @@
 import type { DbClient } from "../db/client";
 import { createSqliteProductProfitabilityReadRepository } from "../repositories/analytics/productProfitabilitySqlite";
+import { buildCatalogueProfitability, type CatalogueProfitabilityQuery, type CatalogueProfitabilityResult } from "../use-cases/analytics/catalogueProfitability";
 import { deriveProfitabilityInsights, type AnalyticsInsight } from "../use-cases/analytics/profitabilityInsights";
 import { projectProductProfitability, PROVISIONAL_PROFITABILITY_POLICY, type ProductProfitability, type ProfitabilityPolicy } from "../use-cases/analytics/productProfitability";
 import { NotFoundError } from "./errors";
@@ -28,4 +29,24 @@ export function getProductProfitability(
  */
 export function getProductProfitabilityInsights(db: DbClient, productId: string, now: Date = new Date()): AnalyticsInsight[] {
   return deriveProfitabilityInsights(getProductProfitability(db, productId, now), now);
+}
+
+/**
+ * Analytics Phase 1D: read-only catalogue evaluation - one batch load (bounded query per table),
+ * then the unchanged Phase 1B projection and Phase 1C insight derivation per product, then pure
+ * aggregation/filtering/sorting. No writes, no caching, no persistence.
+ */
+export function getCatalogueProfitability(
+  db: DbClient,
+  query: CatalogueProfitabilityQuery,
+  now: Date = new Date(),
+  policy: ProfitabilityPolicy = PROVISIONAL_PROFITABILITY_POLICY,
+): CatalogueProfitabilityResult {
+  const evaluated = createSqliteProductProfitabilityReadRepository(db)
+    .loadSources()
+    .map((source) => {
+      const profitability = projectProductProfitability(source, now, policy);
+      return { profitability, insights: deriveProfitabilityInsights(profitability, now) };
+    });
+  return buildCatalogueProfitability(evaluated, query, now, policy);
 }
