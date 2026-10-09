@@ -46,7 +46,7 @@ export function assertPaidCampaignQuery(query: PaidCampaignQuery): void {
   }
   const start=Date.parse(query.startDate+"T00:00:00.000Z");
   const end=Date.parse(query.endDate+"T00:00:00.000Z");
-  if (end<start || end-start>30*86400000 || end>=Date.now()) {
+  if (end<start || end-start>30*86400000 || end+86400000>Date.now()) {
     throw new Error("Paid reporting window must be complete, in the past and at most 31 days");
   }
 }
