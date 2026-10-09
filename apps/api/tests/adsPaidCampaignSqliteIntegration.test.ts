@@ -18,6 +18,9 @@ const END = "2026-10-08T00:00:00.000Z";
 const COLLECTED = "2026-10-09T00:00:00.000Z";
 const REF = "meta.ads.insights";
 type TestDb = { sqlite: Database.Database; db: DbClient };
+function changeCount(sqlite: Database.Database): number {
+  return (sqlite.prepare("SELECT total_changes() AS changes").get() as { changes: number }).changes;
+}
 function openMemory(): TestDb {
   const sqlite = new Database(":memory:");
   ensureSchema(sqlite);
@@ -82,12 +85,12 @@ describe("ADS-006E paid reporting using real SQLite schema", () => {
   it("returns NOT_COLLECTED for a real empty database, without inserting records", async () => {
     const {sqlite, db} = openMemory();
     try {
-      const before = sqlite.totalChanges;
+      const before = changeCount(sqlite);
       const result = await readPaidCampaignReport(db, "meta", ID);
       expect(result.status).toBe("NOT_COLLECTED");
       expect(result.evidence).toBeNull();
       expect(result.spendAuthorized).toBe(false);
-      expect(sqlite.totalChanges).toBe(before);
+      expect(changeCount(sqlite)).toBe(before);
     } finally { sqlite.close(); }
   });
   it("reads five strictly scoped, completed observations with no invented marketplace sale", async () => {
@@ -95,7 +98,7 @@ describe("ADS-006E paid reporting using real SQLite schema", () => {
     try {
       insertRun(sqlite);
       completeWindow(sqlite);
-      const before = sqlite.totalChanges;
+      const before = changeCount(sqlite);
       const result = await readPaidCampaignReport(db, "meta", ID);
       expect(result.status).toBe("REPORT_AVAILABLE");
       expect(result.evidence?.spendEur).toBe(10);
@@ -104,7 +107,7 @@ describe("ADS-006E paid reporting using real SQLite schema", () => {
       expect(result.evidence?.attributedMarketplaceRevenueEur).toBeNull();
       expect(result.advice?.spendAuthorized).toBe(false);
       expect(result.marketplaceAttributionVerified).toBe(false);
-      expect(sqlite.totalChanges).toBe(before);
+      expect(changeCount(sqlite)).toBe(before);
     } finally { sqlite.close(); }
   });
   it("exposes an orphan snapshot as UNTRUSTED, not as falsely NOT_COLLECTED", async () => {
