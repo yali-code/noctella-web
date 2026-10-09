@@ -47,4 +47,23 @@ describe("ADS-006F separate paid provider collection",()=>{
   expect(()=>assertPaidCampaignQuery({...query,endDate:"2026-10-35"})).toThrow();
   expect(()=>providerNumber("4.8","count")).toThrow();
  });
+ it("explicitly authorized backend collection persists the mock paid provider report exactly once",async()=>{
+  const db=createTestDb();
+  const client={provider:"meta" as const,fetchCampaign:vi.fn(async()=>value)};
+  const first=await collectPaidCampaignEvidence(db,client,query,{accessToken:"fake-provider-report-token"},{
+    explicitReadApproval:true,explicitSnapshotWriteApproval:true,now:new Date("2026-10-09T12:00:00.000Z")
+  });
+  expect(first.status).toBe("STORED");
+  expect(first.spendAuthorized).toBe(false);
+  expect(first.run?.status).toBe("completed");
+  const second=await collectPaidCampaignEvidence(db,client,query,{accessToken:"fake-provider-report-token"},{
+    explicitReadApproval:true,explicitSnapshotWriteApproval:true,now:new Date("2026-10-09T12:02:00.000Z")
+  });
+  expect(second.replayed).toBe(true);
+  const evidence=await readPaidCampaignReport(db,"meta",query.campaignId);
+  expect(evidence.status).toBe("REPORT_AVAILABLE");
+  expect(evidence.evidence?.clicks).toBe(10);
+  expect(evidence.marketplaceAttributionVerified).toBe(false);
+ });
+
 });
