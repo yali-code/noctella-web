@@ -28,3 +28,19 @@ Source documentation reviewed:
 6. Full Phase 6 closeout additionally needs genuine spend reconciliation and staging/production rollout approval.
 
 No changes to production SQLite, photo backup or Render settings. This PR must remain Draft/unmerged until separately instructed.
+
+## Manual read-only smoke test (only after provider setup)
+
+The code includes `npm run ads:paid:preview -w apps/api`. This is **not** a background job or public HTTP endpoint, and does not create/open the ERP SQLite database. It requires all of these as secure server environment variables:
+
+- `NOCTELLA_PAID_ADS_PREVIEW_ACK=I_AUTHORIZE_PAID_READ_ONLY` — explicit human-triggered reporting read consent
+- `NOCTELLA_PAID_ADS_PROVIDER=meta` (alternatives `google_ads`, `pinterest_ads`)
+- `NOCTELLA_PAID_ADS_CAMPAIGN_ID` — actual numeric paid campaign ID
+- `NOCTELLA_PAID_ADS_START_DATE`, `NOCTELLA_PAID_ADS_END_DATE` — complete past UTC dates (inclusive), maximum 31 days
+- Meta: `NOCTELLA_META_AD_ACCOUNT_ID`, `NOCTELLA_META_AD_ACCESS_TOKEN` (must be real **paid Ads** permissions)
+- Google: `NOCTELLA_GOOGLE_ADS_CUSTOMER_ID`, `NOCTELLA_GOOGLE_ADS_DEVELOPER_TOKEN`, `NOCTELLA_GOOGLE_ADS_OAUTH_ACCESS_TOKEN`; optional `NOCTELLA_GOOGLE_ADS_MANAGER_CUSTOMER_ID`
+- Pinterest: `NOCTELLA_PINTEREST_AD_ACCOUNT_ID`, `NOCTELLA_PINTEREST_AD_ACCESS_TOKEN`
+
+Do not paste token values in code, logs, tickets, chat or terminal transcripts. The command returns only provider/currency, UTC window, raw EUR ad spend, impressions, clicks, warning codes, and `storagePerformed:false`, `campaignModified:false`, `spendAuthorized:false`. If a live provider fails, an intentionally generic error is displayed without provider response bodies.
+
+**Important:** The manual preview is the first safe step *after* the account owner grants real Ads API permissions. It does not prove spend reconciliation, billing access or eBay/Etsy purchase attribution and must not be promoted automatically to production.
