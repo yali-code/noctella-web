@@ -135,6 +135,8 @@ export async function readPaidCampaignReport(
       m.collected_at AS "collectedAt", m.metadata_json AS "metadataJson"
     FROM analytics_metric_snapshots m
     INNER JOIN analytics_runs a ON a.id = m.run_id
+      AND a.source_type = 'external_platform'
+      AND a.source_reference = m.source_reference
     WHERE m.scope_type = 'external_ad_campaign'
       AND m.scope_id = ${scopeId} AND m.metric_namespace = ${namespace}
       AND m.source_type = 'external_platform'
