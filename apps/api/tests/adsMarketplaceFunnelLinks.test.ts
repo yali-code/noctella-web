@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 import { evaluateFunnelLink, safeMarketplaceListingUrl } from "../src/use-cases/ads/marketplaceFunnelLinks";
 
 const product = { status: "published", salePausedAt: null, availableQuantity: 1 };
-const listing = { channel: "ebay", externalStatus: "active", externalListingUrl: "https://www.ebay.com/itm/12345" };
+const listing = { channel: "ebay", externalStatus: "active", externalListingUrl: "https://www.ebay.com/itm/12345", externalListingId: "12345" };
 
 describe("ADS-002A marketplace funnel link eligibility", () => {
   it("allows a verified active eBay item and Etsy listing", () => {
     expect(evaluateFunnelLink(product, listing)).toEqual({ eligible: true, channel: "ebay", url: listing.externalListingUrl });
-    expect(evaluateFunnelLink(product, { channel: "etsy", externalStatus: "active", externalListingUrl: "https://www.etsy.com/listing/12345" }))
+    expect(evaluateFunnelLink(product, { channel: "etsy", externalStatus: "active", externalListingUrl: "https://www.etsy.com/listing/12345", externalListingId: "12345" }))
       .toEqual({ eligible: true, channel: "etsy", url: "https://www.etsy.com/listing/12345" });
+  });
+
+  it("blocks URL whose item ID does not match stored external listing ID", () => {
+    expect(evaluateFunnelLink(product, { ...listing, externalListingId: "99999" })).toEqual({ eligible: false, blocker: "LISTING_ID_MISMATCH" });
   });
 
   it.each(["sold", "reserved", "archived", "draft"])("blocks product status %s", (status) => {
