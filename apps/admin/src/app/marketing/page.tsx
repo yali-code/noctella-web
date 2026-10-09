@@ -41,7 +41,7 @@ type DraftPlan = {
 const validProductId = /^[A-Za-z0-9_-]{1,100}$/;
 function centsAmount(value: string): number | null {
   // Decimal input is intentionally EUR-only, max two decimal places.
-  if (!/^(?:0|[1-9]\d{0,5})(?:\.\d{1,2})?$/.test(value)) return null;
+  if (!/^(?:0|[1-9][0-9]{0,5})(?:[.][0-9]{1,2})?$/.test(value)) return null;
   const n = Number(value);
   return n > 0 && n <= 1_000_000 ? n : null;
 }
@@ -143,7 +143,7 @@ export default function MarketingPage() {
             {plan.campaignBriefs.map((brief, index) => (
               <li key={`${brief.productId}-${brief.destination}-${index}`} style={{ marginBottom: 18 }}>
                 <strong>{brief.title}</strong> — {brief.destination.toUpperCase()} — {brief.objective.replaceAll("_", " ")}
-                <p>Verified-listing link: <a href={brief.marketplaceUrl} target="_blank" rel="noopener noreferrer">Open marketplace listing</a></p>
+                <p>Marketplace listing (historical record): <a href={brief.marketplaceUrl} target="_blank" rel="noopener noreferrer">Open marketplace listing</a></p>
                 <p>Keyword hints: {brief.keywordHints.length ? brief.keywordHints.join(", ") : "No validated tags"}</p>
                 <p>Creative hook: {brief.creativeBrief.hook}</p>
                 <p>Review required: {brief.creativeBrief.proofRequired.join("; ")}</p>
