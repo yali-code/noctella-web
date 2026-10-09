@@ -21,8 +21,6 @@ export async function collectPaidCampaignEvidence(
   requirePaidCredentials(access);
   const observation=await client.fetchCampaign(query,access);
   assertPaidObservation(observation,query);
-  const {accessToken: _excluded, developerToken: _alsoExcluded, ..._sanitizedAccess }=access;
-  void _excluded;void _alsoExcluded;void _sanitizedAccess;
   if(!options.explicitSnapshotWriteApproval) {
     return {status:"PREVIEW_ONLY" as const,provider:query.provider,campaignId:query.campaignId,
       evidence:observation,run:null,spendAuthorized:false as const};
