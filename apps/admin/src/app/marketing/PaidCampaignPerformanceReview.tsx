@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { api } from "../../../lib/api";
+import { api } from "../../lib/api";
 
 type Provider = "meta" | "google_ads" | "pinterest_ads";
 type PerformanceEvidence = {
