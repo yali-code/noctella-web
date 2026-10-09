@@ -14,6 +14,7 @@ import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitab
 import { handleRouteError } from "./errorHandler";
 import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
 import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
+import { readPaidAdsDryRunFromErp } from "../use-cases/ads/paidLaunchDryRun";
 import { inspectPaidAdsProviderReadiness } from "../use-cases/ads/paidAdsReadiness";
 
 /**
@@ -51,6 +52,23 @@ router.get("/profitability/:productId/history", (req, res) => {
 router.get("/ads/providers/readiness", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({ providers: inspectPaidAdsProviderReadiness(), campaignsEnabled: false, spendAuthorized: false });
+});
+
+// ADS-005B: isolated dry-run only; no client-submitted verification flags.
+router.get("/ads/launch-preflight/:productId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const productId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(req.params.productId);
+    const policy = z.object({
+      provider: z.enum(["meta", "google_ads", "pinterest_ads"]),
+      requestedDailyEur: z.coerce.number().finite().positive().max(1_000_000),
+      hardDailyLimitEur: z.coerce.number().finite().positive().max(1_000_000),
+      hardTotalLimitEur: z.coerce.number().finite().positive().max(1_000_000),
+    }).strict().parse(req.query);
+    res.json(await readPaidAdsDryRunFromErp(db, productId, policy.provider, policy));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
 });
 
 // ADS-004C: advisory planning only; values supplied are a bounded hypothetical
