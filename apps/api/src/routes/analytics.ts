@@ -14,6 +14,7 @@ import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitab
 import { handleRouteError } from "./errorHandler";
 import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
 import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
+import { inspectPaidAdsProviderReadiness } from "../use-cases/ads/paidAdsReadiness";
 
 /**
  * Analytics router (analytics.view). GET / remains the original module placeholder.
@@ -45,6 +46,12 @@ router.get("/profitability/:productId/history", (req, res) => {
   }
 });
 
+
+// ADS-005A: configuration presence is not connection verification or permission to spend.
+router.get("/ads/providers/readiness", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ providers: inspectPaidAdsProviderReadiness(), campaignsEnabled: false, spendAuthorized: false });
+});
 
 // ADS-004C: advisory planning only; values supplied are a bounded hypothetical
 // budget, never saved or used as spending authority.
