@@ -60,7 +60,7 @@ export function evaluateAdsPerformanceEvidence(facts: PaidMetricFacts): AdsPerfo
   if (conversions !== null) warnings.push("PROVIDER_CONVERSIONS_NOT_MARKETPLACE_CONFIRMED");
   if (value !== null && conversions === null) warnings.push("CONVERSION_VALUE_WITHOUT_COUNT");
   if (spendEur === 0 && value !== null) warnings.push("ROAS_UNDEFINED_ZERO_SPEND");
-  const valid = warnings.every(x => !x.startsWith("INVALID_"));
+  const valid = !warnings.some(x => x.startsWith("INVALID_") || x === "CLICKS_EXCEED_IMPRESSIONS" || x === "CONVERSION_VALUE_WITHOUT_COUNT");
   const reportedRoas = valid && spendEur !== null && spendEur > 0 && value !== null && conversions !== null
     ? Math.round((value / spendEur) * 1000) / 1000 : null;
   const evidenceLevel: AdsEvidenceLevel = !valid || spendEur === null || impressions === null || clicks === null
