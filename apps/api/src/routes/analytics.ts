@@ -13,6 +13,7 @@ import { catalogueProfitabilityQuerySchema } from "../use-cases/analytics/catalo
 import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitabilitySnapshots";
 import { handleRouteError } from "./errorHandler";
 import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
+import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
 
 /**
  * Analytics router (analytics.view). GET / remains the original module placeholder.
@@ -44,6 +45,25 @@ router.get("/profitability/:productId/history", (req, res) => {
   }
 });
 
+
+// ADS-004C: advisory planning only; values supplied are a bounded hypothetical
+// budget, never saved or used as spending authority.
+const adsPlanEur = z.coerce.number().finite().positive().max(1000000).refine(x => Number.isInteger(Math.round(x * 100)) && Math.abs(x * 100 - Math.round(x * 100)) < 0.0000001, "Whole EUR cents required");
+const adsPlanQuery = z.object({
+  requestedDailyEur: adsPlanEur,
+  hardDailyLimitEur: adsPlanEur,
+  hardTotalLimitEur: adsPlanEur,
+}).strict();
+router.get("/ads/draft-plan/:productId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const productId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(req.params.productId);
+    const budget = adsPlanQuery.parse(req.query);
+    res.json(await readAdsDraftPlanForProduct(db, productId, budget));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
 
 // ADS phase 3: authenticated, read-only review projection. Never triggers ad spend,
 // an external provider call, a stock mutation, or a background sync.
