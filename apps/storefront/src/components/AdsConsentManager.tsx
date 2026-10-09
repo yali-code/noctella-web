@@ -15,6 +15,7 @@ export function AdsConsentManager() {
   const [open, setOpen] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const [storageError, setStorageError] = useState(false);
 
   useEffect(() => {
     let prior: AdsConsentSnapshot | null = null;
@@ -24,11 +25,34 @@ export function AdsConsentManager() {
     setMarketing(prior?.marketing === true);
     setReady(true);
     setOpen(!prior);
+    const onOtherTabChange = (event: StorageEvent) => {
+      if (event.key !== CONSENT_STORAGE_KEY && event.key !== null) return;
+      // Treat removed, invalid or outdated consent as not decided.
+      const updated = readConsent(event.newValue);
+      setDecision(updated);
+      setAnalytics(updated?.analytics === true);
+      setMarketing(updated?.marketing === true);
+      setStorageError(false);
+      setOpen(!updated);
+    };
+    window.addEventListener("storage", onOtherTabChange);
+    return () => window.removeEventListener("storage", onOtherTabChange);
   }, []);
 
   function save(next: AdsConsentSnapshot) {
-    // Fail closed if storage is blocked; an in-memory choice is still respected for this session.
-    try { window.localStorage.setItem(CONSENT_STORAGE_KEY, serializeConsent(next, new Date().toISOString())); } catch { /* no persisted permission */ }
+    // A missing persisted decision denies tracking in the dispatcher. Never show
+    // an accepted state if storage failed, including private browsing restrictions.
+    try {
+      window.localStorage.setItem(CONSENT_STORAGE_KEY, serializeConsent(next, new Date().toISOString()));
+    } catch {
+      setStorageError(true);
+      setDecision(null);
+      setAnalytics(false);
+      setMarketing(false);
+      setOpen(true);
+      return;
+    }
+    setStorageError(false);
     setDecision(next);
     setAnalytics(next.analytics);
     setMarketing(next.marketing);
@@ -48,6 +72,7 @@ export function AdsConsentManager() {
       {open && (
         <section aria-label="Cookie consent" role="region" style={{ ...baseStyle, position: "fixed", bottom: 12, left: 12, right: 12, zIndex: 1001, maxWidth: 520, marginInline: "auto" }}>
           <h2 style={{ color: "#172033", margin: "0 0 8px", fontSize: 19 }}>Your privacy choices</h2>
+          {storageError && <p role="alert" style={{ color: "#8c201b", fontSize: 14 }}>Your choices could not be saved in this browser. Optional tracking remains off. Please enable browser storage and try again.</p>}
           <p style={{ fontSize: 14, lineHeight: 1.5 }}>Essential website features work without optional tracking. With your permission, analytics helps us improve the site, and marketing tools may measure interest in our collections. You can change your choices anytime.</p>
           <p style={{ fontSize: 13 }}>Essential: always on</p>
           <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
