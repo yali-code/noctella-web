@@ -50,7 +50,8 @@ describe("ADS-002B.3 consent-gated adapter dispatch", () => {
   });
   it("does not forward PII and extra caller fields", () => {
     const meta = vi.fn();
-    dispatchConsentGatedAdsEvent({ ...event, email: "not@for.advertisers" }, { readStoredConsent: () => full, adapters: { meta } });
+    const eventWithExtraData = { ...event, email: "not@for.advertisers" };
+    dispatchConsentGatedAdsEvent(eventWithExtraData, { readStoredConsent: () => full, adapters: { meta } });
     expect(meta).toHaveBeenCalledWith(event);
   });
   it("isolates provider failures", () => {
