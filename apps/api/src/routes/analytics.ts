@@ -12,6 +12,7 @@ import { getCatalogueProfitability } from "../services/productProfitability";
 import { catalogueProfitabilityQuerySchema } from "../use-cases/analytics/catalogueProfitability";
 import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitabilitySnapshots";
 import { handleRouteError } from "./errorHandler";
+import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
 
 /**
  * Analytics router (analytics.view). GET / remains the original module placeholder.
@@ -38,6 +39,21 @@ router.get("/profitability", (req, res) => {
 router.get("/profitability/:productId/history", (req, res) => {
   try {
     res.json(getProductAnalyticsHistory(db, req.params.productId, productMetricHistoryQuerySchema.parse(req.query)));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
+
+
+// ADS phase 3: authenticated, read-only review projection. Never triggers ad spend,
+// an external provider call, a stock mutation, or a background sync.
+// analytics.view is applied to this entire router above.
+router.get("/ads/candidates/:productId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const productId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(req.params.productId);
+    const result = await readAdsCampaignReviewFromErp(db, productId);
+    res.json({ ...result, scope: "REVIEW_ONLY", liveProviderVerified: false, spendAuthorized: false });
   } catch (error) {
     handleRouteError(error, res);
   }
