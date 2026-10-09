@@ -12,3 +12,6 @@ Replaces the existing `/marketing` placeholder using the application's existing 
 
 ## Deferred to future phase
 Real AI-assisted copy requires proof-grounded generation and human review. Owner approval persistence and advertising-provider execution must be added only after verified provider accounts, legal consent review, live stock pause mechanism, and budget enforcement. Do not imply those are present from this screen.
+
+## CI retarget note
+PR base retargeted to main after ADS-004C merged. Require a fresh CI run against main before merge; never infer CI success from the stacked branch.
