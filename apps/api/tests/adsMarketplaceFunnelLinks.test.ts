@@ -45,6 +45,6 @@ describe("ADS-002A marketplace funnel link eligibility", () => {
   });
 
   it("removes fragments and accepts recognized regional ebay domains", () => {
-    expect(safeMarketplaceListingUrl("ebay", "https://www.ebay.de/itm/123#frag")).toBe("https://www.ebay.de/itm/123");
+    expect(safeMarketplaceListingUrl("ebay", "https://www.ebay.de/itm/12345#frag")).toBe("https://www.ebay.de/itm/12345");
   });
 });
