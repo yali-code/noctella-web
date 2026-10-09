@@ -36,4 +36,9 @@ describe("ADS-006H paid spend reconciliation is advisory-only",()=>{
   expect(out.status).toBe("SPEND_MISMATCH");
   expect(out.differenceEur).toBeCloseTo(3.05);
  });
+ it("fails closed when provider metrics are internally invalid",()=>{
+  const invalid=evaluateAdsPerformanceEvidence({...facts,periodEnd:"invalid-date"});
+  expect(reconcilePaidSpend({...input,report:invalid}).status).toBe("INVALID_REPORT");
+ });
+
 });
