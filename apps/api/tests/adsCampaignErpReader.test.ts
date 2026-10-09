@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReviewableMarketplaceEvidence, type AdsListingEvidence } from "../src/use-cases/ads/adsCampaignErpReader";
+import { isReviewableMarketplaceEvidence, stockSyncProviderListingIdentity, type AdsListingEvidence } from "../src/use-cases/ads/adsCampaignErpReader";
 
 const now = new Date("2026-10-09T13:00:00.000Z");
 const good: AdsListingEvidence = {
@@ -31,4 +31,17 @@ describe("ADS-002C.4 marketplace freshness and conflict evidence", () => {
     expect(isReviewableMarketplaceEvidence({ ...good, marketplaceStock: 0.5 }, now)).toBe(false);
     expect(isReviewableMarketplaceEvidence({ ...good, openConflictCount: Number.NaN }, now)).toBe(false);
   });
+  it("uses the actual eBay/Etsy provider listing number rather than the internal row ID", () => {
+    expect(stockSyncProviderListingIdentity({ channel: "ebay", externalListingId: "123456789012" }))
+      .toEqual({ channel: "ebay", providerListingId: "123456789012" });
+    expect(stockSyncProviderListingIdentity({ channel: "etsy", externalListingId: "9876543210" }))
+      .toEqual({ channel: "etsy", providerListingId: "9876543210" });
+  });
+  it("rejects internal row IDs, unsupported marketplaces, and invalid provider IDs", () => {
+    expect(stockSyncProviderListingIdentity({ channel: "ebay", externalListingId: "ext-internal-uuid" })).toBeNull();
+    expect(stockSyncProviderListingIdentity({ channel: "woocommerce", externalListingId: "123456" })).toBeNull();
+    expect(stockSyncProviderListingIdentity({ channel: "etsy", externalListingId: "1234" })).toBeNull();
+    expect(stockSyncProviderListingIdentity({ channel: "etsy", externalListingId: "123456;DROP" })).toBeNull();
+  });
+
 });
