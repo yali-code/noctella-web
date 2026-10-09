@@ -16,6 +16,7 @@ import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpRea
 import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
 import { readPaidAdsDryRunFromErp } from "../use-cases/ads/paidLaunchDryRun";
 import { inspectPaidAdsProviderReadiness } from "../use-cases/ads/paidAdsReadiness";
+import { readPaidCampaignReport } from "../use-cases/ads/adsPaidCampaignRead";
 
 /**
  * Analytics router (analytics.view). GET / remains the original module placeholder.
@@ -47,6 +48,19 @@ router.get("/profitability/:productId/history", (req, res) => {
   }
 });
 
+
+// ADS-006C: exact-scope, paid-only Analytics snapshots, never organic metrics
+// or inferred marketplace conversions. The router has analytics.view gate.
+router.get("/ads/performance/:provider/:campaignId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const provider = z.enum(["meta", "google_ads", "pinterest_ads"]).parse(req.params.provider);
+    const campaignId = z.string().regex(/^[0-9]{5,25}$/).parse(req.params.campaignId);
+    res.json(await readPaidCampaignReport(db, provider, campaignId));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
 
 // ADS-005A: configuration presence is not connection verification or permission to spend.
 router.get("/ads/providers/readiness", (_req, res) => {
