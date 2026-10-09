@@ -14,6 +14,7 @@ import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitab
 import { handleRouteError } from "./errorHandler";
 import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
 import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
+import { readPaidAdsDryRunFromErp } from "../use-cases/ads/paidLaunchDryRun";
 
 /**
  * Analytics router (analytics.view). GET / remains the original module placeholder.
@@ -45,6 +46,24 @@ router.get("/profitability/:productId/history", (req, res) => {
   }
 });
 
+
+// ADS-005B: provider preflight is permanently dry-run. No client-provided
+// readiness/approval booleans or account information can bypass the gates.
+router.get("/ads/launch-preflight/:productId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const productId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(req.params.productId);
+    const parsed = z.object({
+      provider: z.enum(["meta", "google_ads", "pinterest_ads"]),
+      requestedDailyEur: z.coerce.number().finite().positive().max(1_000_000),
+      hardDailyLimitEur: z.coerce.number().finite().positive().max(1_000_000),
+      hardTotalLimitEur: z.coerce.number().finite().positive().max(1_000_000),
+    }).strict().parse(req.query);
+    res.json(await readPaidAdsDryRunFromErp(db, productId, parsed.provider, parsed));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
 
 // ADS-004C: advisory planning only; values supplied are a bounded hypothetical
 // budget, never saved or used as spending authority.
