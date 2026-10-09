@@ -17,7 +17,7 @@ export interface VerifiedPaidBillingEvidence {
 export type PaidSpendReconciliationStatus =
   | "MISSING_REPORT" | "MISSING_BILLING" | "UNVERIFIED_BILLING"
   | "CURRENCY_MISMATCH" | "SCOPE_MISMATCH" | "UNSETTLED"
-  | "NON_COMPARABLE_BILLING" | "INVALID_AMOUNT" | "SPEND_MISMATCH"
+  | "NON_COMPARABLE_BILLING" | "INVALID_AMOUNT" | "INVALID_REPORT" | "SPEND_MISMATCH"
   | "RECONCILED_FOR_REVIEW";
 export interface PaidSpendReconciliation {
   readonly status: PaidSpendReconciliationStatus;
@@ -56,6 +56,9 @@ export function reconcilePaidSpend(input:PaidSpendReconciliationInput):PaidSpend
   });
   if(!input.report || input.report.provider!==input.provider || reportSpend===null){
     return out("MISSING_REPORT","A verified paid ad spend observation is required; do not assume zero.");
+  }
+  if(input.report.evidenceLevel==="INCOMPLETE" || input.report.warnings.some(w=>w.startsWith("INVALID_") || w==="CLICKS_EXCEED_IMPRESSIONS" || w==="CONVERSION_VALUE_WITHOUT_COUNT")){
+    return out("INVALID_REPORT","Paid report contains incomplete or contradictory observations.");
   }
   if(!input.billing)return out("MISSING_BILLING","No independent provider billing evidence was supplied.");
   const b=input.billing;
