@@ -12,12 +12,12 @@ The report is now the stored paid readout produced by the ADS-006C reader (`buil
 
 - `NOT_COLLECTED`, or no report at all, gives `MISSING_REPORT`. Unknown spend also gives `MISSING_REPORT`, never zero.
 - `UNTRUSTED_EVIDENCE` gives `INVALID_REPORT`. So do contradictory metrics, which existing behaviour already rejected.
-- The provider, campaign and window recorded with the stored evidence must equal the reconciled scope. Otherwise the result is `SCOPE_MISMATCH`.
+- The provider, **stored paid account ID**, campaign and window recorded with the source snapshots must equal the reconciled scope. Otherwise the result is `SCOPE_MISMATCH`. Caller-supplied `accountId` is not independent evidence.
 - All other statuses are unchanged. A positive result is still advisory (`RECONCILED_FOR_REVIEW`) and never authorizes spending or budget changes.
 
 ## Known limitation
 
-- The readout does not expose `accountId`. Campaign IDs are unique within each provider, so binding the campaign effectively binds the account. Adding `accountId` to the readout is a small follow-up in the reader, which PR #334 also touches.
+- The readout now exposes validated `accountId` from the snapshots when present. Legacy snapshots without a valid stored account ID remain readable, but reconciliation **fails closed** with `SCOPE_MISMATCH` until the source account is verifiable. No inferred account identity from campaign ID or caller input.
 - With ADS-006I, report windows are account-local instants. Billing periods must be expressed the same way. A billing statement in UTC days gives `SCOPE_MISMATCH`, which is fail-closed and intended.
 
 ## Still blocked (external)
