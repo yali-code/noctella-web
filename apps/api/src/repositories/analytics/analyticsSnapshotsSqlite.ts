@@ -115,6 +115,22 @@ export function createSqliteAnalyticsSnapshotRepository(db: any) {
       return findRun(run.idempotencyKey)!;
     },
 
+    /** Stored values of one run, keyed by metric (read-only; used to detect provider restatements). */
+    listRunMetricValues(runId: string): Map<string, number | null> {
+      const rows = db.select({ metricKey: schema.analyticsMetricSnapshots.metricKey, numericValue: schema.analyticsMetricSnapshots.numericValue })
+        .from(schema.analyticsMetricSnapshots).where(eq(schema.analyticsMetricSnapshots.runId, runId)).all() as { metricKey: string; numericValue: number | null }[];
+      return new Map(rows.map((r) => [r.metricKey, r.numericValue]));
+    },
+
+    /** Run ids already holding snapshots at this identity (scope, namespace, observedAt, source) - read-only. */
+    listSnapshotRunIdsAt(scopeType: string, scopeId: string, metricNamespace: string, observedAt: string, sourceReference: string): string[] {
+      const rows = db.selectDistinct({ runId: schema.analyticsMetricSnapshots.runId }).from(schema.analyticsMetricSnapshots).where(and(
+        eq(schema.analyticsMetricSnapshots.scopeType, scopeType), eq(schema.analyticsMetricSnapshots.scopeId, scopeId),
+        eq(schema.analyticsMetricSnapshots.metricNamespace, metricNamespace), eq(schema.analyticsMetricSnapshots.observedAt, observedAt),
+        eq(schema.analyticsMetricSnapshots.sourceReference, sourceReference))).all() as { runId: string | null }[];
+      return rows.map((r) => r.runId).filter((id): id is string => Boolean(id));
+    },
+
     /** Best-effort failure record outside the (rolled back) snapshot transaction. */
     recordFailedRun(run: Omit<AnalyticsRunRecord, "status" | "completedAt" | "metricCount" | "error">, error: string): void {
       const existing = findRun(run.idempotencyKey);
