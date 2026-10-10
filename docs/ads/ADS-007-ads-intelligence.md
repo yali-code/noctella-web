@@ -26,3 +26,8 @@
 No external AI call, provider call, write or scheduler is involved.
 
 **Not proven yet.** Results depend on real collected windows, which need approved staging collection (see #335). Thresholds are conservative defaults and must be reviewed against real campaign history.
+
+**Account identity.**
+- Every window must carry exactly one verified stored ad-account ID. A window with a missing, malformed or inconsistent ID is excluded and counted as untrusted.
+- If the trusted windows of one provider campaign come from more than one ad account, the history is **quarantined** with `status: ACCOUNT_CONFLICT`. The result then has no windows, no trend, no anomalies, and only a `REVIEW_DATA_QUALITY` recommendation, plus per-account window counts.
+- A single-account history reports its `accountId`.
