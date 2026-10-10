@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CampaignDraftPreviewReview } from "./CampaignDraftPreviewReview";
 import { api } from "../../lib/api";
 
 vi.mock("../../lib/api", () => ({ api: { get: vi.fn() } }));
+
+function deferred<T>() {
+  let resolve!: (v: T) => void, reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
 
 const entry = (errors: string[]) => ({
   fingerprint: "a".repeat(64),
@@ -69,5 +75,58 @@ describe("ADS-008 Admin campaign draft preview", () => {
     await submit("bad id!");
     expect(screen.getByRole("alert")).toHaveTextContent("valid ERP product ID");
     expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it("editing a budget clears the shown preview and drops the response still in flight", async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(preview);
+    await submit();
+    expect(await screen.findByText(/Approved ERP media/)).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Draft daily cap EUR"), "0");
+    expect(screen.queryByText(/Approved ERP media/)).toBeNull(); // old draft was built for other caps
+    const pending = deferred<unknown>();
+    vi.mocked(api.get).mockReturnValueOnce(pending.promise as never);
+    await user.click(screen.getByRole("button", { name: "Preview campaign draft" }));
+    await user.clear(screen.getByLabelText("Draft total cap EUR"));
+    await user.type(screen.getByLabelText("Draft total cap EUR"), "30");
+    expect(screen.getByRole("button", { name: "Preview campaign draft" })).toBeEnabled();
+    await act(async () => pending.resolve(preview));
+    expect(screen.queryByText(/Approved ERP media/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("ignores an in-flight response or error after the provider or product changes", async () => {
+    const meta = deferred<unknown>(), product = deferred<unknown>();
+    vi.mocked(api.get).mockReturnValueOnce(meta.promise as never).mockReturnValueOnce(product.promise as never);
+    await submit();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Draft platform"), "pinterest_ads");
+    await act(async () => meta.resolve(preview));
+    expect(screen.queryByText(/Approved ERP media/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Preview campaign draft" }));
+    await user.type(screen.getByLabelText("Draft product ID"), "8");
+    await act(async () => product.reject(new Error("late failure")));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows only the latest of overlapping requests regardless of completion order", async () => {
+    const older = deferred<unknown>(), newer = deferred<unknown>();
+    vi.mocked(api.get).mockReturnValueOnce(older.promise as never).mockReturnValueOnce(newer.promise as never);
+    const user = userEvent.setup();
+    render(<CampaignDraftPreviewReview />);
+    await user.type(screen.getByLabelText("Draft product ID"), "NOC-000007");
+    const form = screen.getByLabelText("Draft product ID").closest("form")!;
+    await act(async () => { fireEvent.submit(form); fireEvent.submit(form); });
+    await act(async () => newer.resolve(preview));
+    await act(async () => older.resolve({ ...preview, media: { selected: [{ photoId: "stale-photo", url: "/z" }], excluded: [] } }));
+    expect(screen.getByText(/Approved ERP media: ph-1, ph-2/)).toBeInTheDocument();
+    expect(screen.queryByText(/stale-photo/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview campaign draft" })).toBeEnabled();
+  });
+
+  it("refuses a draft that was not built for the requested caps", async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({ ...preview, drafts: [{ ...entry([]), draft: { ...entry([]).draft, budget: { ...entry([]).draft.budget, hardTotalLimitEur: 999 } } }] });
+    await submit();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Unexpected campaign draft response");
   });
 });
