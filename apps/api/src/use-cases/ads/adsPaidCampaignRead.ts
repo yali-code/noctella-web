@@ -18,6 +18,8 @@ import { assessAdsOptimization } from "./adsOptimizationAdvice";
 export interface PaidSnapshotRow {
   readonly runId: string | null;
   readonly runStatus: string | null;
+  readonly runSourceType: string | null;
+  readonly runSourceReference: string | null;
   readonly scopeType: string;
   readonly scopeId: string;
   readonly metricNamespace: string;
@@ -40,7 +42,7 @@ const KEYS = {
   paid_provider_conversion_value_eur: "eur",
 } as const;
 type MetricKey = keyof typeof KEYS;
-type PaidMetadata = { window: { start: string; end: string }; currency: "EUR" };
+type PaidMetadata = { window: { start: string; end: string }; currency: "EUR"; accountId: string | null };
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   !!x && typeof x === "object" && !Array.isArray(x);
 function parsedMetadata(row: PaidSnapshotRow, provider: AdsMetricsProvider, campaignId: string): PaidMetadata | null {
@@ -54,7 +56,11 @@ function parsedMetadata(row: PaidSnapshotRow, provider: AdsMetricsProvider, camp
       || !Number.isFinite(Date.parse(m.window.end))
       || Date.parse(m.window.start) >= Date.parse(m.window.end)
       || row.observedAt !== m.window.end) return null;
-    return { window: { start: m.window.start, end: m.window.end }, currency: "EUR" };
+    // Legacy or malformed paid evidence can remain readable in Admin, but must
+    // never be reconciled against billing without a verified stored account ID.
+    const accountId = typeof m.accountId === "string" && /^[0-9]{5,25}$/.test(m.accountId)
+      ? m.accountId : null;
+    return { window: { start: m.window.start, end: m.window.end }, currency: "EUR", accountId };
   } catch { return null; }
 }
 function trustedRow(row: PaidSnapshotRow, provider: AdsMetricsProvider, campaignId: string): boolean {
@@ -64,6 +70,8 @@ function trustedRow(row: PaidSnapshotRow, provider: AdsMetricsProvider, campaign
     && row.sourceType === "external_platform"
     && row.sourceReference.startsWith(`${provider}.ads.`)
     && row.runStatus === "completed"
+    && row.runSourceType === "external_platform"
+    && row.runSourceReference === row.sourceReference
     && typeof row.runId === "string" && row.runId.length > 0
     && Object.prototype.hasOwnProperty.call(KEYS, row.metricKey)
     && row.unit === KEYS[row.metricKey as MetricKey]
@@ -76,7 +84,7 @@ export function buildPaidCampaignReadout(
   campaignId: string,
   observations: readonly PaidSnapshotRow[],
 ) {
-  const base = { provider, campaignId, source: "EXISTING_ANALYTICS_SNAPSHOTS" as const,
+  const base = { provider, campaignId, accountId: null as string | null, source: "EXISTING_ANALYTICS_SNAPSHOTS" as const,
     marketplaceAttributionVerified: false as const, spendAuthorized: false as const };
   if (!observations.length) {
     return { ...base, status: "NOT_COLLECTED" as PaidReportStatus, evidence: null, advice: null };
@@ -112,7 +120,7 @@ export function buildPaidCampaignReadout(
   };
   const evidence = evaluateAdsPerformanceEvidence(facts);
   return { ...base, status: "REPORT_AVAILABLE" as PaidReportStatus,
-    period: { ...first.window }, sourceReference: newest.sourceReference,
+    accountId: first.accountId, period: { ...first.window }, sourceReference: newest.sourceReference,
     collectedAt: newest.collectedAt, evidence, advice: assessAdsOptimization(evidence) };
 }
 
@@ -127,6 +135,7 @@ export async function readPaidCampaignReport(
   const namespace = `paid_${provider}`;
   const observations = await db.all(sql`
     SELECT m.run_id AS "runId", a.status AS "runStatus",
+      a.source_type AS "runSourceType", a.source_reference AS "runSourceReference",
       m.scope_type AS "scopeType", m.scope_id AS "scopeId",
       m.metric_namespace AS "metricNamespace", m.metric_key AS "metricKey",
       m.numeric_value AS "numericValue", m.value_state AS "valueState",
@@ -134,12 +143,9 @@ export async function readPaidCampaignReport(
       m.source_reference AS "sourceReference", m.observed_at AS "observedAt",
       m.collected_at AS "collectedAt", m.metadata_json AS "metadataJson"
     FROM analytics_metric_snapshots m
-    INNER JOIN analytics_runs a ON a.id = m.run_id
-      AND a.source_type = 'external_platform'
-      AND a.source_reference = m.source_reference
+    LEFT JOIN analytics_runs a ON a.id = m.run_id
     WHERE m.scope_type = 'external_ad_campaign'
       AND m.scope_id = ${scopeId} AND m.metric_namespace = ${namespace}
-      AND m.source_type = 'external_platform'
     ORDER BY m.observed_at DESC, m.collected_at DESC
     LIMIT 100
   `) as PaidSnapshotRow[];
