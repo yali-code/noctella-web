@@ -81,15 +81,15 @@ describe("ADS-007 campaign analysis (advisory only)", () => {
 
 describe("ADS-007 history reader over real SQLite analytics tables", () => {
   const campaignId = "120210000000000001";
-  function store(db: ReturnType<typeof createTestDb>, w: PaidWindowMetrics, opts: { campaign?: string; currency?: string } = {}) {
+  function store(db: ReturnType<typeof createTestDb>, w: PaidWindowMetrics, opts: { campaign?: string; currency?: string; account?: string | null } = {}) {
     const campaign = opts.campaign ?? campaignId;
     const metric = (metricKey: string, numericValue: number | null, unit: string) => ({
       scopeType: "external_ad_campaign", scopeId: `paid_meta:${campaign}`, metricNamespace: "paid_meta", metricKey, numericValue, textValue: null,
       valueState: numericValue === null ? "unknown" : "known", unit,
-      metadata: { paidAdsSource: true, provider: "meta", accountId: "3095361257478763", campaignId: campaign, currency: opts.currency ?? "EUR", windowSemantics: "fixed_range", window: w.period },
+      metadata: { paidAdsSource: true, provider: "meta", ...(opts.account === null ? {} : { accountId: opts.account ?? "3095361257478763" }), campaignId: campaign, currency: opts.currency ?? "EUR", windowSemantics: "fixed_range", window: w.period },
     });
     return createSqliteAnalyticsSnapshotRepository(db).writeCompletedRun(
-      { id: `run-${campaign}-${w.period.end}`, runType: "paid_meta_campaign_metrics", sourceType: "external_platform", sourceReference: w.sourceReference, idempotencyKey: `paid:meta:${campaign}:${w.period.start}:${w.period.end}`, observedAt: w.period.end, startedAt: "2026-10-09T12:00:00.000Z" },
+      { id: `run-${campaign}-${opts.account ?? "a"}-${w.period.end}`, runType: "paid_meta_campaign_metrics", sourceType: "external_platform", sourceReference: w.sourceReference, idempotencyKey: `paid:meta:${opts.account ?? "a"}:${campaign}:${w.period.start}:${w.period.end}`, observedAt: w.period.end, startedAt: "2026-10-09T12:00:00.000Z" },
       "2026-10-09T12:00:00.000Z", "2026-10-09T12:00:00.000Z",
       [metric("paid_spend_eur", w.spendEur, "eur"), metric("paid_impressions", w.impressions, "count"), metric("paid_clicks", w.clicks, "count"),
         metric("paid_provider_conversions", w.providerReportedConversions, "count"), metric("paid_provider_conversion_value_eur", w.providerReportedConversionValueEur, "eur")],
@@ -114,6 +114,30 @@ describe("ADS-007 history reader over real SQLite analytics tables", () => {
     expect(out.anomalies.map((a) => a.code)).toContain("SPEND_SPIKE");
     expect(out.recommendations[0]!.code).toBe("REVIEW_DATA_QUALITY");
     expect(JSON.stringify(out)).not.toContain("99999");
+  });
+
+  it("quarantines a campaign history that mixes ad accounts instead of analysing it", async () => {
+    const db = createTestDb();
+    const [w1, w2, w3, w4] = history({ spendEur: 210 });
+    for (const w of [w1!, w2!, w3!]) store(db, w);
+    store(db, w4!, { account: "9999999999" }); // same provider campaign id, different ad account
+    const out = await readPaidCampaignIntelligence(db, "meta", campaignId);
+    expect(out).toMatchObject({ status: "ACCOUNT_CONFLICT", accountId: null, windows: [], trend: null, anomalies: [], spendAuthorized: false, eligibleForAutomaticAction: false });
+    expect(out.accountConflict).toEqual([{ accountId: "3095361257478763", windows: 3 }, { accountId: "9999999999", windows: 1 }]);
+    expect(out.recommendations.map((r) => r.code)).toEqual(["REVIEW_DATA_QUALITY"]);
+    expect(JSON.stringify(out)).not.toContain("spendEur"); // no metric from either account is exposed
+  });
+
+  it("excludes windows without a verified stored account identity and reports the single account", async () => {
+    const db = createTestDb();
+    for (const w of history()) store(db, w);
+    store(db, win("08-26", "09-02"), { account: null });
+    store(db, win("08-19", "08-26"), { account: "12ab" });
+    const out = await readPaidCampaignIntelligence(db, "meta", campaignId);
+    expect(out).toMatchObject({ status: "ANALYSED", accountId: "3095361257478763", accountConflict: [] });
+    expect(out.windows).toHaveLength(4);
+    expect(out.dataQuality.untrustedWindows).toBe(2);
+    expect(out.recommendations[0]!.code).toBe("REVIEW_DATA_QUALITY");
   });
 
   it("is NOT_COLLECTED for an unknown campaign and rejects malformed identifiers", async () => {

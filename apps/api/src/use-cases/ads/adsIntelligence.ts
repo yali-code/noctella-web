@@ -170,17 +170,38 @@ export async function readPaidCampaignIntelligence(db: DbClient, provider: AdsMe
   `) as PaidSnapshotRow[];
   const groups = new Map<string, PaidSnapshotRow[]>();
   for (const row of rows) groups.set(`${row.runId}|${row.observedAt}`, [...(groups.get(`${row.runId}|${row.observedAt}`) ?? []), row]);
-  const windows: PaidWindowMetrics[] = [];
+  const byAccount = new Map<string, PaidWindowMetrics[]>();
   let untrustedWindows = 0;
   for (const group of groups.values()) {
     const readout = buildPaidCampaignReadout(provider, campaignId, group);
-    if (readout.status !== "REPORT_AVAILABLE" || !readout.evidence || !("period" in readout) || !readout.period) { untrustedWindows += 1; continue; }
-    windows.push({
+    const accountId = storedAccountId(group);
+    // A window without exactly one verified stored ad-account identity cannot join any history.
+    if (readout.status !== "REPORT_AVAILABLE" || !readout.evidence || !("period" in readout) || !readout.period || !accountId) { untrustedWindows += 1; continue; }
+    byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), {
       period: readout.period, sourceReference: readout.sourceReference,
       spendEur: readout.evidence.spendEur, impressions: readout.evidence.impressions, clicks: readout.evidence.clicks,
       providerReportedConversions: readout.evidence.providerReportedConversions,
       providerReportedConversionValueEur: readout.evidence.providerReportedConversionValueEur,
-    });
+    }]);
   }
-  return analyzePaidCampaignWindows(provider, campaignId, windows, { untrustedWindows });
+  if (byAccount.size > 1) {
+    // Never blend ad accounts into one campaign history: quarantine instead of analysing.
+    const empty = analyzePaidCampaignWindows(provider, campaignId, [], { untrustedWindows });
+    return {
+      ...empty, status: "ACCOUNT_CONFLICT" as const, accountId: null,
+      accountConflict: [...byAccount].map(([id, ws]) => ({ accountId: id, windows: ws.length })).sort((a, b) => a.accountId.localeCompare(b.accountId)),
+      recommendations: [{ code: "REVIEW_DATA_QUALITY" as AdsRecommendationCode, reason: "Stored windows for this campaign come from different ad accounts; no trend, anomaly or recommendation is computed until provenance is resolved." }],
+    };
+  }
+  const [only] = [...byAccount];
+  return { ...analyzePaidCampaignWindows(provider, campaignId, only?.[1] ?? [], { untrustedWindows }), accountId: only?.[0] ?? null, accountConflict: [] as { accountId: string; windows: number }[] };
+}
+
+/** Exactly one digit-only account id shared by every row of a window, else null. */
+function storedAccountId(group: readonly PaidSnapshotRow[]): string | null {
+  const ids = new Set(group.map((row) => {
+    try { const m: unknown = JSON.parse(row.metadataJson ?? "null"); return m && typeof m === "object" ? (m as { accountId?: unknown }).accountId : undefined; } catch { return undefined; }
+  }));
+  const [id] = [...ids];
+  return ids.size === 1 && typeof id === "string" && /^[0-9]{5,25}$/.test(id) ? id : null;
 }
