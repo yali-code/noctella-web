@@ -35,6 +35,19 @@ describe("ADS-006F separate paid provider collection",()=>{
   expect(read.evidence?.reportedRoas).toBeNull();
   expect(read.marketplaceAttributionVerified).toBe(false);
  });
+ it("refuses unfinished account-local reporting windows at the direct persistence boundary",async()=>{
+  const db=createTestDb();
+  const westQuery:PaidCampaignQuery={...query,startDate:"2026-10-09",endDate:"2026-10-09"};
+  const westObservation:PaidCampaignObservation={...value,reportingTimeZone:"America/Los_Angeles",
+    window:{start:"2026-10-09T07:00:00.000Z",end:"2026-10-10T07:00:00.000Z"}};
+  const beforeEnd=new Date("2026-10-10T06:59:59.999Z");
+  expect(()=>storeVerifiedPaidCampaignEvidence(db,westQuery,westObservation,beforeEnd))
+    .toThrow(/has not ended/);
+  expect((await readPaidCampaignReport(db,"meta",westQuery.campaignId)).status).toBe("NOT_COLLECTED");
+  const atEnd=storeVerifiedPaidCampaignEvidence(db,westQuery,westObservation,new Date("2026-10-10T07:00:00.000Z"));
+  expect(atEnd.run.status).toBe("completed");
+  expect((await readPaidCampaignReport(db,"meta",westQuery.campaignId)).status).toBe("REPORT_AVAILABLE");
+ });
  it("blocks mismatched provider or EUR and unsupported observations",()=>{
   const db=createTestDb();
   expect(()=>storeVerifiedPaidCampaignEvidence(db,query,{...value,accountId:"999999999"})).toThrow();
