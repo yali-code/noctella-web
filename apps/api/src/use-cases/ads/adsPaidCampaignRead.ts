@@ -40,7 +40,7 @@ const KEYS = {
   paid_provider_conversion_value_eur: "eur",
 } as const;
 type MetricKey = keyof typeof KEYS;
-type PaidMetadata = { window: { start: string; end: string }; currency: "EUR" };
+type PaidMetadata = { window: { start: string; end: string }; currency: "EUR"; accountId: string | null };
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   !!x && typeof x === "object" && !Array.isArray(x);
 function parsedMetadata(row: PaidSnapshotRow, provider: AdsMetricsProvider, campaignId: string): PaidMetadata | null {
@@ -54,7 +54,11 @@ function parsedMetadata(row: PaidSnapshotRow, provider: AdsMetricsProvider, camp
       || !Number.isFinite(Date.parse(m.window.end))
       || Date.parse(m.window.start) >= Date.parse(m.window.end)
       || row.observedAt !== m.window.end) return null;
-    return { window: { start: m.window.start, end: m.window.end }, currency: "EUR" };
+    // Legacy or malformed paid evidence can remain readable in Admin, but must
+    // never be reconciled against billing without a verified stored account ID.
+    const accountId = typeof m.accountId === "string" && /^[0-9]{5,25}$/.test(m.accountId)
+      ? m.accountId : null;
+    return { window: { start: m.window.start, end: m.window.end }, currency: "EUR", accountId };
   } catch { return null; }
 }
 function trustedRow(row: PaidSnapshotRow, provider: AdsMetricsProvider, campaignId: string): boolean {
@@ -76,7 +80,7 @@ export function buildPaidCampaignReadout(
   campaignId: string,
   observations: readonly PaidSnapshotRow[],
 ) {
-  const base = { provider, campaignId, source: "EXISTING_ANALYTICS_SNAPSHOTS" as const,
+  const base = { provider, campaignId, accountId: null as string | null, source: "EXISTING_ANALYTICS_SNAPSHOTS" as const,
     marketplaceAttributionVerified: false as const, spendAuthorized: false as const };
   if (!observations.length) {
     return { ...base, status: "NOT_COLLECTED" as PaidReportStatus, evidence: null, advice: null };
@@ -112,7 +116,7 @@ export function buildPaidCampaignReadout(
   };
   const evidence = evaluateAdsPerformanceEvidence(facts);
   return { ...base, status: "REPORT_AVAILABLE" as PaidReportStatus,
-    period: { ...first.window }, sourceReference: newest.sourceReference,
+    accountId: first.accountId, period: { ...first.window }, sourceReference: newest.sourceReference,
     collectedAt: newest.collectedAt, evidence, advice: assessAdsOptimization(evidence) };
 }
 
