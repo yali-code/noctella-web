@@ -7,9 +7,9 @@ import {PaidProviderReadError,isObject,paidGetJson} from "./paidTransport";
 export class MetaPaidCampaignClient implements PaidAdsReadOnlyClient {
   readonly provider="meta" as const;
   constructor(private readonly fetchImpl:typeof fetch=fetch){}
-  async fetchCampaign(query:PaidCampaignQuery,access:PaidProviderAccess):Promise<PaidCampaignObservation>{
+  async fetchCampaign(query:PaidCampaignQuery,access:PaidProviderAccess,now:Date=new Date()):Promise<PaidCampaignObservation>{
     if(query.provider!==this.provider)throw new Error("Meta provider mismatch");
-    assertPaidCampaignQuery(query);requirePaidCredentials(access);
+    assertPaidCampaignQuery(query,now);requirePaidCredentials(access);
     const account = new URL(`https://graph.facebook.com/v26.0/act_${query.accountId}`);
     account.searchParams.set("fields","currency,account_id,timezone_name");
     const acc=await paidGetJson(account,access,this.fetchImpl);
@@ -35,7 +35,7 @@ export class MetaPaidCampaignClient implements PaidAdsReadOnlyClient {
       throw new PaidProviderReadError("malformed","Meta campaign or window mismatch");
     const m=isObject(row)?row:{};
     return {provider:this.provider,accountId:query.accountId,campaignId:query.campaignId,
-      sourceReference:"meta.ads.graph_v26_insights",currency:"EUR",reportingTimeZone,window:paidReportingWindow(query,reportingTimeZone),
+      sourceReference:"meta.ads.graph_v26_insights",currency:"EUR",reportingTimeZone,window:paidReportingWindow(query,reportingTimeZone,now),
       spendEur:providerNumber(m.spend,"money"),impressions:providerNumber(m.impressions,"count"),
       clicks:providerNumber(m.clicks,"count"),providerReportedConversions:null,
       providerReportedConversionValueEur:null,warnings:row===undefined?["NO_CAMPAIGN_REPORT"]:[]};

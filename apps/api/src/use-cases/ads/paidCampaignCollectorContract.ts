@@ -31,7 +31,8 @@ export interface PaidCampaignObservation {
 }
 export interface PaidAdsReadOnlyClient {
   readonly provider: AdsMetricsProvider;
-  fetchCampaign(query: PaidCampaignQuery, auth: PaidProviderAccess): Promise<PaidCampaignObservation>;
+  /** `now` (default: wall clock) decides window completeness; callers with an injected clock pass it through. */
+  fetchCampaign(query: PaidCampaignQuery, auth: PaidProviderAccess, now?: Date): Promise<PaidCampaignObservation>;
 }
 /** Caller must obtain this via separately approved paid-ad provider OAuth; never organic social credentials. */
 export interface PaidProviderAccess {
@@ -41,7 +42,7 @@ export interface PaidProviderAccess {
 }
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-export function assertPaidCampaignQuery(query: PaidCampaignQuery): void {
+export function assertPaidCampaignQuery(query: PaidCampaignQuery, now: Date = new Date()): void {
   for (const id of [query.accountId, query.campaignId]) {
     if (!/^[0-9]{5,25}$/.test(id)) throw new Error("Invalid paid account or campaign identifier");
   }
@@ -52,7 +53,7 @@ export function assertPaidCampaignQuery(query: PaidCampaignQuery): void {
   }
   const start=Date.parse(query.startDate+"T00:00:00.000Z");
   const end=Date.parse(query.endDate+"T00:00:00.000Z");
-  if (end<start || end-start>30*86400000 || end+86400000>Date.now()) {
+  if (end<start || end-start>30*86400000 || end+86400000>now.getTime()) {
     throw new Error("Paid reporting window must be complete, in the past and at most 31 days");
   }
 }
@@ -66,8 +67,8 @@ export function assertReportingTimeZone(timeZone: unknown): asserts timeZone is 
  * "day" is the account's calendar day, so labelling it as a UTC day would misstate provenance and
  * break reconciliation against account-local billing periods.
  */
-export function paidReportingWindow(query: PaidCampaignQuery, timeZone: string) {
-  assertPaidCampaignQuery(query);
+export function paidReportingWindow(query: PaidCampaignQuery, timeZone: string, now: Date = new Date()) {
+  assertPaidCampaignQuery(query, now);
   assertReportingTimeZone(timeZone);
   const next = new Date(Date.parse(query.endDate+"T00:00:00.000Z")+86400000).toISOString().slice(0,10);
   return {start:zonedTimeToUtc(query.startDate,0,0,timeZone),end:zonedTimeToUtc(next,0,0,timeZone)};
@@ -84,8 +85,8 @@ export function providerNumber(value: unknown, kind: "money"|"count"): number|nu
 export function requirePaidEUR(currency: unknown): asserts currency is "EUR" {
   if(currency!=="EUR") throw new Error("Paid ad account currency must be EUR; automatic FX conversion disabled");
 }
-export function assertPaidObservation(o:PaidCampaignObservation,q:PaidCampaignQuery):void {
-  const w=paidReportingWindow(q,o.reportingTimeZone);
+export function assertPaidObservation(o:PaidCampaignObservation,q:PaidCampaignQuery,now:Date=new Date()):void {
+  const w=paidReportingWindow(q,o.reportingTimeZone,now);
   if(o.provider!==q.provider || o.accountId!==q.accountId || o.campaignId!==q.campaignId
     || o.window.start!==w.start||o.window.end!==w.end||o.currency!=="EUR"
     || !o.sourceReference.startsWith(q.provider+".ads.")

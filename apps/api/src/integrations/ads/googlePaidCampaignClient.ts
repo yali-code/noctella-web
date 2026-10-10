@@ -14,9 +14,9 @@ function readSearchStreamRows(payload:unknown):unknown[]{
 export class GooglePaidCampaignClient implements PaidAdsReadOnlyClient {
   readonly provider="google_ads" as const;
   constructor(private readonly fetchImpl:typeof fetch=fetch){}
-  async fetchCampaign(query:PaidCampaignQuery,access:PaidProviderAccess):Promise<PaidCampaignObservation>{
+  async fetchCampaign(query:PaidCampaignQuery,access:PaidProviderAccess,now:Date=new Date()):Promise<PaidCampaignObservation>{
     if(query.provider!==this.provider)throw new Error("Google provider mismatch");
-    assertPaidCampaignQuery(query);requirePaidCredentials(access);
+    assertPaidCampaignQuery(query,now);requirePaidCredentials(access);
     if(!access.developerToken||access.developerToken.length<8)
       throw new PaidProviderReadError("permission","Google Ads developer token not configured");
     if(access.managerCustomerId&&!/^[0-9]{5,25}$/.test(access.managerCustomerId))
@@ -56,7 +56,7 @@ export class GooglePaidCampaignClient implements PaidAdsReadOnlyClient {
     const warnings:string[]=item===undefined?["NO_CAMPAIGN_REPORT"]:[];
     if(micros!==null&&micros%10000!==0)warnings.push("EUR_MICRO_COST_ROUNDED_TO_CENTS");
     return {provider:this.provider,accountId:query.accountId,campaignId:query.campaignId,
-      sourceReference:"google_ads.ads.v25_searchstream",currency:"EUR",reportingTimeZone,window:paidReportingWindow(query,reportingTimeZone),
+      sourceReference:"google_ads.ads.v25_searchstream",currency:"EUR",reportingTimeZone,window:paidReportingWindow(query,reportingTimeZone,now),
       spendEur:rounded,impressions:providerNumber(metrics?.impressions,"count"),
       clicks:providerNumber(metrics?.clicks,"count"),providerReportedConversions:null,
       providerReportedConversionValueEur:null,warnings};

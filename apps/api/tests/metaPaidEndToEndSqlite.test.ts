@@ -213,9 +213,11 @@ describe("ADS-006F real SQLite + read-only Meta transport integration", () => {
     const db = createTestDb();
     const http = metaHttp();
     // The Sofia window ends at 2026-10-02T21:00Z; one hour earlier the account's last day is still open.
+    // With one consistent clock the (stricter, east-of-UTC) UTC-day check rejects first; the
+    // account-local-only path (west of UTC) is covered by the direct-store Los Angeles test.
     await expect(collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(http.fetchImpl), query, fakeAccess, {
       explicitReadApproval: true, explicitSnapshotWriteApproval: true, now: new Date("2026-10-02T20:00:00.000Z"),
-    })).rejects.toThrow(/not ended in the provider account time zone/);
+    })).rejects.toThrow(/must be complete|not ended in the provider account time zone/);
     expect(await paidSnapshots(db)).toHaveLength(0);
   });
 
