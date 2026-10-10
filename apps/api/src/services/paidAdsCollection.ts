@@ -24,27 +24,30 @@ export async function collectPaidCampaignEvidence(
 ) {
   if(!options.explicitReadApproval) throw new Error("Paid provider read permission has not been approved");
   if(client.provider!==query.provider)throw new Error("Provider mismatch");
-  assertPaidCampaignQuery(query);
+  // One clock for every completeness check (query, client, observation, store): an injected `now`
+  // must never be mixed with the wall clock.
+  const now=options.now??new Date();
+  assertPaidCampaignQuery(query,now);
   requirePaidCredentials(access);
-  const observation=await client.fetchCampaign(query,access);
-  assertPaidObservation(observation,query);
+  const observation=await client.fetchCampaign(query,access,now);
+  assertPaidObservation(observation,query,now);
   // The UTC date check above cannot see account-local days: a day still running in the provider
   // account's time zone would otherwise be stored as a complete window.
-  if(Date.parse(observation.window.end)>(options.now??new Date()).getTime()){
+  if(Date.parse(observation.window.end)>now.getTime()){
     throw new Error("Paid reporting window has not ended in the provider account time zone");
   }
   if(!options.explicitSnapshotWriteApproval) {
     return {status:"PREVIEW_ONLY" as const,provider:query.provider,campaignId:query.campaignId,
       evidence:observation,run:null,spendAuthorized:false as const};
   }
-  return {...storeVerifiedPaidCampaignEvidence(db,query,observation,options.now),status:"STORED" as const};
+  return {...storeVerifiedPaidCampaignEvidence(db,query,observation,now),status:"STORED" as const};
 }
 
 /** Requires caller-trusted approval; never accept a client-supplied authorization flag through HTTP. */
 export function storeVerifiedPaidCampaignEvidence(
   db:DbClient, query:PaidCampaignQuery, o:PaidCampaignObservation, now=new Date(),
 ){
-  assertPaidObservation(o,query);
+  assertPaidObservation(o,query,now);
   // Validate at the persistence boundary as well as the collector entry point:
   // direct trusted callers must not persist an unfinished account-local reporting day.
   if (Date.parse(o.window.end) > now.getTime()) {

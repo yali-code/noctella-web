@@ -13,9 +13,9 @@ export const PINTEREST_REPORTING_TIME_ZONE="UTC";
 export class PinterestPaidCampaignClient implements PaidAdsReadOnlyClient {
   readonly provider="pinterest_ads" as const;
   constructor(private readonly fetchImpl:typeof fetch=fetch){}
-  async fetchCampaign(query:PaidCampaignQuery,access:PaidProviderAccess):Promise<PaidCampaignObservation>{
+  async fetchCampaign(query:PaidCampaignQuery,access:PaidProviderAccess,now:Date=new Date()):Promise<PaidCampaignObservation>{
     if(query.provider!==this.provider)throw new Error("Pinterest paid provider mismatch");
-    assertPaidCampaignQuery(query);requirePaidCredentials(access);
+    assertPaidCampaignQuery(query,now);requirePaidCredentials(access);
     const acc=await paidGetJson(new URL(`https://api.pinterest.com/v5/ad_accounts/${query.accountId}`),access,this.fetchImpl);
     if(!isObject(acc)||String(acc.id)!==query.accountId)
       throw new PaidProviderReadError("malformed","Pinterest account response mismatch");
@@ -39,7 +39,7 @@ export class PinterestPaidCampaignClient implements PaidAdsReadOnlyClient {
     const warnings:string[]=item===undefined?["NO_CAMPAIGN_REPORT"]:[];
     if(micros!==null&&micros%10000!==0)warnings.push("EUR_MICRO_COST_ROUNDED_TO_CENTS");
     return {provider:this.provider,accountId:query.accountId,campaignId:query.campaignId,
-      sourceReference:"pinterest_ads.ads.v5_campaign_analytics",currency:"EUR",reportingTimeZone:PINTEREST_REPORTING_TIME_ZONE,window:paidReportingWindow(query,PINTEREST_REPORTING_TIME_ZONE),
+      sourceReference:"pinterest_ads.ads.v5_campaign_analytics",currency:"EUR",reportingTimeZone:PINTEREST_REPORTING_TIME_ZONE,window:paidReportingWindow(query,PINTEREST_REPORTING_TIME_ZONE,now),
       spendEur,
       impressions:providerNumber(m.TOTAL_IMPRESSION,"count"),
       clicks:providerNumber(m.TOTAL_CLICKTHROUGH,"count"),
