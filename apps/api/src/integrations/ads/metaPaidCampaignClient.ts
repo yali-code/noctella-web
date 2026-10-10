@@ -14,7 +14,7 @@ export class MetaPaidCampaignClient implements PaidAdsReadOnlyClient {
     account.searchParams.set("fields","currency,account_id");
     const acc=await paidGetJson(account,access,this.fetchImpl);
     if(!isObject(acc))throw new PaidProviderReadError("malformed","Meta ad account response malformed");
-    if(acc.account_id!==undefined&&String(acc.account_id)!==query.accountId)
+    if(String(acc.account_id)!==query.accountId)
       throw new PaidProviderReadError("malformed","Meta account identity mismatch");
     requirePaidEUR(acc.currency);
     const url=new URL(`https://graph.facebook.com/v26.0/act_${query.accountId}/insights`);
