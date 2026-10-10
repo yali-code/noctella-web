@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 
 type Provider = "meta" | "google_ads" | "pinterest_ads";
@@ -11,7 +11,9 @@ type Window = {
 };
 type Intelligence = {
   provider: Provider; campaignId: string; currency: "EUR"; source: "EXISTING_ANALYTICS_SNAPSHOTS";
-  status: "NOT_COLLECTED" | "ANALYSED";
+  status: "NOT_COLLECTED" | "ANALYSED" | "ACCOUNT_CONFLICT";
+  accountId: string | null;
+  accountConflict: { accountId: string; windows: number }[];
   windows: Window[];
   trend: { spendPerDayChange: number | null; ctrChange: number | null; cpcChange: number | null; cpmChange: number | null } | null;
   anomalies: { code: string; detail: string }[];
@@ -34,28 +36,35 @@ export function PaidCampaignIntelligenceReview() {
   const [result, setResult] = useState<Intelligence | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Only the latest request may update the screen: older responses are dropped, never shown.
+  const requestSeq = useRef(0);
+  const invalidate = () => { requestSeq.current += 1; setResult(null); setError(null); setLoading(false); };
 
   async function load(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setResult(null);
-    setError(null);
+    invalidate();
     const id = campaignId.trim();
     if (!/^[0-9]{5,25}$/.test(id)) { setError("Enter the exact numeric advertising campaign ID (5–25 digits)."); return; }
+    const seq = requestSeq.current;
+    const requested = provider;
     setLoading(true);
     try {
-      const r = await api.get<Intelligence>(`/api/analytics/ads/intelligence/${provider}/${encodeURIComponent(id)}`);
+      const r = await api.get<Intelligence>(`/api/analytics/ads/intelligence/${requested}/${encodeURIComponent(id)}`);
+      if (seq !== requestSeq.current) return;
       // Refuse any response that claims authority, attribution or organic data.
-      if (r.provider !== provider || r.campaignId !== id || r.currency !== "EUR" || r.source !== "EXISTING_ANALYTICS_SNAPSHOTS"
-        || !["NOT_COLLECTED", "ANALYSED"].includes(r.status) || !Array.isArray(r.windows) || !Array.isArray(r.anomalies) || !Array.isArray(r.recommendations)
+      if (r.provider !== requested || r.campaignId !== id || r.currency !== "EUR" || r.source !== "EXISTING_ANALYTICS_SNAPSHOTS"
+        || !["NOT_COLLECTED", "ANALYSED", "ACCOUNT_CONFLICT"].includes(r.status) || !Array.isArray(r.windows) || !Array.isArray(r.anomalies) || !Array.isArray(r.recommendations)
+        || (r.status === "ACCOUNT_CONFLICT" && (r.windows.length > 0 || r.trend !== null || r.anomalies.length > 0))
         || r.spendAuthorized !== false || r.eligibleForAutomaticAction !== false || r.budgetChangeEur !== null
         || r.marketplaceRoas !== null || r.marketplaceAttributionVerified !== false || r.organicMetricsIncluded !== false) {
         throw new Error("Unexpected intelligence response. Nothing displayed.");
       }
       setResult(r);
     } catch (cause) {
+      if (seq !== requestSeq.current) return;
       setError(cause instanceof Error ? cause.message : "Paid intelligence unavailable.");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
@@ -68,7 +77,7 @@ export function PaidCampaignIntelligenceReview() {
       <form onSubmit={load} style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 12 }}>
         <label>
           Intelligence platform
-          <select aria-label="Intelligence platform" value={provider} onChange={(e) => { setProvider(e.target.value as Provider); setResult(null); }} style={{ display: "block", padding: 10 }}>
+          <select aria-label="Intelligence platform" value={provider} onChange={(e) => { setProvider(e.target.value as Provider); invalidate(); }} style={{ display: "block", padding: 10 }}>
             <option value="meta">Meta Ads</option>
             <option value="google_ads">Google Ads</option>
             <option value="pinterest_ads">Pinterest Ads</option>
@@ -76,7 +85,7 @@ export function PaidCampaignIntelligenceReview() {
         </label>
         <label>
           Intelligence campaign ID
-          <input aria-label="Intelligence campaign ID" value={campaignId} onChange={(e) => { setCampaignId(e.target.value); setResult(null); }} maxLength={25} inputMode="numeric" style={{ display: "block", padding: 10 }} />
+          <input aria-label="Intelligence campaign ID" value={campaignId} onChange={(e) => { setCampaignId(e.target.value); invalidate(); }} maxLength={25} inputMode="numeric" style={{ display: "block", padding: 10 }} />
         </label>
         <button type="submit" disabled={loading} style={{ padding: 12 }}>{loading ? "Analysing…" : "Analyse paid campaign"}</button>
       </form>
@@ -84,6 +93,11 @@ export function PaidCampaignIntelligenceReview() {
       {result && (
         <div aria-live="polite" style={{ marginTop: 16 }}>
           {result.status === "NOT_COLLECTED" && <p>No verified paid windows are stored for this campaign. Nothing can be analysed yet.</p>}
+          {result.status === "ACCOUNT_CONFLICT" && (
+            <p role="status" style={{ border: "1px solid crimson", padding: 10 }}>
+              <strong>Quarantined: stored windows come from different ad accounts</strong> ({result.accountConflict.map((a) => `${a.accountId}: ${a.windows} window(s)`).join("; ")}). No metrics, trend or performance recommendation are shown until provenance is resolved.
+            </p>
+          )}
           {(quality.length > 0 || result.dataQuality.untrustedWindows > 0) && (
             <div role="status" style={{ border: "1px solid crimson", padding: 10 }}>
               <strong>Data-quality warnings — review before relying on any metric</strong>
