@@ -39,12 +39,18 @@ describe("ADS-006G paid provider readiness checklist", () => {
       { ...valid, providers: [{ ...provider("meta", true), connectionVerified: true }, provider("google_ads", false), provider("pinterest_ads", false)] },
       { ...valid, providers: [{ ...provider("meta", true), spendAuthorized: true }, provider("google_ads", false), provider("pinterest_ads", false)] },
       { ...valid, providers: [provider("meta", true), provider("google_ads", false)] },
+      // The API is not trusted merely because it conforms to TypeScript's static types.
+      { ...valid, providers: [{ ...provider("meta", true), configured: "false" }, provider("google_ads", false), provider("pinterest_ads", false)] },
+      { ...valid, providers: [{ ...provider("meta", true), status: "NOT_CONFIGURED" }, provider("google_ads", false), provider("pinterest_ads", false)] },
+      { ...valid, providers: [{ ...provider("meta", true), requiredChecks: [{ token: "fake-secret" }] }, provider("google_ads", false), provider("pinterest_ads", false)] },
+      { ...valid, providers: [{ ...provider("meta", true), platform: "constructor" }, provider("google_ads", false), provider("pinterest_ads", false)] },
     ]) {
       vi.mocked(api.get).mockResolvedValueOnce(tampered);
       const { unmount } = render(<PaidProviderReadinessReview />);
       await userEvent.setup().click(screen.getByRole("button", { name: "Check paid account readiness" }));
       expect(await screen.findByRole("alert")).toHaveTextContent("Unexpected paid account readiness response. Nothing has been enabled.");
       expect(screen.queryByText(/DISABLED/)).toBeNull();
+      expect(screen.queryByText("fake-secret")).toBeNull();
       unmount();
     }
   });
