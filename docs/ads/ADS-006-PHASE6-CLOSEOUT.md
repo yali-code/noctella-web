@@ -62,3 +62,10 @@ Phase 6 code adds **no schema, migration, route, job, cron or environment-variab
 4. Set up Google Ads (developer token and OAuth) and Pinterest Ads access as separate, dedicated paid credentials, then verify each read-only. Confirm Pinterest's UTC reporting dates against the live account.
 5. Get finalized provider billing statements through an owner-approved channel before any reconciliation is claimed.
 6. Get marketplace attribution evidence only with documented, deduplicated eBay/Etsy order linkage.
+
+## GitHub connector write verification — 2026-10-10
+
+- Issue #335 read and issue-comment write succeeded (comment ID 6099697769).
+- Re-fetched PRs #334, #336, #337, #338, #339, #340, #341, #342: all OPEN, Draft, unmerged; #339 targets #336, #340 targets #338, #341 targets #337; other listed PRs target main.
+- This documentation-only commit checks branch-scoped file write capability. It does **not** establish combined-stack integration, live provider readiness, staging smoke, billing reconciliation, attribution or owner activation approval. Phase 6 remains BLOCKED.
+- No merge, deploy, environment modification, credential access, production data access or ad spend.
