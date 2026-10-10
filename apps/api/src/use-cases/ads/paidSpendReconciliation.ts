@@ -1,4 +1,12 @@
-import type { AdsPerformanceEvidence, AdsMetricsProvider } from "./adsPerformanceEvidence";
+import type { AdsMetricsProvider } from "./adsPerformanceEvidence";
+import type { buildPaidCampaignReadout } from "./adsPaidCampaignRead";
+
+/**
+ * The stored paid report exactly as the ADS-006C reader projects it from analytics snapshots.
+ * Its provider, campaign and window come from persisted provenance - never from the caller -
+ * so a report for another campaign or period can never be reconciled against this billing.
+ */
+export type StoredPaidCampaignReport = ReturnType<typeof buildPaidCampaignReadout>;
 
 /** Strict, independent provider billing evidence. Never inferred from clicks or order counts. */
 export interface VerifiedPaidBillingEvidence {
@@ -35,7 +43,7 @@ export interface PaidSpendReconciliationInput {
   readonly accountId: string;
   readonly campaignId: string;
   readonly reportWindow: {readonly start:string;readonly end:string};
-  readonly report: AdsPerformanceEvidence|null;
+  readonly report: StoredPaidCampaignReport|null;
   readonly billing: VerifiedPaidBillingEvidence|null;
 }
 function positiveCents(v:number|null):v is number{
@@ -47,17 +55,29 @@ function validInterval(v:{start:string;end:string}){
     && Date.parse(v.start)<Date.parse(v.end);
 }
 export function reconcilePaidSpend(input:PaidSpendReconciliationInput):PaidSpendReconciliation{
-  const reportSpend=input.report?.spendEur ?? null,billingSpend=input.billing?.comparableAdSpendEur ?? null;
+  const stored=input.report;
+  const evidence=stored?.status==="REPORT_AVAILABLE"?stored.evidence:null;
+  const reportSpend=evidence?.spendEur ?? null,billingSpend=input.billing?.comparableAdSpendEur ?? null;
   const out=(status:PaidSpendReconciliationStatus,explanation:string,differenceEur:number|null=null):PaidSpendReconciliation=>({
     status,provider:input.provider,reportSpendEur:positiveCents(reportSpend)?reportSpend:null,
     billingSpendEur:positiveCents(billingSpend)?billingSpend:null,
     differenceEur,explanation,independentlyVerifiedMarketplaceRevenueEur:null,
     eligibleForAutomaticBudgetChange:false,spendAuthorized:false,
   });
-  if(!input.report || input.report.provider!==input.provider || reportSpend===null){
+  if(!stored || stored.status==="NOT_COLLECTED"){
     return out("MISSING_REPORT","A verified paid ad spend observation is required; do not assume zero.");
   }
-  if(input.report.evidenceLevel==="INCOMPLETE" || input.report.warnings.some(w=>w.startsWith("INVALID_") || w==="CLICKS_EXCEED_IMPRESSIONS" || w==="CONVERSION_VALUE_WITHOUT_COUNT")){
+  if(stored.status!=="REPORT_AVAILABLE" || !evidence || !("period" in stored) || !stored.period){
+    return out("INVALID_REPORT","Stored paid report evidence is untrusted; it cannot be reconciled.");
+  }
+  if(stored.provider!==input.provider || evidence.provider!==input.provider || stored.campaignId!==input.campaignId
+    || stored.period.start!==input.reportWindow.start || stored.period.end!==input.reportWindow.end){
+    return out("SCOPE_MISMATCH","Stored paid report does not cover this provider, campaign and reporting window.");
+  }
+  if(reportSpend===null){
+    return out("MISSING_REPORT","A verified paid ad spend observation is required; do not assume zero.");
+  }
+  if(evidence.evidenceLevel==="INCOMPLETE" || evidence.warnings.some(w=>w.startsWith("INVALID_") || w==="CLICKS_EXCEED_IMPRESSIONS" || w==="CONVERSION_VALUE_WITHOUT_COUNT")){
     return out("INVALID_REPORT","Paid report contains incomplete or contradictory observations.");
   }
   if(!input.billing)return out("MISSING_BILLING","No independent provider billing evidence was supplied.");
