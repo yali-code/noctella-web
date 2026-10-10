@@ -45,6 +45,11 @@ export function storeVerifiedPaidCampaignEvidence(
   db:DbClient, query:PaidCampaignQuery, o:PaidCampaignObservation, now=new Date(),
 ){
   assertPaidObservation(o,query);
+  // Validate at the persistence boundary as well as the collector entry point:
+  // direct trusted callers must not persist an unfinished account-local reporting day.
+  if (Date.parse(o.window.end) > now.getTime()) {
+    throw new Error("Paid reporting window has not ended in the provider account time zone");
+  }
   if([o.spendEur,o.impressions,o.clicks,o.providerReportedConversions,o.providerReportedConversionValueEur].every(v=>v===null)) {
     throw new Error("No paid metrics supplied; refusing to persist empty evidence");
   }
