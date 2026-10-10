@@ -6,7 +6,7 @@ import {assertPaidCampaignQuery,providerNumber,type PaidCampaignObservation,type
 import {readPaidCampaignReport} from "../src/use-cases/ads/adsPaidCampaignRead";
 const query:PaidCampaignQuery={provider:"meta",accountId:"123456789",campaignId:"12345678901",startDate:"2026-10-01",endDate:"2026-10-02"};
 const value:PaidCampaignObservation={provider:"meta",accountId:query.accountId,campaignId:query.campaignId,
- sourceReference:"meta.ads.graph_v26_insights",currency:"EUR",
+ sourceReference:"meta.ads.graph_v26_insights",currency:"EUR",reportingTimeZone:"UTC",
  window:{start:"2026-10-01T00:00:00.000Z",end:"2026-10-03T00:00:00.000Z"},
  spendEur:5.25,clicks:10,impressions:600,providerReportedConversions:null,
  providerReportedConversionValueEur:null,warnings:[]};

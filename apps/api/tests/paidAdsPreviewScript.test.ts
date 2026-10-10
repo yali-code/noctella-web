@@ -21,7 +21,7 @@ describe("ADS-006F manual preview entrypoint",()=>{
     return new Response(JSON.stringify(u.pathname.endsWith("/insights")?
       {data:[{campaign_id:"987654321",spend:"1.25",impressions:"75",clicks:"2",
         date_start:"2026-10-01",date_stop:"2026-10-02"}]}:
-      {currency:"EUR",account_id:"123456789"}),{status:200});
+      {currency:"EUR",account_id:"123456789",timezone_name:"Europe/Sofia"}),{status:200});
   }) as unknown as typeof fetch;
   const result=await previewPaidCampaignFromEnv({
     ...env,NOCTELLA_PAID_ADS_PREVIEW_ACK:"I_AUTHORIZE_PAID_READ_ONLY"},f);

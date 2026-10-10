@@ -1,12 +1,13 @@
 import type { AdsMetricsProvider } from "./adsPerformanceEvidence";
+import { zonedTimeToUtc } from "../media-planning/planner";
 
 /** Provider-only evidence; not marketplace sales. No browser/user token is accepted here. */
 export interface PaidCampaignQuery {
   readonly provider: AdsMetricsProvider;
   readonly accountId: string;
   readonly campaignId: string;
-  readonly startDate: string; // UTC YYYY-MM-DD, inclusive
-  readonly endDate: string; // UTC YYYY-MM-DD, inclusive
+  readonly startDate: string; // provider reporting date YYYY-MM-DD, inclusive
+  readonly endDate: string; // provider reporting date YYYY-MM-DD, inclusive
 }
 export interface PaidCampaignObservation {
   readonly provider: AdsMetricsProvider;
@@ -14,7 +15,12 @@ export interface PaidCampaignObservation {
   readonly campaignId: string;
   readonly sourceReference: string;
   readonly currency: "EUR";
-  /** Exclusive UTC end, at midnight following endDate. */
+  /**
+   * IANA zone in which the provider buckets reporting dates (Meta: ad account timezone_name,
+   * Google Ads: customer.time_zone, Pinterest: documented UTC). Verified, never assumed.
+   */
+  readonly reportingTimeZone: string;
+  /** UTC instants of local midnight at startDate and (exclusive) the midnight after endDate, in reportingTimeZone. */
   readonly window: { readonly start: string; readonly end: string };
   readonly spendEur: number | null;
   readonly impressions: number | null;
@@ -50,10 +56,21 @@ export function assertPaidCampaignQuery(query: PaidCampaignQuery): void {
     throw new Error("Paid reporting window must be complete, in the past and at most 31 days");
   }
 }
-export function paidUtcWindow(query: PaidCampaignQuery) {
+/** Provider-supplied reporting time zone must be a real IANA zone; otherwise the window is unknowable. */
+export function assertReportingTimeZone(timeZone: unknown): asserts timeZone is string {
+  if(typeof timeZone!=="string"||!/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/.test(timeZone))throw new Error("Paid provider reporting time zone missing or invalid");
+  try { new Intl.DateTimeFormat("en-US",{timeZone}); } catch { throw new Error("Paid provider reporting time zone missing or invalid"); }
+}
+/**
+ * Exact instants covered by the provider's account-local reporting dates (DST-safe). A provider
+ * "day" is the account's calendar day, so labelling it as a UTC day would misstate provenance and
+ * break reconciliation against account-local billing periods.
+ */
+export function paidReportingWindow(query: PaidCampaignQuery, timeZone: string) {
   assertPaidCampaignQuery(query);
-  const end = new Date(Date.parse(query.endDate+"T00:00:00.000Z")+86400000).toISOString();
-  return {start:query.startDate+"T00:00:00.000Z",end};
+  assertReportingTimeZone(timeZone);
+  const next = new Date(Date.parse(query.endDate+"T00:00:00.000Z")+86400000).toISOString().slice(0,10);
+  return {start:zonedTimeToUtc(query.startDate,0,0,timeZone),end:zonedTimeToUtc(next,0,0,timeZone)};
 }
 export function providerNumber(value: unknown, kind: "money"|"count"): number|null {
   if(value===null||value===undefined) return null;
@@ -68,7 +85,7 @@ export function requirePaidEUR(currency: unknown): asserts currency is "EUR" {
   if(currency!=="EUR") throw new Error("Paid ad account currency must be EUR; automatic FX conversion disabled");
 }
 export function assertPaidObservation(o:PaidCampaignObservation,q:PaidCampaignQuery):void {
-  const w=paidUtcWindow(q);
+  const w=paidReportingWindow(q,o.reportingTimeZone);
   if(o.provider!==q.provider || o.accountId!==q.accountId || o.campaignId!==q.campaignId
     || o.window.start!==w.start||o.window.end!==w.end||o.currency!=="EUR"
     || !o.sourceReference.startsWith(q.provider+".ads.")
