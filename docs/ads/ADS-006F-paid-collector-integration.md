@@ -9,7 +9,7 @@ Credentials are separate from organic connectors. The eventual application integ
 
 - Meta: Graph Marketing API v26.0 `GET /act_<id>` for EUR account currency and `GET /act_<id>/insights` with campaign-level filtering and explicit date range. Pagination and campaign/window identity checked.
 - Google Ads: REST v25 `GoogleAdsService.SearchStream` with **SELECT-only GAQL**; developer token required. Run an independent `FROM customer` query first to prove the selected customer ID and EUR `customer.currency_code`, **even if campaign results are empty**, then fetch the campaign report. Malformed, missing or non-EUR customer evidence blocks the campaign request; no invented EUR evidence. Cost is converted from micro-units to EUR cents. Fractional cents are rounded and flagged, never silently converted between currencies.
-- Pinterest Ads: v5 `GET /ad_accounts/<id>` to verify EUR and `GET /ad_accounts/<id>/campaigns/analytics` for only the identified campaign; no reuse of organic Pin Analytics.
+- Pinterest Ads: v5 `GET /ad_accounts/<id>` to strictly verify explicit account ID and EUR; then `GET /ad_accounts/<id>/campaigns/analytics` for only the identified campaign, using the documented `SPEND_IN_MICRO_DOLLAR` metric (micro-units of the verified advertiser currency). EUR cents are rounded with a warning if sub-cent values are present. No reuse of organic Pin Analytics.
 - All three: provider-reported conversions and conversion value deliberately remain null. eBay/Etsy orders and outbound clicks never become advertising Purchase events.
 
 Source documentation reviewed:
