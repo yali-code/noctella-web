@@ -44,3 +44,36 @@ The code includes `npm run ads:paid:preview -w apps/api`. This is **not** a back
 Do not paste token values in code, logs, tickets, chat or terminal transcripts. The command returns only provider/currency, UTC window, raw EUR ad spend, impressions, clicks, warning codes, and `storagePerformed:false`, `campaignModified:false`, `spendAuthorized:false`. If a live provider fails, an intentionally generic error is displayed without provider response bodies.
 
 **Important:** The manual preview is the first safe step *after* the account owner grants real Ads API permissions. It does not prove spend reconciliation, billing access or eBay/Etsy purchase attribution and must not be promoted automatically to production.
+
+
+## Zero-campaign Meta account verification (manual only)
+
+The existing per-campaign `ads:paid:preview` script requires a real campaign ID and is
+**not applicable before the first campaign exists**. For initial Meta onboarding use:
+
+```bash
+NOCTELLA_PAID_ADS_PREVIEW_ACK=I_AUTHORIZE_PAID_READ_ONLY npm run ads:meta:verify -w apps/api
+```
+
+Run the command only from a trusted environment that already has
+`NOCTELLA_META_AD_ACCOUNT_ID` and `NOCTELLA_META_AD_ACCESS_TOKEN` configured
+as protected server environment variables. The acknowledgement is intentionally
+per-command; do not persist it in the service environment or schedule this script.
+
+The command checks account identity and EUR currency and executes two Meta Graph
+**GET** requests (account fields and yesterday's account-level Insights). An empty
+successful `data: []` is accepted as **verified read access, 0 report rows**.
+It prints no token, access headers, provider response body, spend, revenue,
+campaign mutation, billing match or attributed marketplace purchases.
+
+It performs **no ERP database read/write**, does not activate any job/route or
+campaign, and requires **no actual campaign or payment method**. Result labels
+`spendReconciliation: NOT_ASSESSED` and
+`marketplaceAttribution: NOT_ASSESSED` must remain unchanged.
+
+For current owner onboarding (2026-10-10), the owner independently reported
+HTTP 200 for Meta account and Ads Insights, EUR and 0 report rows after
+configuring the staging server token. This is **a live Meta permission check only**;
+the code in this draft PR is not deployed to staging and has not performed a
+full paid campaign collector run. No PR may be merged or production-deployed
+without separate explicit owner approval.
