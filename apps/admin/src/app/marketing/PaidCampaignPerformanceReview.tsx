@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
+import { PaidCampaignIntelligenceReview } from "./PaidCampaignIntelligenceReview";
 
 type Provider = "meta" | "google_ads" | "pinterest_ads";
 type PerformanceEvidence = {
@@ -89,6 +90,7 @@ export function PaidCampaignPerformanceReview() {
   }
 
   return (
+    <>
     <section aria-label="Paid Ads performance" style={{ marginTop: 36, borderTop: "1px solid #8b6b2e", paddingTop: 22 }}>
       <h2>Paid campaign performance — evidence only</h2>
       <p>Reads existing Analytics Agent observations. No paid provider is connected by this screen. Missing data is not zero spend or zero sales.</p>
@@ -156,5 +158,8 @@ export function PaidCampaignPerformanceReview() {
         </div>
       )}
     </section>
+    {/* ADS-007A: multi-window advisory analysis of the same stored paid evidence. */}
+    <PaidCampaignIntelligenceReview />
+    </>
   );
 }

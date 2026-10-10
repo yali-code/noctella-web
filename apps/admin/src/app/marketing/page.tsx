@@ -3,7 +3,6 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 import { PaidCampaignPerformanceReview } from "./PaidCampaignPerformanceReview";
-import { PaidCampaignIntelligenceReview } from "./PaidCampaignIntelligenceReview";
 
 type CampaignBrief = {
   productId: string;
@@ -163,7 +162,6 @@ export default function MarketingPage() {
         </section>
       )}
       <PaidCampaignPerformanceReview />
-      <PaidCampaignIntelligenceReview />
     </main>
   );
 }
