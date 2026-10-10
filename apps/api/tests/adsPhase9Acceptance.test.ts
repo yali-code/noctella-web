@@ -128,6 +128,14 @@ describe("ADS-009 acceptance: campaign approval isolation and migration safety",
       budget: { productId: "NOC-000007", currency: "EUR", proposedDailyEur: 2, hardDailyLimitEur: 5, hardTotalLimitEur: 20, decision: "NEEDS_HUMAN_REVIEW", blockers: [], evidence: { landedCostEur: null, historicalProfitEur: null, profitStatus: "UNKNOWN" }, requiresOwnerApproval: true, spendAuthorized: false } });
     const approval = evaluateCampaignDraftApproval(draft, { draftFingerprint: campaignDraftFingerprint(draft), approvedByAdminUserId: "owner", approvedAt: "2026-09-30T11:00:00.000Z", maxDailyEur: 5, maxTotalEur: 20 }, NOW);
     expect(approval).toMatchObject({ status: "APPROVED_FOR_EXECUTION_REVIEW", executionAuthorized: false, spendAuthorized: false });
+    // Any content change after approval invalidates it (creative, media or budget).
+    const signed = { draftFingerprint: approval.draftFingerprint, approvedByAdminUserId: "owner", approvedAt: "2026-09-30T11:00:00.000Z", maxDailyEur: 5, maxTotalEur: 20 };
+    for (const edited of [
+      { ...draft, creative: { ...draft.creative, headline: "Edited after approval" } },
+      { ...draft, creative: { ...draft.creative, mediaPhotoIds: [] as string[] } },
+      { ...draft, budget: { ...draft.budget, proposedDailyEur: 3 } },
+    ]) expect(evaluateCampaignDraftApproval(edited, signed, NOW).status).not.toBe("APPROVED_FOR_EXECUTION_REVIEW");
+    expect(evaluateCampaignDraftApproval({ ...draft, budget: { ...draft.budget, proposedDailyEur: 3 } }, signed, NOW).status).toBe("APPROVAL_STALE");
     expect(dbDump(db)).toBe(before);
   });
 
