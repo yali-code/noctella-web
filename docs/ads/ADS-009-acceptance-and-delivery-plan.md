@@ -6,25 +6,26 @@ Updated 2026-10-10. This is engineering evidence only. **No phase is operational
 
 ```
 main (ab9d5f4)
-├── #343 Wishlist race fix (canonical) ── test/wishlist-race-remaining-cases (2 sibling assertions)
+├── #343 Wishlist race fix (canonical) ── #350 (2 sibling assertions)
 ├── #334 ADS-006E reader provenance
 ├── #336 ADS-006F collectors ── #339 ADS-006I windows/conflicts ── #344 direct-store window guard
 ├── #337 ADS-006G readiness UI ── #341 ADS-006K UI tests
 ├── #338 ADS-006H reconciliation ── #340 ADS-006J evidence binding
-├── #345 ADS-007 Intelligence ── feat/ads-007a-admin-intelligence (Admin summary)
-├── #346 ADS-008 Campaign drafts ── feat/ads-008a-admin-draft-preview (Admin preview)
+├── #345 ADS-007 Intelligence (+ account-conflict quarantine) ── #348 Admin intelligence (+ stale-response guard)
+├── #346 ADS-008 Campaign drafts ─┬─ #349 Admin draft preview (+ stale-response guard)
+│                                 └─ #351 exact marketplace destination allowlist (other worker)
 ├── #342 Phase 6 closeout docs
 └── #347 test/ads-009-acceptance: integration-only composition + Phase 9 acceptance
 ```
 
 **Recommended merge order (owner decides; each PR reviewed on its own):**
-1. #343, then its follow-up.
+1. #343, then #350.
 2. #334.
 3. #336, then #339, then #344.
 4. #337, then #341.
 5. #338, then #340.
-6. #345, then 007a.
-7. #346, then 008a.
+6. #345, then #348.
+7. #346, then #351, then #349.
 8. #342.
 9. **#347 is not merged as-is.** It exists to show that the whole stack composes and to run CI over it. After steps 1–8 land, open one small PR from `main` carrying only the Phase 9 files (`apps/api/tests/adsPhase9Acceptance.test.ts`, `docs/ads/ADS-009-*.md`) and close #347.
 
@@ -41,9 +42,10 @@ main (ab9d5f4)
 
 | Check | Result |
 |---|---|
-| API ads/paid/analytics suites (32 files) | **224/224 PASS** |
-| `adsPhase9Acceptance.test.ts` | **9/9 PASS** (includes ERP → media → draft) |
-| Admin marketing tests (3 files) | 8/8 PASS |
+| API ads/paid/analytics suites (32 files) | **228/228 PASS** |
+| `adsPhase9Acceptance.test.ts` | **11/11 PASS** (ERP → media → draft, account conflict, lookalike destination) |
+| Admin marketing tests (4 files, incl. deferred-response stale tests) | 17/17 PASS |
+| API build and Admin `next build` (CI placeholder `NEXT_PUBLIC_API_BASE_URL`) | PASS |
 | API, Admin and storefront typecheck | PASS |
 | Admin marketing lint | PASS |
 | Storefront Wishlist suite | 24/24 PASS |
@@ -74,6 +76,14 @@ main (ab9d5f4)
 | Migration safety | No ads/paid tables; no schema change in Phases 6–9 | — |
 | Cross-module chain | ERP → media → draft → simulated Meta → SQLite → report → intelligence → reconciliation | Mock-only, **not operational proof** |
 
+## Security fixes in this round
+
+| Defect | Fix | Evidence |
+|---|---|---|
+| ADS-007 could blend windows from different ad accounts into one campaign history | #345: each window needs exactly one verified stored account id; multi-account histories are quarantined as `ACCOUNT_CONFLICT` (no metrics, trend or recommendation) | SQLite regression tests; acceptance (two accounts collected → quarantine, cross-account reconciliation → `SCOPE_MISMATCH`) |
+| Admin views could show a late response for an old campaign or provider, or a draft for old budgets | #348 (intelligence and existing performance view), #349 (draft preview): a request sequence drops stale responses and errors; any input change invalidates the view; drafts must match the requested caps | Deferred-response React tests, each verified failing without the fix |
+| Lookalike marketplace destinations (#351, other worker) | Reviewed, not duplicated: exact eBay/Etsy domains, HTTPS only, no credentials or ports, marketplace must match the URL | Probe: uppercase, `:443`, query and `etsy.com/de` accepted; trailing dot, punycode/Cyrillic, `ftp:`, `user@`, `etsy.de`, `:444`, protocol-relative and `%2e` rejected. In the chain, the ERP funnel policy already excludes such listings (layer 1). |
+
 ## Remaining engineering items
 
 | Item | Estimate |
@@ -83,4 +93,4 @@ main (ab9d5f4)
 | CI review fixes across 15 Draft PRs and the final small Phase 9 PR after the merges | ~0.5–1 day |
 | `assertPaidCampaignQuery` (#336) uses the real `Date.now()` and ignores the injected `now` (test determinism only) | ~0.1 day, by the branch owner |
 
-**Engineering total: about 2–3.5 working days.** Operational closure still depends on the external owner items (staging approval, a reportable campaign, Google and Pinterest accounts, billing statements, the schema decision).
+**Engineering total: about 2–3 working days.** Operational closure still depends on the external owner items (staging approval, a reportable campaign, Google and Pinterest accounts, billing statements, the schema decision).
