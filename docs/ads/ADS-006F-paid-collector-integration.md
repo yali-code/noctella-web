@@ -77,3 +77,34 @@ configuring the staging server token. This is **a live Meta permission check onl
 the code in this draft PR is not deployed to staging and has not performed a
 full paid campaign collector run. No PR may be merged or production-deployed
 without separate explicit owner approval.
+
+
+## In-memory end-to-end paid data-flow validation (code only)
+
+`apps/api/tests/metaPaidEndToEndSqlite.test.ts` now exercises the **real**
+`MetaPaidCampaignClient` (with injected, mocked HTTP), the actual
+`collectPaidCampaignEvidence` opt-in policy, the existing
+`analytics_runs` / `analytics_metric_snapshots` SQLite schema in a
+temporary **in-memory** database, and `readPaidCampaignReport` (the same
+read projection used by the authenticated Admin Marketing route).
+
+The test requires **no Meta credentials**, no actual campaigns, no Render
+deployment, no production DB access and no payment method. It verifies:
+
+- A missing backend read approval denies the provider call and DB writes.
+- Approved **preview** performs HTTPS GET only and leaves SQLite empty.
+- Explicitly approved snapshot writing records only authenticated EUR
+  campaign observations, with replay idempotency, bounded provider/campaign
+  identity and the original source provenance.
+- Unknown provider conversions and marketplace-attributed sales remain null;
+  no ROAS or automatic budget/campaign authorization is fabricated.
+- A valid **empty** Meta Insights report stays `NOT_COLLECTED` and does not
+  create synthetic zero-spend rows.
+- Wrong-campaign, non-EUR and unauthorized-provider responses fail closed,
+  and no token appears in sanitized results.
+
+This provides code-level integration evidence, **not** live staging endpoint
+or actual paid campaign collection evidence. The current app reports continue
+to be limited to authenticated `analytics.view` and cannot send paid ad
+mutations. Existing Draft PRs and deployed staging/production services are
+unchanged; the owner still requires **NO MERGE**.
