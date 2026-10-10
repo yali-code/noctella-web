@@ -57,8 +57,12 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
   const f=mockFetch((_url,request)=>{
     const payload=JSON.parse(String(request.body));
     expect(payload.query).toContain("SELECT customer.id");
-    expect(payload.query).toContain("campaign.id = "+campaignId);
     expect(payload.query).not.toContain("UPDATE");
+    if(payload.query.includes("FROM customer")){
+      expect(payload.query).not.toContain("metrics.");
+      return [{results:[{customer:{id:accountId,currencyCode:"EUR"}}]}];
+    }
+    expect(payload.query).toContain("campaign.id = "+campaignId);
     return [{results:[{
       customer:{id:accountId,currencyCode:"EUR"},campaign:{id:campaignId},
       metrics:{costMicros:"12300000",impressions:"100",clicks:"15"}
@@ -68,10 +72,47 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
   const report=await new GooglePaidCampaignClient(f.fn).fetchCampaign(q,{accessToken:token,developerToken:"fake-developer-token"});
   expect(report.spendEur).toBe(12.3);
   expect(report.clicks).toBe(15);
-  expect(f.calls).toHaveLength(1);
-  expect(f.calls[0]?.options.method).toBe("POST");
-  expect(f.calls[0]?.url.pathname).toMatch(/googleAds:searchStream$/);
+  expect(f.calls).toHaveLength(2);
+  expect(f.calls.every(x=>x.options.method==="POST")).toBe(true);
+  expect(f.calls.every(x=>/googleAds:searchStream$/.test(x.url.pathname))).toBe(true);
   checkCalls(f.calls);
+ });
+ it("verifies real EUR account before accepting an empty campaign report",async()=>{
+  const f=mockFetch((_url,request)=>{
+    const query=JSON.parse(String(request.body)).query as string;
+    return query.includes("FROM customer")
+      ?[{results:[{customer:{id:accountId,currencyCode:"EUR"}}]}]
+      :[];
+  });
+  const result=await new GooglePaidCampaignClient(f.fn).fetchCampaign(
+    {...base,provider:"google_ads"}, {accessToken:token,developerToken:"fake-developer-token"});
+  expect(result).toMatchObject({
+    currency:"EUR",spendEur:null,clicks:null,impressions:null,
+    warnings:["NO_CAMPAIGN_REPORT"],
+  });
+  expect(f.calls).toHaveLength(2);
+  checkCalls(f.calls);
+ });
+ it("blocks a non-EUR or mismatched customer before requesting campaign data",async()=>{
+  for(const customer of [
+    {id:accountId,currencyCode:"GBP"},
+    {id:"999999999",currencyCode:"EUR"},
+  ]){
+    const f=mockFetch(()=>[{results:[{customer}]}]);
+    await expect(new GooglePaidCampaignClient(f.fn).fetchCampaign(
+      {...base,provider:"google_ads"},
+      {accessToken:token,developerToken:"fake-developer-token"})).rejects.toThrow();
+    expect(f.calls).toHaveLength(1);
+  }
+ });
+ it("fails closed on malformed or missing customer stream evidence",async()=>{
+  for(const invalid of [[], [{}], [{results:[{}]}], [{results:"not-an-array"}]]){
+    const f=mockFetch(()=>invalid);
+    await expect(new GooglePaidCampaignClient(f.fn).fetchCampaign(
+      {...base,provider:"google_ads"},
+      {accessToken:token,developerToken:"fake-developer-token"})).rejects.toThrow();
+    expect(f.calls).toHaveLength(1);
+  }
  });
  it("refuses Google Ads access without separately granted developer token",async()=>{
   const f=mockFetch(()=>[]);
