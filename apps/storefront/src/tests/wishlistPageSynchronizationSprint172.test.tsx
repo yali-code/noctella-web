@@ -84,7 +84,8 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
-    fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
+    // ProductCard derives its wishlist label from localStorage in an effect: wait for it, not just the title.
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Item A from wishlist" }));
     expect(screen.queryByText("Item A")).toBeNull();
     expect(screen.getByText("Item B")).toBeTruthy();
   });
@@ -94,7 +95,8 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
-    fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
+    // ProductCard derives its wishlist label from localStorage in an effect: wait for it, not just the title.
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Item A from wishlist" }));
     expect(screen.getByText(/Your wishlist is empty/)).toBeTruthy();
   });
 
@@ -189,7 +191,8 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     vi.mocked(api.post).mockResolvedValue(catalog([itemA, itemB]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
-    fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
+    // ProductCard derives its wishlist label from localStorage in an effect: wait for it, not just the title.
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Item A from wishlist" }));
     expect(api.post).toHaveBeenCalledOnce();
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByText("Item B")).toBeTruthy();
