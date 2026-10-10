@@ -139,3 +139,38 @@ describe("ADS-009 acceptance: campaign approval isolation and migration safety",
     expect(namespaces).toEqual([{ ns: "paid_meta", scope: "external_ad_campaign" }]);
   });
 });
+
+describe("ADS-009 acceptance: ERP source data -> approved media -> campaign draft (non-executing)", () => {
+  const PREVIEW_NOW = new Date("2026-09-30T12:00:00.000Z");
+  async function seedErpProduct(db: ReturnType<typeof createTestDb>) {
+    const schema = await import("../src/db/schema.sqlite");
+    db.insert(schema.categories).values({ id: "cat-cam", name: "Cameras", slug: "cameras" }).run();
+    db.insert(schema.products).values({ id: "NOC-000007", sku: "NOC-000007", title: "Vintage Olympus OM-1 35mm SLR camera body", slug: "olympus-om-1", type: "unique_item", status: "published", stockQuantity: 1, categoryId: "cat-cam", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z" }).run();
+    for (const [id, ready, primary, w] of [["ph-1", "Ready", true, 1600], ["ph-2", "Ready", false, 1600], ["ph-3", "Pending", false, 1600], ["ph-4", "Ready", false, 320]] as const) {
+      db.insert(schema.productPhotos).values({ id, productId: "NOC-000007", processingStatus: ready, url: `/images/product-photos/${id}.webp`, thumbnailUrl: `/t/${id}.webp`, filename: `${id}.webp`, mimeType: "image/webp", sizeBytes: 10, width: w, height: w, isPrimary: primary, sortOrder: id === "ph-1" ? 0 : 1 }).run();
+    }
+    db.insert(schema.marketplaceConnections).values({ id: "conn-ebay", channel: "ebay", accountLabel: "ebay", status: "connected" }).run();
+    db.insert(schema.externalListings).values({ id: "xl-1", productId: "NOC-000007", channel: "ebay", connectionId: "conn-ebay", externalListingId: "123456789012", externalListingUrl: "https://www.ebay.de/itm/123456789012", externalStatus: "active", payloadSnapshot: "{}", publishedAt: "2026-09-02T00:00:00.000Z", updatedAt: "2026-09-30T08:00:00.000Z" }).run();
+    db.insert(schema.marketplaceInventorySnapshots).values({ id: "snap-1", channel: "ebay", productId: "NOC-000007", externalListingId: "123456789012", localStock: 1, marketplaceStock: 1, capturedAt: "2026-09-30T09:00:00.000Z" }).run();
+    const { addProductMarketingTag } = await import("../src/services/marketingTags");
+    await addProductMarketingTag(db, "NOC-000007", "Film Camera");
+  }
+
+  it("builds a provider draft only from Ready ERP-hosted photos and fails closed without financial evidence", async () => {
+    const db = createTestDb();
+    await seedErpProduct(db);
+    const { readCampaignDraftPreview } = await import("../src/use-cases/ads/adsCampaignDrafts");
+    const before = dbDump(db);
+    const preview = await readCampaignDraftPreview(db, "NOC-000007", "meta", { requestedDailyEur: 2, hardDailyLimitEur: 5, hardTotalLimitEur: 20 }, PREVIEW_NOW);
+    expect(preview).toMatchObject({ scope: "DRAFT_PREVIEW_ONLY", ownerApprovalRecorded: false, executionEnabled: false, spendAuthorized: false, capabilityLimitsSource: "PLANNING_DEFAULTS_UNVERIFIED" });
+    expect(preview.media.selected.map((m) => m.photoId)).toEqual(["ph-1", "ph-2"]);
+    expect(preview.media.excluded).toEqual(expect.arrayContaining([{ photoId: "ph-3", reason: "NOT_READY" }, { photoId: "ph-4", reason: "TOO_SMALL" }]));
+    expect(preview.drafts).toHaveLength(1);
+    const [{ draft, validation, approval }] = preview.drafts;
+    expect(draft).toMatchObject({ productId: "NOC-000007", destination: { marketplace: "ebay", url: "https://www.ebay.de/itm/123456789012" }, creative: { mediaPhotoIds: ["ph-1", "ph-2"] }, targeting: { demographics: null, geography: null } });
+    // An unsold original has no historical profit: the existing budget guard blocks, so the draft is invalid and cannot be approved.
+    expect(validation.errors).toContain("BUDGET_BLOCKED");
+    expect(approval).toMatchObject({ status: "DRAFT_INVALID", executionAuthorized: false, spendAuthorized: false });
+    expect(dbDump(db)).toBe(before);
+  });
+});
