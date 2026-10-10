@@ -3,6 +3,13 @@ import {assertPaidCampaignQuery,paidUtcWindow,providerNumber,requirePaidEUR,requ
 } from "../../use-cases/ads/paidCampaignCollectorContract";
 import {PaidProviderReadError,isObject,paidGetJson} from "./paidTransport";
 
+/** Fail closed when Google sends an unexpected SearchStream batch shape. */
+function readSearchStreamRows(payload:unknown):unknown[]{
+  if(!Array.isArray(payload)||payload.length>3
+    || payload.some(batch=>!isObject(batch)||!Array.isArray(batch.results)))
+    throw new PaidProviderReadError("malformed","Google Ads SearchStream response malformed");
+  return payload.flatMap((batch:Record<string,unknown>)=>batch.results as unknown[]);
+}
 /** Google Ads API v25 SearchStream, strictly SELECT-only GAQL. */
 export class GooglePaidCampaignClient implements PaidAdsReadOnlyClient {
   readonly provider="google_ads" as const;
@@ -15,13 +22,23 @@ export class GooglePaidCampaignClient implements PaidAdsReadOnlyClient {
     if(access.managerCustomerId&&!/^[0-9]{5,25}$/.test(access.managerCustomerId))
       throw new PaidProviderReadError("rejected","Invalid Google manager account id");
     const url=new URL(`https://googleads.googleapis.com/v25/customers/${query.accountId}/googleAds:searchStream`);
-    const gaql=`SELECT customer.id, customer.currency_code, campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks FROM campaign WHERE campaign.id = ${query.campaignId} AND segments.date BETWEEN '${query.startDate}' AND '${query.endDate}'`;
-    const payload=await paidGetJson(url,access,this.fetchImpl,"POST",{query:gaql},{
+    const headers={
       "developer-token":access.developerToken,
-      ...(access.managerCustomerId?{"login-customer-id":access.managerCustomerId}:{})});
-    if(!Array.isArray(payload)||payload.length>3)
-      throw new PaidProviderReadError("malformed","Google Ads report batches malformed");
-    const rows:unknown[]=payload.flatMap(batch=>isObject(batch)&&Array.isArray(batch.results)?batch.results:[]);
+      ...(access.managerCustomerId?{"login-customer-id":access.managerCustomerId}:{}),
+    };
+    // An empty campaign report does not identify a customer or prove its currency.
+    // Verify the account independently BEFORE requesting its campaign metrics.
+    const accountQuery="SELECT customer.id, customer.currency_code FROM customer LIMIT 1";
+    const rawAccount=await paidGetJson(url,access,this.fetchImpl,"POST",{query:accountQuery},headers);
+    const accountRows=readSearchStreamRows(rawAccount);
+    if(accountRows.length!==1||!isObject(accountRows[0])||!isObject(accountRows[0].customer)
+      || String(accountRows[0].customer.id)!==query.accountId)
+      throw new PaidProviderReadError("malformed","Google Ads customer identity not verified");
+    requirePaidEUR(accountRows[0].customer.currencyCode);
+
+    const gaql=`SELECT customer.id, customer.currency_code, campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks FROM campaign WHERE campaign.id = ${query.campaignId} AND segments.date BETWEEN '${query.startDate}' AND '${query.endDate}'`;
+    const payload=await paidGetJson(url,access,this.fetchImpl,"POST",{query:gaql},headers);
+    const rows=readSearchStreamRows(payload);
     if(rows.length>1)throw new PaidProviderReadError("malformed","Google Ads reporting must use a single aggregate campaign row");
     const item=rows[0];
     if(item!==undefined&&(!isObject(item)||!isObject(item.customer)||!isObject(item.campaign)||!isObject(item.metrics)
