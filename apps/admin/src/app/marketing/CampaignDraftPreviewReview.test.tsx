@@ -36,7 +36,7 @@ async function submit(productId = "NOC-000007") {
   const user = userEvent.setup();
   render(<CampaignDraftPreviewReview />);
   await user.type(screen.getByLabelText("Draft product ID"), productId);
-  await user.click(screen.getByRole("button", { name: "Preview campaign draft" }));
+  await user.click(screen.getByRole("button", { name: "Preview provider campaign draft" }));
 }
 
 describe("ADS-008 Admin campaign draft preview", () => {
@@ -52,7 +52,7 @@ describe("ADS-008 Admin campaign draft preview", () => {
     expect(screen.getByText("Execution authorization").nextSibling).toHaveTextContent("Disabled — provider execution disabled");
     expect(screen.getByText(/geography and demographics not set/)).toBeInTheDocument();
     // No approve/launch/budget control: the only button is the preview request.
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Preview campaign draft"]);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Preview provider campaign draft"]);
   });
 
   it("refuses responses implying a recorded approval, execution or spend authority", async () => {
@@ -65,7 +65,7 @@ describe("ADS-008 Admin campaign draft preview", () => {
       const user = userEvent.setup();
       const { unmount } = render(<CampaignDraftPreviewReview />);
       await user.type(screen.getByLabelText("Draft product ID"), "NOC-000007");
-      await user.click(screen.getByRole("button", { name: "Preview campaign draft" }));
+      await user.click(screen.getByRole("button", { name: "Preview provider campaign draft" }));
       expect(await screen.findByRole("alert")).toHaveTextContent("Unexpected campaign draft response. Nothing displayed.");
       unmount();
     }
@@ -86,10 +86,10 @@ describe("ADS-008 Admin campaign draft preview", () => {
     expect(screen.queryByText(/Approved ERP media/)).toBeNull(); // old draft was built for other caps
     const pending = deferred<unknown>();
     vi.mocked(api.get).mockReturnValueOnce(pending.promise as never);
-    await user.click(screen.getByRole("button", { name: "Preview campaign draft" }));
+    await user.click(screen.getByRole("button", { name: "Preview provider campaign draft" }));
     await user.clear(screen.getByLabelText("Draft total cap EUR"));
     await user.type(screen.getByLabelText("Draft total cap EUR"), "30");
-    expect(screen.getByRole("button", { name: "Preview campaign draft" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Preview provider campaign draft" })).toBeEnabled();
     await act(async () => pending.resolve(preview));
     expect(screen.queryByText(/Approved ERP media/)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -103,7 +103,7 @@ describe("ADS-008 Admin campaign draft preview", () => {
     await user.selectOptions(screen.getByLabelText("Draft platform"), "pinterest_ads");
     await act(async () => meta.resolve(preview));
     expect(screen.queryByText(/Approved ERP media/)).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Preview campaign draft" }));
+    await user.click(screen.getByRole("button", { name: "Preview provider campaign draft" }));
     await user.type(screen.getByLabelText("Draft product ID"), "8");
     await act(async () => product.reject(new Error("late failure")));
     expect(screen.queryByRole("alert")).toBeNull();
@@ -121,7 +121,7 @@ describe("ADS-008 Admin campaign draft preview", () => {
     await act(async () => older.resolve({ ...preview, media: { selected: [{ photoId: "stale-photo", url: "/z" }], excluded: [] } }));
     expect(screen.getByText(/Approved ERP media: ph-1, ph-2/)).toBeInTheDocument();
     expect(screen.queryByText(/stale-photo/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Preview campaign draft" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Preview provider campaign draft" })).toBeEnabled();
   });
 
   it("refuses a draft that was not built for the requested caps", async () => {
