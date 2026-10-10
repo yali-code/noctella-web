@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 
 type Provider = "meta" | "google_ads" | "pinterest_ads";
@@ -40,29 +40,39 @@ export function CampaignDraftPreviewReview() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Only the latest request may update the screen; any input change invalidates the shown preview
+  // and every in-flight request, so a draft never appears with budgets or a product it was not built for.
+  const requestSeq = useRef(0);
+  const invalidate = () => { requestSeq.current += 1; setPreview(null); setError(null); setLoading(false); };
+
   async function load(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPreview(null);
-    setError(null);
+    invalidate();
     const id = productId.trim();
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) { setError("Enter a valid ERP product ID."); return; }
     if (![daily, dailyCap, totalCap].every((v) => eurPattern.test(v) && Number(v) > 0)) { setError("Budgets must be positive EUR amounts with at most two decimals."); return; }
+    const seq = requestSeq.current;
+    const requested = { provider, dailyCap: Number(dailyCap), totalCap: Number(totalCap) };
     setLoading(true);
     try {
       const query = new URLSearchParams({ provider, requestedDailyEur: daily, hardDailyLimitEur: dailyCap, hardTotalLimitEur: totalCap });
       const r = await api.get<Preview>(`/api/analytics/ads/campaign-draft/${encodeURIComponent(id)}?${query.toString()}`);
-      // Refuse any response that implies a recorded approval, execution or spend authority.
-      if (r.productId !== id || r.provider !== provider || r.scope !== "DRAFT_PREVIEW_ONLY" || !Array.isArray(r.drafts)
+      if (seq !== requestSeq.current) return;
+      // Refuse any response that implies a recorded approval, execution or spend authority,
+      // or that was not built for exactly the requested product, provider and caps.
+      if (r.productId !== id || r.provider !== requested.provider || r.scope !== "DRAFT_PREVIEW_ONLY" || !Array.isArray(r.drafts)
         || r.ownerApprovalRecorded !== false || r.executionEnabled !== false || r.spendAuthorized !== false
         || r.drafts.some((d) => d.validation.executionEnabled !== false || d.validation.spendAuthorized !== false
-          || d.approval.executionAuthorized !== false || d.approval.spendAuthorized !== false || d.draft.status !== "DRAFT")) {
+          || d.approval.executionAuthorized !== false || d.approval.spendAuthorized !== false || d.draft.status !== "DRAFT"
+          || d.draft.provider !== requested.provider || d.draft.budget.hardDailyLimitEur !== requested.dailyCap || d.draft.budget.hardTotalLimitEur !== requested.totalCap)) {
         throw new Error("Unexpected campaign draft response. Nothing displayed.");
       }
       setPreview(r);
     } catch (cause) {
+      if (seq !== requestSeq.current) return;
       setError(cause instanceof Error ? cause.message : "Campaign draft preview unavailable.");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
@@ -71,15 +81,15 @@ export function CampaignDraftPreviewReview() {
       <h2>Provider campaign draft — preview only</h2>
       <p>Builds a provider-specific draft from the ERP product, its Ready photos and the existing budget guard. Nothing is sent to any ad platform.</p>
       <form onSubmit={load} style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 12 }}>
-        <label>Draft product ID<input aria-label="Draft product ID" value={productId} onChange={(e) => { setProductId(e.target.value); setPreview(null); }} maxLength={100} style={{ display: "block", padding: 10 }} /></label>
+        <label>Draft product ID<input aria-label="Draft product ID" value={productId} onChange={(e) => { setProductId(e.target.value); invalidate(); }} maxLength={100} style={{ display: "block", padding: 10 }} /></label>
         <label>Draft platform
-          <select aria-label="Draft platform" value={provider} onChange={(e) => { setProvider(e.target.value as Provider); setPreview(null); }} style={{ display: "block", padding: 10 }}>
+          <select aria-label="Draft platform" value={provider} onChange={(e) => { setProvider(e.target.value as Provider); invalidate(); }} style={{ display: "block", padding: 10 }}>
             <option value="meta">Meta Ads</option><option value="google_ads">Google Ads</option><option value="pinterest_ads">Pinterest Ads</option>
           </select>
         </label>
-        <label>Requested daily €<input aria-label="Draft requested daily EUR" value={daily} onChange={(e) => setDaily(e.target.value)} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
-        <label>Daily cap €<input aria-label="Draft daily cap EUR" value={dailyCap} onChange={(e) => setDailyCap(e.target.value)} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
-        <label>Total cap €<input aria-label="Draft total cap EUR" value={totalCap} onChange={(e) => setTotalCap(e.target.value)} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
+        <label>Requested daily €<input aria-label="Draft requested daily EUR" value={daily} onChange={(e) => { setDaily(e.target.value); invalidate(); }} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
+        <label>Daily cap €<input aria-label="Draft daily cap EUR" value={dailyCap} onChange={(e) => { setDailyCap(e.target.value); invalidate(); }} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
+        <label>Total cap €<input aria-label="Draft total cap EUR" value={totalCap} onChange={(e) => { setTotalCap(e.target.value); invalidate(); }} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
         <button type="submit" disabled={loading} style={{ padding: 12 }}>{loading ? "Building…" : "Preview campaign draft"}</button>
       </form>
       {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
