@@ -1,88 +1,86 @@
 # ADS-009 — Acceptance matrix, dependency map and delivery plan (Phases 6–9)
 
-State on 2026-10-10. This is engineering evidence only. **No phase is operationally complete.** Nothing has been merged, deployed or activated, and there has been no ad spend.
+Updated 2026-10-10. This is engineering evidence only. **No phase is operationally complete.** Nothing has been merged, deployed or activated, and there has been no ad spend. The staging steps are in `ADS-009-staging-acceptance-checklist.md`.
 
-## Branch and dependency map
+## Draft PR dependency map
 
 ```
 main (ab9d5f4)
-├── #334 ADS-006E reader provenance ─────────────────────────────┐
-├── #336 ADS-006F collectors ── #339 ADS-006I windows/conflicts ──┤
-├── #337 ADS-006G readiness UI ── #341 ADS-006K UI tests ─────────┤
-├── #338 ADS-006H reconciliation ── #340 ADS-006J evidence binding┤
-├── #342 Phase 6 closeout docs                                    │
-├── feat/ads-007-intelligence (Phase 7) ─────────────────────────┤
-├── feat/ads-008-campaign-drafts (Phase 8) ──────────────────────┤
-├── test/storefront-wishlist-flaky-remove (CI flake fix) ────────┤
-└── test/ads-009-acceptance = local merge of all of the above + Phase 9 acceptance test
+├── #343 Wishlist race fix (canonical) ── test/wishlist-race-remaining-cases (2 sibling assertions)
+├── #334 ADS-006E reader provenance
+├── #336 ADS-006F collectors ── #339 ADS-006I windows/conflicts ── #344 direct-store window guard
+├── #337 ADS-006G readiness UI ── #341 ADS-006K UI tests
+├── #338 ADS-006H reconciliation ── #340 ADS-006J evidence binding
+├── #345 ADS-007 Intelligence ── feat/ads-007a-admin-intelligence (Admin summary)
+├── #346 ADS-008 Campaign drafts ── feat/ads-008a-admin-draft-preview (Admin preview)
+├── #342 Phase 6 closeout docs
+└── #347 test/ads-009-acceptance: integration-only composition + Phase 9 acceptance
 ```
 
-- **Merge order (owner decides):**
-  1. Wishlist flake fix (independent).
-  2. #334.
-  3. #336 then #339.
-  4. #337 then #341.
-  5. #338 then #340.
-  6. ADS-007, then ADS-008.
-  7. ADS-009.
-  8. #342.
-- **Conflicts:** none. The full composition merges cleanly. ADS-007 and ADS-008 both touch `routes/analytics.ts` in separate places; I adjusted ADS-008's import to avoid a textual conflict.
-- **Code dependencies:**
-  - ADS-007 works against both the `main` reader and the hardened #334/#340 reader, because it reuses `buildPaidCampaignReadout` for each window.
-  - ADS-008 depends only on `main` (ADS-004/005).
-  - The ADS-009 acceptance test needs the whole stack.
+**Recommended merge order (owner decides; each PR reviewed on its own):**
+1. #343, then its follow-up.
+2. #334.
+3. #336, then #339, then #344.
+4. #337, then #341.
+5. #338, then #340.
+6. #345, then 007a.
+7. #346, then 008a.
+8. #342.
+9. **#347 is not merged as-is.** It exists to show that the whole stack composes and to run CI over it. After steps 1–8 land, open one small PR from `main` carrying only the Phase 9 files (`apps/api/tests/adsPhase9Acceptance.test.ts`, `docs/ads/ADS-009-*.md`) and close #347.
 
-## Integration checkpoint (local composition `test/ads-009-acceptance`)
+**Phase 9-specific review:** review only the non-merge commits of #347 (`git log --no-merges origin/main..test/ads-009-acceptance -- apps/api/tests/adsPhase9Acceptance.test.ts docs/ads/ADS-009-*`).
+
+**Canonical Wishlist fix:** #343, plus a follow-up branch for the two sibling assertions with the same race. The earlier duplicate branch `test/storefront-wishlist-flaky-remove` is superseded; #347 reverts its merge. Delete it only with owner approval.
+
+**Conflict hygiene:** the full composition merges with no conflicts.
+- ADS-008 places its route import beside the draft-plan import.
+- 007a renders inside `PaidCampaignPerformanceReview` rather than editing `page.tsx`, where #337 inserts at the same line.
+- 008a renders under the page heading.
+
+## Integration checkpoint (#347 local composition, all branches above)
 
 | Check | Result |
 |---|---|
-| API ads/paid/analytics suites (32 files) | **222/222 PASS** |
-| `adsPhase9Acceptance.test.ts` (cross-module) | **8/8 PASS** |
+| API ads/paid/analytics suites (32 files) | **224/224 PASS** |
+| `adsPhase9Acceptance.test.ts` | **9/9 PASS** (includes ERP → media → draft) |
+| Admin marketing tests (3 files) | 8/8 PASS |
 | API, Admin and storefront typecheck | PASS |
-| Admin marketing tests and lint | PASS |
-| Storefront Wishlist suite | 24/24 PASS (5 local repeats on the fix branch) |
-| GitHub CI | Runs when the Draft PRs are opened (no write token here) |
+| Admin marketing lint | PASS |
+| Storefront Wishlist suite | 24/24 PASS |
+| GitHub CI | Runs on #347 after push. #344 and the stacked follow-ups get CI coverage through #347, because their own base is not `main`. |
+
+**#344 regression probe** (local, not committed, on #344's head; 54/54 together with the existing paid suites):
+- On Sofia's 23-hour DST day, the window is exactly 22:00Z–21:00Z.
+- 1 ms before the end, both the direct store and the collector reject the window, with 0 runs and 0 snapshots written.
+- Exactly at the end, the window is accepted.
+- An identical replay is idempotent; a restatement fails closed and leaves history unchanged.
+- The reader period is exact.
 
 ## Phase 9 acceptance matrix
 
 | Area | Code-level evidence | Operational state |
 |---|---|---|
-| Authentication / authorization | `paidAdsAdminHttp`, `adsIntelligenceHttp`, `adsCampaignDraftsHttp`: 401/403, strict input (400), no-store | Staging check BLOCKED: collectors not deployed |
-| Provider readiness | `paidAdsReadiness`, `PaidProviderReadinessReview.test` (config ≠ verified ≠ spend) | Meta read verified by owner; Google and Pinterest BLOCKED |
-| Read-only collector integrity | `paidAdsProviders`, `metaPaidEndToEndSqlite`, acceptance: GET/SELECT only, fixed hosts, identity, EUR, time zone | No reportable campaign: BLOCKED |
-| Reporting provenance | Account-local windows (DST and fractional-hour tests), run/source provenance, stored account id | Live `timezone_name` not yet observed |
-| Financial reconciliation evidence | `paidSpendReconciliation`, acceptance: bound to stored provider/account/campaign/window; UTC-day billing gives `SCOPE_MISMATCH` | No finalized billing source: BLOCKED |
-| Campaign approval isolation | `adsCampaignDrafts`, acceptance: fingerprint binding; the best case is still `executionAuthorized: false`; analytics untouched | Approval persistence needs a schema decision |
-| No-spend guarantees | Every output has `spendAuthorized: false`; no mutation routes; provider execution disabled | Holds by construction |
-| Duplicates / retries | Replay is idempotent; restatement and same-end windows fail closed | — |
-| Provider failures | 429, Meta 190/17, 403, 500 and malformed responses store nothing; classified kinds | — |
-| Secret redaction | Token absent from errors, outputs and the full analytics DB dump | — |
-| Migration safety | No ads/paid tables; paid data only in `analytics_*` with namespace `paid_meta` | No migration in Phases 6–8 |
-| Rollback | `ADS-006-PHASE6-CLOSEOUT.md` (#342) | Owner-run |
-| Admin UX | Readiness checklist, paid report section | Intelligence and draft preview have API only; no Admin UI yet |
-| Cross-module integration | `adsPhase9Acceptance.test.ts`: mock Meta → collector → SQLite → report → intelligence → reconciliation | Mock-only, **not operational proof** |
+| Authentication / authorization | HTTP tests for performance, readiness, intelligence and campaign draft: 401/403/400, no-store, no mutation routes | Staging smoke test pending |
+| Provider readiness | API test plus Admin test: configured ≠ verified ≠ spend | Meta read verified by owner; Google and Pinterest BLOCKED |
+| Read-only collector integrity | Providers, end-to-end and acceptance: GET/SELECT only, fixed hosts, identity, EUR, time zone | No reportable campaign |
+| Reporting provenance | Account-local windows (DST and fractional zones), run provenance, stored account id, #344 boundary guard | Live `timezone_name` not observed |
+| Financial reconciliation | Bound to stored provider/account/campaign/window; UTC-day billing gives `SCOPE_MISMATCH` | No finalized billing |
+| Approval isolation | Fingerprint binding; any edit makes the approval stale; the best case is still `executionAuthorized: false`; Admin shows "approval not recorded" separately from "execution disabled" | Persistence needs a schema decision |
+| No-spend | `spendAuthorized: false` everywhere; provider execution disabled; no approve or launch UI | By construction |
+| Duplicates / retries | Idempotent replay; restatement and same-end windows fail closed | — |
+| Provider failures | 429, Meta 190/17, 403, 500 and malformed responses store nothing | — |
+| Secret redaction | Token absent from errors, outputs and the analytics DB dump | — |
+| Missing data / organic separation | Unknown is never zero; paid namespace only; no marketplace ROAS | — |
+| Migration safety | No ads/paid tables; no schema change in Phases 6–9 | — |
+| Cross-module chain | ERP → media → draft → simulated Meta → SQLite → report → intelligence → reconciliation | Mock-only, **not operational proof** |
 
-## Findings recorded (not fixed here: on other workers' branches)
-
-- `assertPaidCampaignQuery` (#336) checks window completeness with the real `Date.now()`, so it ignores the collector's injected `now`. This is minor: it only affects deterministic tests of future-dated fixtures, and the account-local check in #339 does use `now`.
-- CI #456 failed on a docs-only commit because of a storefront Wishlist race: `ProductCard` sets its wishlist label in an effect. Fixed test-only on `test/storefront-wishlist-flaky-remove`.
-
-## External authorization and provider checklist (owner)
-
-1. Open Draft PRs for ADS-007, ADS-008, ADS-009 and the Wishlist fix so CI runs. Do not merge.
-2. Approve a staging-only deploy of the integrated stack, then re-run `ads:meta:verify` (expect EUR, `ads_read` and `reportingTimeZone`).
-3. A reportable Meta test or real campaign, and approval for a read-only staging collection with snapshot writes.
-4. Google Ads: a dedicated account, developer token (Basic or higher) and OAuth credentials, verified read-only.
-5. Pinterest Ads: a dedicated ad account and advertising scopes, separate from social analytics OAuth. Confirm the UTC reporting dates.
-6. Finalized provider billing statements through an owner-approved channel.
-7. A schema decision for persisting campaign drafts, approvals and audit events (ADS-008).
-8. Marketplace attribution evidence (eBay/Etsy), only if attribution is to be claimed.
-9. Any execution capability (campaign creation or budget changes) needs a separate design review and authorization. Out of scope here.
-
-## Revised estimate (engineering only, based on repository findings)
+## Remaining engineering items
 
 | Item | Estimate |
 |---|---|
-| Code for Phases 6–9 | Foundations and acceptance tests are implemented. Remaining: Admin UI for Intelligence and draft preview (~1–2 days), approval/audit persistence after the schema decision (~1–2 days), CI review fixes (~0.5–1 day) |
-| Engineering total | **~3–5 working days**, if review is prompt |
-| Operational closure | Gated by items 2–8 above (accounts, campaigns, billing). Calendar time depends on provider approvals, e.g. the Google developer-token review, not on engineering. **The 7–12 day target is achievable for engineering, not for operational acceptance, unless the external items arrive in parallel.** |
+| Owner-approved staging **write-collection command**, with its own acknowledgement and backup step (needed for operational checks, see the staging checklist §4) | ~0.5 day |
+| Approval and audit persistence plus approve/reject API and UI, **after the owner's schema decision** | ~1–2 days |
+| CI review fixes across 15 Draft PRs and the final small Phase 9 PR after the merges | ~0.5–1 day |
+| `assertPaidCampaignQuery` (#336) uses the real `Date.now()` and ignores the injected `now` (test determinism only) | ~0.1 day, by the branch owner |
+
+**Engineering total: about 2–3.5 working days.** Operational closure still depends on the external owner items (staging approval, a reportable campaign, Google and Pinterest accounts, billing statements, the schema decision).
