@@ -90,7 +90,7 @@ export function CampaignDraftPreviewReview() {
         <label>Requested daily €<input aria-label="Draft requested daily EUR" value={daily} onChange={(e) => { setDaily(e.target.value); invalidate(); }} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
         <label>Daily cap €<input aria-label="Draft daily cap EUR" value={dailyCap} onChange={(e) => { setDailyCap(e.target.value); invalidate(); }} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
         <label>Total cap €<input aria-label="Draft total cap EUR" value={totalCap} onChange={(e) => { setTotalCap(e.target.value); invalidate(); }} inputMode="decimal" style={{ display: "block", padding: 10 }} /></label>
-        <button type="submit" disabled={loading} style={{ padding: 12 }}>{loading ? "Building…" : "Preview campaign draft"}</button>
+        <button type="submit" disabled={loading} style={{ padding: 12 }}>{loading ? "Building…" : "Preview provider campaign draft"}</button>
       </form>
       {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
       {preview && (
