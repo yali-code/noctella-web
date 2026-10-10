@@ -30,7 +30,8 @@
     "reset:admin-password": "tsx src/scripts/resetAdminPassword.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",
     "repo:parity": "tsx src/scripts/productReadRepositoryAudit.ts && tsx src/scripts/productWriteRepositoryAudit.ts && tsx src/scripts/orderRepositoryAudit.ts && tsx src/scripts/returnRepositoryFoundationAudit.ts && tsx src/scripts/refundRepositoryFoundationAudit.ts && tsx src/scripts/inventoryRepositoryAudit.ts",
-    "ads:paid:preview": "tsx src/scripts/previewPaidCampaign.ts"
+    "ads:paid:preview": "tsx src/scripts/previewPaidCampaign.ts",
+    "ads:meta:verify": "tsx src/scripts/verifyMetaPaidAccount.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
