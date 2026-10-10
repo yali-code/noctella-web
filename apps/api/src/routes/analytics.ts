@@ -14,10 +14,10 @@ import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitab
 import { handleRouteError } from "./errorHandler";
 import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
 import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
+import { readCampaignDraftPreview } from "../use-cases/ads/adsCampaignDrafts";
 import { readPaidAdsDryRunFromErp } from "../use-cases/ads/paidLaunchDryRun";
 import { inspectPaidAdsProviderReadiness } from "../use-cases/ads/paidAdsReadiness";
 import { readPaidCampaignReport } from "../use-cases/ads/adsPaidCampaignRead";
-import { readCampaignDraftPreview } from "../use-cases/ads/adsCampaignDrafts";
 
 /**
  * Analytics router (analytics.view). GET / remains the original module placeholder.
