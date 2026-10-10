@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 import { PaidCampaignIntelligenceReview } from "./PaidCampaignIntelligenceReview";
 
@@ -53,23 +53,28 @@ export function PaidCampaignPerformanceReview() {
   const [report, setReport] = useState<PaidCampaignReadout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Only the latest request may update the screen (stale responses are dropped).
+  const requestSeq = useRef(0);
+  const invalidate = () => { requestSeq.current += 1; setReport(null); setError(null); setLoading(false); };
 
   async function load(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setReport(null);
-    setError(null);
+    invalidate();
     const id = campaignId.trim();
     if (!validCampaignId.test(id)) {
       setError("Enter the exact numeric advertising campaign ID (5–25 digits).");
       return;
     }
+    const seq = requestSeq.current;
+    const requested = provider;
     setLoading(true);
     try {
       const result = await api.get<PaidCampaignReadout>(
-        `/api/analytics/ads/performance/${provider}/${encodeURIComponent(id)}`,
+        `/api/analytics/ads/performance/${requested}/${encodeURIComponent(id)}`,
       );
+      if (seq !== requestSeq.current) return;
       // Refuse any newly altered response that tries to convey spend authority.
-      if (result.provider !== provider || result.campaignId !== id
+      if (result.provider !== requested || result.campaignId !== id
         || result.spendAuthorized !== false || result.marketplaceAttributionVerified !== false
         || result.source !== "EXISTING_ANALYTICS_SNAPSHOTS"
         || !["NOT_COLLECTED", "UNTRUSTED_EVIDENCE", "REPORT_AVAILABLE"].includes(result.status)
@@ -83,9 +88,10 @@ export function PaidCampaignPerformanceReview() {
       }
       setReport(result);
     } catch (cause) {
+      if (seq !== requestSeq.current) return;
       setError(cause instanceof Error ? cause.message : "Paid campaign report unavailable.");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
@@ -99,7 +105,7 @@ export function PaidCampaignPerformanceReview() {
           Advertising platform
           <select aria-label="Advertising platform" value={provider} onChange={event => {
             setProvider(event.target.value as Provider);
-            setReport(null);
+            invalidate();
           }} style={{ display: "block", padding: 10 }}>
             <option value="meta">Meta Ads</option>
             <option value="google_ads">Google Ads</option>
@@ -110,7 +116,7 @@ export function PaidCampaignPerformanceReview() {
           Provider campaign ID
           <input aria-label="Provider campaign ID" value={campaignId} onChange={event => {
             setCampaignId(event.target.value);
-            setReport(null);
+            invalidate();
           }} maxLength={25} inputMode="numeric" placeholder="1234567890"
             style={{ display: "block", padding: 10 }} />
         </label>
