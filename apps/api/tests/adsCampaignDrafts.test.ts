@@ -61,6 +61,29 @@ describe("ADS-008 campaign draft model and validation", () => {
     for (const url of ["http://www.ebay.de/itm/1", "https://evil.example.com/ebay.de", "javascript:alert(1)"]) {
       expect(validateCampaignDraft(draftFor("meta", budget, { ...brief, marketplaceUrl: url })).errors).toContain("DESTINATION_NOT_MARKETPLACE");
     }
+    // Registrable marketplace domain must match the declared destination.
+    for (const url of [
+      "https://ebay.de.attacker.com/itm/1",
+      "https://ebay.co.evil/itm/1",
+      "https://etsy.com.evil/listing/1",
+      "https://www.ebay.de.evil/itm/1",
+      "https://user:pass@www.ebay.de/itm/1",
+      "https://www.ebay.de:8443/itm/1",
+    ]) {
+      expect(validateCampaignDraft(draftFor("meta", budget, { ...brief, marketplaceUrl: url })).errors)
+        .toContain("DESTINATION_NOT_MARKETPLACE");
+    }
+    expect(validateCampaignDraft(draftFor("meta", budget, { ...brief, destination: "etsy", marketplaceUrl: "https://www.ebay.de/itm/1" })).errors)
+      .toContain("DESTINATION_NOT_MARKETPLACE");
+    expect(validateCampaignDraft(draftFor("meta", budget, { ...brief, destination: "ebay", marketplaceUrl: "https://www.etsy.com/listing/1" })).errors)
+      .toContain("DESTINATION_NOT_MARKETPLACE");
+    for (const url of [
+      "https://www.ebay.de/itm/123456789012",
+      "https://www.ebay.co.uk/itm/123456789012",
+      "https://www.ebay.com/itm/123456789012",
+    ]) {
+      expect(validateCampaignDraft(draftFor("meta", budget, { ...brief, marketplaceUrl: url })).valid).toBe(true);
+    }
     expect(validateCampaignDraft(draftFor("meta", budget, { ...brief, destination: "etsy", marketplaceUrl: "https://www.etsy.com/listing/1" })).valid).toBe(true);
   });
 });
