@@ -6,7 +6,7 @@ const metadataJson = JSON.stringify({
   window: { start: "2026-10-01T00:00:00.000Z", end: "2026-10-08T00:00:00.000Z" },
 });
 const row = (metricKey: string, numericValue: number|null, unit: string): PaidSnapshotRow => ({
-  runId:"verified-run-id",runStatus:"completed",scopeType:"external_ad_campaign",
+  runId:"verified-run-id",runStatus:"completed",runSourceType:"external_platform",runSourceReference:"meta.ads.insights",scopeType:"external_ad_campaign",
   scopeId:"paid_meta:123456789",metricNamespace:"paid_meta",
   metricKey,numericValue,valueState:numericValue===null?"unknown":"known",unit,
   sourceType:"external_platform",sourceReference:"meta.ads.insights",
