@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
+import { CampaignDraftPreviewReview } from "./CampaignDraftPreviewReview";
 import { PaidCampaignPerformanceReview } from "./PaidCampaignPerformanceReview";
 import { PaidProviderReadinessReview } from "./PaidProviderReadinessReview";
 
@@ -97,6 +98,7 @@ export default function MarketingPage() {
   return (
     <main>
       <h1>Marketing — Ads Agent</h1>
+      <CampaignDraftPreviewReview />
       <p style={{ color: "var(--noctella-aged-bronze)" }}>
         Draft planning only. No ad account is connected here, and this screen cannot publish ads or spend money.
       </p>
