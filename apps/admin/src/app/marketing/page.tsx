@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 import { CampaignDraftPreviewReview } from "./CampaignDraftPreviewReview";
 import { PaidCampaignPerformanceReview } from "./PaidCampaignPerformanceReview";
@@ -61,10 +61,14 @@ export default function MarketingPage() {
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<DraftPlan | null>(null);
 
+  // A plan is only valid for the exact product and budgets it was built from: any input change
+  // clears it and invalidates in-flight requests, and only the latest request may update the view.
+  const requestSeq = useRef(0);
+  const invalidate = () => { requestSeq.current += 1; setPlan(null); setError(null); setLoading(false); };
+
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setPlan(null);
+    invalidate();
     const id = productId.trim();
     const values = [daily, dailyCap, totalCap].map(centsAmount);
     if (!validProductId.test(id) || values.some(n => n === null)) {
@@ -75,6 +79,7 @@ export default function MarketingPage() {
       setError("The proposed daily amount must not exceed the daily cap, and the daily cap must not exceed the total cap.");
       return;
     }
+    const seq = requestSeq.current;
     setLoading(true);
     try {
       const query = new URLSearchParams({
@@ -83,15 +88,18 @@ export default function MarketingPage() {
         hardTotalLimitEur: String(values[2]),
       });
       const result = await api.get<DraftPlan>(`/api/analytics/ads/draft-plan/${encodeURIComponent(id)}?${query.toString()}`);
+      if (seq !== requestSeq.current) return;
       if (result.scope !== "DRAFT_REVIEW_ONLY" || result.spendAuthorized !== false
-        || result.liveProviderVerified !== false || result.ownerApprovalRecorded !== false) {
+        || result.liveProviderVerified !== false || result.ownerApprovalRecorded !== false
+        || result.productId !== id || result.budget.hardDailyLimitEur !== values[1] || result.budget.hardTotalLimitEur !== values[2]) {
         throw new Error("Unexpected campaign plan safety state. No plan was displayed.");
       }
       setPlan(result);
     } catch (cause) {
+      if (seq !== requestSeq.current) return;
       setError(cause instanceof Error ? cause.message : "Campaign preview unavailable.");
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }
 
@@ -105,7 +113,7 @@ export default function MarketingPage() {
       <form onSubmit={generate} style={{ display: "grid", gap: 12, maxWidth: 620, marginTop: 20 }}>
         <label>
           ERP product ID
-          <input aria-label="ERP product ID" value={productId} onChange={e => setProductId(e.target.value)}
+          <input aria-label="ERP product ID" value={productId} onChange={e => { setProductId(e.target.value); invalidate(); }}
             required maxLength={100} placeholder="NOC-000007" style={{ width: "100%", padding: 10 }} />
         </label>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
@@ -117,7 +125,7 @@ export default function MarketingPage() {
             <label key={name as string}>
               {name as string}
               <input aria-label={name as string} type="text" inputMode="decimal" value={value as string}
-                onChange={e => (update as (v: string) => void)(e.target.value)}
+                onChange={e => { (update as (v: string) => void)(e.target.value); invalidate(); }}
                 required style={{ width: "100%", padding: 10 }} />
             </label>
           ))}
