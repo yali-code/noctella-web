@@ -42,6 +42,15 @@ describe("ADS-006F Meta paid analytics transport",()=>{
   expect(fake.calls.every(x=>x.options.method==="GET")).toBe(true);
   checkCalls(fake.calls);
  });
+ it("rejects missing or mismatched Meta ad account identity",async()=>{
+  for(const account of [{currency:"EUR"},{account_id:"999999999",currency:"EUR"}]){
+    const f=mockFetch(()=>account);
+    await expect(new MetaPaidCampaignClient(f.fn).fetchCampaign(
+      {...base,provider:"meta"},{accessToken:token}))
+      .rejects.toBeInstanceOf(PaidProviderReadError);
+    expect(f.calls).toHaveLength(1);
+  }
+ });
  it("rejects non-EUR account before querying insights",async()=>{
   const f=mockFetch(()=>({account_id:accountId,currency:"USD"}));
   await expect(new MetaPaidCampaignClient(f.fn).fetchCampaign({...base,provider:"meta"},{accessToken:token})).rejects.toThrow("EUR");
@@ -123,14 +132,34 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
 describe("ADS-006F Pinterest paid campaign analytics",()=>{
  it("uses paid campaigns endpoint, not organic Pinterest Pin API",async()=>{
   const f=mockFetch(url=>url.pathname.endsWith("/analytics")
-    ?[{CAMPAIGN_ID:campaignId,SPEND_IN_DOLLAR:3.99,TOTAL_IMPRESSION:700,TOTAL_CLICKTHROUGH:11}]
+    ?[{CAMPAIGN_ID:campaignId,SPEND_IN_MICRO_DOLLAR:3990000,TOTAL_IMPRESSION:700,TOTAL_CLICKTHROUGH:11}]
     :{id:accountId,currency:"EUR"});
   const report=await new PinterestPaidCampaignClient(f.fn).fetchCampaign({...base,provider:"pinterest_ads"},{accessToken:token});
   expect(report).toMatchObject({spendEur:3.99,impressions:700,clicks:11,providerReportedConversionValueEur:null});
   expect(f.calls).toHaveLength(2);
   expect(f.calls.every(x=>x.options.method==="GET")).toBe(true);
   expect(f.calls[1]?.url.pathname).toContain("/campaigns/analytics");
+  expect(f.calls[1]?.url.searchParams.get("columns")).toContain("SPEND_IN_MICRO_DOLLAR");
   checkCalls(f.calls);
+ });
+ it("uses verified EUR micro-units and explicitly warns when rounding cents",async()=>{
+  const f=mockFetch(url=>url.pathname.endsWith("/analytics")
+    ?[{CAMPAIGN_ID:campaignId,SPEND_IN_MICRO_DOLLAR:1234567,
+       TOTAL_IMPRESSION:500,TOTAL_CLICKTHROUGH:4}]
+    :{id:accountId,currency:"EUR"});
+  const report=await new PinterestPaidCampaignClient(f.fn).fetchCampaign(
+    {...base,provider:"pinterest_ads"},{accessToken:token});
+  expect(report.spendEur).toBe(1.23);
+  expect(report.warnings).toContain("EUR_MICRO_COST_ROUNDED_TO_CENTS");
+ });
+ it("denies missing or mismatched Pinterest account identity before campaign report",async()=>{
+  for(const account of [{currency:"EUR"},{id:"999999999",currency:"EUR"}]){
+    const f=mockFetch(()=>account);
+    await expect(new PinterestPaidCampaignClient(f.fn).fetchCampaign(
+      {...base,provider:"pinterest_ads"},{accessToken:token}))
+      .rejects.toBeInstanceOf(PaidProviderReadError);
+    expect(f.calls).toHaveLength(1);
+  }
  });
  it("rejects account currency mismatch",async()=>{
   const f=mockFetch(()=>({id:accountId,currency:"GBP"}));
