@@ -3,8 +3,9 @@ import type { buildPaidCampaignReadout } from "./adsPaidCampaignRead";
 
 /**
  * The stored paid report exactly as the ADS-006C reader projects it from analytics snapshots.
- * Its provider, campaign and window come from persisted provenance - never from the caller -
- * so a report for another campaign or period can never be reconciled against this billing.
+ * Its provider, account ID, campaign and window come from persisted provenance.
+ * Legacy evidence with no independently stored account ID cannot be reconciled.
+ * An input account ID alone is not evidence of the source account.
  */
 export type StoredPaidCampaignReport = ReturnType<typeof buildPaidCampaignReadout>;
 
@@ -70,9 +71,11 @@ export function reconcilePaidSpend(input:PaidSpendReconciliationInput):PaidSpend
   if(stored.status!=="REPORT_AVAILABLE" || !evidence || !("period" in stored) || !stored.period){
     return out("INVALID_REPORT","Stored paid report evidence is untrusted; it cannot be reconciled.");
   }
-  if(stored.provider!==input.provider || evidence.provider!==input.provider || stored.campaignId!==input.campaignId
+  if(stored.provider!==input.provider || evidence.provider!==input.provider
+    || stored.accountId===null || stored.accountId!==input.accountId
+    || stored.campaignId!==input.campaignId
     || stored.period.start!==input.reportWindow.start || stored.period.end!==input.reportWindow.end){
-    return out("SCOPE_MISMATCH","Stored paid report does not cover this provider, campaign and reporting window.");
+    return out("SCOPE_MISMATCH","Stored paid report does not verify this account, provider, campaign and reporting window.");
   }
   if(reportSpend===null){
     return out("MISSING_REPORT","A verified paid ad spend observation is required; do not assume zero.");
