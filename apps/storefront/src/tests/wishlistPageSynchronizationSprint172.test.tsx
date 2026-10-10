@@ -94,7 +94,9 @@ describe("Sprint 172 Wishlist page source-of-truth synchronization", () => {
     vi.mocked(api.post).mockResolvedValue(catalog([itemA]));
     render(<WishlistPage />);
     await screen.findByText("Item A");
-    fireEvent.click(screen.getByRole("button", { name: "Remove Item A from wishlist" }));
+    // ProductCard synchronizes its persisted wishlist state in an effect after rendering.
+    // Wait for the removal control before testing the immediate empty-state transition.
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Item A from wishlist" }));
     expect(screen.getByText(/Your wishlist is empty/)).toBeTruthy();
   });
 
