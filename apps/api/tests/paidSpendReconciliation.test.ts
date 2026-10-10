@@ -4,14 +4,14 @@ import {reconcilePaidSpend,type PaidSpendReconciliationInput} from "../src/use-c
 const first="2026-10-01T00:00:00.000Z",last="2026-10-03T00:00:00.000Z";
 const campaignId="123456780";
 /** Synthetic analytics snapshot rows in the reserved paid-collector contract (run provenance included). */
-function storedRows(o:{spend?:number|null;clicks?:number;campaign?:string;window?:{start:string;end:string}}={}){
+function storedRows(o:{spend?:number|null;clicks?:number;campaign?:string;account?:string|null;window?:{start:string;end:string}}={}){
   const campaign=o.campaign??campaignId,window=o.window??{start:first,end:last};
   const metric=(metricKey:string,value:number|null,unit:string)=>({runId:"run-1",runStatus:"completed",
     runSourceType:"external_platform",runSourceReference:"meta.ads.graph_v26_insights",
     scopeType:"external_ad_campaign",scopeId:`paid_meta:${campaign}`,metricNamespace:"paid_meta",metricKey,
     numericValue:value,valueState:value===null?"unknown":"known",unit,sourceType:"external_platform",
     sourceReference:"meta.ads.graph_v26_insights",observedAt:window.end,collectedAt:"2026-10-09T12:00:00.000Z",
-    metadataJson:JSON.stringify({paidAdsSource:true,provider:"meta",accountId:"123456789",campaignId:campaign,
+    metadataJson:JSON.stringify({paidAdsSource:true,provider:"meta",accountId:o.account===null?undefined:(o.account??"123456789"),campaignId:campaign,
       currency:"EUR",windowSemantics:"fixed_range",window})});
   return [metric("paid_spend_eur",o.spend===undefined?15.25:o.spend,"eur"),metric("paid_impressions",500,"count"),
     metric("paid_clicks",o.clicks??20,"count"),metric("paid_provider_conversions",null,"count"),
@@ -26,6 +26,7 @@ const input:PaidSpendReconciliationInput={provider:"meta",accountId:"123456789",
 describe("ADS-006H paid spend reconciliation is advisory-only",()=>{
  it("reconciles independently verified, settled EUR advertising spend without allowing budget changes",()=>{
   expect(input.report?.status).toBe("REPORT_AVAILABLE");
+  expect(input.report?.accountId).toBe("123456789");
   const out=reconcilePaidSpend(input);
   expect(out.status).toBe("RECONCILED_FOR_REVIEW");
   expect(out.differenceEur).toBe(0);
@@ -52,6 +53,9 @@ describe("ADS-006H paid spend reconciliation is advisory-only",()=>{
  it("binds the report to its stored provenance: another campaign or window cannot be reconciled",()=>{
   // Same spend figure, but the stored evidence belongs to a different campaign / period.
   expect(reconcilePaidSpend({...input,report:stored({campaign:"999999999"})}).status).toBe("SCOPE_MISMATCH");
+  // An input or billing account ID cannot stand in for account evidence in SQLite.
+  expect(reconcilePaidSpend({...input,report:stored({account:"999999999"})}).status).toBe("SCOPE_MISMATCH");
+  expect(reconcilePaidSpend({...input,report:stored({account:null})}).status).toBe("SCOPE_MISMATCH");
   expect(reconcilePaidSpend({...input,report:stored({window:{start:"2026-09-30T21:00:00.000Z",end:"2026-10-02T21:00:00.000Z"}})}).status).toBe("SCOPE_MISMATCH");
   expect(reconcilePaidSpend({...input,provider:"google_ads",billing:{...input.billing!,provider:"google_ads"}}).status).toBe("SCOPE_MISMATCH");
  });
