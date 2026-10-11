@@ -4,7 +4,13 @@ This checklist is for owner-authorized **staging** validation of the Ads Agent s
 
 ## 0. Preconditions (owner)
 - [ ] Explicit approval to deploy the integrated Draft stack to **staging only** (`noctella-staging-api` and Admin).
-- [ ] Staging uses its **own** SQLite file. Take a backup before deploying and confirm restore works. Never point staging at `/var/data/noctella.sqlite` or production R2 backups.
+- [ ] Staging uses its **own** SQLite database on its **own Render service and disk**:
+  - `render.yaml` gives staging `DATABASE_URL=/var/data/noctella.sqlite` on the disk `noctella-staging-data`.
+  - The same *path* inside an isolated staging volume is expected and is not a problem in itself.
+  - The invariant is identity: the staging API service and disk IDs must differ from production's.
+  - Staging must never mount, attach, copy or read the production disk, the production SQLite file or production backup/photo buckets.
+  - Attest the runtime targets with the sanitized operator procedure in `ADS-009C-staging-isolation-review.md` §4.
+  - Take a staging-only backup before deploying. A restore rehearsal is a separately authorized step (§5 of that document).
 - [ ] No schema migration is expected: Phases 6–9 add no tables, and paid evidence goes only to `analytics_runs` / `analytics_metric_snapshots`. Confirm that `ensureSchema` reports no new `ads*`/`paid*` tables.
 
 ## 1. Environment (names only; values are never written to GitHub, logs or chat)
