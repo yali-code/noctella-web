@@ -18,6 +18,8 @@ import { assessAdsOptimization } from "./adsOptimizationAdvice";
 export interface PaidSnapshotRow {
   readonly runId: string | null;
   readonly runStatus: string | null;
+  readonly runSourceType: string | null;
+  readonly runSourceReference: string | null;
   readonly scopeType: string;
   readonly scopeId: string;
   readonly metricNamespace: string;
@@ -64,6 +66,8 @@ function trustedRow(row: PaidSnapshotRow, provider: AdsMetricsProvider, campaign
     && row.sourceType === "external_platform"
     && row.sourceReference.startsWith(`${provider}.ads.`)
     && row.runStatus === "completed"
+    && row.runSourceType === "external_platform"
+    && row.runSourceReference === row.sourceReference
     && typeof row.runId === "string" && row.runId.length > 0
     && Object.prototype.hasOwnProperty.call(KEYS, row.metricKey)
     && row.unit === KEYS[row.metricKey as MetricKey]
@@ -127,6 +131,7 @@ export async function readPaidCampaignReport(
   const namespace = `paid_${provider}`;
   const observations = await db.all(sql`
     SELECT m.run_id AS "runId", a.status AS "runStatus",
+      a.source_type AS "runSourceType", a.source_reference AS "runSourceReference",
       m.scope_type AS "scopeType", m.scope_id AS "scopeId",
       m.metric_namespace AS "metricNamespace", m.metric_key AS "metricKey",
       m.numeric_value AS "numericValue", m.value_state AS "valueState",
@@ -134,12 +139,9 @@ export async function readPaidCampaignReport(
       m.source_reference AS "sourceReference", m.observed_at AS "observedAt",
       m.collected_at AS "collectedAt", m.metadata_json AS "metadataJson"
     FROM analytics_metric_snapshots m
-    INNER JOIN analytics_runs a ON a.id = m.run_id
-      AND a.source_type = 'external_platform'
-      AND a.source_reference = m.source_reference
+    LEFT JOIN analytics_runs a ON a.id = m.run_id
     WHERE m.scope_type = 'external_ad_campaign'
       AND m.scope_id = ${scopeId} AND m.metric_namespace = ${namespace}
-      AND m.source_type = 'external_platform'
     ORDER BY m.observed_at DESC, m.collected_at DESC
     LIMIT 100
   `) as PaidSnapshotRow[];
