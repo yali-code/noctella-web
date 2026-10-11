@@ -14,6 +14,7 @@ import { productMetricHistoryQuerySchema } from "../use-cases/analytics/profitab
 import { handleRouteError } from "./errorHandler";
 import { readAdsCampaignReviewFromErp } from "../use-cases/ads/adsCampaignErpReader";
 import { readAdsDraftPlanForProduct } from "../use-cases/ads/adsDraftPlan";
+import { readCampaignDraftPreview } from "../use-cases/ads/adsCampaignDrafts";
 import { readPaidAdsDryRunFromErp } from "../use-cases/ads/paidLaunchDryRun";
 import { inspectPaidAdsProviderReadiness } from "../use-cases/ads/paidAdsReadiness";
 import { readPaidCampaignReport } from "../use-cases/ads/adsPaidCampaignRead";
@@ -112,6 +113,18 @@ router.get("/ads/draft-plan/:productId", async (req, res) => {
     const productId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(req.params.productId);
     const budget = adsPlanQuery.parse(req.query);
     res.json(await readAdsDraftPlanForProduct(db, productId, budget));
+  } catch (error) {
+    handleRouteError(error, res);
+  }
+});
+
+// ADS-008: read-only provider campaign draft preview (validation + fingerprint); never executes.
+router.get("/ads/campaign-draft/:productId", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const productId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(req.params.productId);
+    const { provider, ...budget } = adsPlanQuery.extend({ provider: z.enum(["meta", "google_ads", "pinterest_ads"]) }).strict().parse(req.query);
+    res.json(await readCampaignDraftPreview(db, productId, provider, budget));
   } catch (error) {
     handleRouteError(error, res);
   }
