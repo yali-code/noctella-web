@@ -23,6 +23,7 @@
     "analytics:pinterest": "tsx src/scripts/runPinterestAnalytics.ts",
     "analytics:research": "tsx src/scripts/runAnalyticsResearch.ts",
     "db:restore-verify": "tsx src/scripts/verifyDatabaseRestore.ts",
+    "ops:isolation-audit": "tsx src/scripts/auditStagingIsolation.ts",
     "db:restore-materialize": "tsx src/scripts/materializeDatabaseRestore.ts",
     "photos:backup": "tsx src/scripts/runProductPhotoBackup.ts",
     "photos:recovery-verify": "tsx src/scripts/verifyProductPhotoRecovery.ts",
