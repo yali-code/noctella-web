@@ -1,5 +1,11 @@
 # ADS-006 Phase 6 closeout: status, evidence, rollback
 
+> **Historical evidence note (updated 2026-10-11).** The sections below preserve the 2026-10-10 discovery/acceptance snapshot, NOT the present GitHub or staging state. References below to PRs #334/#336/#337/#338/#339/#340/#341 being Draft, unmerged, or undeployed, and the previous blanket NO MERGE instruction, are superseded by the owner's subsequent controlled staging-only merge authorization. Do not interpret those historical entries as current blockers or instructions.
+>
+> **Current integration status:** The Phase 6 foundation PRs #334, #336, #337, #338, #339, #340 and #341 have been merged into `main` through the verified integration sequence. Related guards #343/#344/#350 were also merged. After PR #349, `main` was `8d01320b7b11d5cb19eb22af0f829738cb6507f2`, with GitHub `validate: SUCCESS` and the staging API/Admin/Storefront each LIVE on that exact commit (verified 2026-10-11). This document PR #342 is documentation-only. Production deployment, real provider write operations and advertising spend are NOT authorized.
+>
+> **Operational Phase 6 closure remains BLOCKED.** Actual provider authorization, independently corroborated complete reporting windows, final billing statements and reconciliation evidence, real campaign/test-account acceptance, and permitted staging collection are NOT established solely by code CI or staging deployments. No verified marketplace revenue attribution is asserted. Production activation requires separate explicit approval.
+
 Tracking issue: #335. State as of 2026-10-10.
 
 **Phase 6 is NOT operationally complete.** The code-level foundations are implemented and tested. The remaining acceptance criteria depend on provider accounts, real campaigns, billing evidence and owner authorization, so they are **BLOCKED**, not done.
