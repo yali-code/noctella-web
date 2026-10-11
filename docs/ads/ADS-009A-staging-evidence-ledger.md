@@ -26,8 +26,8 @@ Record **PASS**, **FAIL**, **BLOCKED** or **NOT RUN**. PASS requires the specifi
 | Gate | Status | Required observable proof (redacted) | Owner/reviewer and evidence reference |
 |---|---|---|---|
 | E01: reviewed engineering composition | NOT RUN | Exact branch SHA; completed GitHub CI run with typecheck, tests, build, lint; independent review of outstanding security findings | TBD |
-| E02: staging/prod isolation | NOT RUN | Staging API/Admin service IDs; staging DB path/volume distinct from production; no prod R2 target; sanitized environment name comparison | TBD |
-| E03: staging backup and restore | NOT RUN | Pre-deploy staging-only backup checksum, timestamp and a restore rehearsal to a disposable isolated DB; no credentials in record | TBD |
+| E02: staging/prod isolation | PARTIAL (source review only; runtime NOT RUN) | Staging API/Admin service IDs; staging **service and disk IDs** distinct from production (an identical in-volume DB path is acceptable); no prod R2 target; sanitized environment name comparison. Source review and attestation procedure: `ADS-009C-staging-isolation-review.md` | ADS-009C (source); operator attestation TBD |
+| E03: staging backup and restore | NOT RUN | Pre-deploy staging-only backup checksum, timestamp and a restore rehearsal to a disposable isolated DB; no credentials in record. Prerequisites: `ADS-009C` §5 (separately authorized; not executed) | TBD |
 | E04: owner staging deploy consent | BLOCKED | Explicit scoped approval for reviewed SHA, named staging services, no prod or campaign changes | TBD |
 | E05: Meta read-only account verification | BLOCKED | Verified account ID (consider masked display), EUR, ads_read, non-empty IANA reportingTimeZone, sanitized result status; no raw token | TBD |
 | E06: completed paid reporting window | BLOCKED | Actual account/campaign identity, local inclusive dates, IANA zone, derived UTC half-open timestamps, completion as of observation time; no empty result mislabelled zero | TBD |
