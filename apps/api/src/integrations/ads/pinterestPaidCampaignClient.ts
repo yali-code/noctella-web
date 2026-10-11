@@ -1,7 +1,13 @@
-import {assertPaidCampaignQuery,paidUtcWindow,providerNumber,requirePaidEUR,requirePaidCredentials,
+import {assertPaidCampaignQuery,paidReportingWindow,providerNumber,requirePaidEUR,requirePaidCredentials,
   type PaidAdsReadOnlyClient,type PaidCampaignQuery,type PaidProviderAccess,type PaidCampaignObservation,
 } from "../../use-cases/ads/paidCampaignCollectorContract";
 import {PaidProviderReadError,isObject,paidGetJson} from "./paidTransport";
+
+/**
+ * Pinterest v5 documents analytics start_date/end_date as UTC dates (unlike Meta/Google, which
+ * bucket by account-local day). To be re-confirmed against the live account during staging.
+ */
+export const PINTEREST_REPORTING_TIME_ZONE="UTC";
 
 /** Pinterest v5 paid Campaign Analytics, separate from organic Pins Analytics. */
 export class PinterestPaidCampaignClient implements PaidAdsReadOnlyClient {
@@ -33,7 +39,7 @@ export class PinterestPaidCampaignClient implements PaidAdsReadOnlyClient {
     const warnings:string[]=item===undefined?["NO_CAMPAIGN_REPORT"]:[];
     if(micros!==null&&micros%10000!==0)warnings.push("EUR_MICRO_COST_ROUNDED_TO_CENTS");
     return {provider:this.provider,accountId:query.accountId,campaignId:query.campaignId,
-      sourceReference:"pinterest_ads.ads.v5_campaign_analytics",currency:"EUR",window:paidUtcWindow(query),
+      sourceReference:"pinterest_ads.ads.v5_campaign_analytics",currency:"EUR",reportingTimeZone:PINTEREST_REPORTING_TIME_ZONE,window:paidReportingWindow(query,PINTEREST_REPORTING_TIME_ZONE),
       spendEur,
       impressions:providerNumber(m.TOTAL_IMPRESSION,"count"),
       clicks:providerNumber(m.TOTAL_CLICKTHROUGH,"count"),

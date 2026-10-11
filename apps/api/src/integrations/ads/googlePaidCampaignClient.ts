@@ -1,4 +1,4 @@
-import {assertPaidCampaignQuery,paidUtcWindow,providerNumber,requirePaidEUR,requirePaidCredentials,
+import {assertPaidCampaignQuery,paidReportingWindow,assertReportingTimeZone,providerNumber,requirePaidEUR,requirePaidCredentials,
   type PaidAdsReadOnlyClient,type PaidCampaignQuery,type PaidProviderAccess,type PaidCampaignObservation,
 } from "../../use-cases/ads/paidCampaignCollectorContract";
 import {PaidProviderReadError,isObject,paidGetJson} from "./paidTransport";
@@ -28,13 +28,16 @@ export class GooglePaidCampaignClient implements PaidAdsReadOnlyClient {
     };
     // An empty campaign report does not identify a customer or prove its currency.
     // Verify the account independently BEFORE requesting its campaign metrics.
-    const accountQuery="SELECT customer.id, customer.currency_code FROM customer LIMIT 1";
+    const accountQuery="SELECT customer.id, customer.currency_code, customer.time_zone FROM customer LIMIT 1";
     const rawAccount=await paidGetJson(url,access,this.fetchImpl,"POST",{query:accountQuery},headers);
     const accountRows=readSearchStreamRows(rawAccount);
     if(accountRows.length!==1||!isObject(accountRows[0])||!isObject(accountRows[0].customer)
       || String(accountRows[0].customer.id)!==query.accountId)
       throw new PaidProviderReadError("malformed","Google Ads customer identity not verified");
     requirePaidEUR(accountRows[0].customer.currencyCode);
+    // segments.date is a customer-local day (customer.time_zone), not a UTC day.
+    const reportingTimeZone=accountRows[0].customer.timeZone;
+    try{assertReportingTimeZone(reportingTimeZone);}catch{throw new PaidProviderReadError("malformed","Google Ads customer time zone missing or invalid");}
 
     const gaql=`SELECT customer.id, customer.currency_code, campaign.id, metrics.cost_micros, metrics.impressions, metrics.clicks FROM campaign WHERE campaign.id = ${query.campaignId} AND segments.date BETWEEN '${query.startDate}' AND '${query.endDate}'`;
     const payload=await paidGetJson(url,access,this.fetchImpl,"POST",{query:gaql},headers);
@@ -53,7 +56,7 @@ export class GooglePaidCampaignClient implements PaidAdsReadOnlyClient {
     const warnings:string[]=item===undefined?["NO_CAMPAIGN_REPORT"]:[];
     if(micros!==null&&micros%10000!==0)warnings.push("EUR_MICRO_COST_ROUNDED_TO_CENTS");
     return {provider:this.provider,accountId:query.accountId,campaignId:query.campaignId,
-      sourceReference:"google_ads.ads.v25_searchstream",currency:"EUR",window:paidUtcWindow(query),
+      sourceReference:"google_ads.ads.v25_searchstream",currency:"EUR",reportingTimeZone,window:paidReportingWindow(query,reportingTimeZone),
       spendEur:rounded,impressions:providerNumber(metrics?.impressions,"count"),
       clicks:providerNumber(metrics?.clicks,"count"),providerReportedConversions:null,
       providerReportedConversionValueEur:null,warnings};

@@ -27,13 +27,19 @@ const now = new Date("2026-10-09T15:00:00.000Z");
 
 type Call = { url: URL; init: RequestInit };
 function metaHttp(
-  mode: "report" | "empty" | "wrong_campaign" | "wrong_currency" | "unauthorized" = "report",
+  mode: "report" | "empty" | "wrong_campaign" | "wrong_currency" | "unauthorized" | "no_timezone" | "expired_token" = "report",
 ) {
   const calls: Call[] = [];
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     calls.push({ url, init: init ?? {} });
     const isInsights = url.pathname.endsWith("/insights");
+    if (mode === "expired_token") {
+      // Meta signals an expired/invalid token as HTTP 400 + OAuthException code 190.
+      return new Response(JSON.stringify({
+        error: { code: 190, message: "Untrusted secret data must never be logged" },
+      }), { status: 400 });
+    }
     if (mode === "unauthorized") {
       return new Response(JSON.stringify({
         error: { message: "Untrusted secret data must never be logged" },
@@ -51,6 +57,7 @@ function metaHttp(
       : {
         account_id: query.accountId,
         currency: mode === "wrong_currency" ? "USD" : "EUR",
+        ...(mode === "no_timezone" ? {} : { timezone_name: "Europe/Sofia" }),
       };
     return new Response(JSON.stringify(responseBody), {
       status: 200, headers: { "content-type": "application/json" },
@@ -186,6 +193,85 @@ describe("ADS-006F real SQLite + read-only Meta transport integration", () => {
     expect(report.evidence).toBeNull();
     expect(http.calls).toHaveLength(4);
     assertGetOnly(http.calls);
+  });
+
+  it("records the ad-account-local reporting window (Meta days are account-local, not UTC)", async () => {
+    const db = createTestDb();
+    const http = metaHttp();
+    await collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(http.fetchImpl), query, fakeAccess, {
+      explicitReadApproval: true, explicitSnapshotWriteApproval: true, now,
+    });
+    // Europe/Sofia is UTC+3 in October: local 2026-10-01 00:00 .. 2026-10-03 00:00.
+    const report = await readPaidCampaignReport(db, "meta", query.campaignId);
+    expect(report.status).toBe("REPORT_AVAILABLE");
+    expect((report as { period?: unknown }).period).toEqual({ start: "2026-09-30T21:00:00.000Z", end: "2026-10-02T21:00:00.000Z" });
+    const [meta] = await db.all(sql`SELECT metadata_json AS m FROM analytics_metric_snapshots LIMIT 1`) as Array<{ m: string }>;
+    expect(JSON.parse(meta!.m)).toMatchObject({ reportingTimeZone: "Europe/Sofia", reportDates: { start: "2026-10-01", end: "2026-10-02" } });
+  });
+
+  it("refuses a window whose last account-local day has not ended yet", async () => {
+    const db = createTestDb();
+    const http = metaHttp();
+    // The Sofia window ends at 2026-10-02T21:00Z; one hour earlier the account's last day is still open.
+    await expect(collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(http.fetchImpl), query, fakeAccess, {
+      explicitReadApproval: true, explicitSnapshotWriteApproval: true, now: new Date("2026-10-02T20:00:00.000Z"),
+    })).rejects.toThrow(/not ended in the provider account time zone/);
+    expect(await paidSnapshots(db)).toHaveLength(0);
+  });
+
+  it("fails closed when the provider omits the account time zone", async () => {
+    const db = createTestDb();
+    const http = metaHttp("no_timezone");
+    await expect(collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(http.fetchImpl), query, fakeAccess, {
+      explicitReadApproval: true, explicitSnapshotWriteApproval: true, now,
+    })).rejects.toThrow(/time zone/);
+    expect(http.calls).toHaveLength(1);
+    expect(await paidSnapshots(db)).toHaveLength(0);
+  });
+
+  it("classifies an expired Meta token (HTTP 400, code 190) as authentication without leaking the body", async () => {
+    const db = createTestDb();
+    const http = metaHttp("expired_token");
+    const error = await collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(http.fetchImpl), query, fakeAccess, {
+      explicitReadApproval: true, explicitSnapshotWriteApproval: false, now,
+    }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ name: "PaidProviderReadError", kind: "authentication", message: "Paid provider returned HTTP 400" });
+    expect(String((error as Error).message)).not.toContain("Untrusted secret");
+  });
+
+  it("never silently ignores a provider restatement of a stored window", async () => {
+    const db = createTestDb();
+    const options = { explicitReadApproval: true, explicitSnapshotWriteApproval: true, now };
+    await collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(metaHttp().fetchImpl), query, fakeAccess, options);
+    const restated = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await metaHttp().fetchImpl(input, init);
+      const body = await response.json() as Record<string, unknown>;
+      if (Array.isArray(body.data)) (body.data[0] as Record<string, unknown>).spend = "7.10";
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    await expect(collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(restated), query, fakeAccess, options))
+      .rejects.toMatchObject({ name: "PaidEvidenceConflictError", code: "PAID_PROVIDER_RESTATEMENT" });
+    const snapshots = await paidSnapshots(db);
+    expect(snapshots).toHaveLength(5);
+    expect(snapshots.find(row => row.key === "paid_spend_eur")?.value).toBe(6.25); // history preserved, not overwritten
+  });
+
+  it("refuses a second window ending at the same instant instead of recording a run without rows", async () => {
+    const db = createTestDb();
+    const options = { explicitReadApproval: true, explicitSnapshotWriteApproval: true, now };
+    await collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(metaHttp().fetchImpl), query, fakeAccess, options);
+    const shorter = { ...query, startDate: query.endDate };
+    const oneDay = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await metaHttp().fetchImpl(input, init);
+      const body = await response.json() as Record<string, unknown>;
+      if (Array.isArray(body.data)) (body.data[0] as Record<string, unknown>).date_start = shorter.startDate;
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    await expect(collectPaidCampaignEvidence(db, new MetaPaidCampaignClient(oneDay), shorter, fakeAccess, options))
+      .rejects.toMatchObject({ code: "PAID_WINDOW_END_CONFLICT" });
+    const runs = await db.all(sql`SELECT status, metric_count AS n FROM analytics_runs`) as Array<{ status: string; n: number }>;
+    expect(runs).toEqual([{ status: "completed", n: 5 }]);
+    expect(await paidSnapshots(db)).toHaveLength(5);
   });
 
   it("fails closed for mismatched identity, non-EUR, or permission errors", async () => {

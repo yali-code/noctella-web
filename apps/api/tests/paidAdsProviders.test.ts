@@ -33,11 +33,14 @@ describe("ADS-006F Meta paid analytics transport",()=>{
     if(url.pathname.endsWith("/insights"))return {data:[{
       campaign_id:campaignId,spend:"5.50",impressions:"400",clicks:"8",
       date_start:base.startDate,date_stop:base.endDate}]};
-    return {account_id:accountId,currency:"EUR"};
+    return {account_id:accountId,currency:"EUR",timezone_name:"Europe/Sofia"};
   });
   const query:PaidCampaignQuery={...base,provider:"meta"};
   const r=await new MetaPaidCampaignClient(fake.fn).fetchCampaign(query,{accessToken:token});
   expect(r).toMatchObject({provider:"meta",spendEur:5.5,impressions:400,clicks:8,providerReportedConversions:null});
+  // Account-local days (Europe/Sofia, UTC+3 in October), not UTC days.
+  expect(r).toMatchObject({reportingTimeZone:"Europe/Sofia",window:{start:"2026-09-30T21:00:00.000Z",end:"2026-10-02T21:00:00.000Z"}});
+  expect(fake.calls[0]?.url.searchParams.get("fields")).toContain("timezone_name");
   expect(fake.calls).toHaveLength(2);
   expect(fake.calls.every(x=>x.options.method==="GET")).toBe(true);
   checkCalls(fake.calls);
@@ -69,7 +72,7 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
     expect(payload.query).not.toContain("UPDATE");
     if(payload.query.includes("FROM customer")){
       expect(payload.query).not.toContain("metrics.");
-      return [{results:[{customer:{id:accountId,currencyCode:"EUR"}}]}];
+      return [{results:[{customer:{id:accountId,currencyCode:"EUR",timeZone:"Europe/Berlin"}}]}];
     }
     expect(payload.query).toContain("campaign.id = "+campaignId);
     return [{results:[{
@@ -81,6 +84,8 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
   const report=await new GooglePaidCampaignClient(f.fn).fetchCampaign(q,{accessToken:token,developerToken:"fake-developer-token"});
   expect(report.spendEur).toBe(12.3);
   expect(report.clicks).toBe(15);
+  // segments.date is customer-local (Europe/Berlin, UTC+2 in October).
+  expect(report).toMatchObject({reportingTimeZone:"Europe/Berlin",window:{start:"2026-09-30T22:00:00.000Z",end:"2026-10-02T22:00:00.000Z"}});
   expect(f.calls).toHaveLength(2);
   expect(f.calls.every(x=>x.options.method==="POST")).toBe(true);
   expect(f.calls.every(x=>/googleAds:searchStream$/.test(x.url.pathname))).toBe(true);
@@ -90,7 +95,7 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
   const f=mockFetch((_url,request)=>{
     const query=JSON.parse(String(request.body)).query as string;
     return query.includes("FROM customer")
-      ?[{results:[{customer:{id:accountId,currencyCode:"EUR"}}]}]
+      ?[{results:[{customer:{id:accountId,currencyCode:"EUR",timeZone:"Europe/Berlin"}}]}]
       :[];
   });
   const result=await new GooglePaidCampaignClient(f.fn).fetchCampaign(
@@ -102,10 +107,12 @@ describe("ADS-006F Google Ads read-only GAQL",()=>{
   expect(f.calls).toHaveLength(2);
   checkCalls(f.calls);
  });
- it("blocks a non-EUR or mismatched customer before requesting campaign data",async()=>{
+ it("blocks a non-EUR, mismatched or time-zone-less customer before requesting campaign data",async()=>{
   for(const customer of [
-    {id:accountId,currencyCode:"GBP"},
-    {id:"999999999",currencyCode:"EUR"},
+    {id:accountId,currencyCode:"GBP",timeZone:"Europe/Berlin"},
+    {id:"999999999",currencyCode:"EUR",timeZone:"Europe/Berlin"},
+    {id:accountId,currencyCode:"EUR"},
+    {id:accountId,currencyCode:"EUR",timeZone:"Not/A_Zone"},
   ]){
     const f=mockFetch(()=>[{results:[{customer}]}]);
     await expect(new GooglePaidCampaignClient(f.fn).fetchCampaign(
@@ -136,6 +143,7 @@ describe("ADS-006F Pinterest paid campaign analytics",()=>{
     :{id:accountId,currency:"EUR"});
   const report=await new PinterestPaidCampaignClient(f.fn).fetchCampaign({...base,provider:"pinterest_ads"},{accessToken:token});
   expect(report).toMatchObject({spendEur:3.99,impressions:700,clicks:11,providerReportedConversionValueEur:null});
+  expect(report).toMatchObject({reportingTimeZone:"UTC",window:{start:"2026-10-01T00:00:00.000Z",end:"2026-10-03T00:00:00.000Z"}});
   expect(f.calls).toHaveLength(2);
   expect(f.calls.every(x=>x.options.method==="GET")).toBe(true);
   expect(f.calls[1]?.url.pathname).toContain("/campaigns/analytics");

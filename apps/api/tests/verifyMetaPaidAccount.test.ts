@@ -21,7 +21,7 @@ function mockFetch(
     requests.push({ url, init: init ?? {} });
     const payload = url.pathname.endsWith("/insights")
       ? { data: insightsData }
-      : { account_id: reportedAccountId, currency };
+      : { account_id: reportedAccountId, currency, timezone_name: "Europe/Sofia" };
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -44,7 +44,7 @@ describe("manual Meta paid account-only readiness verification", () => {
     const result = await verifyMetaPaidAccountFromEnv(validEnv, f.fn);
     expect(result).toMatchObject({
       mode: "MANUAL_META_READ_ONLY_CHECK",
-      accountId, currency: "EUR", accountAccess: "VERIFIED",
+      accountId, currency: "EUR", reportingTimeZone: "Europe/Sofia", accountAccess: "VERIFIED",
       insightsAccess: "VERIFIED", reportRows: 0,
       spendReconciliation: "NOT_ASSESSED",
       marketplaceAttribution: "NOT_ASSESSED",
