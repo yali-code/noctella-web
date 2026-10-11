@@ -41,10 +41,15 @@ export function PaidProviderReadinessReview() {
       if (result.campaignsEnabled !== false || result.spendAuthorized !== false
         || !Array.isArray(result.providers) || result.providers.length !== 3
         || new Set(result.providers.map(p => p.platform)).size !== 3
-        || result.providers.some(p => !(p.platform in names)
-          || !["NOT_CONFIGURED", "CONFIG_REVIEW_REQUIRED"].includes(p.status)
+        || result.providers.some(p => !p || typeof p !== "object"
+          || !Object.prototype.hasOwnProperty.call(names, p.platform)
+          || typeof p.configured !== "boolean"
+          || p.status !== (p.configured ? "CONFIG_REVIEW_REQUIRED" : "NOT_CONFIGURED")
           || p.connectionVerified !== false || p.campaignsEnabled !== false
-          || p.spendAuthorized !== false || !Array.isArray(p.requiredChecks))) {
+          || p.spendAuthorized !== false || !Array.isArray(p.requiredChecks)
+          || p.requiredChecks.length > 10
+          || p.requiredChecks.some(check => typeof check !== "string"
+            || check.length > 240))) {
         throw new Error("Unexpected paid account readiness response. Nothing has been enabled.");
       }
       setReadiness(result);
