@@ -110,9 +110,23 @@ export function validateCampaignDraft(draft: CampaignDraft) {
   if (draft.creative.mediaPhotoIds.length > cap.maxImages) errors.push("TOO_MANY_IMAGES");
   if (!cap.formats.includes(draft.creative.format)) errors.push("FORMAT_UNSUPPORTED");
   if (!cap.objectives.includes(draft.objective)) errors.push("OBJECTIVE_UNSUPPORTED");
-  let host = "";
-  try { const u = new URL(draft.destination.url); host = u.protocol === "https:" ? u.hostname : ""; } catch { host = ""; }
-  if (!/(^|\.)ebay\.[a-z.]+$|(^|\.)etsy\.com$/.test(host)) errors.push("DESTINATION_NOT_MARKETPLACE");
+  // Exact marketplace registrable domains only. Never accept arbitrary ebay.* suffixes:
+  // a hostname such as ebay.de.attacker.com is not an eBay destination.
+  const ebayDomains = new Set([
+    "ebay.com", "ebay.de", "ebay.co.uk", "ebay.fr", "ebay.it", "ebay.es",
+    "ebay.at", "ebay.ch", "ebay.ca", "ebay.com.au", "ebay.nl", "ebay.be",
+    "ebay.ie", "ebay.pl", "ebay.com.hk", "ebay.com.sg",
+  ]);
+  let validDestination = false;
+  try {
+    const u = new URL(draft.destination.url);
+    const host = u.hostname.toLowerCase();
+    const hostname = host.startsWith("www.") ? host.slice(4) : host;
+    validDestination = u.protocol === "https:" && !u.username && !u.password && !u.port &&
+      (draft.destination.marketplace === "ebay" ? ebayDomains.has(hostname)
+        : draft.destination.marketplace === "etsy" && hostname === "etsy.com");
+  } catch { /* Invalid URLs are never accepted as marketplace destinations. */ }
+  if (!validDestination) errors.push("DESTINATION_NOT_MARKETPLACE");
   const b = draft.budget;
   if (b.proposedDailyEur === null) errors.push("BUDGET_NOT_PROPOSED");
   if (b.guardDecision === "BLOCKED") errors.push("BUDGET_BLOCKED");
