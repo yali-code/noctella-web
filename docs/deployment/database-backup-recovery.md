@@ -51,6 +51,31 @@ calculates SHA-256 and byte size, uploads it, verifies remote metadata, download
 new temporary path, and repeats SHA-256 and SQLite integrity validation. Any mismatch fails the
 operation; temporary files are removed and the live database is never overwritten.
 
+### Failure diagnostics (ADS-009F)
+
+A failed run still returns a generic HTTP 503. The API also writes **one** JSON line to stderr, for
+example:
+
+```text
+{"event":"database_backup_failed","stage":"STORAGE_UPLOAD","code":"STORAGE_AUTH_REJECTED","httpStatus":403,"errorName":"SignatureDoesNotMatch"}
+```
+
+The product-photo backup logs `product_photo_backup_failed` the same way.
+
+- **What is logged:** only a stage, a fixed code, the numeric storage HTTP status and an
+  allowlisted S3/network error name.
+- **What is never logged:** messages, stacks, paths, object keys, bucket names, endpoints,
+  credentials or provider response bodies.
+
+| `code` | Usual cause to check |
+|---|---|
+| `CONFIG_MISSING_OR_INVALID` | Region, bucket, access key ID or secret is empty (R2 needs `REGION=auto`), or the prefix is invalid |
+| `STORAGE_AUTH_REJECTED` | Wrong key pair (e.g. an API *token value* used instead of the S3 *Secret Access Key*), or a token without Object Read & Write on that bucket |
+| `STORAGE_BUCKET_NOT_FOUND` | Bucket name mismatch, or a jurisdiction endpoint mismatch (e.g. an EU bucket needs the `.eu.` R2 endpoint) |
+| `STORAGE_BAD_REQUEST` / `STORAGE_NOT_IMPLEMENTED` at `STORAGE_UPLOAD` | Region/endpoint signing mismatch, or the provider rejecting the SDK's default streaming checksum on uploads |
+| `STORAGE_ENDPOINT_UNREACHABLE` | Malformed or unreachable endpoint URL |
+| `LOCAL_SOURCE_FAILED` (`LOCAL_SNAPSHOT` / `LOCAL_FILE` / `LOCAL_DB_READ`) | Disk or SQLite access, or a photo file missing or changed on disk |
+
 ## Restore verification
 
 Restore verification validates one explicit remote object without restoring it into service:
