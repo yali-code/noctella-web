@@ -176,3 +176,55 @@ describe("ADS-009D CLI: redaction and side-effect safety", () => {
     expect(parseIsolationAuditInput("nope")).toEqual({ ok: false, error: "INPUT_NOT_JSON" });
   });
 });
+
+describe("ADS-009E: prior operator attestations and an unset PUBLIC_API_ORIGIN", () => {
+  // The state recorded in #335 (Render inventory + operator YES answers), expressed without any
+  // bucket name, path or credential: IDs are Render metadata, the rest are YES/NO attestations.
+  const recorded = (): IsolationAuditInput => ({
+    expected: { stagingApiServiceId: "srv-staging-api", stagingDiskId: "dsk-staging", productionDiskId: "dsk-production" },
+    staging: { source: "effective_runtime", apiServiceId: "srv-staging-api", otherServiceIds: ["crn-staging-backup"], diskId: "dsk-staging", diskAttachedToServiceId: "srv-staging-api", origins: { publicApiOrigin: "UNSET" } },
+    production: { source: "effective_runtime", apiServiceId: "srv-production-api", diskId: "dsk-production" },
+    operatorAttestations: { stagingDatabaseUrlOnStagingDisk: "YES", databaseBackupBucketsDistinct: "YES", photoBackupBucketsDistinct: "YES", stagingOriginsAreStagingOnly: "YES" },
+  });
+
+  it("represents the recorded evidence and leaves only the genuinely unknown checks open", () => {
+    const r = auditStagingIsolation(recorded());
+    expect(r.overall).toBe("UNKNOWN");
+    expect(r.e02Gate).toBe("PARTIAL");
+    expect(Object.fromEntries(r.checks.map((c) => [c.id, c.status]))).toEqual({
+      I01: "PASS", I02: "PASS", I03: "PASS", I04: "PASS", I05: "UNKNOWN", I06: "PASS", I07: "UNKNOWN", I08: "PASS", I09: "UNKNOWN",
+      I10: "UNKNOWN", I11: "PASS", I12: "UNKNOWN", I13: "UNKNOWN", I14: "UNKNOWN",
+    });
+    expect(status(r, "I11").reason).toBe("OPERATOR_ATTESTED_STAGING_ORIGINS_PUBLIC_API_ORIGIN_UNSET_FAIL_CLOSED");
+    expect(status(r, "I06").reason).toBe("OPERATOR_ATTESTED_DISTINCT_BUCKETS");
+    const closed = auditStagingIsolation({ ...recorded(), operatorAttestations: { ...recorded().operatorAttestations, stagingPhotoAndMediaDirsOnStagingDisk: "YES", stagingCronsLinkedToStagingApiWithoutOverride: "YES",
+      stagingDatabaseBackupCredentialDeniedOnProductionBucket: "YES", stagingPhotoBackupCredentialDeniedOnProductionBucket: "YES", productionDiskNotAttachedToAnyStagingService: "YES" } });
+    expect(closed.overall).toBe("PASS");
+    expect(closed.e02Gate).toBe("PASS_PENDING_REVIEW");
+    expect(closed.operatorActionsRequired).toEqual(["I07", "I09"]); // advisory prefixes only
+  });
+
+  it("supplied values always take precedence over an attestation", () => {
+    const sharedBucket = run((i) => { i.staging.databaseBackup = { ...i.production.databaseBackup!, prefix: "staging" }; i.operatorAttestations = { ...i.operatorAttestations, databaseBackupBucketsDistinct: "YES" }; });
+    expect(status(sharedBucket, "I06").reason).toBe("SAME_BUCKET_PREFIX_SEPARATION_IS_NOT_ISOLATION");
+    const prodOrigin = run((i) => { i.staging.origins = { adminAppOrigin: "https://admin.noctella.com", publicApiOrigin: "UNSET" }; i.operatorAttestations = { ...i.operatorAttestations, stagingOriginsAreStagingOnly: "YES" }; });
+    expect(status(prodOrigin, "I11").reason).toBe("NON_STAGING_ORIGIN");
+    const outside = run((i) => { i.staging.databaseUrl = "/var/other/noctella.sqlite"; i.operatorAttestations = { ...i.operatorAttestations, stagingDatabaseUrlOnStagingDisk: "YES" }; });
+    expect(status(outside, "I04").status).toBe("FAIL");
+  });
+
+  it("an unset PUBLIC_API_ORIGIN is fail-closed and passes with complete staging origins; an unreported one stays UNKNOWN", () => {
+    expect(status(run((i) => { i.staging.origins!.publicApiOrigin = "UNSET"; }), "I11")).toMatchObject({ status: "PASS", reason: "STAGING_ORIGINS_ISOLATED_PUBLIC_API_ORIGIN_UNSET_FAIL_CLOSED" });
+    const missing = auditStagingIsolation({ ...recorded(), staging: { ...recorded().staging, origins: {} } });
+    expect(status(missing, "I11")).toMatchObject({ status: "UNKNOWN", reason: "PUBLIC_API_ORIGIN_UNKNOWN" });
+    expect(status(run((i) => { i.staging.origins!.publicApiOrigin = "not-a-url"; }), "I11").reason).toBe("NON_STAGING_ORIGIN");
+  });
+
+  it("a NO attestation fails, and attestations never upgrade non-runtime snapshots", () => {
+    const no = auditStagingIsolation({ ...recorded(), operatorAttestations: { ...recorded().operatorAttestations, photoBackupBucketsDistinct: "NO" } });
+    expect(status(no, "I08")).toMatchObject({ status: "FAIL", reason: "OPERATOR_REPORTED_FAIL" });
+    expect(no.e02Gate).toBe("BLOCKED");
+    const blueprint = auditStagingIsolation({ ...recorded(), staging: { ...recorded().staging, source: "blueprint" } });
+    for (const idv of ["I04", "I06", "I08", "I10", "I11"]) expect(status(blueprint, idv).status, idv).toBe("UNKNOWN");
+  });
+});

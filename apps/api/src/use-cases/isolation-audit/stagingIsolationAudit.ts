@@ -43,9 +43,18 @@ export const isolationAuditInputSchema = z.object({
   }).strict()).max(20).optional(),
   /** Facts the tool cannot prove offline; answered by a human operator. */
   operatorAttestations: z.object({
+    /** YES when the staging token is scoped to staging buckets only (preferred: token-scope view, no request to production) or a read attempt on the production bucket is denied. */
     stagingDatabaseBackupCredentialDeniedOnProductionBucket: yesNo.optional(),
     stagingPhotoBackupCredentialDeniedOnProductionBucket: yesNo.optional(),
     productionDiskNotAttachedToAnyStagingService: yesNo.optional(),
+    // ADS-009E: prior operator observations, usable ONLY when the corresponding values are not
+    // supplied (supplied values always take precedence), so no bucket name or path needs re-typing.
+    stagingDatabaseUrlOnStagingDisk: yesNo.optional(),
+    stagingPhotoAndMediaDirsOnStagingDisk: yesNo.optional(),
+    databaseBackupBucketsDistinct: yesNo.optional(),
+    photoBackupBucketsDistinct: yesNo.optional(),
+    stagingCronsLinkedToStagingApiWithoutOverride: yesNo.optional(),
+    stagingOriginsAreStagingOnly: yesNo.optional(),
   }).strict().optional(),
 }).strict();
 export type IsolationAuditInput = z.infer<typeof isolationAuditInputSchema>;
@@ -77,6 +86,12 @@ export function auditStagingIsolation(input: IsolationAuditInput) {
   const checks: IsolationCheck[] = [];
   const add = (check: IsolationCheck) => checks.push(check);
   const unknown = (idv: string, title: string, severity: IsolationCheck["severity"], reason: string) => add({ id: idv, title, severity, status: "UNKNOWN", reason });
+  /** Values were not supplied: fall back to an explicit operator YES/NO, labelled as an attestation. */
+  const attestedOr = (idv: string, title: string, value: "YES" | "NO" | undefined, unknownReason: string, yesReason = "OPERATOR_ATTESTED") => {
+    if (value === "YES") add({ id: idv, title, severity: "required", status: "PASS", reason: yesReason });
+    else if (value === "NO") add({ id: idv, title, severity: "required", status: "FAIL", reason: "OPERATOR_REPORTED_FAIL" });
+    else unknown(idv, title, "required", unknownReason);
+  };
 
   // I01 provenance
   add({ id: "I01", title: "Snapshots come from effective runtime settings", severity: "required",
@@ -107,7 +122,8 @@ export function auditStagingIsolation(input: IsolationAuditInput) {
   // I04 effective DATABASE_URL on the staging disk (an identical in-volume path is acceptable)
   {
     const t = "Staging DATABASE_URL resolves inside the staging disk mount";
-    if (!runtime(s) || !s.databaseUrl || !s.diskMountPath) unknown("I04", t, "required", "DATABASE_URL_OR_MOUNT_UNKNOWN");
+    if (!runtime(s)) unknown("I04", t, "required", "DATABASE_URL_OR_MOUNT_UNKNOWN");
+    else if (!s.databaseUrl || !s.diskMountPath) attestedOr("I04", t, att.stagingDatabaseUrlOnStagingDisk, "DATABASE_URL_OR_MOUNT_UNKNOWN", "OPERATOR_ATTESTED_DATABASE_URL_ON_STAGING_DISK");
     else if (!path.posix.isAbsolute(s.databaseUrl) || !posixInside(s.databaseUrl, s.diskMountPath)) add({ id: "I04", title: t, severity: "required", status: "FAIL", reason: "DATABASE_URL_OUTSIDE_STAGING_MOUNT" });
     else add({ id: "I04", title: t, severity: "required", status: "PASS", reason: "DATABASE_URL_ON_STAGING_DISK" });
   }
@@ -116,20 +132,22 @@ export function auditStagingIsolation(input: IsolationAuditInput) {
   {
     const t = "Staging photo and media directories are on the staging disk";
     const dirs = [s.productPhotoDir, s.mediaAssetDir];
-    if (!runtime(s) || !s.diskMountPath || dirs.some((d) => !d)) unknown("I05", t, "required", "PHOTO_OR_MEDIA_DIR_UNKNOWN");
+    if (!runtime(s)) unknown("I05", t, "required", "PHOTO_OR_MEDIA_DIR_UNKNOWN");
+    else if (!s.diskMountPath || dirs.some((d) => !d)) attestedOr("I05", t, att.stagingPhotoAndMediaDirsOnStagingDisk, "PHOTO_OR_MEDIA_DIR_UNKNOWN", "OPERATOR_ATTESTED_DIRECTORIES_ON_STAGING_DISK");
     else if (dirs.some((d) => !posixInside(d!, s.diskMountPath!))) add({ id: "I05", title: t, severity: "required", status: "FAIL", reason: "DIRECTORY_OUTSIDE_STAGING_MOUNT" });
     else add({ id: "I05", title: t, severity: "required", status: "PASS", reason: "DIRECTORIES_ON_STAGING_DISK" });
   }
 
   // I06-I09 backup destinations: bucket identity (required) and prefix overlap (advisory) are separate.
-  for (const [bucketId, prefixId, label, key, fallback] of [
-    ["I06", "I07", "database backup", "databaseBackup", "database-backups"],
-    ["I08", "I09", "product-photo backup", "photoBackup", "product-photo-backups"],
+  for (const [bucketId, prefixId, label, key, fallback, attested] of [
+    ["I06", "I07", "database backup", "databaseBackup", "database-backups", att.databaseBackupBucketsDistinct],
+    ["I08", "I09", "product-photo backup", "photoBackup", "product-photo-backups", att.photoBackupBucketsDistinct],
   ] as const) {
     const sb = s[key], pb = p[key];
     const bt = `Staging ${label} bucket is a different bucket from production`;
     const si = bucketIdentity(sb), pi = bucketIdentity(pb);
-    if (!both || !si || !pi) unknown(bucketId, bt, "required", "BUCKET_IDENTITY_UNKNOWN");
+    if (!both) unknown(bucketId, bt, "required", "BUCKET_IDENTITY_UNKNOWN");
+    else if (!si || !pi) attestedOr(bucketId, bt, attested, "BUCKET_IDENTITY_UNKNOWN", "OPERATOR_ATTESTED_DISTINCT_BUCKETS");
     else if (si === pi) add({ id: bucketId, title: bt, severity: "required", status: "FAIL", reason: "SAME_BUCKET_PREFIX_SEPARATION_IS_NOT_ISOLATION" });
     else add({ id: bucketId, title: bt, severity: "required", status: "PASS", reason: "DIFFERENT_BUCKET_IDENTITY" });
     const pt = `Staging ${label} prefix does not overlap production's`;
@@ -142,7 +160,11 @@ export function auditStagingIsolation(input: IsolationAuditInput) {
   {
     const t = "Every staging cron targets the staging API via Blueprint binding (no manual override)";
     const crons = input.stagingCrons ?? [];
-    if (!crons.length || !s.apiServiceId) unknown("I10", t, "required", "CRON_BINDINGS_UNKNOWN");
+    if (!crons.length) {
+      if (runtime(s)) attestedOr("I10", t, att.stagingCronsLinkedToStagingApiWithoutOverride, "CRON_BINDINGS_UNKNOWN", "OPERATOR_ATTESTED_CRONS_LINKED_WITHOUT_OVERRIDE");
+      else unknown("I10", t, "required", "CRON_BINDINGS_UNKNOWN");
+    }
+    else if (!s.apiServiceId) unknown("I10", t, "required", "CRON_BINDINGS_UNKNOWN");
     else if (crons.some((c) => c.apiHostportSetting === "manual_override" || c.schedulerTokenSetting === "manual_override")) add({ id: "I10", title: t, severity: "required", status: "FAIL", reason: "MANUAL_OVERRIDE_PRESENT" });
     else if (crons.some((c) => c.source === "effective_runtime" && c.boundServiceId && (c.boundServiceId !== s.apiServiceId || c.boundServiceId === p.apiServiceId))) add({ id: "I10", title: t, severity: "required", status: "FAIL", reason: "CRON_BOUND_TO_NON_STAGING_API" });
     else if (crons.some((c) => c.source !== "effective_runtime" || c.apiHostportSetting !== "fromService" || c.schedulerTokenSetting !== "fromService" || !c.boundServiceId)) unknown("I10", t, "required", "CRON_BINDING_NOT_PROVEN_AT_RUNTIME");
@@ -154,12 +176,20 @@ export function auditStagingIsolation(input: IsolationAuditInput) {
     const t = "Staging origins are staging hosts and differ from production";
     const suffix = (exp.stagingOriginSuffix ?? ".staging.noctella.com").toLowerCase();
     const so = s.origins ?? {}, po = p.origins ?? {};
-    const sHosts = [so.adminAppOrigin, so.storefrontAppOrigin, so.publicApiOrigin, so.nextPublicApiBaseUrl].map(hostOf);
+    // "UNSET" = PUBLIC_API_ORIGIN deliberately absent: resolvePublicApiOrigin() throws and no public
+    // URL is generated (never inferred from request headers), so it cannot point at production.
+    const publicUnset = so.publicApiOrigin === "UNSET";
     const pHosts = [po.adminAppOrigin, po.storefrontAppOrigin, po.publicApiOrigin, po.nextPublicApiBaseUrl].map(hostOf).filter(Boolean) as string[];
-    if (!runtime(s) || sHosts.some((h) => !h) || !so.cookieDomain) unknown("I11", t, "required", "STAGING_ORIGINS_UNKNOWN");
-    else if (sHosts.some((h) => !h!.endsWith(suffix)) || so.cookieDomain.toLowerCase() !== suffix) add({ id: "I11", title: t, severity: "required", status: "FAIL", reason: "NON_STAGING_ORIGIN" });
-    else if (sHosts.some((h) => pHosts.includes(h!)) || (po.cookieDomain && po.cookieDomain.toLowerCase() === so.cookieDomain.toLowerCase())) add({ id: "I11", title: t, severity: "required", status: "FAIL", reason: "ORIGIN_SHARED_WITH_PRODUCTION" });
-    else add({ id: "I11", title: t, severity: "required", status: "PASS", reason: "STAGING_ORIGINS_ISOLATED" });
+    const supplied = [so.adminAppOrigin, so.storefrontAppOrigin, so.nextPublicApiBaseUrl, publicUnset ? undefined : so.publicApiOrigin];
+    const hosts = supplied.filter((v) => v !== undefined).map(hostOf);
+    const unsetSuffix = publicUnset ? "_PUBLIC_API_ORIGIN_UNSET_FAIL_CLOSED" : "";
+    if (!runtime(s)) unknown("I11", t, "required", "STAGING_ORIGINS_UNKNOWN");
+    // Any value that IS supplied is always checked, with or without an attestation.
+    else if (hosts.some((h) => !h || !h.endsWith(suffix)) || (so.cookieDomain && so.cookieDomain.toLowerCase() !== suffix)) add({ id: "I11", title: t, severity: "required", status: "FAIL", reason: "NON_STAGING_ORIGIN" });
+    else if (hosts.some((h) => pHosts.includes(h!)) || (so.cookieDomain && po.cookieDomain && po.cookieDomain.toLowerCase() === so.cookieDomain.toLowerCase())) add({ id: "I11", title: t, severity: "required", status: "FAIL", reason: "ORIGIN_SHARED_WITH_PRODUCTION" });
+    else if (!publicUnset && !so.publicApiOrigin) unknown("I11", t, "required", "PUBLIC_API_ORIGIN_UNKNOWN");
+    else if (so.adminAppOrigin && so.storefrontAppOrigin && so.nextPublicApiBaseUrl && so.cookieDomain) add({ id: "I11", title: t, severity: "required", status: "PASS", reason: `STAGING_ORIGINS_ISOLATED${unsetSuffix}` });
+    else attestedOr("I11", t, att.stagingOriginsAreStagingOnly, "STAGING_ORIGINS_UNKNOWN", `OPERATOR_ATTESTED_STAGING_ORIGINS${unsetSuffix}`);
   }
 
   // I12-I14 operator-only facts (the tool never calls storage or Render)

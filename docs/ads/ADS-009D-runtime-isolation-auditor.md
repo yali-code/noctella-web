@@ -80,3 +80,40 @@ Answer YES or NO and record only the answer:
 
 ## Status
 This tool has **not** been run against real settings. E02 stays **PARTIAL** until an owner-access operator runs it with effective-runtime values (or answers the minimum checks) and the result is reviewed. E03 stays **NOT RUN**.
+
+## ADS-009E follow-up (2026-10-11): verified findings and the minimum remaining manual checks
+
+Main is `9a551e7`. Evidence types are source review and Render service metadata recorded in #335. No runtime environment values were read.
+
+**Source and metadata findings**
+- **`PUBLIC_API_ORIGIN` has no fallback.**
+  - `resolvePublicApiOrigin()` (`config/publicApiOrigin.ts`) requires an HTTPS origin and otherwise throws. It is never inferred from request headers: `Host`/`Origin` are read only for CSRF and CORS allowlists.
+  - Its callers are social/Media Planner image preparation and Instagram publishing, plus readiness, which only reports `configured`/`missing`/`invalid`.
+  - So an **unset** value fails closed: no public URL is generated and Instagram publishing reports `missing`. It cannot point staging at production. It is a functional gap for staging Instagram, not an isolation risk.
+  - The auditor now accepts `"publicApiOrigin": "UNSET"` for this case.
+- **Cron wiring.** All four staging crons bind `API_HOSTPORT` and `SCHEDULER_AUTH_TOKEN` via `fromService: noctella-staging-api`. The token is generated per service.
+  - A cross-environment trigger needs **two** independent manual dashboard overrides: target and token. Even then, the production API's own settings choose its bucket.
+  - Production crons are separate service IDs (#335 inventory).
+  - Remaining unknown: whether a manual override exists on the live staging crons.
+- **Disk attachment.** The Blueprint declares one disk, on the staging API only. Render's live inventory (#335) shows the staging and production disks distinct, each attached only to its own API. That inventory answers I14 without any new manual check.
+- **R2 credential scope.** The application cannot prove this without contacting production storage, and it must not. The safest evidence is the **token scope view** in the storage provider console (staging token limited to staging buckets). That needs no request to the production bucket.
+- **Auditor representability.** Prior operator observations can now be supplied as YES/NO attestations: DB URL on the staging disk, photo/media directories, distinct buckets, cron links, staging origins. They are used **only when the values are absent**; supplied values always win. Results are labelled `OPERATOR_ATTESTED_*`. No bucket name or path needs to be re-entered. Blueprint or unknown snapshots still never PASS.
+
+**Already established (#335):**
+- service IDs disjoint;
+- disks distinct and correctly attached;
+- staging DB on the staging disk;
+- DB and photo backup buckets distinct;
+- admin/storefront/cookie origins staging.
+
+**Minimum remaining operator checks (YES/NO only; record only the answer):**
+1. **I10:** On each of the four staging cron services, are `API_HOSTPORT` and `SCHEDULER_AUTH_TOKEN` shown as **linked to `noctella-staging-api`**, with no manually entered value?
+2. **I12/I13:** In the storage provider's API-token settings, is each token used by staging (database backup, photo backup) **restricted to staging bucket(s) only**, rather than all buckets? Answer separately for each token.
+3. **I05:** Do staging `PRODUCT_PHOTO_DIR` and `MEDIA_ASSET_DIR` both start with the staging disk mount `/var/data/`?
+4. **I11:** Is `PUBLIC_API_ORIGIN` absent on the staging API, or equal to the staging API host? Does `NEXT_PUBLIC_API_BASE_URL` on staging Admin and Storefront point to the staging API host?
+5. *(Advisory, not blocking)* **I07/I09:** Do the staging backup prefixes differ from production's?
+
+**To close E02:** run `npm run -s ops:isolation-audit -w apps/api` once, with the recorded IDs and attestations plus the answers above (`publicApiOrigin: "UNSET"` if absent).
+- If every required check is PASS, record the output and mark E02 **PASS after reviewer sign-off**, noting the advisory prefix result.
+- A NO on question 2 (a token not bucket-scoped) means E02 FAIL/BLOCKED until a staging-only token is issued (owner action).
+- E03 remains NOT RUN.
