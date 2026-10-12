@@ -185,6 +185,17 @@ describe("Sprint 124 SQLite database backup", () => {
     sqlite.close();
   });
 
+  it("rejects a valid-looking backup key outside the configured restore-verification prefix before any R2 request", async () => {
+    const repository = new FakeRepository();
+    const head = vi.spyOn(repository, "head");
+    const download = vi.spyOn(repository, "download");
+    await expect(createDatabaseRestoreVerificationUseCase(repository, artifactInspector, "staging/database-backups")
+      .execute("production/database-backups/valid.sqlite"))
+      .rejects.toThrow("Invalid database backup object key");
+    expect(head).not.toHaveBeenCalled();
+    expect(download).not.toHaveBeenCalled();
+  });
+
   it("rejects an unsafe restore object key", async () => {
     await expect(createDatabaseRestoreVerificationUseCase(new FakeRepository(), artifactInspector).execute("../live.sqlite")).rejects.toThrow("Invalid database backup object key");
   });
