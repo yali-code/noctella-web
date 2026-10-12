@@ -1,5 +1,18 @@
 # ADS-009 — Acceptance matrix, dependency map and delivery plan (Phases 6–9)
 
+**Historical plan (snapshot 2026-10-10):** The PR merge order,
+unmerged-stack notes and engineering estimates below describe the original
+planning baseline, **not today's open PRs or outstanding engineering work**.
+For the verified 2026-10-12 E01–E12 gate table and staging PR #366 LIVE status,
+consult [ADS-009A current supplement](./ADS-009A-staging-evidence-ledger.md)
+and [#335](https://github.com/yali-code/noctella-web/issues/335).
+PRs #364–#366 implemented the manual E07 staging command and independent R2
+audit; the R2 operator audit passed at 2026-10-12 17:29:52Z. E06 real campaign,
+E07 staging snapshot/replay and E09 finalized billing remain blocked on real
+provider evidence. The table of "remaining engineering items" below is a
+**historical estimate**, not a fresh statement of current blockers.
+No production deployment, provider mutation or advertising spend is approved.
+
 Updated 2026-10-10. This is engineering evidence only. **No phase is operationally complete.** The 2026-10-10 snapshot predates controlled staging-only merges; see issue #335 for current commit and CI/staging evidence. No production activation or ad spend has been authorized. The staging steps are in `ADS-009-staging-acceptance-checklist.md`.
 
 ## Draft PR dependency map
