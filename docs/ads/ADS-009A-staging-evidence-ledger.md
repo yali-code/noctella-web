@@ -4,6 +4,28 @@
 
 Tracking issue: #335. Scope: Noctella Ads Agent Phases 6–9, **staging only**, EUR-only. Existing production SQLite `/var/data/noctella.sqlite` and R2 backup buckets are explicitly out of scope.
 
+> **Current operational checkpoint (12 October 2026):** See the evidence supplement below before using the original blank template. The original matrix is retained as an acceptance *template*, not an assertion that already-verified E01–E03 work is missing. No approval is granted by this documentation change.
+
+## 2026-10-12 E04 read-only evidence supplement
+
+This supplement is the current observed checkpoint for GitHub issue [#335](https://github.com/yali-code/noctella-web/issues/335). It does **not** overwrite historical notes or expand the owner's authorization.
+
+| Gate / aspect | Verified observation | Limitation / disposition |
+|---|---|---|
+| E01 — engineering CI and deploy convergence | GitHub `main` SHA `8f2d929884efd26be75241e8f67feb64bab1daac`; GitHub Actions CI run [38162375527](https://github.com/yali-code/noctella-web/actions/runs/38162375527) succeeded. Render staging API `dep-db5ulrqjnfac73bprbh0`, Admin `dep-db5t4jn40ujc73cr1ujg`, Storefront `dep-db5t4jn40ujc73cr1ung` all LIVE on that SHA. | **PASS for CI/deployment convergence only**; independent E04 functional/security acceptance is separate. |
+| E02 — isolation and R2 targets | Staging API disk `dsk-d9lnbgf10e5c73e1qp1g` mounted at `/var/data`, different from operator-reported production disk `dsk-db34390m7kps73cv8mh0`. Staging API origins and S3 token scopes, dedicated staging buckets, scheduled backup artifacts and cron results attested in issue #335. | **OPERATOR PASS**, not independently inspected Cloudflare API privileges or a separate security-review signoff. |
+| E03 — integrity verification | In the staging API shell, a temporary read-only SQLite backup download passed integrity and SHA-256 validation (2,514,944 bytes; SHA-256 `18ab73d08772ce5218a9ccfdbafd478088ce34df6f3a940ec6ece84d44c1ebb1`). Staging photo manifest verifier reported `verifiedArtifacts: 52`, `integrity: ok`. See [E03 evidence](https://github.com/yali-code/noctella-web/issues/335#issuecomment-6119407647). | **PASS for nondestructive integrity verification only**; no actual service swap, backup materialization to live location, or disaster-recovery cutover rehearsal occurred. Do not treat E12 as done. |
+| E04 — owner staging acceptance authorization | Named staging services and reviewed SHA are documented. Read-only audit recorded at [#335 E04 checkpoint](https://github.com/yali-code/noctella-web/issues/335#issuecomment-6119455339). | **PENDING** explicit scoped owner approval/signoff under the acceptance policy. Existing deployments are not authorization for new operations. |
+| E08 — Admin HTTP authorization | Existing `apps/api/tests/paidAdsAdminHttp.test.ts` covers 401 unauthenticated, 403 insufficient scope, 200 authorized reads, `no-store`, `NOT_COLLECTED`, 404 mutation methods, and non-executable/no secret echo behavior using an isolated in-memory SQLite fixture. | **CODE-TESTED, STAGING SMOKE NOT RUN**. Do not equate passing CI with authenticated runtime evidence. |
+| E05–E07 / E09–E12 — provider and operational acceptance | No newly authorized real paid-provider collection, staging SQLite write, finalized billing reconciliation, provider scoping decision, purchase attribution or rollback cutover in this checkpoint. | **BLOCKED / NOT RUN** according to the original matrix. Never claim real spend or attribution from fixtures. |
+
+### Scoped next actions
+
+1. Perform a non-mutating staging E08 unauthenticated HTTP smoke with sanitized results, then independently verify 403 and 200 only through an authorized operator session without exposing credentials or session cookies.
+2. Capture explicit owner E04 approval with exact reviewed commit and service IDs before any new operationally consequential action. A deployed commit does not itself authorize paid-provider reads or writes.
+3. Keep E05 provider access, E07 storage writes, and E12 live restore rehearsal separately authorized. Do not change production, campaign state, budgets, or provider tokens.
+4. Preserve EUR, provider-local reporting periods, and UNKNOWN for missing data. Confirm Google/Pinterest separately or record an explicit owner de-scope.
+
 ## Owner and reviewer decision
 
 | Field | Value to record |
