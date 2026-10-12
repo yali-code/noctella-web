@@ -67,7 +67,7 @@ export async function runMetaE07Staging(
   const backup = await (dependencies.verifyBackup ??
     ((e, t) => verifyMetaE07BackupPreflight(e, undefined, t)))(env, now);
   if (operation === "preflight") {
-    return { ...backup, operation, providerCalled: false as const,
+    return { ...backup, operation, status: "PREFLIGHT_ONLY" as const, providerCalled: false as const,
       databaseWritePerformed: false as const, spendAuthorized: false as const };
   }
 
