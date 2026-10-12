@@ -4,7 +4,7 @@ import {
   type PaidAdsReadOnlyClient, type PaidCampaignObservation, type PaidCampaignQuery,
 } from "../use-cases/ads/paidCampaignCollectorContract";
 import { verifyMetaE07BackupPreflight } from "./verifyMetaE07BackupPreflight";
-import type { E07PreflightEnv } from "./preflightMetaPaidStageWrite";
+import { validateMetaE07StagingPreflight, type E07PreflightEnv } from "./preflightMetaPaidStageWrite";
 
 /**
  * ADS-009M — manual Meta-only staging E07 operator command.
@@ -44,12 +44,41 @@ function scopedQuery(env: E07PreflightEnv): PaidCampaignQuery {
   return query;
 }
 
+/**
+ * Fail closed if the validated operator scope differs from the actual runtime
+ * that will open the ERP SQLite database. In particular, accepting a caller
+ * supplied staging env must never cause a process with production env to write.
+ * Pure guard: no network, disk or database side effects.
+ */
+export function assertMetaE07ActualDatabaseRuntime(
+  verifiedScope: E07PreflightEnv,
+  actualEnv: E07PreflightEnv,
+  now = new Date(),
+): void {
+  validateMetaE07StagingPreflight(actualEnv, now);
+  const matching = [
+    "RENDER_SERVICE_NAME", "DATABASE_DRIVER", "DATABASE_URL",
+    "DATABASE_BACKUP_S3_BUCKET", "DATABASE_BACKUP_S3_PREFIX",
+    "NOCTELLA_PAID_ADS_PROVIDER", "NOCTELLA_META_AD_ACCOUNT_ID",
+    "NOCTELLA_PAID_ADS_CAMPAIGN_ID", "NOCTELLA_PAID_ADS_START_DATE",
+    "NOCTELLA_PAID_ADS_END_DATE", "NOCTELLA_E07_STAGING_BACKUP_KEY",
+  ] as const;
+  if (matching.some(key => actualEnv[key] !== verifiedScope[key]) ||
+      actualEnv.NOCTELLA_E07_OPERATION !== "write" ||
+      actualEnv.NOCTELLA_E07_ONE_TIME_WRITE_ACK !== "I_AUTHORIZE_ONE_TIME_STAGING_SNAPSHOT_WRITE") {
+    throw new Error("E07 staging runtime differs from verified operator scope");
+  }
+}
+
 export async function runMetaE07Staging(
   env: E07PreflightEnv = process.env,
   dependencies: E07Dependencies = {},
   now = new Date(),
 ) {
   const operation = selectedOperation(env.NOCTELLA_E07_OPERATION);
+  // This check is independent of the injected backup verifier, so test doubles
+  // or later implementation changes cannot bypass stage identity validation.
+  validateMetaE07StagingPreflight(env, now);
 
   // A per-invocation write acknowledgement is REQUIRED in addition to the
   // separate staged read/write scope acknowledgements validated by preflight.
@@ -100,6 +129,9 @@ export async function runMetaE07Staging(
   }
 
   const persist = dependencies.persist ?? (async (q: PaidCampaignQuery, o: PaidCampaignObservation, t: Date) => {
+    // Validate the real process environment, not only the caller-supplied env.
+    // This must happen BEFORE any import that could open or migrate SQLite.
+    assertMetaE07ActualDatabaseRuntime(env, process.env, t);
     // Must be dynamic: db/client opens SQLite and can ensure schema during import.
     const [{ db }, { storeVerifiedPaidCampaignEvidence }] = await Promise.all([
       import("../db/client"), import("../services/paidAdsCollection"),
