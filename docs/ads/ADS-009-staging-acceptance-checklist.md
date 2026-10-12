@@ -1,6 +1,17 @@
-# ADS-009 — Staging-only acceptance checklist (not executed)
+# ADS-009 — Staging-only acceptance checklist (historical plan + current gate)
 
-This checklist is for owner-authorized **staging** validation of the Ads Agent stack, Phases 6–9. Nothing here has been run. Do not deploy to production. Do not create, change or fund campaigns.
+**Current checkpoint (2026-10-12):** This checklist originated as an unexecuted plan,
+but E01/E02/E03, E05, E08, limited E12 and the **E07 independent R2 subgate**
+have since gained staging evidence. See the authoritative current-status supplement
+in [ADS-009A](./ADS-009A-staging-evidence-ledger.md) and
+[issue #335](https://github.com/yali-code/noctella-web/issues/335).
+Unmarked boxes in this historical procedure do **not** undo proven subgates.
+
+**Next external blocker:** E06 has no owner-created paid Meta campaign with real
+delivery, so do not run E07 `write` with a fabricated campaign ID or claim complete
+acceptance. E09 also needs finalized billing. Production and spend remain
+unauthorized. All paid-provider calls/data writes require their own explicit scope
+and approval; deploying or passing R2 backup checks is not such approval.
 
 ## 0. Preconditions (owner)
 - [ ] Explicit approval to deploy the integrated Draft stack to **staging only** (`noctella-staging-api` and Admin).
@@ -31,9 +42,11 @@ This checklist is for owner-authorized **staging** validation of the Ads Agent s
 - [ ] Pick a **completed** window (all local days ended) of at most 31 days.
 - [ ] Run `npm run ads:paid:preview -w apps/api` with provider, campaign and dates set via the `NOCTELLA_PAID_ADS_*` variables. This is read-only and writes nothing to the database. Check: identity matches, EUR, account-local window, and `NO_CAMPAIGN_REPORT` for empty data (not zero).
 
-## 4. Read-only collector approval boundary
-- [ ] **Engineering gap:** there is no command yet for an approved **write** collection into staging SQLite. `collectPaidCampaignEvidence` requires `explicitSnapshotWriteApproval`, which only code can supply today. A small owner-approved staging command with its own acknowledgement and backup step is needed before checks 5–6 can use real windows.
-- [ ] Once it exists: collect, then replay the same window (expect `replayed: true` and no new rows). A later restatement must stop with `PAID_PROVIDER_RESTATEMENT`.
+## 4. Read-only collector and staging write approval boundary (updated 2026-10-12)
+- [x] **Engineering command exists (code + CI + staging deployment):** `node apps/api/dist/scripts/runMetaE07Staging.js` on staging API, introduced in [PR #364](https://github.com/yali-code/noctella-web/pull/364), with actual-runtime guard in #365. Default `preflight` and explicit `preview` do not write ERP SQLite; explicit `write` requires a separate per-invocation authorization. **Not an operational write PASS.**
+- [x] **Independent R2 audit executed:** the separate, compiled `node apps/api/dist/scripts/checkMetaE07StagingBackup.js` command from #366 passed on the real staging shell without any campaign ID or write acknowledgements; see [record](https://github.com/yali-code/noctella-web/issues/335#issuecomment-6129294680). Audit age is a point-in-time observation, not a permanent fresh-backup guarantee.
+- [ ] **E06 prerequisite:** wait for an actual owner-created, delivered Meta campaign and its completed account-local reporting interval. Never use synthetic/fake account or campaign IDs for live E07.
+- [ ] **Actual E07 snapshot write requires separate operator approval:** verify real campaign read-only, re-verify a fresh dedicated staging backup, check staging service/disk identity, authorize only the narrow one-time scoped write. Verify before/after staging SQLite snapshot/run counts, then replay (expect `replayed: true` and unchanged rows). A genuine provider restatement must reject with `PAID_PROVIDER_RESTATEMENT`; same-end conflict must reject with `PAID_WINDOW_END_CONFLICT`. No production access or ad spend.
 
 ## 5. Admin authentication smoke test (staging)
 - [ ] Without a session, `/api/analytics/ads/performance/meta/<id>`, `/ads/intelligence/...`, `/ads/providers/readiness` and `/ads/campaign-draft/...` all return 401. An Admin without `analytics.view` gets 403.
