@@ -3,7 +3,8 @@ import {
   assertPaidCampaignQuery, assertPaidObservation, requirePaidCredentials,
   type PaidAdsReadOnlyClient, type PaidCampaignObservation, type PaidCampaignQuery,
 } from "../use-cases/ads/paidCampaignCollectorContract";
-import { verifyMetaE07BackupPreflight, type E07PreflightEnv } from "./verifyMetaE07BackupPreflight";
+import { verifyMetaE07BackupPreflight } from "./verifyMetaE07BackupPreflight";
+import type { E07PreflightEnv } from "./preflightMetaPaidStageWrite";
 
 /**
  * ADS-009M — manual Meta-only staging E07 operator command.
