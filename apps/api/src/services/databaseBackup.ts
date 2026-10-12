@@ -45,7 +45,7 @@ export async function executeDiagnosedDatabaseBackup(dependencies: Parameters<ty
 
 export async function verifyRemoteDatabaseBackup(objectKey: string, env: NodeJS.ProcessEnv = process.env) {
   const config = readS3CompatibleBackupConfig(env);
-  return createDatabaseRestoreVerificationUseCase(createS3CompatibleBackupRepository(config), inspector).execute(objectKey);
+  return createDatabaseRestoreVerificationUseCase(createS3CompatibleBackupRepository(config), inspector, config.prefix).execute(objectKey);
 }
 
 export async function materializeRemoteDatabaseBackup(objectKey: string, destination: string, env: NodeJS.ProcessEnv = process.env) {
