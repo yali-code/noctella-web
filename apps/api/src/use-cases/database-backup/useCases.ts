@@ -79,10 +79,10 @@ export function createDatabaseBackupUseCase(dependencies: {
   };
 }
 
-export function createDatabaseRestoreVerificationUseCase(repository: DatabaseBackupRepository, inspector: DatabaseBackupArtifactInspector) {
+export function createDatabaseRestoreVerificationUseCase(repository: DatabaseBackupRepository, inspector: DatabaseBackupArtifactInspector, expectedPrefix?: string) {
   return {
     async execute(objectKeyValue: string): Promise<DatabaseBackupObjectMetadata & { integrity: "ok" }> {
-      validateObjectKey(objectKeyValue);
+      validateObjectKey(objectKeyValue, expectedPrefix);
       let metadata: DatabaseBackupObjectMetadata;
       try { metadata = await repository.head(objectKeyValue); }
       catch { throw new DatabaseBackupError("Database backup remote metadata read failed"); }
