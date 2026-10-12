@@ -57,3 +57,33 @@ billing (E09) and trustworthy marketplace attribution (E11) are NOT claimed.
 No Render manual deploy, production activation, budget/campaign modification,
 paid advertising spend, new API route, scheduler, Web UI, new migration, new
 marketplace ROAS attribution, Google Ads or Pinterest pilot.
+
+
+## Independent staging R2 backup audit (ADS-009O)
+
+With no real Meta campaigns in the ad account, there is no legitimate campaign
+ID to supply to the E07 collection gate. For **read-only R2 readiness only**,
+the independent operator command is:
+
+```bash
+NOCTELLA_E07_STAGING_BACKUP_KEY="database-backups/<verified-staging-backup-name>.sqlite" \
+  npm run ads:meta:e07:backup -w apps/api
+```
+
+This MUST be run only in the confirmed staging API shell. It checks exact
+staging identity, driver, live-database *path string* and R2 staging bucket/prefix,
+then downloads the designated staging R2 object into an isolated temporary
+workspace to verify its prefix, content size, SHA-256 and SQLite integrity.
+The metadata timestamp must be no older than 36 hours. Verification cleans up
+its own temporary file; it never opens or changes the live ERP SQLite.
+
+This command requires **no fake campaign ID**, no Meta provider token and no
+paid read/write approval markers. It cannot authorize collection or ad spend.
+Never treat environment variables alone as proof of disk/bucket isolation:
+check the trusted Render service/disk identity separately. Report the sanitized
+command output under issue #335; do not log AWS credential variables.
+
+The existing `ads:meta:e07` collector and
+`verifyMetaE07BackupPreflight` keep their strict Meta account/campaign,
+window, staging and per-operation approval gates for `preview`/`write`.
+A successful R2-only audit is **not E06, E07 or E09 acceptance**.
