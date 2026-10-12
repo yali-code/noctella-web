@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
-import { runMetaE07Staging } from "../src/scripts/runMetaE07Staging";
+import { runMetaE07Staging, assertMetaE07ActualDatabaseRuntime } from "../src/scripts/runMetaE07Staging";
 import { paidReportingWindow, type PaidCampaignQuery, type PaidCampaignObservation } from "../src/use-cases/ads/paidCampaignCollectorContract";
 
 const query: PaidCampaignQuery = {
@@ -91,6 +91,34 @@ describe("ADS-009M Meta E07 manual staging collection orchestration", () => {
     expect(deps.fetchCampaign).toHaveBeenCalledOnce();
     expect(deps.persist).toHaveBeenCalledOnce();
   });
+  it("denies a fake-success backup verifier if the operator scope is production", async () => {
+    const deps = fakes();
+    await expect(runMetaE07Staging({
+      ...env, RENDER_SERVICE_NAME: "noctella-production-api", NOCTELLA_E07_OPERATION: "preview",
+    }, deps, now)).rejects.toThrow(/staging identity/);
+    expect(deps.verifyBackup).not.toHaveBeenCalled();
+    expect(deps.fetchCampaign).not.toHaveBeenCalled();
+    expect(deps.persist).not.toHaveBeenCalled();
+  });
+  it("rejects actual production or divergent process env before db/client import", () => {
+    const scope = {
+      ...env, NOCTELLA_E07_OPERATION: "write",
+      NOCTELLA_E07_ONE_TIME_WRITE_ACK: "I_AUTHORIZE_ONE_TIME_STAGING_SNAPSHOT_WRITE",
+    };
+    expect(() => assertMetaE07ActualDatabaseRuntime(scope, scope, now)).not.toThrow();
+    expect(() => assertMetaE07ActualDatabaseRuntime(scope, {
+      ...scope, RENDER_SERVICE_NAME: "noctella-production-api",
+    }, now)).toThrow(/staging identity/);
+    expect(() => assertMetaE07ActualDatabaseRuntime(scope, {
+      ...scope, NOCTELLA_META_AD_ACCOUNT_ID: "11111111111",
+    }, now)).toThrow(/runtime differs/);
+    expect(() => assertMetaE07ActualDatabaseRuntime(scope, {
+      ...scope, DATABASE_URL: "/tmp/other.sqlite",
+    }, now)).toThrow(/staging identity/);
+    expect(() => assertMetaE07ActualDatabaseRuntime(scope, {
+      ...scope, NOCTELLA_E07_ONE_TIME_WRITE_ACK: "",
+    }, now)).toThrow(/runtime differs/);
+  });
   it("missing or failing backup gate blocks Meta reads and SQLite entirely", async () => {
     const deps = fakes();
     deps.verifyBackup.mockRejectedValueOnce(new Error("R2 failure"));
@@ -116,9 +144,14 @@ describe("ADS-009M Meta E07 manual staging collection orchestration", () => {
     expect(deps.persist).not.toHaveBeenCalled();
   });
   it("provider account-local reporting day must be completed", async () => {
-    const deps = fakes();
+    const laObservation = {
+      ...observation, reportingTimeZone: "America/Los_Angeles",
+      window: paidReportingWindow(query, "America/Los_Angeles"),
+    };
+    const deps = fakes(laObservation);
+    // UTC date has finished, but Los Angeles 2026-10-02 has not.
     await expect(runMetaE07Staging({ ...env, NOCTELLA_E07_OPERATION: "preview" },
-      deps, new Date("2026-10-02T20:59:00.000Z"))).rejects.toThrow(/not completed/);
+      deps, new Date("2026-10-03T00:00:01.000Z"))).rejects.toThrow(/not completed/);
     expect(deps.persist).not.toHaveBeenCalled();
   });
   for (const [key, value] of [
