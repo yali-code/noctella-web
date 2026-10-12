@@ -19,6 +19,11 @@ The ordinary preview and staged scope acknowledgments remain required.
 Only after backup verification, provider account identity/EUR/timezone validation,
 completed account-local reporting days, matching campaign/source provenance
 and nonempty real metrics does the command dynamically import the SQLite runtime.
+**Immediately before importing the actual SQLite runtime**, the command independently
+validates the real `process.env` staging identity and its exact account/campaign,
+reporting dates, backup key and explicit per-invocation write acknowledgement
+against the previously verified operator scope. A supplied staging environment
+must never redirect a production process's SQLite connection into a write.
 At that point it calls the existing checked/idempotent paid evidence store.
 
 **No campaign is currently present**, so production-like E07 write/replay is **NOT RUN / NOT ACCEPTED**.
