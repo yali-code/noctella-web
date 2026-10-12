@@ -1,6 +1,37 @@
-# ADS-009A — Staging Acceptance Evidence Ledger (template)
+# ADS-009A — Staging Acceptance Evidence Ledger (template + live status supplements)
 
-**Status: TEMPLATE ONLY — NOT EXECUTED OR APPROVED.** This document is an operational evidence register to accompany `ADS-009-staging-acceptance-checklist.md` (currently Draft PR #347). It grants no staging access, provider read, data write, deployment, campaign execution, spend or database schema permission.
+## 2026-10-12 current acceptance snapshot (ADS-009P; authoritative over older blank template rows)
+
+This entry is an evidence **index**, not a fresh authorization, execution or final sign-off.
+The baseline E01–E12 matrix below was a blank planning **template**; its historic
+NOT RUN/BLOCKED entries must **not** be used as current status without this supplement.
+Source of truth for changing operational evidence: [GitHub issue #335](https://github.com/yali-code/noctella-web/issues/335).
+
+| Gate | Current evidenced state | Proof, boundary and remaining requirement |
+|---|---|---|
+| E01 — engineering CI and staging deploy | **PASS** | PRs [#363](https://github.com/yali-code/noctella-web/pull/363)–[#366](https://github.com/yali-code/noctella-web/pull/366) were CI green and merged. API, Admin and Storefront all LIVE on `e067b74a51f0526cb7567d9fba3a6589906c6629`; [Render convergence record](https://github.com/yali-code/noctella-web/issues/335#issuecomment-6129175939). |
+| E02 — isolation | **PASS for distinct Render disks; operator-attested for staging R2** | Staging API persistent disk `dsk-d9lnbgf10e5c73e1qp1g` differs from production `dsk-db34390m7kps73cv8mh0`. Do not treat bucket env-name matching as independently verified Cloudflare credential scope. |
+| E03 — R2 backup integrity | **PASS, operator-attested** | Staging database backup SHA-256 and SQLite integrity, plus 52 photo artifacts, checked without touching the live ERP DB; earlier E03 evidence in #335. |
+| E04 — overall staged operational sign-off | **PARTIAL** | Staging deployment and E08 HTTP checks verified. Formal scope-specific sign-off must be recorded separately for any consequential future action. |
+| E05 — Meta paid account verification | **PASS, operator-attested READ ONLY** | Real account, EUR and `Europe/Sofia` reporting zone verified; does not prove delivery or authorize spend. |
+| E06 — completed real Meta campaign window | **BLOCKED** | No real paid campaign and no nonempty completed account-local campaign report. Do not invent an ID or enter fake metrics. |
+| E07 — R2 gate + Meta snapshot collection | **R2 SUBGATE PASS; COLLECTION NOT RUN** | [2026-10-12 staging shell result](https://github.com/yali-code/noctella-web/issues/335#issuecomment-6129294680): `STAGING_E07_R2_BACKUP_AUDIT`, `backupIntegrity:ok`, `WITHIN_36H`, checksum `18ab73d0…e84d44c1ebb1`, zero provider calls/writes. CLI and isolation guard from PRs #364–#366 are LIVE; real campaign observation and staging SQLite write/replay still absent. |
+| E08 — staging Admin authorization/no mutation | **PASS, operator-attested HTTP scope** | Unauthenticated 401 (4/4), unauthorized 403 (4/4), Owner 200/no-store (4/4), mutation verbs 404 (16/16); UI disabled. See [E08 evidence](https://github.com/yali-code/noctella-web/issues/335#issuecomment-6121380415). |
+| E09 — finalized billing reconciliation | **BLOCKED** | No finalized matching campaign invoice, cannot treat reporting spend as billed spend. |
+| E10 — Google/Pinterest Ads | **DEFERRED from Meta-only pilot** | Needs separate accounts/approval if later brought into scope. Not validated by organic account connections. |
+| E11 — marketplace attribution/ROAS | **UNKNOWN** | No independently verified eBay/Etsy purchase-to-ad attribution; do not compute marketplace ROAS. |
+| E12 — isolated staging recovery rehearsal | **PASS, limited** | Disposable SQLite copy checked (integrity and 117 tables); temporary copy removed per operator output. This is not live failover or production restore. |
+
+**Release posture:** Technical staging preconditions and isolated R2 audit have progressed,
+but the integrated paid Ads project is **NOT operationally accepted**. Production API
+remains LIVE at `1994f50cd042f9c1a6121d2970ac8907caea8b3e`, deliberately behind
+staging; no production deployment, campaign creation, provider mutation or ad spend.
+Actual E06/E07/E09 cannot advance without a real owner-created campaign and later a
+matching finalized billing record. No new automated monitoring or hidden work is implied.
+
+## Historical template (retained for audit; original statuses are not current)
+
+**Original status at template creation: TEMPLATE ONLY — NOT EXECUTED OR APPROVED.** This document is an operational evidence register to accompany `ADS-009-staging-acceptance-checklist.md` (currently Draft PR #347). It grants no staging access, provider read, data write, deployment, campaign execution, spend or database schema permission.
 
 Tracking issue: #335. Scope: Noctella Ads Agent Phases 6–9, **staging only**, EUR-only. Existing production SQLite `/var/data/noctella.sqlite` and R2 backup buckets are explicitly out of scope.
 
