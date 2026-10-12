@@ -22,7 +22,10 @@ const strictDate=(v:string|undefined):v is string=>{
   const ms=Date.parse(v+"T00:00:00.000Z");
   return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===v;
 };
-export function validateMetaE07StagingPreflight(env:E07PreflightEnv,now=new Date()):E07PreflightResult {
+/** Stage identity guard reused by the separate read-only R2 audit.
+ * A backup integrity check requires no fake Meta campaign or write authorization.
+ */
+export function assertMetaE07StagingEnvironment(env:E07PreflightEnv):void {
   if(env.RENDER_SERVICE_NAME!=="noctella-staging-api" ||
      env.DATABASE_DRIVER!=="sqlite" ||
      env.DATABASE_URL!=="/var/data/noctella.sqlite"){
@@ -32,6 +35,9 @@ export function validateMetaE07StagingPreflight(env:E07PreflightEnv,now=new Date
      env.DATABASE_BACKUP_S3_PREFIX!=="database-backups"){
     throw new Error("E07 preflight denied: staging backup configuration mismatch");
   }
+}
+export function validateMetaE07StagingPreflight(env:E07PreflightEnv,now=new Date()):E07PreflightResult {
+  assertMetaE07StagingEnvironment(env);
   if(env.NOCTELLA_PAID_ADS_PROVIDER!=="meta" ||
      env.NOCTELLA_PAID_ADS_PREVIEW_ACK!=="I_AUTHORIZE_PAID_READ_ONLY" ||
      env.NOCTELLA_PAID_ADS_STAGE_WRITE_ACK!=="I_AUTHORIZE_STAGING_SNAPSHOT_WRITE"){
