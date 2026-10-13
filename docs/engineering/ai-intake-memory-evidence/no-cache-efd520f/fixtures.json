@@ -1,0 +1,19 @@
+[
+  {
+    "name": "jpeg-near-limit",
+    "file": "/fixtures/jpeg-near-limit.jpg",
+    "mimetype": "image/jpeg",
+    "sizeBytes": 9670997,
+    "width": 6000,
+    "height": 4000,
+    "megapixels": 24,
+    "format": "jpeg",
+    "quality": 86,
+    "sha256": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+    "tags": [
+      "near-limit",
+      "landscape"
+    ],
+    "expectValid": true
+  }
+]

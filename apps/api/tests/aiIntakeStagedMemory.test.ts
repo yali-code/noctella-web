@@ -51,3 +51,34 @@ it("rejects malformed staged content and keeps the new capability disabled with 
  await expect(storage.saveStagedIntakePhoto(file)).rejects.toThrow();expect(await readdir(path.join(root,"private"))).toEqual([]);
  vi.stubEnv("PRODUCT_PHOTO_DISK_STAGING_ENABLED","false");await expect(storage.saveStagedIntakePhoto(file)).rejects.toMatchObject({code:"PHOTO_STORAGE_UNAVAILABLE"});
 });
+
+it("queued cancellation and timeout occur before staged input validation or native work",async()=>{
+ const invalid={path:"not-read",workDir:"not-read",size:1,mimetype:"image/jpeg",signal:new AbortController().signal};
+ const storage=new LocalAiIntakePhotoStorage(path.join(root,"private"));let release!:()=>void,started!:()=>void;
+ const hold=new Promise<void>(r=>{release=r;}),begin=new Promise<void>(r=>{started=r;});
+ const active=gate.scope(async()=>{started();await hold;});await begin;
+ const encoder=vi.spyOn(sharp.prototype,"metadata");
+ const controller=new AbortController(),queued=gate.scope(()=>storage.saveStagedIntakePhoto({...invalid,signal:controller.signal}),controller.signal);
+ const aborted=expect(queued).rejects.toMatchObject({code:"PHOTO_UPLOAD_ABORTED"});controller.abort();await aborted;
+ vi.useFakeTimers();try{
+  const waiting=gate.scope(()=>storage.saveStagedIntakePhoto(invalid));const timed=expect(waiting).rejects.toMatchObject({code:"PHOTO_QUEUE_TIMEOUT"});
+  await vi.advanceTimersByTimeAsync(5001);await timed;
+ }finally{vi.useRealTimers();release();await active;}
+ expect(encoder).not.toHaveBeenCalled();expect(gate.snapshot()).toMatchObject({held:0,active:0});
+});
+it("surfaces failed partial-output cleanup and still releases admission",async()=>{
+ const bytes=await sharp({create:{width:8,height:8,channels:3,background:"red"}}).jpeg().toBuffer(),file=await input(bytes);
+ vi.spyOn(sharp.prototype,"toFile").mockImplementationOnce((async(destination:string)=>{await rm(destination);await mkdir(destination);await writeFile(path.join(destination,"partial"),"partial");throw Error("encode");}) as any);
+ await expect(new LocalAiIntakePhotoStorage(path.join(root,"private")).saveStagedIntakePhoto(file)).rejects.toMatchObject({code:"PHOTO_STORAGE_UNAVAILABLE"});
+ expect(gate.snapshot()).toMatchObject({held:0,active:0});expect(await readdir(path.join(root,"private"))).toHaveLength(1);
+});
+it("shutdown rejects waiting staged work while active native work drains, with legacy Buffer API available after restart-off policy",async()=>{
+ const bytes=await sharp({create:{width:8,height:8,channels:3,background:"red"}}).jpeg().toBuffer(),file=await input(bytes);
+ let release!:()=>void,started!:()=>void;const hold=new Promise<void>(r=>{release=r;}),begin=new Promise<void>(r=>{started=r;});
+ const original=sharp.prototype.toFile;
+ vi.spyOn(sharp.prototype,"toFile").mockImplementationOnce((async function(this:sharp.Sharp,destination:string){started();await hold;return original.call(this,destination);}) as any);
+ const storage=new LocalAiIntakePhotoStorage(path.join(root,"private")),active=storage.saveStagedIntakePhoto(file);await begin;
+ const queued=storage.saveStagedIntakePhoto(file),rejected=expect(queued).rejects.toMatchObject({code:"PHOTO_CAPACITY_BUSY"});gate.close();await rejected;
+ expect(gate.snapshot().active).toBe(1);release();await active;expect(gate.snapshot()).toMatchObject({held:0,active:0,closed:true});
+ vi.stubEnv("PRODUCT_PHOTO_DISK_STAGING_ENABLED","false");await expect(storage.saveIntakePhoto({buffer:bytes,size:bytes.length,mimetype:"image/jpeg"})).resolves.toHaveProperty("storageKey");
+});

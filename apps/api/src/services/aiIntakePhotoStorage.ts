@@ -92,7 +92,7 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
       if (!imageAdmissionEnabled()) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Disk intake processing is disabled");
       if (file.signal.aborted) throw abortedError();
       // File-cache handles can outlive native work and prevent private ingress cleanup.
-      sharp.cache(false);
+      sharp.cache({ files: 0 });
       validateUpload(file);
       const info = await lstat(file.path);
       if (path.dirname(file.path) !== file.workDir || path.basename(file.path) !== "input" || info.isSymbolicLink() || !info.isFile() || await realpath(file.path) !== path.resolve(file.path) || info.size !== file.size) {
