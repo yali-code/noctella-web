@@ -1,9 +1,11 @@
 import { imageAdmissionEnabled, PhotoUploadError, runImageOperation } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, open, rm } from "node:fs/promises";
+import { mkdir, readFile, open, rm, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { BadRequestError, NotFoundError } from "./errors";
+import { abortedError } from "./photoUploadAdmission";
+import type { StagedProductPhotoInput } from "./stagedProductPhotoStorage";
 import { deleteManagedFile, statManagedFile } from "./managedFileDeletion";
 
 /**
@@ -84,7 +86,22 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
   async saveIntakePhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredAiIntakePhoto> {
     return runImageOperation(() => this.#saveIntakePhotoUnadmitted(file));
   }
-  async #saveIntakePhotoUnadmitted(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredAiIntakePhoto> {
+  /** Internal disk-ingress capability. The established Buffer interface remains unchanged. */
+  async saveStagedIntakePhoto(file: StagedProductPhotoInput): Promise<StoredAiIntakePhoto> {
+    return runImageOperation(async () => {
+      if (!imageAdmissionEnabled()) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Disk intake processing is disabled");
+      if (file.signal.aborted) throw abortedError();
+      // File-cache handles can outlive native work and prevent private ingress cleanup.
+      sharp.cache({ files: 0 });
+      validateUpload(file);
+      const info = await lstat(file.path);
+      if (path.dirname(file.path) !== file.workDir || path.basename(file.path) !== "input" || info.isSymbolicLink() || !info.isFile() || await realpath(file.path) !== path.resolve(file.path) || info.size !== file.size) {
+        throw new BadRequestError("Invalid staged intake photo");
+      }
+      return this.#saveIntakePhotoUnadmitted(file);
+    });
+  }
+  async #saveIntakePhotoUnadmitted(file: { buffer: Buffer; mimetype: string; size: number } | StagedProductPhotoInput): Promise<StoredAiIntakePhoto> {
     validateUpload(file);
     await mkdir(this.root, { recursive: true });
 
@@ -93,7 +110,7 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
 
     let owned = false;
     try {
-      const image = sharp(file.buffer, { failOn: "error" }).rotate();
+      const image = sharp("buffer" in file ? file.buffer : file.path, { failOn: "error" }).rotate();
       const metadata = await image.metadata();
       if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
       if (imageAdmissionEnabled()) {
@@ -102,6 +119,7 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
         await reserved.close();
       }
       await image.webp({ quality: 86 }).toFile(filePath);
+      if ("signal" in file && file.signal.aborted) throw abortedError();
       return { storageKey };
     } catch (error) {
       if (owned) {
