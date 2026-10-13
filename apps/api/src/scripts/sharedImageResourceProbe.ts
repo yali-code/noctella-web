@@ -1,6 +1,6 @@
 // Offline synthetic combined-load probe; never a publishing or production entry point.
 import fs from "node:fs/promises";
-import { createReadStream } from "node:fs";
+import { createReadStream, appendFileSync, readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 
@@ -19,13 +19,20 @@ export async function runCombinedScenario(config: any) {
   const {imageProcessingAdmission}=await import("../services/photoUploadAdmission");
   const instagram=await import("../integrations/instagram/mediaPreparation");
   const sharp=(await import("sharp")).default;
+  const trace = (phase:string, details:Record<string,unknown>={}) => {
+    const number=(name:string)=>Number(readFileSync("/sys/fs/cgroup/"+name,"utf8"));
+    appendFileSync("/evidence/phases.ndjson",JSON.stringify({time:Date.now(),phase,...details,memory:process.memoryUsage(),cgroupCurrent:number("memory.current"),cgroupPeak:number("memory.peak"),events:readFileSync("/sys/fs/cgroup/memory.events","utf8"),stat:readFileSync("/sys/fs/cgroup/memory.stat","utf8"),cache:sharp.cache()})+"\n");
+  };
+  const originalRead=fs.readFile;
+  fs.readFile=(async(...args:any[])=>{trace("read.start",{file:String(args[0])});const result=await (originalRead as any)(...args);trace("read.end",{file:String(args[0]),bytes:result.length});return result;}) as typeof fs.readFile;
   let nativeActive=0,nativePeak=0,nativeCalls=0;
   const originals=new Map<string,any>();
   for(const method of ["metadata","toFile","toBuffer"]){
     const prototype=sharp.prototype as any, original=prototype[method];originals.set(method,original);
     prototype[method]=function(...args:any[]){
+      trace("native.start",{method,input:typeof this.options?.input?.file === "string" ? this.options.input.file : "buffer",output:args[0],width:this.options?.width,height:this.options?.height});
       nativeActive++;nativeCalls++;nativePeak=Math.max(nativePeak,nativeActive);
-      try { return Promise.resolve(original.apply(this,args)).finally(()=>nativeActive--); }
+      try { return Promise.resolve(original.apply(this,args)).finally(()=>{nativeActive--;trace("native.end",{method});}); }
       catch(error){nativeActive--;throw error;}
     };
   }
@@ -72,7 +79,7 @@ export async function runCombinedScenario(config: any) {
     });
   }
   async function record<T extends {status:number;body:any}>(kind:string,work:()=>Promise<T>,expected:number):Promise<T> {
-    const start=Date.now(),result=await work();
+    const start=Date.now();trace("workflow.start",{kind});const result=await work();trace("workflow.end",{kind,status:result.status});
     operations.push({index:operations.length,kind,status:result.status,ok:result.status===expected,asExpected:result.status===expected,durationMs:Date.now()-start});
     await fs.writeFile("/evidence/progress.json",JSON.stringify({operations,nativePeak,nativeCalls},null,2));
     if(result.status!==expected)throw Error("Unexpected synthetic workflow status: "+kind+" "+result.status);
@@ -109,6 +116,7 @@ export async function runCombinedScenario(config: any) {
     return {scenario:config.scenario,operations,baseline,warmBeforeCombined,peak,peakMaxRss:process.resourceUsage().maxRSS*1024,totalDurationMs:Date.now()-started,nativePeak,nativeCalls,admission:imageProcessingAdmission.snapshot(),retainedAiSourceFiles:privateFiles.length,leftovers:{photoDirFiles:photoFiles.length,expectedPhotoDirFiles:9,tmpDirFiles},scope:"synthetic authenticated product/AI HTTP and local-only Instagram; no provider calls; not full production acceptance"};
   } finally {
     clearInterval(sampler);
+    fs.readFile=originalRead;
     await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     await dbRuntime.shutdown();
     for(const[method,original]of originals)(sharp.prototype as any)[method]=original;
