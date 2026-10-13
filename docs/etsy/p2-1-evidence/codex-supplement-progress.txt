@@ -4,7 +4,7 @@ At line:2 char:1
 + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (Generating 19 fixtures...:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
 [1/5] single-png-near-limit
 [2/5] sequential-12-near-limit
 [3/5] concurrent-1-png-near-limit
@@ -67,4 +67,3 @@ No operation failed.
 ## Cleanup
 
 Scenario directories removed: 5/5. Work root removed: yes.
-
