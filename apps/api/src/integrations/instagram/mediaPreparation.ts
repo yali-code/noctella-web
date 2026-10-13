@@ -1,3 +1,4 @@
+import { runImageOperation, PhotoUploadError } from "../../services/photoUploadAdmission";
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { link, lstat, open, realpath, unlink, writeFile } from "node:fs/promises";
@@ -71,7 +72,7 @@ async function validDerivative(root: string, filename: string, recipe: typeof im
 }
 
 /** Local-only derivative; no ProductPhoto writes, HTTP reads, or credential handling. */
-export async function inspectPreparedInstagramImage(
+async function inspectPreparedInstagramImageUnadmitted(
   photo: { url: string },
   prepared: Pick<PreparedInstagramImage, "sourceFingerprint" | "recipeVersion" | "outputPath">,
   root: string = productPhotoStaticRoot,
@@ -104,7 +105,7 @@ export async function prepareInstagramImage(
   return (await prepareInstagramImageAsset(photo, publicOrigin, env, root)).url;
 }
 
-export async function prepareInstagramImageAsset(
+async function prepareInstagramImageAssetUnadmitted(
   photo: { url: string },
   publicOrigin: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -159,3 +160,16 @@ export async function prepareInstagramImageAsset(
     throw invalid();
   }
 }
+
+async function instagramImageOperation<T>(work: () => Promise<T>): Promise<T> {
+  try { return await runImageOperation(work); }
+  catch (error) {
+    // Capacity is infrastructure pressure, not a permanent invalid-media error.
+    if (error instanceof PhotoUploadError) throw new InstagramClientError("processing", true);
+    throw error;
+  }
+}
+export const inspectPreparedInstagramImage: typeof inspectPreparedInstagramImageUnadmitted =
+  (...args) => instagramImageOperation(() => inspectPreparedInstagramImageUnadmitted(...args));
+export const prepareInstagramImageAsset: typeof prepareInstagramImageAssetUnadmitted =
+  (...args) => instagramImageOperation(() => prepareInstagramImageAssetUnadmitted(...args));

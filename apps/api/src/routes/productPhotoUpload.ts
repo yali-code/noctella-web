@@ -1,3 +1,4 @@
+import type { AuthedRequest } from "../auth/permissions";
 import type { Request, RequestHandler } from "express";
 import multer from "multer";
 import { createWriteStream } from "node:fs";
@@ -136,7 +137,7 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
         if (req.file && req.file.size > PRODUCT_PHOTO_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Product photos must be 10 MB or smaller");
         if (!req.file) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Photo file is required");
         if (Object.keys(req.body ?? {}).some(key => key !== "altText") || (req.body.altText !== undefined && typeof req.body.altText !== "string")) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Photo multipart fields exceed the safety limit");
-        value = await lease.run(() => options.upload(String(req.params.id), { path: req.file!.path, workDir: workDir!, size: req.file!.size, mimetype: req.file!.mimetype, signal: abort.signal }, req.body.altText), abort.signal);
+        value = await lease.run(() => options.upload(String(req.params.id), { path: req.file!.path, workDir: workDir!, size: req.file!.size, mimetype: req.file!.mimetype, signal: abort.signal, originalname: req.file!.originalname, actorAdminUserId: (req as AuthedRequest).adminUser?.id }, req.body.altText), abort.signal);
         committed = true;
       } catch (err) {
         error = err;

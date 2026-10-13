@@ -1,3 +1,4 @@
+import { runImageScope, runImageOperation } from "./photoUploadAdmission";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { getIntakeById } from "./aiProductIntakes";
@@ -29,7 +30,7 @@ export interface FinalizeAiIntakePhotosResult {
 function defaultManifestDeps(db: DbClient, intakeId: string): AiIntakePhotoFinalizationManifestDeps {
   const reader = new LocalAiIntakePhotoReader(createIntakeScopedPhotoStorageKeyResolver(db, intakeId));
   return {
-    readStagedPhotoBytes: (stagedPhotoId) => reader.read(stagedPhotoId),
+    readStagedPhotoBytes: (stagedPhotoId) => runImageOperation(() => reader.read(stagedPhotoId)),
     writeDeterministicPhoto: (photoInput) => writeDeterministicProductPhoto(photoInput),
   };
 }
@@ -61,12 +62,13 @@ export async function finalizeAiIntakePhotos(
   let manifest: AiIntakePhotoFinalizationManifestEntry[] | null = null;
   if (precheckIntake.status === AiProductIntakeStatus.Applied && precheckIntake.resultProductId) {
     const stagedPhotos = await listIntakePhotos(db, intakeId);
-    manifest = await buildAiIntakePhotoFinalizationManifest(
+    const resultProductId = precheckIntake.resultProductId;
+    manifest = await runImageScope(() => buildAiIntakePhotoFinalizationManifest(
       manifestDeps,
       stagedPhotos.map((photo) => ({ id: photo.id as string, storageKey: photo.storageKey as string })),
-      precheckIntake.resultProductId,
+      resultProductId,
       input.primaryIntakePhotoId,
-    );
+    ));
   }
 
   const driver = ((process.env.DATABASE_DRIVER as string) || "sqlite") as AiIntakePhotoFinalizeTransactionDriver;

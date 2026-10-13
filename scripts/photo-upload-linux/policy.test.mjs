@@ -57,3 +57,9 @@ test("retry profile selects only four failed c4 cases and rejects unbounded prof
   assert.deepEqual(selectedScenarios(true, "webp-c4").map(s => s.name), ["linux-webp-c4"]);
   assert.throws(() => selectedScenarios(true, "unknown"));
 });
+test("combined profile has exactly three fresh 24MP synthetic trials with eight operations", async () => {
+  const { selectedScenarios } = await import("./policy.mjs");
+  const cases=selectedScenarios(true,"combined");
+  assert.equal(cases.length,3);assert.deepEqual(cases.map(s=>s.trial),[1,2,3]);
+  assert.ok(cases.every(s=>s.ops===8&&s.concurrency===3&&s.path==="combined"&&s.fixtures[0]==="jpeg-near-limit"));
+});

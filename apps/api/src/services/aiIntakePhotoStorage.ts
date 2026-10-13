@@ -1,5 +1,6 @@
+import { imageAdmissionEnabled, PhotoUploadError, runImageOperation } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, open, rm } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { BadRequestError, NotFoundError } from "./errors";
@@ -81,19 +82,34 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
   constructor(private readonly root: string = stagingRoot) {}
 
   async saveIntakePhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredAiIntakePhoto> {
+    return runImageOperation(() => this.#saveIntakePhotoUnadmitted(file));
+  }
+  async #saveIntakePhotoUnadmitted(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredAiIntakePhoto> {
     validateUpload(file);
     await mkdir(this.root, { recursive: true });
 
     const storageKey = `${randomUUID()}.webp`;
     const filePath = path.join(this.root, storageKey);
 
-    const image = sharp(file.buffer, { failOn: "error" }).rotate();
-    const metadata = await image.metadata();
-    if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
-
-    await image.webp({ quality: 86 }).toFile(filePath);
-
-    return { storageKey };
+    let owned = false;
+    try {
+      const image = sharp(file.buffer, { failOn: "error" }).rotate();
+      const metadata = await image.metadata();
+      if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
+      if (imageAdmissionEnabled()) {
+        const reserved = await open(filePath, "wx", 0o600);
+        owned = true;
+        await reserved.close();
+      }
+      await image.webp({ quality: 86 }).toFile(filePath);
+      return { storageKey };
+    } catch (error) {
+      if (owned) {
+        try { await rm(filePath, { force: true }); }
+        catch { throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Private photo cleanup failed"); }
+      }
+      throw error;
+    }
   }
 
   async deleteIntakePhoto(storageKey: string): Promise<void> {
