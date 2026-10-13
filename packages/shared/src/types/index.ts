@@ -5,6 +5,7 @@ import { DimensionUnit } from "../enums/dimensionUnit";
 import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
 import { ListingStatus } from "../enums/listingStatus";
+import { EtsyRenewalOption, EtsyWhoMade } from "../enums/etsyListing";
 import { PublishChannel } from "../enums/publishChannel";
 import { MarketplacePreparationStatus } from "../enums/marketplacePreparationStatus";
 import { CanonicalProductProposalStatus } from "../enums/canonicalProductProposalStatus";
@@ -201,6 +202,40 @@ export interface Product extends Timestamps {
   etsyOccasion?: string;
   etsyListingPriceEur?: number;
   etsyListingStatus?: ListingStatus;
+
+  // Etsy listing form parity (Phase 1) - all optional; draft saves never require them. Etsy object
+  // IDs are positive-integer strings. Seller-provided only: never inferred or AI-generated.
+  /** Listing identity */
+  etsyTaxonomyId?: string;
+  etsyShopSectionId?: string;
+  /** Etsy listing quantity; must not exceed ERP stock at publish time. Absent = use ERP stock. */
+  etsyQuantity?: number;
+  /** Etsy SKU override. Absent = ERP SKU. */
+  etsySku?: string;
+  /** Product classification: who made it / what is it (true = supply or tool) / when was it made. */
+  etsyWhoMade?: EtsyWhoMade;
+  etsyIsSupply?: boolean;
+  etsyWhenMade?: string;
+  /** Optional exact year for a vintage item; must fall inside etsyWhenMade. */
+  etsyVintageYear?: number;
+  /** Shipping and returns (Etsy-side profiles; distinct from the generic ERP shippingProfile). */
+  etsyShippingProfileId?: string;
+  etsyProcessingProfileId?: string;
+  etsyReturnPolicyId?: string;
+  /** Listing settings. Promotional options default to off; nothing is sent to Etsy in Phase 1. */
+  etsyRenewalOption?: EtsyRenewalOption;
+  etsyFeatured?: boolean;
+  etsyAdsOptIn?: boolean;
+  etsyRestockRequests?: boolean;
+  /** Legal and compliance (EU GPSR) - seller-provided facts only. */
+  etsyGpsrManufacturerName?: string;
+  etsyGpsrManufacturerAddress?: string;
+  etsyGpsrManufacturerContact?: string;
+  etsyGpsrResponsiblePersonName?: string;
+  etsyGpsrResponsiblePersonAddress?: string;
+  etsyGpsrResponsiblePersonContact?: string;
+  etsyGpsrSafetyInformation?: string;
+  etsyConsumerGuaranteeInfo?: string;
 
   // WooCommerce marketplace data (Sprint 3 foundation — all optional, not published/synced yet)
   wooProductName?: string;
@@ -474,7 +509,9 @@ export type PublishValidationIssueType =
   | "inventory_unavailable"
   | "price_missing"
   | "content_warning"
-  | "primary_product_photo_required";
+  | "primary_product_photo_required"
+  | "marketplace_limit_exceeded"
+  | "invalid_marketplace_value";
 
 export interface PublishValidationIssue {
   type: PublishValidationIssueType;

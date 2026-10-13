@@ -1,5 +1,9 @@
 import {
   DIMENSION_UNIT_VALUES,
+  ETSY_ID_PATTERN,
+  ETSY_RENEWAL_OPTION_VALUES,
+  ETSY_WHO_MADE_VALUES,
+  parseEtsyWhenMade,
   LISTING_STATUS_VALUES,
   PRICE_CURRENCY_VALUES,
   PRODUCT_SHIPPING_PROFILE_VALUES,
@@ -10,6 +14,31 @@ import {
   WEIGHT_UNIT_VALUES,
 } from "@noctella/shared";
 import { z } from "zod";
+
+/** Etsy object identifiers are positive integers; kept as strings to avoid any precision loss. */
+function etsyId(label: string) {
+  return z.string().trim().regex(ETSY_ID_PATTERN, `${label} must be a positive whole number`).nullable().optional();
+}
+/** GPSR electronic contact: an email address or an HTTPS URL - never a placeholder. */
+function gpsrContact() {
+  return z.string().trim().max(320).refine((value) => {
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return true;
+    try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password; } catch { return false; }
+  }, "GPSR contact must be an email address or an https:// URL").nullable().optional();
+}
+
+/**
+ * Etsy listing form parity: cross-field STRUCTURAL consistency that is safe to enforce on draft
+ * saves (completeness and Etsy listing limits belong to the publish gate, never to saving).
+ */
+function refineEtsyListingFields(data: { etsyWhenMade?: string | null; etsyVintageYear?: number | null }, ctx: z.RefinementCtx) {
+  if (data.etsyVintageYear == null || data.etsyWhenMade == null) return;
+  const span = parseEtsyWhenMade(data.etsyWhenMade);
+  if (!span) return;
+  if (span.kind === "made_to_order" || (span.fromYear !== null && data.etsyVintageYear < span.fromYear) || (span.toYear !== null && data.etsyVintageYear > span.toYear)) {
+    ctx.addIssue({ code: "custom", path: ["etsyVintageYear"], message: "Vintage year must fall within the selected 'When was it made' period" });
+  }
+}
 
 const imageSchema = z.object({
   url: z.string().min(1, "Image URL is required"),
@@ -107,6 +136,32 @@ export const baseProductSchema = z.object({
   etsyListingPriceEur: z.number().positive("Etsy listing price must be greater than 0").optional(),
   etsyListingStatus: z.enum(LISTING_STATUS_VALUES as [string, ...string[]]).optional(),
 
+  // Etsy listing form parity (Phase 1). Draft saves only check STRUCTURE (null clears a value);
+  // Etsy completeness and listing limits are enforced at the publish gate (services/publishing.ts).
+  etsyTaxonomyId: etsyId("Etsy category (taxonomy) ID"),
+  etsyShopSectionId: etsyId("Etsy shop section ID"),
+  etsyQuantity: z.number().int("Etsy quantity must be a whole number").min(1, "Etsy quantity must be at least 1").max(999, "Etsy quantity cannot exceed 999").nullable().optional(),
+  etsySku: z.string().trim().min(1).max(255).nullable().optional(),
+  etsyWhoMade: z.enum(ETSY_WHO_MADE_VALUES as [string, ...string[]]).nullable().optional(),
+  etsyIsSupply: z.boolean().nullable().optional(),
+  etsyWhenMade: z.string().trim().refine((value) => parseEtsyWhenMade(value) !== null, "When was it made must be made_to_order, a decade (e.g. 1970s), a year range (e.g. 2020_2026) or before_YYYY").nullable().optional(),
+  etsyVintageYear: z.number().int("Vintage year must be a whole year").min(1000, "Vintage year must be a four-digit year").max(new Date().getUTCFullYear(), "Vintage year cannot be in the future").nullable().optional(),
+  etsyShippingProfileId: etsyId("Etsy shipping profile ID"),
+  etsyProcessingProfileId: etsyId("Etsy processing profile ID"),
+  etsyReturnPolicyId: etsyId("Etsy return policy ID"),
+  etsyRenewalOption: z.enum(ETSY_RENEWAL_OPTION_VALUES as [string, ...string[]]).nullable().optional(),
+  etsyFeatured: z.boolean().nullable().optional(),
+  etsyAdsOptIn: z.boolean().nullable().optional(),
+  etsyRestockRequests: z.boolean().nullable().optional(),
+  etsyGpsrManufacturerName: z.string().trim().min(1).max(200).nullable().optional(),
+  etsyGpsrManufacturerAddress: z.string().trim().min(1).max(1000).nullable().optional(),
+  etsyGpsrManufacturerContact: gpsrContact(),
+  etsyGpsrResponsiblePersonName: z.string().trim().min(1).max(200).nullable().optional(),
+  etsyGpsrResponsiblePersonAddress: z.string().trim().min(1).max(1000).nullable().optional(),
+  etsyGpsrResponsiblePersonContact: gpsrContact(),
+  etsyGpsrSafetyInformation: z.string().trim().min(1).max(5000).nullable().optional(),
+  etsyConsumerGuaranteeInfo: z.string().trim().min(1).max(2000).nullable().optional(),
+
   wooProductName: z.string().optional(),
   wooShortDescription: z.string().optional(),
   wooLongDescription: z.string().optional(),
@@ -152,6 +207,7 @@ export const createProductSchema = baseProductSchema.superRefine((data, ctx) => 
       message: "A valid positive EUR price is required to create a Published product",
     });
   }
+  refineEtsyListingFields(data, ctx);
 });
 
 /**
@@ -175,6 +231,7 @@ function refineUpdateProductFields(data: Partial<z.infer<typeof baseProductSchem
       message: "Unique Item stock quantity cannot exceed 1",
     });
   }
+  refineEtsyListingFields(data, ctx);
 }
 
 /** Internal/command shape: editable Product fields only, no version token. */
