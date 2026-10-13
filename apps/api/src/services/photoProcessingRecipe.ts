@@ -1,6 +1,8 @@
+import { assertImageOperationOwned } from "./photoUploadAdmission";
 import sharp from "sharp";
 
 export function productPhotoImage(input: Buffer | string, options: sharp.SharpOptions = {}) {
+  assertImageOperationOwned();
   return sharp(input, { failOn: "error", ...options }).rotate();
 }
 /** Both entry points share the established recipe; no AI-intake byte/quality change. */

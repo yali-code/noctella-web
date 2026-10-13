@@ -5,6 +5,7 @@ import { generateFixtures } from "../../apps/api/src/scripts/photoMemoryBenchmar
 import { PROFILES } from "../../apps/api/src/scripts/photoMemoryBenchmark/scenarios";
 import { createRequire } from "node:module";
 const sharp = createRequire(new URL("../../apps/api/package.json", import.meta.url))("sharp");
+const { runCombinedScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/sharedImageResourceProbe.js");
 const { runScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/photoUploadResourceProbe.js");
 import { FIXTURES, selectedScenarios, parseEvents, validateLimits } from "./policy.mjs";
 
@@ -36,7 +37,7 @@ async function main() {
   }
   if (mode !== "run") throw new Error("Unknown isolated agent mode");
   const config = JSON.parse(await fs.readFile("/work/config.json", "utf8"));
-  const result = await runScenario(config);
+  const result = config.scenario.path === "combined" ? await runCombinedScenario(config) : await runScenario(config);
   await fs.writeFile("/evidence/result.json", JSON.stringify(result, null, 2));
 }
 main().catch((error) => { console.error(String(error)); process.exitCode = 2; });

@@ -1,3 +1,4 @@
+import { runImageOperation } from "./photoUploadAdmission";
 import { productPhotoImage, productPhotoDerivative } from "./photoProcessingRecipe";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -136,7 +137,7 @@ export interface DeterministicProductPhotoResult {
  * writeIdempotent for safe, non-destructive retry behavior. Never touches
  * the staged intake-photo source file.
  */
-export async function writeDeterministicProductPhoto(input: DeterministicProductPhotoInput): Promise<DeterministicProductPhotoResult> {
+async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProductPhotoInput): Promise<DeterministicProductPhotoResult> {
   assertSafeDeterministicKey(input.mainStorageKey);
   assertSafeDeterministicKey(input.thumbnailStorageKey);
   const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
@@ -159,8 +160,14 @@ export async function writeDeterministicProductPhoto(input: DeterministicProduct
   };
 }
 
+export const writeDeterministicProductPhoto: typeof writeDeterministicProductPhotoUnadmitted = input =>
+  runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input));
+
 export class LocalPhotoStorage implements PhotoStorage {
   async saveProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredProductPhoto> {
+    return runImageOperation(() => this.#saveProductPhotoUnadmitted(file));
+  }
+  async #saveProductPhotoUnadmitted(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredProductPhoto> {
     const { mainBytes, thumbBytes, width, height } = await processProductPhoto(file);
     await mkdir(uploadRoot, { recursive: true });
 

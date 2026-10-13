@@ -1,3 +1,4 @@
+import { runImageOperation } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
 
 import { link, lstat, mkdir, open, realpath, rm } from "node:fs/promises";
@@ -12,7 +13,7 @@ import { PhotoUploadError, abortedError } from "./photoUploadAdmission";
 export const PHOTO_PIXEL_LIMIT = 24_000_000;
 export const PHOTO_EDGE_LIMIT = 12_000;
 export const PHOTO_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
-export interface StagedProductPhotoInput { path: string; workDir: string; mimetype: string; size: number; signal: AbortSignal }
+export interface StagedProductPhotoInput { path: string; workDir: string; mimetype: string; size: number; signal: AbortSignal; originalname?: string; actorAdminUserId?: string }
 export interface StagedProductPhotoStorage {
   saveStagedProductPhoto(input: StagedProductPhotoInput): Promise<StoredProductPhoto>;
   deleteProductPhoto(photo: { url: string; thumbnailUrl: string }): Promise<void>;
@@ -28,6 +29,9 @@ let fileCacheConfigured = false;
 export class LocalStagedProductPhotoStorage implements StagedProductPhotoStorage {
   constructor(private readonly root = productPhotoStaticRoot, private readonly publish = link, private readonly encode = (image: sharp.Sharp, destination: string) => image.toFile(destination)) {}
   async saveStagedProductPhoto(input: StagedProductPhotoInput): Promise<StoredProductPhoto> {
+    return runImageOperation(() => this.#saveStagedProductPhotoUnadmitted(input));
+  }
+  async #saveStagedProductPhotoUnadmitted(input: StagedProductPhotoInput): Promise<StoredProductPhoto> {
     // libvips file-cache handles can outlive metadata() and prevent private-file cleanup on Windows.
     // Activate this process-level file-cache policy only when the gated staged processor is used.
     if (!fileCacheConfigured) { sharp.cache({ files: 0 }); fileCacheConfigured = true; }

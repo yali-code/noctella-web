@@ -1,0 +1,19 @@
+[
+  {
+    "name": "jpeg-typical-landscape",
+    "file": "/fixtures/jpeg-typical-landscape.jpg",
+    "mimetype": "image/jpeg",
+    "sizeBytes": 3083109,
+    "width": 4032,
+    "height": 3024,
+    "megapixels": 12.19,
+    "format": "jpeg",
+    "quality": 88,
+    "sha256": "321f87db041dcaf48a097bcc491e4e348fab788cc58ea3d99f2a4a2ea6ba622d",
+    "tags": [
+      "typical",
+      "landscape"
+    ],
+    "expectValid": true
+  }
+]

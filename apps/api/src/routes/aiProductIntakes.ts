@@ -1,3 +1,8 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { AiProductIntakeStatus } from "@noctella/shared";
+import { createProductPhotoUploadHandler } from "./productPhotoUpload";
+import { aiIntakePhotoStagingRoot } from "../services/aiIntakePhotoStorage";
 import { Router } from "express";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
@@ -95,7 +100,7 @@ router.post("/:id/cancel", requirePermission("ai_product_intakes.manage"), async
 
 // Sprint 91: AI Intake Photo foundation - nested under the owning intake.
 // Actor identity always comes from req.adminUser.id, never the request body.
-router.post("/:id/photos", requirePermission("ai_product_intakes.manage"), upload.single("photo"), async (req: AuthedRequest, res) => {
+const legacyIntakePhotoUpload = async (req: AuthedRequest, res: import("express").Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: "Photo file is required" });
@@ -106,7 +111,24 @@ router.post("/:id/photos", requirePermission("ai_product_intakes.manage"), uploa
   } catch (err) {
     handleRouteError(err, res);
   }
+};
+
+
+const stagedIntakePhotoUpload = createProductPhotoUploadHandler({
+  root: path.join(path.dirname(path.resolve(aiIntakePhotoStagingRoot)), ".ai-intake-upload-ingress"),
+  assertProduct: async id => {
+    const intake = await getIntakeById(db, id);
+    if (intake.status !== AiProductIntakeStatus.Open) throw new BadRequestError("Only an Open intake can receive staged photos");
+  },
+  upload: async (id, file) => {
+    if (!file.actorAdminUserId) throw new BadRequestError("Authenticated actor is required");
+    // The shared active scope is already held, before this full input read.
+    const buffer = await readFile(file.path);
+    return uploadIntakePhoto(db, id, { buffer, size: file.size, mimetype: file.mimetype }, file.originalname ?? "photo", file.actorAdminUserId);
+  },
 });
+router.post("/:id/photos", requirePermission("ai_product_intakes.manage"),
+  process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? stagedIntakePhotoUpload : [upload.single("photo"), legacyIntakePhotoUpload]);
 
 router.get("/:id/photos", requirePermission("ai_product_intakes.view"), async (req, res) => {
   try {

@@ -5,14 +5,14 @@ on:
       profile:
         description: Bounded full suite or retry only the four concurrent-overload cases
         type: choice
-        options: [full, c4, webp-c4]
+        options: [full, c4, webp-c4, combined, combined-reference]
         default: full
       include_stress:
         description: Include the last bounded 144-MP stress case
         type: boolean
         default: true
   pull_request:
-    branches: [main]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1]
     types: [opened, synchronize, reopened, edited]
     paths:
       - scripts/photo-upload-linux/**
@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 45
     env:
       INCLUDE_STRESS: ${{ github.event_name == 'workflow_dispatch' && inputs.include_stress == false && 'false' || 'true' }}
-      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] webp-c4-only') && 'webp-c4' || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
+      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-reference-only') && 'combined-reference' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-only') && 'combined' || startsWith(github.event.pull_request.title, '[run-upload-512m] webp-c4-only') && 'webp-c4' || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
       HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
