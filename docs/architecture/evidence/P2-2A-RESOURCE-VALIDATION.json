@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-13",
+  "sourceBaseline": "7df99bad74c822e13a690f7a3593637794b7b7c8",
+  "worktreeBranch": "docs/photo-upload-memory-safety-p2-2a",
+  "p21": {
+    "pullRequest": 379,
+    "head": "7c6ab55237e996fef041c60bb06f45b7d0fc2061",
+    "ciRun": 529,
+    "ciRunId": 38401044690,
+    "status": "completed",
+    "conclusion": "success",
+    "scenarios": 35,
+    "operations": 155,
+    "measurementPlatform": "Windows desktop; no enforced 512-MiB limit"
+  },
+  "discovery": [
+    {
+      "command": "docker info --format '{{json .ServerVersion}}'",
+      "exitCode": 1,
+      "result": "dockerDesktopLinuxEngine named pipe unavailable; no usable Linux daemon"
+    },
+    {
+      "command": "docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}'",
+      "exitCode": 1,
+      "result": "daemon unavailable; cached Linux image inventory could not be read"
+    },
+    {
+      "command": "wsl --list --verbose",
+      "exitCode": 1,
+      "result": "No installed Linux distribution"
+    }
+  ],
+  "constrainedValidation": {
+    "status": "BLOCKED",
+    "enforced512MiB": false,
+    "linuxMeasurements": "NOT RUN",
+    "fullApiBaseline": "NOT RUN",
+    "oneVsTwoTransforms": "NOT RUN",
+    "representativePhotoPixelValidation": "NOT RUN; synthetic P2-1 evidence only",
+    "runtimeChanges": false,
+    "productionAccess": false,
+    "unrestrictedWindowsSubstitute": false
+  },
+  "proposed": {
+    "limitMiB": 512,
+    "acceptancePeakMiB": 384,
+    "reserveMiB": 128,
+    "baselineMiB": 160,
+    "transformAllowanceMiB": 128,
+    "fileCacheAllowanceMiB": 48,
+    "otherWorkAllowanceMiB": 48,
+    "pixelLimit": 24000000,
+    "active": 1,
+    "waiters": 2,
+    "requestLeases": 3,
+    "stagingQuotaMiB": 128,
+    "stagingReservationMiB": 126,
+    "status": "UNVALIDATED proposal; owner acceptance and P2-2B authorization required"
+  }
+}
