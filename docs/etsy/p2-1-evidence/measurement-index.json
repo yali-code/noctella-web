@@ -1,0 +1,177 @@
+[
+  {
+    "scenario": "single-jpeg-small-landscape",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-jpeg-typical-landscape",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-jpeg-typical-portrait",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-jpeg-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-png-typical-landscape",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-png-rgba-portrait",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-png-near-limit",
+    "source": "photo-memory-full-2026-10-13T12-41-46-546Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-webp-typical-portrait",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-webp-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-jpeg-stress-64mp",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-png-stress-144mp",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-png-over-pixel-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-invalid-random-bytes",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-invalid-truncated-jpeg",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-invalid-text-as-png",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-invalid-empty",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-invalid-oversize",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "single-invalid-gif-mime",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected rejection; original expectValid/asExpected flags are incorrect. No measurement changed."
+  },
+  {
+    "scenario": "single-mime-mismatch-png-as-jpeg",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "sequential-12-mixed",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "sequential-12-near-limit",
+    "source": "photo-memory-full-2026-10-13T12-41-46-546Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-1-jpeg-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-2-jpeg-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-4-jpeg-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-1-png-near-limit",
+    "source": "photo-memory-full-2026-10-13T12-41-46-546Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-2-png-near-limit",
+    "source": "photo-memory-full-2026-10-13T12-41-46-546Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-4-png-near-limit",
+    "source": "photo-memory-full-2026-10-13T12-41-46-546Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-1-mixed",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-2-mixed",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-4-mixed",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "concurrent-4-png-stress-144mp",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "deterministic-jpeg-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "deterministic-retry-jpeg-near-limit",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "variant-concurrent-4-jpeg-near-limit-sharp-concurrency-1",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  },
+  {
+    "scenario": "variant-concurrent-4-jpeg-near-limit-sharp-cache-off",
+    "source": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+    "assessment": "Expected outcomes and clean staging"
+  }
+]

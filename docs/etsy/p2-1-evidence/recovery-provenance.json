@@ -1,0 +1,52 @@
+{
+  "originalSourceArchive": [
+    {
+      "file": "package.json",
+      "sha256": "1a706a2f3368e56f97ae0b86ae6f1e1b009b5a3464296f826ef506675509c225"
+    },
+    {
+      "file": "runPhotoMemoryBenchmark.ts",
+      "sha256": "48ea6fc40f3dec86425ef55492847a4ed0d4d599de021d98d1bf3dfe446786db"
+    },
+    {
+      "file": "photoMemoryBenchmark.test.ts",
+      "sha256": "b2c0f90e05bb6b266b7c93720c093a02ac13095752077596d3692f6b4296adff"
+    },
+    {
+      "file": "photoMemoryBenchmark/fixtures.ts",
+      "sha256": "90552c0d085e0ead4652a275c9c1185d541422985e65aa62c21a61f5ab5bec5f"
+    },
+    {
+      "file": "photoMemoryBenchmark/metrics.ts",
+      "sha256": "b62b5bebcacaaa86d9838f902730df33945edf69016bfd0738fb4eacd1ee1179"
+    },
+    {
+      "file": "photoMemoryBenchmark/report.ts",
+      "sha256": "035055a4328cf9b16ab1fc9cffbbc9f33a500eb2fc5c0002a368f788cb03a405"
+    },
+    {
+      "file": "photoMemoryBenchmark/scenarios.ts",
+      "sha256": "a80389df3111ed963dcfcc51fcc518767cdf22c5648a8b5d8e928e9661e63cb1"
+    },
+    {
+      "file": "photoMemoryBenchmark/worker.ts",
+      "sha256": "5d0de60b3ffd207398bdb9cb85144695be80bce6ddc5d26928389e5a44476c35"
+    }
+  ],
+  "evidence": [
+    {
+      "file": "photo-memory-full-2026-10-13T10-58-12-651Z.json",
+      "sha256": "077a9cd7247fe3dbc66d690b5b745eaf22436f6154fbbc0806c7b28b1dca59cc"
+    },
+    {
+      "file": "photo-memory-full-2026-10-13T12-41-46-546Z.json",
+      "sha256": "fd5af38073d86c44990f56352cc9d67c86a58918f1b812ebc0643196e1c2d47c"
+    },
+    {
+      "file": "claude-original-progress.txt",
+      "sha256": "4bd9eb3a378dfe2da929ece7b9cf9d21bf6c1e3baec17e0b83171c7dd1339441"
+    }
+  ],
+  "retainedFixtures": "p2-1-handoff.local/corrected-fixtures (local, excluded from Git; fixtures.json contains hashes)",
+  "originalFixtures": "Original report says work root removed; no original fixture directory was found. Source and completed measurements preserved before edits."
+}
