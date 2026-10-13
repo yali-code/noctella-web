@@ -35,6 +35,11 @@ function productWriteUseCaseContext(db: DbClient) {
   return { unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories: write.repositories };
 }
 
+/** SQLite boolean mode yields true/false, Postgres boolean yields true/false; NULL stays undefined. */
+function optionalBoolean(value: unknown): boolean | undefined {
+  return value === null || value === undefined ? undefined : Boolean(value);
+}
+
 function toProduct(row: typeof products.$inferSelect): Product {
   return {
     id: row.id,
@@ -98,6 +103,30 @@ function toProduct(row: typeof products.$inferSelect): Product {
     etsyOccasion: row.etsyOccasion ?? undefined,
     etsyListingPriceEur: row.etsyListingPriceEur ?? undefined,
     etsyListingStatus: (row.etsyListingStatus as Product["etsyListingStatus"]) ?? undefined,
+    // Etsy listing form parity (Phase 1): NULL (legacy / not provided) reads as undefined, never false.
+    etsyTaxonomyId: row.etsyTaxonomyId ?? undefined,
+    etsyShopSectionId: row.etsyShopSectionId ?? undefined,
+    etsyQuantity: row.etsyQuantity ?? undefined,
+    etsySku: row.etsySku ?? undefined,
+    etsyWhoMade: (row.etsyWhoMade as Product["etsyWhoMade"]) ?? undefined,
+    etsyIsSupply: optionalBoolean(row.etsyIsSupply),
+    etsyWhenMade: row.etsyWhenMade ?? undefined,
+    etsyVintageYear: row.etsyVintageYear ?? undefined,
+    etsyShippingProfileId: row.etsyShippingProfileId ?? undefined,
+    etsyProcessingProfileId: row.etsyProcessingProfileId ?? undefined,
+    etsyReturnPolicyId: row.etsyReturnPolicyId ?? undefined,
+    etsyRenewalOption: (row.etsyRenewalOption as Product["etsyRenewalOption"]) ?? undefined,
+    etsyFeatured: optionalBoolean(row.etsyFeatured),
+    etsyAdsOptIn: optionalBoolean(row.etsyAdsOptIn),
+    etsyRestockRequests: optionalBoolean(row.etsyRestockRequests),
+    etsyGpsrManufacturerName: row.etsyGpsrManufacturerName ?? undefined,
+    etsyGpsrManufacturerAddress: row.etsyGpsrManufacturerAddress ?? undefined,
+    etsyGpsrManufacturerContact: row.etsyGpsrManufacturerContact ?? undefined,
+    etsyGpsrResponsiblePersonName: row.etsyGpsrResponsiblePersonName ?? undefined,
+    etsyGpsrResponsiblePersonAddress: row.etsyGpsrResponsiblePersonAddress ?? undefined,
+    etsyGpsrResponsiblePersonContact: row.etsyGpsrResponsiblePersonContact ?? undefined,
+    etsyGpsrSafetyInformation: row.etsyGpsrSafetyInformation ?? undefined,
+    etsyConsumerGuaranteeInfo: row.etsyConsumerGuaranteeInfo ?? undefined,
     wooProductName: row.wooProductName ?? undefined,
     wooShortDescription: row.wooShortDescription ?? undefined,
     wooLongDescription: row.wooLongDescription ?? undefined,
@@ -302,10 +331,17 @@ export function computeMarketplaceReadiness(product: Product): ProductMarketplac
     ["listingPriceEur", product.ebayListingPriceEur],
   ]);
 
+  // Etsy listing form parity: only the fields the publish gate treats as errors (Etsy API-required)
+  // count here; form-only / unverified ones (what is it, processing profile, return policy) are
+  // publish warnings and never make an otherwise complete Etsy draft "not ready".
   const etsyMissing = missing([
     ["title", product.etsyTitle],
     ["description", product.etsyDescription],
     ["listingPriceEur", product.etsyListingPriceEur],
+    ["taxonomyId", product.etsyTaxonomyId],
+    ["whoMade", product.etsyWhoMade],
+    ["whenMade", product.etsyWhenMade],
+    ["shippingProfileId", product.etsyShippingProfileId],
   ]);
 
   const wooMissing = missing([
