@@ -1,3 +1,4 @@
+import { productPhotoImage, productPhotoDerivative } from "./photoProcessingRecipe";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -71,12 +72,12 @@ interface ProcessedProductPhoto {
  */
 async function processProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<ProcessedProductPhoto> {
   validateUpload(file);
-  const image = sharp(file.buffer, { failOn: "error" }).rotate();
+  const image = productPhotoImage(file.buffer);
   const metadata = await image.metadata();
   if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
 
-  const mainBytes = await image.clone().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true }).webp({ quality: 86 }).toBuffer();
-  const thumbBytes = await image.clone().resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+  const mainBytes = await productPhotoDerivative(image).toBuffer();
+  const thumbBytes = await productPhotoDerivative(image, true).toBuffer();
   const output = await sharp(mainBytes).metadata();
   return { mainBytes, thumbBytes, width: output.width ?? metadata.width, height: output.height ?? metadata.height };
 }
