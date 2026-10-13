@@ -1,4 +1,4 @@
-# P2-2B2: shared image admission
+# P2-2B2A: shared image admission foundation; resource acceptance FAILED
 
 Tracking: #387; parent #384. Stacked on #386 at 47b32ddd60348393597238c741400d48828f7c62. Base branch: feat/photo-upload-bounded-memory-p2-2b1. This work does not modify the base branch or enable production behavior.
 
@@ -69,3 +69,7 @@ Run via explicit workflow_dispatch profile=combined, or same-repository PR title
 - Existing encoded/decode/output limits and Buffer APIs are preserved; arbitrary caller-held inputs and FFmpeg can still exceed total-memory targets.
 - Roll back by keeping/unsetting the flag and restarting. Revert this stacked change to restore B1 product-only admission if needed; no DB migration or key rewrite. Preserve/reconcile private inventory under the B1 operational plan; never delete canonical/source files blindly.
 - Parent head movement requires an explicit isolated rebase and revalidation; do not update #386 in this task. No merge, deploy, production access, provider writes or infrastructure changes.
+
+## Actual acceptance failure (do not enable)
+Runtime973b66f / Actions38439169032 / artifact11833589757 (ZIP SHA256 ea1cb71a3e61bd3460b600b1253c6df9f9993468a618a0e97212c8a2e0113936): all three24-MP combined trials hit512MiB cgroup peak, exit137, and one OOM kill each. max counter deltas120/121/126. Last checkpoints recorded four of eight completed operations and nativePeak1; the second AI upload was outstanding. Finalization/wave2 and application integrity/cleanup assertions were never reached. Host disposable cleanup completed; that is not application crash recovery.
+These results fail the unchanged384MiB target and are not production measurements. Shared admission is not sufficient total-memory protection. We retain the existing AI decoded-size/recipe rules rather than silently lowering acceptance inputs or changing customer behavior. A single12-MP combined-reference case is diagnostic-only; even if it passes, the24-MP gate remains FAILED. No failed24-MP trial is relabeled or discarded. Full P2-2B2 remains open; this Draft is a reviewable B2A foundation.

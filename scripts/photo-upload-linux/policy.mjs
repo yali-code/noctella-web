@@ -3,7 +3,7 @@ export const HARD_BYTES = 512 * 1024 * 1024;
 export const TARGET_BYTES = 384 * 1024 * 1024;
 export const SCENARIO_TIMEOUT_MS = 120_000;
 export const DISK_STOP_BYTES = 256 * 1024 * 1024;
-export const FIXTURES = ["jpeg-near-limit", "png-near-limit", "webp-near-limit", "invalid-random-bytes", "png-stress-144mp"];
+export const FIXTURES = ["jpeg-typical-landscape", "jpeg-near-limit", "png-near-limit", "webp-near-limit", "invalid-random-bytes", "png-stress-144mp"];
 
 export function scenarios(includeStress = true) {
   const normal = ["jpeg", "png", "webp"].flatMap((format) =>
@@ -14,7 +14,7 @@ export function scenarios(includeStress = true) {
     })));
   normal.push({
     name: "linux-sequential-12", description: "Twelve sequential near-limit mixed transforms",
-    fixtures: ["jpeg-near-limit", "png-near-limit", "webp-near-limit"], ops: 12, concurrency: 1, path: "upload",
+    fixtures: ["jpeg-typical-landscape", "jpeg-near-limit", "png-near-limit", "webp-near-limit"], ops: 12, concurrency: 1, path: "upload",
   }, {
     name: "linux-invalid", description: "Synthetic random bytes must be rejected",
     fixtures: ["invalid-random-bytes"], ops: 1, concurrency: 1, path: "upload",
@@ -69,7 +69,8 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
 }
 
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4", "webp-c4", "combined"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (!["full", "c4", "webp-c4", "combined", "combined-reference"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (profile === "combined-reference") return [{ name: "linux-combined-reference-12mp", description: "DIAGNOSTIC ONLY: complete mixed workflow on a 12MP reference; cannot replace failed 24MP acceptance", fixtures: ["jpeg-typical-landscape"], ops: 8, concurrency: 3, path: "combined", trial: 1, acceptanceRole: "diagnostic-only" }];
   if (profile === "combined") return [1, 2, 3].map(trial => ({ name: "linux-combined-t" + trial, description: "Combined gated product, AI upload/finalization and Instagram synthetic workflows", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial }));
   return scenarios(includeStress).filter(s => profile === "full" || (profile === "c4" ? s.concurrency === 4 : s.name === "linux-webp-c4"));
 }

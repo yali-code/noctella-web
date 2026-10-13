@@ -63,3 +63,9 @@ test("combined profile has exactly three fresh 24MP synthetic trials with eight 
   assert.equal(cases.length,3);assert.deepEqual(cases.map(s=>s.trial),[1,2,3]);
   assert.ok(cases.every(s=>s.ops===8&&s.concurrency===3&&s.path==="combined"&&s.fixtures[0]==="jpeg-near-limit"));
 });
+test("smaller reference is explicitly diagnostic and never replaces combined acceptance", async()=>{
+  const {selectedScenarios}=await import("./policy.mjs");const reference=selectedScenarios(true,"combined-reference");
+  assert.equal(reference.length,1);assert.equal(reference[0].acceptanceRole,"diagnostic-only");
+  assert.equal(reference[0].fixtures[0],"jpeg-typical-landscape");
+  assert.equal(selectedScenarios(true,"combined").length,3);
+});
