@@ -32,7 +32,7 @@ it("waits for aborted native work to settle before releasing capacity and remove
  const bytes=await sharp({create:{width:8,height:8,channels:3,background:"red"}}).jpeg().toBuffer(),file=await input(bytes);
  const controller=new AbortController();let release!:()=>void,started!:()=>void;
  const hold=new Promise<void>(r=>{release=r;}),begin=new Promise<void>(r=>{started=r;});
- vi.spyOn(sharp.prototype,"toFile").mockImplementationOnce((async destination=>{await writeFile(destination,"partial");started();await hold;return{};}) as any);
+ vi.spyOn(sharp.prototype,"toFile").mockImplementationOnce((async (destination:string)=>{await writeFile(destination,"partial");started();await hold;return{};}) as any);
  const storage=new LocalAiIntakePhotoStorage(path.join(root,"private"));
  const result=gate.scope(()=>storage.saveStagedIntakePhoto({...file,signal:controller.signal}),controller.signal);
  const rejection=expect(result).rejects.toMatchObject({code:"PHOTO_UPLOAD_ABORTED"});
@@ -42,7 +42,7 @@ it("waits for aborted native work to settle before releasing capacity and remove
 it("removes only owned partial outputs after disk failure and retains input for route cleanup",async()=>{
  const bytes=await sharp({create:{width:8,height:8,channels:3,background:"red"}}).jpeg().toBuffer(),file=await input(bytes),privateRoot=path.join(root,"private");
  await mkdir(privateRoot);await writeFile(path.join(privateRoot,"existing.webp"),"keep");
- vi.spyOn(sharp.prototype,"toFile").mockImplementationOnce((async destination=>{await writeFile(destination,"partial");throw Object.assign(Error("disk full"),{code:"ENOSPC"});}) as any);
+ vi.spyOn(sharp.prototype,"toFile").mockImplementationOnce((async (destination:string)=>{await writeFile(destination,"partial");throw Object.assign(Error("disk full"),{code:"ENOSPC"});}) as any);
  await expect(new LocalAiIntakePhotoStorage(privateRoot).saveStagedIntakePhoto(file)).rejects.toMatchObject({code:"ENOSPC"});
  expect(await readdir(privateRoot)).toEqual(["existing.webp"]);expect(await readFile(file.path)).toEqual(bytes);expect(gate.snapshot()).toMatchObject({held:0,active:0});
 });
