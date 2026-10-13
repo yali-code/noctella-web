@@ -75,6 +75,9 @@ it("already-finalized retries skip admission and reads; Instagram overload is re
  const leases=[gate.reserve(),gate.reserve(),gate.reserve()];
  try{
   expect((await finalizeAiIntakePhotos(db,intakeId,{},actorId)).created).toBe(false);expect(read).not.toHaveBeenCalled();
+  const overloaded=await request(app).post("/api/ai-product-intakes/"+intakeId+"/photos").set("Cookie",cookie).attach("photo",bytes,"capacity.jpg");
+  expect(overloaded.status).toBe(503);expect(overloaded.body.code).toBe("PHOTO_CAPACITY_BUSY");
+  expect(await readdir(path.join(root,".ai-intake-upload-ingress"))).toEqual([]);
   await expect((await import("../src/integrations/instagram/mediaPreparation")).prepareInstagramImageAsset({url:"/images/product-photos/source.webp"},origin,env,path.join(root,"photos"))).rejects.toMatchObject({kind:"processing",retryable:true});
  }finally{leases.forEach(lease=>lease.release());}
 });
