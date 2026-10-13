@@ -1,0 +1,1116 @@
+{
+  "environment": {
+    "generatedAt": "2026-10-13T12:41:46.546Z",
+    "profile": "full",
+    "node": "v24.18.0",
+    "platform": "win32",
+    "osRelease": "10.0.26200",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Core(TM) i5-3210M CPU @ 2.50GHz",
+    "logicalCpus": 4,
+    "totalMemoryBytes": 8458129408,
+    "uvThreadpoolSize": "default (4)",
+    "gitCommit": "7df99ba"
+  },
+  "fixtures": [
+    {
+      "name": "jpeg-small-landscape",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 88303,
+      "width": 1024,
+      "height": 768,
+      "megapixels": 0.79,
+      "format": "jpeg",
+      "quality": 82,
+      "sha256": "8ed55d5ec483a0e5bc809163920ac4fce5e05ab68b9814df7409e77ed8b77069",
+      "tags": [
+        "small"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "jpeg-typical-landscape",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 3083109,
+      "width": 4032,
+      "height": 3024,
+      "megapixels": 12.19,
+      "format": "jpeg",
+      "quality": 88,
+      "sha256": "321f87db041dcaf48a097bcc491e4e348fab788cc58ea3d99f2a4a2ea6ba622d",
+      "tags": [
+        "typical",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "jpeg-typical-portrait",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 3082573,
+      "width": 3024,
+      "height": 4032,
+      "megapixels": 12.19,
+      "format": "jpeg",
+      "quality": 88,
+      "sha256": "c3455e7806de711d179d83a9498c7d71a1f7de8514521b609f48b685f4a2d319",
+      "tags": [
+        "typical",
+        "portrait"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "jpeg-near-limit",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 9670997,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "jpeg",
+      "quality": 86,
+      "sha256": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-typical-landscape",
+      "mimetype": "image/png",
+      "sizeBytes": 5232620,
+      "width": 1600,
+      "height": 1200,
+      "megapixels": 1.92,
+      "format": "png",
+      "sha256": "9c3e1cde41b6c7c7738ec2121b73bbc9417f23cabd1afb921d2f7fee1281dc02",
+      "tags": [
+        "typical",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-rgba-portrait",
+      "mimetype": "image/png",
+      "sizeBytes": 6954215,
+      "width": 1200,
+      "height": 1600,
+      "megapixels": 1.92,
+      "format": "png",
+      "sha256": "22b64491019da95e5a385588d556e23998dcef9169149ba397d634b9b5ae97b3",
+      "tags": [
+        "typical",
+        "portrait",
+        "alpha"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-near-limit",
+      "mimetype": "image/png",
+      "sizeBytes": 10026026,
+      "width": 2350,
+      "height": 1500,
+      "megapixels": 3.53,
+      "format": "png",
+      "sha256": "f517a233086aebe6765eef458315e5a1b6f65f50e718ab7e6e1295523f3f4d8a",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "webp-typical-portrait",
+      "mimetype": "image/webp",
+      "sizeBytes": 1624694,
+      "width": 2000,
+      "height": 3000,
+      "megapixels": 6,
+      "format": "webp",
+      "quality": 85,
+      "sha256": "2368c9ff4f352a07058d98e1d8329189c74d07e1e1b4b08b3407f1b26a63dffd",
+      "tags": [
+        "typical",
+        "portrait"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "webp-near-limit",
+      "mimetype": "image/webp",
+      "sizeBytes": 9831282,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "webp",
+      "quality": 80,
+      "sha256": "dab8de194ad8b80b516ef52b4d6cbc059e752e1feb29777f3ad7111d91961a8d",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "jpeg-stress-64mp",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 375268,
+      "width": 8000,
+      "height": 8000,
+      "megapixels": 64,
+      "format": "jpeg",
+      "quality": 80,
+      "sha256": "940cc0b1fd14c3af36fa5b30b7f409c0e5ab5df8ddc75b111191d2be1f6831e2",
+      "tags": [
+        "decompression-stress"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-stress-144mp",
+      "mimetype": "image/png",
+      "sizeBytes": 1919037,
+      "width": 12000,
+      "height": 12000,
+      "megapixels": 144,
+      "format": "png",
+      "sha256": "4c4d09e3c7e7d83873d103375d11b31ca3506a17cbe3e0633a6d888393af335c",
+      "tags": [
+        "decompression-stress"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-over-pixel-limit",
+      "mimetype": "image/png",
+      "sizeBytes": 3834218,
+      "width": 17000,
+      "height": 17000,
+      "megapixels": 289,
+      "format": "png",
+      "sha256": "9e92f727cbdd41b68e2142918c571c6f102c45ffed2f64f266d47d7cc0998178",
+      "tags": [
+        "decompression-stress",
+        "over-pixel-limit"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "invalid-random-bytes",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 524288,
+      "sha256": "8e48a2e7a74e99d17b484ce00706c0371312a61e1ea59c969571662355075b56",
+      "tags": [
+        "invalid"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "invalid-truncated-jpeg",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 1541554,
+      "sha256": "f30a9dea0be93da868346b41904b487f97905467215b02782e270c6ef5f1185f",
+      "tags": [
+        "invalid",
+        "corrupted"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "invalid-text-as-png",
+      "mimetype": "image/png",
+      "sizeBytes": 1344,
+      "sha256": "456ea0d8fb29c87fac5e5debcb7402d3bba9bb409945746791530e1bbd27757a",
+      "tags": [
+        "invalid"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "invalid-empty",
+      "mimetype": "image/webp",
+      "sizeBytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "tags": [
+        "invalid"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "invalid-oversize",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 10485761,
+      "sha256": "6375693b0725c994a9d04bb96f9c35d2621d97a78b1c537494e7a4866c65fab3",
+      "tags": [
+        "invalid",
+        "oversize"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "invalid-gif-mime",
+      "mimetype": "image/gif",
+      "sizeBytes": 5232620,
+      "sha256": "9c3e1cde41b6c7c7738ec2121b73bbc9417f23cabd1afb921d2f7fee1281dc02",
+      "tags": [
+        "invalid",
+        "mime"
+      ],
+      "expectValid": false
+    },
+    {
+      "name": "mime-mismatch-png-as-jpeg",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 5232620,
+      "sha256": "9c3e1cde41b6c7c7738ec2121b73bbc9417f23cabd1afb921d2f7fee1281dc02",
+      "tags": [
+        "mime"
+      ],
+      "expectValid": true
+    }
+  ],
+  "outcomes": [
+    {
+      "scenario": {
+        "name": "single-png-near-limit",
+        "description": "One upload in a fresh process",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 1,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "result": {
+        "scenario": {
+          "name": "single-png-near-limit",
+          "description": "One upload in a fresh process",
+          "fixtures": [
+            "png-near-limit"
+          ],
+          "ops": 1,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "baseline": {
+          "rss": 82309120,
+          "heapUsed": 11896320,
+          "heapTotal": 20422656,
+          "external": 4194705,
+          "arrayBuffers": 1570609
+        },
+        "baselineMaxRss": 82608128,
+        "peak": {
+          "rss": 137957376,
+          "heapUsed": 11981448,
+          "heapTotal": 20422656,
+          "external": 34886387,
+          "arrayBuffers": 31275133,
+          "samples": 56
+        },
+        "peakMaxRss": 138080256,
+        "final": {
+          "rss": 115458048,
+          "heapUsed": 10460816,
+          "heapTotal": 20422656,
+          "external": 34886387,
+          "arrayBuffers": 31275133
+        },
+        "totalDurationMs": 777.5887999999999,
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 759.7090999999999,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          }
+        ],
+        "sharp": {
+          "version": "0.34.5",
+          "libvips": "8.17.3",
+          "concurrency": 4,
+          "cache": {
+            "memory": {
+              "current": 9,
+              "high": 16,
+              "max": 50
+            },
+            "files": {
+              "current": 0,
+              "max": 20
+            },
+            "items": {
+              "current": 31,
+              "max": 100
+            }
+          },
+          "simd": true
+        },
+        "leftovers": {
+          "photoDirFiles": 2,
+          "expectedPhotoDirFiles": 2,
+          "tmpDirFiles": []
+        }
+      },
+      "cleanedUp": true
+    },
+    {
+      "scenario": {
+        "name": "sequential-12-near-limit",
+        "description": "12 sequential near-10 MiB uploads across JPEG/PNG/WebP",
+        "fixtures": [
+          "jpeg-near-limit",
+          "png-near-limit",
+          "webp-near-limit"
+        ],
+        "ops": 12,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "result": {
+        "scenario": {
+          "name": "sequential-12-near-limit",
+          "description": "12 sequential near-10 MiB uploads across JPEG/PNG/WebP",
+          "fixtures": [
+            "jpeg-near-limit",
+            "png-near-limit",
+            "webp-near-limit"
+          ],
+          "ops": 12,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "baseline": {
+          "rss": 82604032,
+          "heapUsed": 11966096,
+          "heapTotal": 20684800,
+          "external": 4194705,
+          "arrayBuffers": 1570609
+        },
+        "baselineMaxRss": 82608128,
+        "peak": {
+          "rss": 151195648,
+          "heapUsed": 12040864,
+          "heapTotal": 20684800,
+          "external": 44714338,
+          "arrayBuffers": 41107855,
+          "samples": 1171
+        },
+        "peakMaxRss": 151269376,
+        "final": {
+          "rss": 111255552,
+          "heapUsed": 9103680,
+          "heapTotal": 12820480,
+          "external": 33938360,
+          "arrayBuffers": 30687973
+        },
+        "totalDurationMs": 18337.9621,
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "jpeg-near-limit",
+            "ok": true,
+            "durationMs": 945.9418000000001,
+            "inputBytes": 9670997,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 484350,
+            "thumbBytes": 1516,
+            "asExpected": true
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 941.4486999999999,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 2,
+            "fixture": "webp-near-limit",
+            "ok": true,
+            "durationMs": 2096.8443,
+            "inputBytes": 9831282,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 627424,
+            "thumbBytes": 1550,
+            "asExpected": true
+          },
+          {
+            "index": 3,
+            "fixture": "jpeg-near-limit",
+            "ok": true,
+            "durationMs": 890.8766000000005,
+            "inputBytes": 9670997,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 484350,
+            "thumbBytes": 1516,
+            "asExpected": true
+          },
+          {
+            "index": 4,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 813.5078999999996,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 5,
+            "fixture": "webp-near-limit",
+            "ok": true,
+            "durationMs": 2535.2627999999995,
+            "inputBytes": 9831282,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 627424,
+            "thumbBytes": 1550,
+            "asExpected": true
+          },
+          {
+            "index": 6,
+            "fixture": "jpeg-near-limit",
+            "ok": true,
+            "durationMs": 908.9202999999998,
+            "inputBytes": 9670997,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 484350,
+            "thumbBytes": 1516,
+            "asExpected": true
+          },
+          {
+            "index": 7,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 816.9650000000001,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 8,
+            "fixture": "webp-near-limit",
+            "ok": true,
+            "durationMs": 2883.6764000000003,
+            "inputBytes": 9831282,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 627424,
+            "thumbBytes": 1550,
+            "asExpected": true
+          },
+          {
+            "index": 9,
+            "fixture": "jpeg-near-limit",
+            "ok": true,
+            "durationMs": 1346.3089,
+            "inputBytes": 9670997,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 484350,
+            "thumbBytes": 1516,
+            "asExpected": true
+          },
+          {
+            "index": 10,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1323.406500000001,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 11,
+            "fixture": "webp-near-limit",
+            "ok": true,
+            "durationMs": 2680.9477000000006,
+            "inputBytes": 9831282,
+            "outputWidth": 2000,
+            "outputHeight": 1333,
+            "mainBytes": 627424,
+            "thumbBytes": 1550,
+            "asExpected": true
+          }
+        ],
+        "sharp": {
+          "version": "0.34.5",
+          "libvips": "8.17.3",
+          "concurrency": 4,
+          "cache": {
+            "memory": {
+              "current": 11,
+              "high": 122,
+              "max": 50
+            },
+            "files": {
+              "current": 0,
+              "max": 20
+            },
+            "items": {
+              "current": 6,
+              "max": 100
+            }
+          },
+          "simd": true
+        },
+        "leftovers": {
+          "photoDirFiles": 24,
+          "expectedPhotoDirFiles": 24,
+          "tmpDirFiles": []
+        }
+      },
+      "cleanedUp": true
+    },
+    {
+      "scenario": {
+        "name": "concurrent-1-png-near-limit",
+        "description": "8 near-10 MiB PNG uploads, 1 in flight",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "result": {
+        "scenario": {
+          "name": "concurrent-1-png-near-limit",
+          "description": "8 near-10 MiB PNG uploads, 1 in flight",
+          "fixtures": [
+            "png-near-limit"
+          ],
+          "ops": 8,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "baseline": {
+          "rss": 82563072,
+          "heapUsed": 11784712,
+          "heapTotal": 20684800,
+          "external": 4178321,
+          "arrayBuffers": 1554225
+        },
+        "baselineMaxRss": 82898944,
+        "peak": {
+          "rss": 140726272,
+          "heapUsed": 11863832,
+          "heapTotal": 20946944,
+          "external": 54943223,
+          "arrayBuffers": 51331969,
+          "samples": 452
+        },
+        "peakMaxRss": 145412096,
+        "final": {
+          "rss": 96948224,
+          "heapUsed": 8925384,
+          "heapTotal": 12820480,
+          "external": 14826636,
+          "arrayBuffers": 11220233
+        },
+        "totalDurationMs": 6748.5972,
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 914.4149000000001,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 755.9773,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 2,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 942.1620000000003,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 3,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 851.3069,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 4,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 860.6686999999993,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 5,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 845.0271999999995,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 6,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 753.7663999999995,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 7,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 745.6482999999998,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          }
+        ],
+        "sharp": {
+          "version": "0.34.5",
+          "libvips": "8.17.3",
+          "concurrency": 4,
+          "cache": {
+            "memory": {
+              "current": 38,
+              "high": 47,
+              "max": 50
+            },
+            "files": {
+              "current": 0,
+              "max": 20
+            },
+            "items": {
+              "current": 100,
+              "max": 100
+            }
+          },
+          "simd": true
+        },
+        "leftovers": {
+          "photoDirFiles": 16,
+          "expectedPhotoDirFiles": 16,
+          "tmpDirFiles": []
+        }
+      },
+      "cleanedUp": true
+    },
+    {
+      "scenario": {
+        "name": "concurrent-2-png-near-limit",
+        "description": "8 near-10 MiB PNG uploads, 2 in flight",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 2,
+        "path": "upload"
+      },
+      "result": {
+        "scenario": {
+          "name": "concurrent-2-png-near-limit",
+          "description": "8 near-10 MiB PNG uploads, 2 in flight",
+          "fixtures": [
+            "png-near-limit"
+          ],
+          "ops": 8,
+          "concurrency": 2,
+          "path": "upload"
+        },
+        "baseline": {
+          "rss": 82583552,
+          "heapUsed": 11660208,
+          "heapTotal": 20422656,
+          "external": 4178321,
+          "arrayBuffers": 1554225
+        },
+        "baselineMaxRss": 82595840,
+        "peak": {
+          "rss": 194764800,
+          "heapUsed": 11766688,
+          "heapTotal": 20684800,
+          "external": 65951263,
+          "arrayBuffers": 61354939,
+          "samples": 299
+        },
+        "peakMaxRss": 194916352,
+        "final": {
+          "rss": 129085440,
+          "heapUsed": 9076928,
+          "heapTotal": 13082624,
+          "external": 45891448,
+          "arrayBuffers": 41299975
+        },
+        "totalDurationMs": 4246.1929,
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 891.2654,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 932.9691000000001,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 2,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 939.0546000000002,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 3,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 953.635,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 4,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1002.5124000000001,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 5,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 986.3564999999999,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 6,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1317.3614999999995,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 7,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1318.9892,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          }
+        ],
+        "sharp": {
+          "version": "0.34.5",
+          "libvips": "8.17.3",
+          "concurrency": 4,
+          "cache": {
+            "memory": {
+              "current": 38,
+              "high": 62,
+              "max": 50
+            },
+            "files": {
+              "current": 0,
+              "max": 20
+            },
+            "items": {
+              "current": 100,
+              "max": 100
+            }
+          },
+          "simd": true
+        },
+        "leftovers": {
+          "photoDirFiles": 16,
+          "expectedPhotoDirFiles": 16,
+          "tmpDirFiles": []
+        }
+      },
+      "cleanedUp": true
+    },
+    {
+      "scenario": {
+        "name": "concurrent-4-png-near-limit",
+        "description": "8 near-10 MiB PNG uploads, 4 in flight",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 4,
+        "path": "upload"
+      },
+      "result": {
+        "scenario": {
+          "name": "concurrent-4-png-near-limit",
+          "description": "8 near-10 MiB PNG uploads, 4 in flight",
+          "fixtures": [
+            "png-near-limit"
+          ],
+          "ops": 8,
+          "concurrency": 4,
+          "path": "upload"
+        },
+        "baseline": {
+          "rss": 82788352,
+          "heapUsed": 11612976,
+          "heapTotal": 20422656,
+          "external": 4178321,
+          "arrayBuffers": 1554225
+        },
+        "baselineMaxRss": 82792448,
+        "peak": {
+          "rss": 302567424,
+          "heapUsed": 11720160,
+          "heapTotal": 20684800,
+          "external": 128064307,
+          "arrayBuffers": 121504855,
+          "samples": 146
+        },
+        "peakMaxRss": 302829568,
+        "final": {
+          "rss": 160632832,
+          "heapUsed": 9185168,
+          "heapTotal": 13606912,
+          "external": 77942994,
+          "arrayBuffers": 71381381
+        },
+        "totalDurationMs": 3018.6224,
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1436.6735000000003,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1460.9343999999996,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 2,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1438.3084,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 3,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1438.4876000000002,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 4,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1408.9161,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 5,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1402.8298,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 6,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1380.4377,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          },
+          {
+            "index": 7,
+            "fixture": "png-near-limit",
+            "ok": true,
+            "durationMs": 1381.4397,
+            "inputBytes": 10026026,
+            "outputWidth": 2000,
+            "outputHeight": 1277,
+            "mainBytes": 982588,
+            "thumbBytes": 2482,
+            "asExpected": true
+          }
+        ],
+        "sharp": {
+          "version": "0.34.5",
+          "libvips": "8.17.3",
+          "concurrency": 4,
+          "cache": {
+            "memory": {
+              "current": 29,
+              "high": 62,
+              "max": 50
+            },
+            "files": {
+              "current": 0,
+              "max": 20
+            },
+            "items": {
+              "current": 3,
+              "max": 100
+            }
+          },
+          "simd": true
+        },
+        "leftovers": {
+          "photoDirFiles": 16,
+          "expectedPhotoDirFiles": 16,
+          "tmpDirFiles": []
+        }
+      },
+      "cleanedUp": true
+    }
+  ],
+  "workRootRemoved": true
+}

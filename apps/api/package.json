@@ -27,6 +27,7 @@
     "db:restore-materialize": "tsx src/scripts/materializeDatabaseRestore.ts",
     "photos:backup": "tsx src/scripts/runProductPhotoBackup.ts",
     "photos:recovery-verify": "tsx src/scripts/verifyProductPhotoRecovery.ts",
+    "photos:memory-benchmark": "tsx src/scripts/runPhotoMemoryBenchmark.ts",
     "bootstrap:admin": "tsx src/scripts/bootstrapAdmin.ts",
     "reset:admin-password": "tsx src/scripts/resetAdminPassword.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",
