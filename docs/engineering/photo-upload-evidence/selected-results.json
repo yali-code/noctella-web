@@ -1,0 +1,190 @@
+{
+  "scope": "versioned smoke evidence; not final-head full acceptance",
+  "stats": {
+    "scenarios": 12,
+    "successful": 45,
+    "invalid": 4,
+    "overload": 4,
+    "cgroupPeak": 353402880,
+    "rssPeak": 379535360,
+    "diskLogical": 36801035,
+    "diskAllocated": 36806656,
+    "baselineRssMin": 159580160,
+    "baselineRssMax": 164835328
+  },
+  "selected": [
+    {
+      "scenario": "linux-invalid",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 128565248,
+      "processPeak": 163053568,
+      "statuses": [
+        400
+      ]
+    },
+    {
+      "scenario": "linux-jpeg-c1",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 237703168,
+      "processPeak": 259747840,
+      "statuses": [
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-jpeg-c2",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 246804480,
+      "processPeak": 269340672,
+      "statuses": [
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-jpeg-c4",
+      "runtimeSha": "ae41eea0643181c3f6c43fb4cd69e8eda5eb6863",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38428694945",
+      "rawSummary": "c4-ae41eea-summary.json",
+      "peakCgroup": 244895744,
+      "processPeak": 275648512,
+      "statuses": [
+        503,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-png-c1",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 272740352,
+      "processPeak": 291549184,
+      "statuses": [
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-png-c2",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 270372864,
+      "processPeak": 281034752,
+      "statuses": [
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-png-c4",
+      "runtimeSha": "ae41eea0643181c3f6c43fb4cd69e8eda5eb6863",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38428694945",
+      "rawSummary": "c4-ae41eea-summary.json",
+      "peakCgroup": 250769408,
+      "processPeak": 263512064,
+      "statuses": [
+        503,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-sequential-12",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 353402880,
+      "processPeak": 379535360,
+      "statuses": [
+        201,
+        201,
+        201,
+        201,
+        201,
+        201,
+        201,
+        201,
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-stress-144mp-c4",
+      "runtimeSha": "ae41eea0643181c3f6c43fb4cd69e8eda5eb6863",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38428694945",
+      "rawSummary": "c4-ae41eea-summary.json",
+      "peakCgroup": 144285696,
+      "processPeak": 173105152,
+      "statuses": [
+        503,
+        400,
+        400,
+        400
+      ]
+    },
+    {
+      "scenario": "linux-webp-c1",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 303304704,
+      "processPeak": 333488128,
+      "statuses": [
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-webp-c2",
+      "runtimeSha": "75fb3dee0c9e24e08656de9e582c0ed8db2658a3",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38426951715",
+      "rawSummary": "native-75fb3de-summary.json",
+      "peakCgroup": 301408256,
+      "processPeak": 331239424,
+      "statuses": [
+        201,
+        201,
+        201,
+        201
+      ]
+    },
+    {
+      "scenario": "linux-webp-c4",
+      "runtimeSha": "fa3adb600ebd2add451b9fd3f230be6140cda514",
+      "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38430085616",
+      "rawSummary": "webp-fa3adb6-summary.json",
+      "peakCgroup": 304963584,
+      "processPeak": 337383424,
+      "statuses": [
+        503,
+        201,
+        201,
+        201
+      ]
+    }
+  ]
+}
