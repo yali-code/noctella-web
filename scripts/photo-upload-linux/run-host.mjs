@@ -150,4 +150,3 @@ run().catch(async error => {
   await write(path.join(output, "summary.json"), record);
   console.error(String(error)); process.exitCode = 2;
 });
-

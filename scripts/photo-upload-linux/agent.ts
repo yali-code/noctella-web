@@ -38,4 +38,3 @@ async function main() {
   await fs.writeFile("/evidence/result.json", JSON.stringify(result, null, 2));
 }
 main().catch((error) => { console.error(String(error)); process.exitCode = 2; });
-

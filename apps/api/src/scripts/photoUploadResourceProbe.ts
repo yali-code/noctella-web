@@ -69,5 +69,3 @@ export async function runScenario(config: any) {
     return { scenario: config.scenario, operations, baseline, peak, peakMaxRss: process.resourceUsage().maxRSS * 1024, totalDurationMs: Date.now() - started, leftovers: { photoDirFiles: files.length, expectedPhotoDirFiles: successes * 2, tmpDirFiles }, scope: "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance" };
   } finally { clearInterval(sampling); await new Promise<void>((resolve, reject) => server.close(err => err ? reject(err) : resolve())); await dbRuntime.shutdown(); }
 }
-
-

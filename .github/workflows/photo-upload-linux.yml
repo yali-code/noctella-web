@@ -124,5 +124,3 @@ jobs:
         env:
           MEASUREMENT_OUTCOME: ${{ steps.measure.outcome }}
         run: test "$MEASUREMENT_OUTCOME" = success
-
-

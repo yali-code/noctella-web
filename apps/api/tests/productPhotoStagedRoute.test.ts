@@ -54,7 +54,3 @@ it("invalid images produce no rows, files or outbox changes", async () => {
   expect(await readdir(path.join(root, "photos"))).toEqual(prior);
   expect(await readdir(path.join(root, ".product-photo-upload-staging"))).toEqual([]);
 });
-
-
-
-

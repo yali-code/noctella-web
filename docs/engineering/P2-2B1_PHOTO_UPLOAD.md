@@ -56,4 +56,3 @@ The worker imports the actual app, seeds isolated SQLite/auth/category/product, 
 ## Rollback
 
 Leave/unset the gate to use the existing route. No migrations or key transformations to reverse. Already committed photos/outbox remain valid on either route. Before rolling back an enabled instance, drain requests, preserve staging inventory, reconcile against DB/outbox and handle only proven-owned orphans. A code revert removes the candidate without deleting canonical media. Disabling the gate alone does not bound legacy memory, and does not justify higher concurrency.
-

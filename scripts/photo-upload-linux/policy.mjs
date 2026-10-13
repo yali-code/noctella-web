@@ -67,4 +67,3 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
   if (after.peak > TARGET_BYTES) return { status: "FAIL", reason: "Exceeded proposed 384-MiB cgroup peak target", delta };
   return { status: "PASS", reason: "HTTP smoke target satisfied; not final full-API acceptance", delta };
 }
-
