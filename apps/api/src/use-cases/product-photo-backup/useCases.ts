@@ -142,12 +142,22 @@ export function createProductPhotoRecoveryVerificationUseCase(repository: Produc
           const remoteArtifact = await repository.head(entry.remoteObjectKey);
           if (remoteArtifact && remoteArtifact.byteSize > MAX_PRODUCT_PHOTO_BACKUP_ARTIFACT_BYTES) throw new ProductPhotoBackupError();
           assertRemote(remoteArtifact, { objectKey: entry.remoteObjectKey, byteSize: entry.actualSizeBytes, sha256: entry.sha256 });
-          await verifyDownload(repository, { objectKey: entry.remoteObjectKey, byteSize: entry.actualSizeBytes, sha256: entry.sha256 }, path.join(directory, `artifact-${index}.webp`));
+          const artifactPath = path.join(directory, `artifact-${index}.webp`);
+          try {
+            await verifyDownload(repository, { objectKey: entry.remoteObjectKey, byteSize: entry.actualSizeBytes, sha256: entry.sha256 }, artifactPath);
+          } finally {
+            // Bound staging to the manifest and one artifact, including partial downloads.
+            // A cleanup failure must stop verification before another download begins.
+            await rm(artifactPath, { force: true });
+          }
           verifiedArtifacts += 1;
         }
         return { manifestKey, verifiedArtifacts, integrity: "ok" as const };
       } catch (error) { throw error instanceof ProductPhotoBackupError ? error : new ProductPhotoBackupError(); }
-      finally { await rm(directory, { recursive: true, force: true }).catch(() => undefined); }
+      finally {
+        try { await rm(directory, { recursive: true, force: true }); }
+        catch { throw new ProductPhotoBackupError(); }
+      }
     },
   };
 }
