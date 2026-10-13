@@ -65,7 +65,7 @@ describe("publishing service", () => {
   });
 
   it("validates Etsy and Noctella Web requirements", async () => {
-    const created = await createProduct(db, base({ etsyTitle: "Moon", etsyDescription: "Rare", etsyTags: ["watch"], etsyListingPriceEur: 600, wooProductName: "Moon", wooShortDescription: "Short", wooLongDescription: "Long", wooListingPriceEur: 550 }));
+    const created = await createProduct(db, base({ etsyTitle: "Moon", etsyDescription: "Rare", etsyTags: ["watch"], etsyListingPriceEur: 600, etsyTaxonomyId: "1234", etsyWhoMade: "someone_else", etsyIsSupply: false, etsyWhenMade: "1970s", etsyShippingProfileId: "1111", etsyProcessingProfileId: "2222", etsyReturnPolicyId: "3333", wooProductName: "Moon", wooShortDescription: "Short", wooLongDescription: "Long", wooListingPriceEur: 550 }));
     const product = await seedPrimaryPhoto(created.id);
     expect(validatePublish(product, PublishChannel.Etsy).valid).toBe(true);
     expect(validatePublish(product, PublishChannel.NoctellaWeb).valid).toBe(true);

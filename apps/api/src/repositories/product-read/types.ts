@@ -16,6 +16,14 @@ export type ProductBaseReadProjection = {
   ebayCategory: Nullable<string>; ebayItemSpecifics: Nullable<string>; ebayListingPriceEur: Nullable<number>; ebayListingStatus: Nullable<string>;
   etsyTitle: Nullable<string>; etsyDescription: Nullable<string>; etsyTags: Nullable<string>; etsyMaterials: Nullable<string>;
   etsyStyle: Nullable<string>; etsyOccasion: Nullable<string>; etsyListingPriceEur: Nullable<number>; etsyListingStatus: Nullable<string>;
+  // Etsy listing form parity (Phase 1) - nullable columns (NULL = not provided / legacy product).
+  etsyTaxonomyId: Nullable<string>; etsyShopSectionId: Nullable<string>; etsyQuantity: Nullable<number>; etsySku: Nullable<string>;
+  etsyWhoMade: Nullable<string>; etsyIsSupply: Nullable<boolean>; etsyWhenMade: Nullable<string>; etsyVintageYear: Nullable<number>;
+  etsyShippingProfileId: Nullable<string>; etsyProcessingProfileId: Nullable<string>; etsyReturnPolicyId: Nullable<string>;
+  etsyRenewalOption: Nullable<string>; etsyFeatured: Nullable<boolean>; etsyAdsOptIn: Nullable<boolean>; etsyRestockRequests: Nullable<boolean>;
+  etsyGpsrManufacturerName: Nullable<string>; etsyGpsrManufacturerAddress: Nullable<string>; etsyGpsrManufacturerContact: Nullable<string>;
+  etsyGpsrResponsiblePersonName: Nullable<string>; etsyGpsrResponsiblePersonAddress: Nullable<string>; etsyGpsrResponsiblePersonContact: Nullable<string>;
+  etsyGpsrSafetyInformation: Nullable<string>; etsyConsumerGuaranteeInfo: Nullable<string>;
   wooProductName: Nullable<string>; wooShortDescription: Nullable<string>; wooLongDescription: Nullable<string>; wooSlug: Nullable<string>;
   wooSeoTitle: Nullable<string>; wooMetaDescription: Nullable<string>; wooFocusKeyword: Nullable<string>; wooListingPriceEur: Nullable<number>;
   wooListingStatus: Nullable<string>; createdAt: string; updatedAt: string;
