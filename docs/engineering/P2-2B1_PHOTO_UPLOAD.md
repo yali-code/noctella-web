@@ -56,3 +56,28 @@ The worker imports the actual app, seeds isolated SQLite/auth/category/product, 
 ## Rollback
 
 Leave/unset the gate to use the existing route. No migrations or key transformations to reverse. Already committed photos/outbox remain valid on either route. Before rolling back an enabled instance, drain requests, preserve staging inventory, reconcile against DB/outbox and handle only proven-owned orphans. A code revert removes the candidate without deleting canonical media. Disabling the gate alone does not bound legacy memory, and does not justify higher concurrency.
+
+## Interface and Sharp entry-point inventory
+
+| Location | Contract retained / B1 status |
+| --- | --- |
+| routes/products.ts POST /:id/photos | auth/products.edit before ingress; single photo + optional altText;201 ProductPhoto |
+| services/photoStorage.ts PhotoStorage.saveProductPhoto/deleteProductPhoto | Buffer API retained for legacy callers; random main/thumb WebP keys and original size metadata |
+| services/photoStorage.ts writeDeterministicProductPhoto | canonical IDs/keys and exact-content retry/conflict remain; no new admission wrapper |
+| services/aiIntakePhotoStorage.ts saveIntakePhoto | Buffer ingress, rotate + WebP86 file output remains unmodified; not admitted |
+| routes/aiProductIntakes.ts + services/aiIntakePhotoFinalization.ts | Multer memory ingress and LocalAiIntakePhotoReader Buffer finalization remain; not admitted; source retention and manifest preparation stay outside transaction |
+| integrations/instagram/mediaPreparation.ts | metadata/raw decode validation and40MP preparation remain unmodified; not admitted |
+| services/products.ts + photo mutation lock capability | shared persistence transaction, primary/order/photo row + promotion outbox; no post-commit file compensation |
+| services/productPhotoOutboxDispatcher.ts and backup/recovery repositories | existing keys, Ready checks, same-root promotion ownership, checksum/size/key checks and remote read/write interfaces untouched |
+| apps/admin/src/app/products/[id]/photos/page.tsx | sequential awaited uploads, per-file status, successful uploads never automatically retried; no UI edits |
+| Publishing consumers | same photo IDs, URLs, primary/order and alt fields; no provider calls or provider adapters changed |
+
+Rejected requests reserve no transform/disk work. To reliably deliver an early response for a valid near-limit body, a bounded raw discard (at most body budget or250ms) precedes Connection:close; chunks are never parsed/concatenated/stored. This adds a finite error-path delay and transport work. Extreme/slow oversized senders can still observe connection closure rather than a complete JSON response; overload drain and overall HTTP connection limits need adversarial acceptance before enabling.
+
+## Evidence ledger (intermediate, not final acceptance)
+
+- Intermediate stream-output revision5d37f87: Actions38425661511; artifact11828019581; ZIP SHA256 5c9b13f982d70b995ee8fa7ad4d1edd8b10450b8bce569dbdbcb4486a0a3f2fe. All cases correctly failed: loader cache cleanup and early overload TCP resets. Raw summary preserved as intermediate-5d37f87-summary.json. This revision was superseded by native file output.
+- Native file-output revision75fb3de: Actions38426951715; artifact11829296963; ZIP SHA256 6da4936d41c024a3e8037ee22e99984a54de24508011d9ce2cf9a5c0cfb6e08f. Eight cases passed, four c4 cases failed with client ECONNRESET/exit2. No max/OOM events. Raw summary native-75fb3de-summary.json includes failures; do not present the run as green.
+- Successful native cases' peak cgroup MiB: JPEG c1 226.69/c2 235.37; PNG c1 260.11/c2 257.85; WebP c1 289.25/c2 287.45; mixed sequential12 337.03; invalid122.61. Corresponding process RSS/HWM differs and must not replace cgroup accounting.
+- The c4 retry profile selects exactly four failed cases after bounded rejection-discard correction; it never silently skips failures from a full run. The combined evidence spans explicit revisions; it is not a full final-head12-case rerun, three trials, soak or production acceptance.
+- Temporary disk observer counts all disposable /work bytes (including SQLite and canonical outputs); transient hardlinks may be double-counted. It is conservative logical/allocated high-water, not exclusively private staging usage. Heap/external/ArrayBuffer samples begin at warm baseline; OS process high-water and cgroup peak also cover startup.

@@ -49,3 +49,10 @@ test("process RSS and HWM use kernel KiB; changed limits cannot pass", () => {
   assert.deepEqual(parseProcStatus("Name:\tnode\nVmRSS:\t2048 kB\nVmHWM:\t4096 kB\n"), { name: "node", rss: 2097152, hwm: 4194304 });
   const e = evidence(); e.after.max *= 2; assert.equal(assess(e).status, "INCONCLUSIVE");
 });
+test("retry profile selects only four failed c4 cases and rejects unbounded profiles", async () => {
+  const { selectedScenarios } = await import("./policy.mjs");
+  assert.equal(selectedScenarios(true, "full").length, 12);
+  assert.equal(selectedScenarios(true, "c4").length, 4);
+  assert.ok(selectedScenarios(true, "c4").every(s => s.concurrency === 4));
+  assert.throws(() => selectedScenarios(true, "unknown"));
+});

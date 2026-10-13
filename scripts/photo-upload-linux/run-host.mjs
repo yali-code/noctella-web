@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, scenarios, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
+import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
 const fixtureRoot = path.resolve(process.argv[3] ?? "");
@@ -50,7 +50,7 @@ async function run() {
   record.host = { platform: process.platform, kernel: os.release(), cpuModel: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemory: os.totalmem(), dockerVersion: docker("version", "--format", "{{.Server.Version}}").trim(), image: JSON.parse(docker("image", "inspect", image))[0].Id };
   await write(path.join(output, "summary.json"), record);
   console.log(JSON.stringify({ type: "environment", sourceSha: SOURCE_SHA, harnessSha: record.harnessSha, runUrl: record.runUrl, host: record.host, fixtures: record.fixtures }));
-  for (const [index, scenario] of scenarios(includeStress).entries()) {
+  for (const [index, scenario] of selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").entries()) {
     const evidence = path.join(output, scenario.name);
     await fsp.mkdir(evidence);
     const work = path.join(tempRoot, "case-" + index);
@@ -137,7 +137,7 @@ async function run() {
   }
   await fsp.rmdir(tempRoot);
   record.finishedAt = new Date().toISOString();
-  record.expectedCases = scenarios(includeStress).length;
+  record.expectedCases = selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").length;
   record.status = record.cases.length === record.expectedCases && record.cases.every(c => c.assessment.status === "PASS") ? "PASS" : "FAIL";
   await write(path.join(output, "summary.json"), record);
   const size = await usage(output);

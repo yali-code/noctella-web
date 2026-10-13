@@ -2,6 +2,11 @@ name: Photo upload Linux 512 MiB
 on:
   workflow_dispatch:
     inputs:
+      profile:
+        description: Bounded full suite or retry only the four concurrent-overload cases
+        type: choice
+        options: [full, c4]
+        default: full
       include_stress:
         description: Include the last bounded 144-MP stress case
         type: boolean
@@ -43,6 +48,7 @@ jobs:
     timeout-minutes: 45
     env:
       INCLUDE_STRESS: ${{ github.event_name == 'workflow_dispatch' && inputs.include_stress == false && 'false' || 'true' }}
+      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
       HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:

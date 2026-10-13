@@ -13,6 +13,18 @@ import { handleRouteError } from "./errorHandler";
 const RESERVATION = 42 * 1024 * 1024;
 const STAGING_BUDGET = 128 * 1024 * 1024;
 const BODY_LIMIT = PRODUCT_PHOTO_MAX_BYTES + 72 * 1024;
+// Finish a bounded raw discard before closing an early rejection. Closing with unread TCP data
+// can reset even a valid 503 response. This never parses, stores or concatenates body bytes.
+async function discardRejectedBody(req: Request) {
+  if (req.complete || req.destroyed) return;
+  await new Promise<void>(resolve => {
+    let bytes = 0;
+    const finish = () => { clearTimeout(timer); req.off("data", data); req.off("end", finish); req.off("aborted", finish); req.off("error", finish); req.pause(); resolve(); };
+    const data = (chunk: Buffer) => { bytes += chunk.length; if (bytes >= BODY_LIMIT) finish(); };
+    const timer = setTimeout(finish, 250);
+    req.on("data", data); req.once("end", finish); req.once("aborted", finish); req.once("error", finish); req.resume();
+  });
+}
 interface UploadContext { workDir: string; signal: AbortSignal; writes: Promise<unknown>[] }
 export interface ProductPhotoUploadOptions {
   root?: string;
@@ -149,9 +161,11 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
       }
       if (res.destroyed || res.writableEnded) return;
       if (!error) { res.status(201).json(value); return; }
-      // Do not leave rejected/malformed bodies draining through an unlimited open socket.
+      await discardRejectedBody(req);
+      if (res.destroyed || res.writableEnded) return;
+      // Raw discard is capped in both bytes and time; the connection now closes after the response.
       res.setHeader("Connection", "close");
-      res.once("finish", () => req.destroy());
+      // Let Node finish the response and close gracefully; destroying req here can reset an early 503 before it reaches the client.
       if (error instanceof multer.MulterError) error = new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Photo multipart request exceeds the safety limit");
       if (error instanceof PhotoUploadError) {
         if (error.status === 503) res.setHeader("Retry-After", "1");

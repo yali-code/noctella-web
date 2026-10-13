@@ -99,10 +99,10 @@ describe("bounded private multipart ingress", () => {
     else req = req.field("untrusted", "x");
     await req.expect(413); expect(f.upload).not.toHaveBeenCalled(); expect(await readdir(f.root)).toEqual([]);
   });
-  it("rejects the fourth request before any parsing or product lookup", async () => {
+  it.each([1024, 10 * 1024 * 1024])("rejects the fourth %i-byte request before parsing or product lookup", async size => {
     const f = await fixture();
     const reservations = [f.admission.reserve(), f.admission.reserve(), f.admission.reserve()];
-    const result = await post(f.app).attach("photo", Buffer.alloc(1024), "x.png").expect(503);
+    const result = await post(f.app).attach("photo", Buffer.alloc(size), "x.png").expect(503);
     expect(result.headers["retry-after"]).toBe("1"); expect(result.body.code).toBe("PHOTO_CAPACITY_BUSY");
     expect(f.check).not.toHaveBeenCalled(); expect(await readdir(f.root)).toEqual([]);
     reservations.forEach(lease => lease.release());
