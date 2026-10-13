@@ -1,0 +1,70 @@
+{
+  "operations": [
+    {
+      "index": 0,
+      "kind": "product.setup",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 874
+    },
+    {
+      "index": 1,
+      "kind": "ai.upload.setup",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 4681
+    },
+    {
+      "index": 2,
+      "kind": "instagram.prepare",
+      "status": 200,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 414
+    },
+    {
+      "index": 3,
+      "kind": "product.upload.wave1",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 1224
+    },
+    {
+      "index": 4,
+      "kind": "ai.upload.wave1",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 5721
+    },
+    {
+      "index": 5,
+      "kind": "instagram.inspect",
+      "status": 200,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 26
+    },
+    {
+      "index": 6,
+      "kind": "ai.finalize",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 2818
+    },
+    {
+      "index": 7,
+      "kind": "product.upload.wave2",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 3497
+    }
+  ],
+  "nativePeak": 1,
+  "nativeCalls": 24
+}

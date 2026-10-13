@@ -21,7 +21,7 @@ export async function runCombinedScenario(config: any) {
   const sharp=(await import("sharp")).default;
   const trace = (phase:string, details:Record<string,unknown>={}) => {
     const number=(name:string)=>Number(readFileSync("/sys/fs/cgroup/"+name,"utf8"));
-    appendFileSync("/evidence/phases.ndjson",JSON.stringify({time:Date.now(),phase,...details,memory:process.memoryUsage(),cgroupCurrent:number("memory.current"),cgroupPeak:number("memory.peak"),events:readFileSync("/sys/fs/cgroup/memory.events","utf8"),stat:readFileSync("/sys/fs/cgroup/memory.stat","utf8"),cache:sharp.cache()})+"\n");
+    appendFileSync("/evidence/phases.ndjson",JSON.stringify({time:Date.now(),phase,...details,memory:process.memoryUsage(),cgroupCurrent:number("memory.current"),cgroupPeak:number("memory.peak"),events:readFileSync("/sys/fs/cgroup/memory.events","utf8"),stat:readFileSync("/sys/fs/cgroup/memory.stat","utf8"),cache:sharp.cache(),sharpCounters:sharp.counters(),sharpConcurrency:sharp.concurrency(),resourceUsage:process.resourceUsage(),admission:imageProcessingAdmission.snapshot(),allocatorPolicy:{mmapThreshold:process.env.MALLOC_MMAP_THRESHOLD_,trimThreshold:process.env.MALLOC_TRIM_THRESHOLD_}})+"\n");
   };
   const originalRead=fs.readFile;
   fs.readFile=(async(...args:any[])=>{trace("read.start",{file:String(args[0])});const result=await (originalRead as any)(...args);trace("read.end",{file:String(args[0]),bytes:result.length});return result;}) as typeof fs.readFile;
@@ -32,7 +32,9 @@ export async function runCombinedScenario(config: any) {
     prototype[method]=function(...args:any[]){
       trace("native.start",{method,input:typeof this.options?.input?.file === "string" ? this.options.input.file : "buffer",output:args[0],width:this.options?.width,height:this.options?.height});
       nativeActive++;nativeCalls++;nativePeak=Math.max(nativePeak,nativeActive);
-      try { return Promise.resolve(original.apply(this,args)).finally(()=>{nativeActive--;trace("native.end",{method});}); }
+      const isWorker = config.scenario.recipeWorker && method === "toFile" && String(this.options?.input?.file).startsWith("/work/.ai-intake-upload-ingress/");
+      const execute = () => isWorker ? require("/app/scripts/photo-upload-linux/recipe-worker.cjs").runRecipe(this.options.input.file,args[0],require.resolve("sharp")) : original.apply(this,args);
+      try { return Promise.resolve(execute()).finally(()=>{nativeActive--;trace("native.end",{method});}); }
       catch(error){nativeActive--;throw error;}
     };
   }
@@ -94,6 +96,7 @@ export async function runCombinedScenario(config: any) {
     const {createHash}=await import("node:crypto");
     async function digest(file: string) { const hash=createHash("sha256"); for await(const chunk of createReadStream(file)) hash.update(chunk); return hash.digest("hex"); }
     const sourceHash=await digest("/work/intake/"+staged.body.storageKey);
+    trace("source.digest",{sha256:sourceHash});
     const warmBeforeCombined={memory:process.memoryUsage(),cgroupCurrent:Number(await fs.readFile("/sys/fs/cgroup/memory.current","utf8"))};
     let prepared!: Awaited<ReturnType<typeof instagram.prepareInstagramImageAsset>>;
     await Promise.all([

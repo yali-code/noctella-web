@@ -1,0 +1,404 @@
+{
+  "events": 218,
+  "requestedLargeAllocationPeakBytes": 345154266,
+  "requestedLargeAllocationLiveBytes": 289504154,
+  "unknownFrees": 2,
+  "failedAllocations": 0,
+  "groups": [
+    {
+      "bytes": 3975008,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4cb3e3",
+          "symbol": ""
+        }
+      ],
+      "allocations": 102,
+      "frees": 58,
+      "liveBytes": 174900352,
+      "liveCount": 44,
+      "peakLiveBytes": 230550464,
+      "peakLiveCount": 58,
+      "threads": [
+        59,
+        61
+      ]
+    },
+    {
+      "bytes": 72000000,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "15a56f",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 1,
+      "liveBytes": 72000000,
+      "liveCount": 1,
+      "peakLiveBytes": 72000000,
+      "peakLiveCount": 1,
+      "threads": [
+        46,
+        45
+      ]
+    },
+    {
+      "bytes": 36000000,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4aa2d2",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 1,
+      "liveBytes": 36000000,
+      "liveCount": 1,
+      "peakLiveBytes": 36000000,
+      "peakLiveCount": 1,
+      "threads": [
+        59,
+        61
+      ]
+    },
+    {
+      "bytes": 10664016,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "1c6241",
+          "symbol": "vips_tracked_malloc"
+        }
+      ],
+      "allocations": 4,
+      "frees": 4,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 21328032,
+      "peakLiveCount": 2,
+      "threads": [
+        45,
+        48,
+        47
+      ]
+    },
+    {
+      "bytes": 20927686,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4aa06b",
+          "symbol": ""
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 20927686,
+      "peakLiveCount": 1,
+      "threads": [
+        59
+      ]
+    },
+    {
+      "bytes": 18750000,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4cf0c7",
+          "symbol": ""
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 18750000,
+      "peakLiveCount": 1,
+      "threads": [
+        59
+      ]
+    },
+    {
+      "bytes": 16780288,
+      "frames": [
+        {
+          "dso": "node",
+          "offset": "18b0839",
+          "symbol": ""
+        },
+        {
+          "dso": "node",
+          "offset": "17b9b88",
+          "symbol": "EVP_PBE_scrypt_ex"
+        },
+        {
+          "dso": "node",
+          "offset": "17b9c39",
+          "symbol": "EVP_PBE_scrypt"
+        },
+        {
+          "dso": "node",
+          "offset": "a9c122",
+          "symbol": "_ZN4node6crypto12ScryptTraits10DeriveBitsEPNS_11EnvironmentERKNS0_12ScryptConfigEPNS0_10ByteSourceEN"
+        },
+        {
+          "dso": "node",
+          "offset": "ab3911",
+          "symbol": "_ZThn56_N4node6crypto13DeriveBitsJobINS0_12ScryptTraitsEE16DoThreadPoolWorkEv"
+        },
+        {
+          "dso": "node",
+          "offset": "86f421",
+          "symbol": "_ZZN4node14ThreadPoolWork12ScheduleWorkEvENUlP9uv_work_sE_4_FUNES2_"
+        },
+        {
+          "dso": "node",
+          "offset": "14a34c0",
+          "symbol": ""
+        },
+        {
+          "dso": "libc.so.6",
+          "offset": "891f5",
+          "symbol": ""
+        },
+        {
+          "dso": "libc.so.6",
+          "offset": "108b50",
+          "symbol": "__clone"
+        }
+      ],
+      "allocations": 2,
+      "frees": 2,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 16780288,
+      "peakLiveCount": 1,
+      "threads": [
+        46,
+        47
+      ]
+    },
+    {
+      "bytes": 10463844,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4e01d1",
+          "symbol": ""
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 10463844,
+      "peakLiveCount": 1,
+      "threads": [
+        46
+      ]
+    },
+    {
+      "bytes": 10463843,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4aa06b",
+          "symbol": ""
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 10463843,
+      "peakLiveCount": 1,
+      "threads": [
+        59
+      ]
+    },
+    {
+      "bytes": 10463824,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4e04af",
+          "symbol": ""
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 10463824,
+      "peakLiveCount": 1,
+      "threads": [
+        46
+      ]
+    },
+    {
+      "bytes": 9375000,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4cf0c7",
+          "symbol": ""
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 9375000,
+      "peakLiveCount": 1,
+      "threads": [
+        59
+      ]
+    },
+    {
+      "bytes": 3110416,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "1c6241",
+          "symbol": "vips_tracked_malloc"
+        }
+      ],
+      "allocations": 3,
+      "frees": 3,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 9331248,
+      "peakLiveCount": 3,
+      "threads": [
+        47,
+        60,
+        61
+      ]
+    },
+    {
+      "bytes": 7998000,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "15a56f",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 2,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 7998000,
+      "peakLiveCount": 1,
+      "threads": [
+        48,
+        47
+      ]
+    },
+    {
+      "bytes": 2367543,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "44ba05",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 2,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 4735086,
+      "peakLiveCount": 2,
+      "threads": [
+        47
+      ]
+    },
+    {
+      "bytes": 4687500,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4cf0c7",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 1,
+      "liveBytes": 4687500,
+      "liveCount": 1,
+      "peakLiveBytes": 4687500,
+      "peakLiveCount": 1,
+      "threads": [
+        59,
+        61
+      ]
+    },
+    {
+      "bytes": 4000000,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4aa2d2",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 2,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 4000000,
+      "peakLiveCount": 1,
+      "threads": [
+        59,
+        61
+      ]
+    },
+    {
+      "bytes": 2332816,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "1c6241",
+          "symbol": "vips_tracked_malloc"
+        }
+      ],
+      "allocations": 1,
+      "frees": 1,
+      "liveBytes": 0,
+      "liveCount": 0,
+      "peakLiveBytes": 2332816,
+      "peakLiveCount": 1,
+      "threads": [
+        60
+      ]
+    },
+    {
+      "bytes": 1916302,
+      "frames": [
+        {
+          "dso": "libvips-cpp.so.8.17.3",
+          "offset": "4aa6ee",
+          "symbol": ""
+        }
+      ],
+      "allocations": 2,
+      "frees": 1,
+      "liveBytes": 1916302,
+      "liveCount": 1,
+      "peakLiveBytes": 1916302,
+      "peakLiveCount": 1,
+      "threads": [
+        59,
+        61
+      ]
+    }
+  ],
+  "limitations": "Only >=1MiB glibc requested allocations, not RSS; small allocations/mmap excluded; symbols may be stripped. First/last events can be missing on abrupt kill."
+}

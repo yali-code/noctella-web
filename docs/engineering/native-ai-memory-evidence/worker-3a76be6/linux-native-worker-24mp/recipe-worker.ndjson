@@ -1,0 +1,3 @@
+{"phase":"start","time":1791918660198,"pid":61,"ppid":33,"cgroup":"0::/\n","memory":{"rss":41082880,"heapTotal":4431872,"heapUsed":3696120,"external":1501822,"arrayBuffers":10511},"current":205139968,"peak":205139968}
+{"phase":"end","time":1791918664667,"pid":61,"ppid":33,"cgroup":"0::/\n","memory":{"rss":82362368,"heapTotal":7315456,"heapUsed":5326760,"external":1700557,"arrayBuffers":16655},"current":222990336,"peak":536870912}
+{"phase":"start","time":1791918665220,"pid":78,"ppid":33,"cgroup":"0::/\n","memory":{"rss":40931328,"heapTotal":4431872,"heapUsed":3696120,"external":1501822,"arrayBuffers":10511},"current":238120960,"peak":536870912}

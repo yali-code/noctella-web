@@ -27,6 +27,15 @@ async function usage(root) {
   }
   return { logical, allocated, files };
 }
+async function inventory(root, dir = root, result = []) {
+  for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name), info = await fsp.lstat(file);
+    if (info.isSymbolicLink()) throw Error("Unexpected symlink in disposable inventory");
+    if (entry.isDirectory()) await inventory(root, file, result);
+    else { if (result.length >= 1000) throw Error("Inventory budget exceeded"); result.push({ path: path.relative(root, file), size: info.size }); }
+  }
+  return result;
+}
 async function cgroup(root) {
   const value = async (name) => (await fsp.readFile(path.join(root, name), "utf8")).trim();
   return { max: Number(await value("memory.max")), swapMax: Number(await value("memory.swap.max")), current: Number(await value("memory.current")), peak: Number(await value("memory.peak")), events: parseEvents(await value("memory.events")) };
@@ -98,7 +107,8 @@ async function run() {
         samplingJob = sample().catch(error => { item.samplingError = String(error); }).finally(() => { sampling = false; });
       }, 50);
       item.exitCode = await new Promise((resolve) => {
-        const child = spawn("docker", ["exec", name, "node", "--import", "tsx", "scripts/photo-upload-linux/agent.ts", "run"], { stdio: ["ignore", "pipe", "pipe"] });
+        const diagnosticEnv = scenario.mmapPolicy ? ["--env", "MALLOC_MMAP_THRESHOLD_=131072", "--env", "MALLOC_TRIM_THRESHOLD_=131072"] : scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
+        const child = spawn("docker", ["exec", ...diagnosticEnv, name, "node", "--import", "tsx", "scripts/photo-upload-linux/agent.ts", "run"], { stdio: ["ignore", "pipe", "pipe"] });
         let log = "";
         child.stdout.on("data", chunk => { log = (log + chunk.toString()).slice(-64000); });
         child.stderr.on("data", chunk => { log = (log + chunk.toString()).slice(-64000); });
@@ -113,6 +123,7 @@ async function run() {
       item.oomKilled = item.dockerState.OOMKilled;
       item.result = JSON.parse(await fsp.readFile(path.join(evidence, "result.json"), "utf8").catch(() => "null"));
       item.finalDisk = await usage(work);
+      item.finalInventory = await inventory(work);
       item.diskPeak.logical = Math.max(item.diskPeak.logical, item.finalDisk.logical);
       item.diskPeak.allocated = Math.max(item.diskPeak.allocated, item.finalDisk.allocated);
       item.diskPeak.files = Math.max(item.diskPeak.files, item.finalDisk.files);
