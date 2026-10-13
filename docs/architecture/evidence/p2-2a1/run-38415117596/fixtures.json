@@ -1,0 +1,78 @@
+[
+  {
+    "name": "jpeg-near-limit",
+    "file": "/fixtures/jpeg-near-limit.jpg",
+    "mimetype": "image/jpeg",
+    "sizeBytes": 9670997,
+    "width": 6000,
+    "height": 4000,
+    "megapixels": 24,
+    "format": "jpeg",
+    "quality": 86,
+    "sha256": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+    "tags": [
+      "near-limit",
+      "landscape"
+    ],
+    "expectValid": true
+  },
+  {
+    "name": "png-near-limit",
+    "file": "/fixtures/png-near-limit.png",
+    "mimetype": "image/png",
+    "sizeBytes": 10026026,
+    "width": 2350,
+    "height": 1500,
+    "megapixels": 3.53,
+    "format": "png",
+    "sha256": "f517a233086aebe6765eef458315e5a1b6f65f50e718ab7e6e1295523f3f4d8a",
+    "tags": [
+      "near-limit",
+      "landscape"
+    ],
+    "expectValid": true
+  },
+  {
+    "name": "webp-near-limit",
+    "file": "/fixtures/webp-near-limit.webp",
+    "mimetype": "image/webp",
+    "sizeBytes": 9831282,
+    "width": 6000,
+    "height": 4000,
+    "megapixels": 24,
+    "format": "webp",
+    "quality": 80,
+    "sha256": "dab8de194ad8b80b516ef52b4d6cbc059e752e1feb29777f3ad7111d91961a8d",
+    "tags": [
+      "near-limit",
+      "landscape"
+    ],
+    "expectValid": true
+  },
+  {
+    "name": "png-stress-144mp",
+    "file": "/fixtures/png-stress-144mp.png",
+    "mimetype": "image/png",
+    "sizeBytes": 1919037,
+    "width": 12000,
+    "height": 12000,
+    "megapixels": 144,
+    "format": "png",
+    "sha256": "4c4d09e3c7e7d83873d103375d11b31ca3506a17cbe3e0633a6d888393af335c",
+    "tags": [
+      "decompression-stress"
+    ],
+    "expectValid": true
+  },
+  {
+    "name": "invalid-random-bytes",
+    "file": "/fixtures/invalid-random-bytes.bin",
+    "mimetype": "image/jpeg",
+    "sizeBytes": 524288,
+    "sha256": "8e48a2e7a74e99d17b484ce00706c0371312a61e1ea59c969571662355075b56",
+    "tags": [
+      "invalid"
+    ],
+    "expectValid": false
+  }
+]

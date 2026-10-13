@@ -1,0 +1,17 @@
+{
+  "runId": 38415117596,
+  "jobId": 115357491350,
+  "harnessSha": "1dd28bea1221d4d7f8f245419f13c85fc44697cd",
+  "sourceSha": "7c6ab55237e996fef041c60bb06f45b7d0fc2061",
+  "artifactId": 11823432542,
+  "artifactName": "photo-memory-linux-38415117596-1",
+  "sizeBytes": 75502,
+  "sha256": "a339e1e26654026f5c55e7ec958ea5b37431ad0d40adccb35e11f01ab8c9b88c",
+  "digestVerifiedAfterDownload": true,
+  "artifactUrl": "https://github.com/yali-code/noctella-web/actions/runs/38415117596/artifacts/11823432542",
+  "expiresAt": "2026-10-27T14:41:46Z",
+  "conclusion": "failure",
+  "reason": "11/12 target compliant; stress peak 408535040 bytes exceeds proposed 402653184-byte target, with no OOM",
+  "fullArchiveRetainedLocally": "p2-2a1-evidence.local/run2.zip",
+  "scope": "isolated baseline photo processing; no full API or P2-2B implementation"
+}
