@@ -98,7 +98,7 @@ async function run() {
         samplingJob = sample().catch(error => { item.samplingError = String(error); }).finally(() => { sampling = false; });
       }, 50);
       item.exitCode = await new Promise((resolve) => {
-        const diagnosticEnv = scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
+        const diagnosticEnv = scenario.mmapPolicy ? ["--env", "MALLOC_MMAP_THRESHOLD_=131072", "--env", "MALLOC_TRIM_THRESHOLD_=131072"] : scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
         const child = spawn("docker", ["exec", ...diagnosticEnv, name, "node", "--import", "tsx", "scripts/photo-upload-linux/agent.ts", "run"], { stdio: ["ignore", "pipe", "pipe"] });
         let log = "";
         child.stdout.on("data", chunk => { log = (log + chunk.toString()).slice(-64000); });

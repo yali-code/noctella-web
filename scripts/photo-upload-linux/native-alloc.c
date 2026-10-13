@@ -22,7 +22,7 @@ static __thread int busy;
 static int fd=-1;
 static unsigned sequence;
 #define THRESHOLD (1024u*1024u)
-#define MAX_EVENTS 8192u
+#define MAX_EVENTS 2048u
 __attribute__((constructor)) static void initialize(void) {
   if (getenv("NOCTELLA_NATIVE_TRACE") && strcmp(getenv("NOCTELLA_NATIVE_TRACE"),"synthetic-only")==0)
     fd=open("/evidence/native-alloc.ndjson",O_WRONLY|O_CREAT|O_EXCL|O_APPEND|O_CLOEXEC,0600);

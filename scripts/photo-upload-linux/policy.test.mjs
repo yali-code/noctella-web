@@ -71,3 +71,5 @@ test("smaller reference is explicitly diagnostic and never replaces combined acc
 });
 
 test("native allocator diagnostics cannot masquerade as uninstrumented final acceptance",async()=>{const {selectedScenarios}=await import("./policy.mjs");const d=selectedScenarios(true,"native-profile");assert.equal(d.length,1);assert.equal(d[0].acceptanceRole,"diagnostic-only");assert.equal(d[0].nativeTrace,true);assert.deepEqual(d[0].fixtures,["jpeg-near-limit"]);assert.ok(selectedScenarios(true,"combined").every(s=>!s.nativeTrace));});
+
+test("worker and allocator experiments remain diagnostic with unchanged fixture and acceptance",async()=>{const {selectedScenarios}=await import("./policy.mjs");for(const p of ["native-worker","native-mmap"]){const d=selectedScenarios(true,p);assert.equal(d.length,1);assert.equal(d[0].acceptanceRole,"diagnostic-only");assert.equal(d[0].ops,8);assert.deepEqual(d[0].fixtures,["jpeg-near-limit"]);}assert.ok(selectedScenarios(true,"combined").every(s=>!s.recipeWorker&&!s.mmapPolicy&&!s.nativeTrace));});

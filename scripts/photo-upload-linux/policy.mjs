@@ -69,7 +69,8 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
 }
 
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (profile === "native-worker" || profile === "native-mmap") return [{ name: "linux-"+profile+"-24mp", description: "DIAGNOSTIC ONLY: unchanged mixed workload with isolated AI recipe or glibc mmap policy; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, recipeWorker: profile === "native-worker", mmapPolicy: profile === "native-mmap", acceptanceRole: "diagnostic-only" }];
   if (profile === "native-profile") return [{ name: "linux-native-profile-24mp", description: "DIAGNOSTIC ONLY: glibc large allocation stacks and lifetimes; instrumentation is not acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, nativeTrace: true, acceptanceRole: "diagnostic-only" }];
   if (profile === "combined-reference") return [{ name: "linux-combined-reference-12mp", description: "DIAGNOSTIC ONLY: complete mixed workflow on a 12MP reference; cannot replace failed 24MP acceptance", fixtures: ["jpeg-typical-landscape"], ops: 8, concurrency: 3, path: "combined", trial: 1, acceptanceRole: "diagnostic-only" }];
   if (profile === "combined") return [1, 2, 3].map(trial => ({ name: "linux-combined-t" + trial, description: "Combined gated product, AI upload/finalization and Instagram synthetic workflows", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial }));
