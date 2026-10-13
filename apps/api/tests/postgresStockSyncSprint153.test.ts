@@ -48,11 +48,11 @@ describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
   it("makes Product EUR price nullable through 0026 without changing an existing price", async () => {
     harness = await createPostgresTestDb("0025_sprint153_stock_sync_runtime_parity.sql");
     const now = new Date();
-    await harness.db.insert(schema.products).values({ id: "p-priced", sku: "SPRINT153-PRICED", title: "Priced", slug: "sprint153-priced", type: "unique", status: "draft", stockQuantity: 1, priceEur: "123.450000", createdAt: now, updatedAt: now });
+    await harness.pool.query("INSERT INTO products (id, sku, title, slug, type, status, stock_quantity, price_eur, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", ["p-priced", "SPRINT153-PRICED", "Priced", "sprint153-priced", "unique", "draft", 1, "123.450000", now, now]);
 
     const migrate = async () => {
       const client = await harness!.pool.connect();
-      try { return await applyPostgresMigrations(client, harness!.schemaName); } finally { client.release(); }
+      try { return await applyPostgresMigrations(client, harness!.schemaName, "0026_sprint153_product_price_eur_nullable_parity.sql"); } finally { client.release(); }
     };
     expect((await migrate()).at(-1)).toBe("0026_sprint153_product_price_eur_nullable_parity.sql");
     const nullable = await harness.pool.query<{ is_nullable: "YES" | "NO" }>(
@@ -62,7 +62,7 @@ describePostgres("Sprint 153 PostgreSQL stock-sync runtime parity", () => {
     expect(nullable.rows).toEqual([{ is_nullable: "YES" }]);
     expect((await harness.pool.query<{ price_eur: string }>("SELECT price_eur FROM products WHERE id = 'p-priced'")).rows).toEqual([{ price_eur: "123.450000" }]);
 
-    await harness.db.insert(schema.products).values({ id: "p-unpriced", sku: "SPRINT153-UNPRICED", title: "Unpriced", slug: "sprint153-unpriced", type: "unique", status: "draft", stockQuantity: 1, createdAt: now, updatedAt: now });
+    await harness.pool.query("INSERT INTO products (id, sku, title, slug, type, status, stock_quantity, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)", ["p-unpriced", "SPRINT153-UNPRICED", "Unpriced", "sprint153-unpriced", "unique", "draft", 1, now, now]);
     expect((await harness.pool.query<{ price_is_null: boolean }>("SELECT price_eur IS NULL AS price_is_null FROM products WHERE id = 'p-unpriced'")).rows).toEqual([{ price_is_null: true }]);
     expect((await migrate()).at(-1)).toBe("0026_sprint153_product_price_eur_nullable_parity.sql");
   });
