@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { link, lstat, mkdir, realpath, rm } from "node:fs/promises";
+
+import { link, lstat, mkdir, open, realpath, rm } from "node:fs/promises";
 import path from "node:path";
-import { Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
+
+
 import sharp from "sharp";
 import { productPhotoImage, productPhotoDerivative } from "./photoProcessingRecipe";
 import { PRODUCT_PHOTO_MAX_BYTES, PRODUCT_PHOTO_MIME_TYPES, productPhotoStaticPath, productPhotoStaticRoot, type StoredProductPhoto } from "./photoStorage";
@@ -20,13 +20,13 @@ export interface StagedProductPhotoStorage {
 export function photoStorageError(error: unknown): PhotoUploadError {
   if (error instanceof PhotoUploadError) return error;
   const err = error as { code?: string; message?: string };
-  if (err.code) return new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo storage is unavailable");
+  if (err.code || /unable to write|write error|No space left|Permission denied|Input\/output error/i.test(err.message ?? "")) return new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo storage is unavailable");
   if (err.message?.includes("pixel limit")) return new PhotoUploadError(400, "PHOTO_PIXEL_LIMIT", "Photo dimensions exceed the safety limit");
   return new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Photo file is not a valid image");
 }
 let fileCacheConfigured = false;
 export class LocalStagedProductPhotoStorage implements StagedProductPhotoStorage {
-  constructor(private readonly root = productPhotoStaticRoot, private readonly publish = link) {}
+  constructor(private readonly root = productPhotoStaticRoot, private readonly publish = link, private readonly encode = (image: sharp.Sharp, destination: string) => image.toFile(destination)) {}
   async saveStagedProductPhoto(input: StagedProductPhotoInput): Promise<StoredProductPhoto> {
     // libvips file-cache handles can outlive metadata() and prevent private-file cleanup on Windows.
     // Activate this process-level file-cache policy only when the gated staged processor is used.
@@ -45,15 +45,12 @@ export class LocalStagedProductPhotoStorage implements StagedProductPhotoStorage
       const thumb = path.join(input.workDir, "thumb.webp");
       for (const [dest, thumbnail] of [[main, false], [thumb, true]] as const) {
         if (input.signal.aborted) throw abortedError();
-        let size = 0;
-        const cap = new Transform({
-          transform(chunk, _encoding, callback) {
-            size += chunk.length;
-            callback(size > PHOTO_OUTPUT_MAX_BYTES ? new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Processed photo exceeds the safety limit") : null, chunk);
-          },
-        });
-        // Request abort does not release native work early. Await the real pipeline settlement.
-        await pipeline(productPhotoDerivative(image, thumbnail), cap, createWriteStream(dest, { flags: "wx", mode: 0o600 }));
+        // Sharp stream output uses a complete encoded Buffer in 0.34.5. File output avoids that JS Buffer.
+        // Reserve a private, exclusively owned path before libvips opens it for output.
+        const reserved = await open(dest, "wx", 0o600); await reserved.close();
+        // Abort cannot release native work early; wait for the actual file encoder to settle.
+        await this.encode(productPhotoDerivative(image, thumbnail), dest);
+        if ((await lstat(dest)).size > PHOTO_OUTPUT_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Processed photo exceeds the safety limit");
       }
       if (input.signal.aborted) throw abortedError();
       const output = await sharp(main, { limitInputPixels: PHOTO_PIXEL_LIMIT }).metadata();

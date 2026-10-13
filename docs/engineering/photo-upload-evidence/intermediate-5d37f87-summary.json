@@ -1,0 +1,3032 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "7c6ab55237e996fef041c60bb06f45b7d0fc2061",
+  "harnessSha": "5d37f870ad9d7de3e1b6228f46a9180e2342d618",
+  "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38425661511",
+  "startedAt": "2026-10-13T15:55:25.962Z",
+  "scope": "gated real product HTTP route; synthetic SQLite and in-process streaming client; not final API acceptance",
+  "cases": [
+    {
+      "scenario": {
+        "name": "linux-jpeg-c1",
+        "description": "Candidate product HTTP pipeline; four near-limit jpeg operations",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 88,
+      "observedProcessRss": 284950528,
+      "observedProcessHwm": 287637504,
+      "observedGroupRss": 286441472,
+      "diskPeak": {
+        "logical": 17390773,
+        "allocated": 17424384,
+        "files": 17
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 55533568,
+          "peak": 56528896,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1519616,
+        "peak": 56528896,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906926538,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 228540416,
+        "peak": 236937216,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 8323072,
+        "peak": 236937216,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 4197,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:55:26.035101653Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-jpeg-c1",
+          "description": "Candidate product HTTP pipeline; four near-limit jpeg operations",
+          "fixtures": [
+            "jpeg-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 737
+          },
+          {
+            "index": 1,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 659
+          },
+          {
+            "index": 2,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 750
+          },
+          {
+            "index": 3,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 725
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 157614080,
+            "heapTotal": 49983488,
+            "heapUsed": 46111672,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 114941952
+        },
+        "peak": {
+          "rss": 287637504,
+          "heapTotal": 51048448,
+          "heapUsed": 46888832,
+          "external": 23800076,
+          "arrayBuffers": 18988507
+        },
+        "peakMaxRss": 287637504,
+        "totalDurationMs": 2873,
+        "leftovers": {
+          "photoDirFiles": 8,
+          "expectedPhotoDirFiles": 8,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 4146004,
+        "allocated": 4177920,
+        "files": 14
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-jpeg-c2",
+        "description": "Candidate product HTTP pipeline; four near-limit jpeg operations",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 2,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 87,
+      "observedProcessRss": 269185024,
+      "observedProcessHwm": 269185024,
+      "observedGroupRss": 270696448,
+      "diskPeak": {
+        "logical": 26575904,
+        "allocated": 26607616,
+        "files": 17
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 57184256,
+          "peak": 57184256,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1671168,
+        "peak": 57970688,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906931588,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 217448448,
+        "peak": 225300480,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 8151040,
+        "peak": 225300480,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 4399,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:55:31.087283652Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-jpeg-c2",
+          "description": "Candidate product HTTP pipeline; four near-limit jpeg operations",
+          "fixtures": [
+            "jpeg-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 2,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 1,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 852
+          },
+          {
+            "index": 0,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1535
+          },
+          {
+            "index": 2,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1345
+          },
+          {
+            "index": 3,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1265
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 156340224,
+            "heapTotal": 50245632,
+            "heapUsed": 45469936,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 112930816
+        },
+        "peak": {
+          "rss": 268759040,
+          "heapTotal": 51572736,
+          "heapUsed": 46231880,
+          "external": 23761387,
+          "arrayBuffers": 18957335
+        },
+        "peakMaxRss": 268931072,
+        "totalDurationMs": 2802,
+        "leftovers": {
+          "photoDirFiles": 8,
+          "expectedPhotoDirFiles": 8,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 4146004,
+        "allocated": 4177920,
+        "files": 14
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-jpeg-c4",
+        "description": "Candidate product HTTP pipeline; four near-limit jpeg operations",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 4,
+        "path": "upload"
+      },
+      "exitCode": 2,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 155,
+      "observedProcessRss": 258056192,
+      "observedProcessHwm": 258314240,
+      "observedGroupRss": 259534848,
+      "diskPeak": {
+        "logical": 35275169,
+        "allocated": 35299328,
+        "files": 15
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/evidence",
+            "rw": true
+          },
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 59736064,
+          "peak": 59736064,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1486848,
+        "peak": 59998208,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906936561,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 196112384,
+        "peak": 206393344,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 7966720,
+        "peak": 206393344,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 4602,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:55:36.064935325Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": null,
+      "finalDisk": {
+        "logical": 3660138,
+        "allocated": 3686400,
+        "files": 12
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-png-c1",
+        "description": "Candidate product HTTP pipeline; four near-limit png operations",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 85,
+      "observedProcessRss": 286564352,
+      "observedProcessHwm": 286564352,
+      "observedGroupRss": 288038912,
+      "diskPeak": {
+        "logical": 19741649,
+        "allocated": 19759104,
+        "files": 17
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 57729024,
+          "peak": 57729024,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1183744,
+        "peak": 57991168,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906944920,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 256675840,
+        "peak": 256679936,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 10117120,
+        "peak": 264015872,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 4804,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:55:44.434948954Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-png-c1",
+          "description": "Candidate product HTTP pipeline; four near-limit png operations",
+          "fixtures": [
+            "png-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 620
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 688
+          },
+          {
+            "index": 2,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 700
+          },
+          {
+            "index": 3,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 673
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 156618752,
+            "heapTotal": 49737728,
+            "heapUsed": 43992680,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 113590272
+        },
+        "peak": {
+          "rss": 293535744,
+          "heapTotal": 51310592,
+          "heapUsed": 45545752,
+          "external": 19462071,
+          "arrayBuffers": 14650502
+        },
+        "peakMaxRss": 293535744,
+        "totalDurationMs": 2683,
+        "leftovers": {
+          "photoDirFiles": 8,
+          "expectedPhotoDirFiles": 8,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 6142817,
+        "allocated": 6160384,
+        "files": 14
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-png-c2",
+        "description": "Candidate product HTTP pipeline; four near-limit png operations",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 2,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 87,
+      "observedProcessRss": 261701632,
+      "observedProcessHwm": 261701632,
+      "observedGroupRss": 263200768,
+      "diskPeak": {
+        "logical": 28782605,
+        "allocated": 28798976,
+        "files": 17
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/evidence",
+            "rw": true
+          },
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 58486784,
+          "peak": 58486784,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1548288,
+        "peak": 58748928,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906949806,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 194023424,
+        "peak": 241152000,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 10592256,
+        "peak": 241152000,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 5002,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:55:49.299535731Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-png-c2",
+          "description": "Candidate product HTTP pipeline; four near-limit png operations",
+          "fixtures": [
+            "png-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 2,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 854
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1552
+          },
+          {
+            "index": 2,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1440
+          },
+          {
+            "index": 3,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1260
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 147288064,
+            "heapTotal": 50507776,
+            "heapUsed": 45688752,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 103993344
+        },
+        "peak": {
+          "rss": 261386240,
+          "heapTotal": 51572736,
+          "heapUsed": 46059848,
+          "external": 22591749,
+          "arrayBuffers": 17787697
+        },
+        "peakMaxRss": 261386240,
+        "totalDurationMs": 2818,
+        "leftovers": {
+          "photoDirFiles": 8,
+          "expectedPhotoDirFiles": 8,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 6142817,
+        "allocated": 6160384,
+        "files": 14
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-png-c4",
+        "description": "Candidate product HTTP pipeline; four near-limit png operations",
+        "fixtures": [
+          "png-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 4,
+        "path": "upload"
+      },
+      "exitCode": 2,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 148,
+      "observedProcessRss": 267579392,
+      "observedProcessHwm": 267579392,
+      "observedGroupRss": 269115392,
+      "diskPeak": {
+        "logical": 36838491,
+        "allocated": 36851712,
+        "files": 15
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 58400768,
+          "peak": 58400768,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1679360,
+        "peak": 58400768,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906954772,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 226197504,
+        "peak": 236670976,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 9572352,
+        "peak": 236670976,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 5208,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:55:54.260492581Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": null,
+      "finalDisk": {
+        "logical": 5157747,
+        "allocated": 5173248,
+        "files": 12
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-webp-c1",
+        "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+        "fixtures": [
+          "webp-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 195,
+      "observedProcessRss": 336351232,
+      "observedProcessHwm": 338776064,
+      "observedGroupRss": 337825792,
+      "diskPeak": {
+        "logical": 18123456,
+        "allocated": 18157568,
+        "files": 17
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 57860096,
+          "peak": 58179584,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1794048,
+        "peak": 59170816,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906962866,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 293650432,
+        "peak": 297558016,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 8589312,
+        "peak": 297558016,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 5409,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:56:02.374511806Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-webp-c1",
+          "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+          "fixtures": [
+            "webp-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2077
+          },
+          {
+            "index": 1,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1993
+          },
+          {
+            "index": 2,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2088
+          },
+          {
+            "index": 3,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2090
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 155545600,
+            "heapTotal": 50245632,
+            "heapUsed": 45621792,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 112066560
+        },
+        "peak": {
+          "rss": 338513920,
+          "heapTotal": 51310592,
+          "heapUsed": 46816032,
+          "external": 21069609,
+          "arrayBuffers": 16258040
+        },
+        "peakMaxRss": 338776064,
+        "totalDurationMs": 8250,
+        "leftovers": {
+          "photoDirFiles": 8,
+          "expectedPhotoDirFiles": 8,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 4718436,
+        "allocated": 4751360,
+        "files": 14
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-webp-c2",
+        "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+        "fixtures": [
+          "webp-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 2,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 199,
+      "observedProcessRss": 307724288,
+      "observedProcessHwm": 310099968,
+      "observedGroupRss": 309198848,
+      "diskPeak": {
+        "logical": 27956288,
+        "allocated": 27996160,
+        "files": 18
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/evidence",
+            "rw": true
+          },
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 55779328,
+          "peak": 55779328,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1970176,
+        "peak": 56303616,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906973249,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 11259904,
+        "peak": 269611008,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 10727424,
+        "peak": 269611008,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 5620,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:56:12.754072852Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-webp-c2",
+          "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+          "fixtures": [
+            "webp-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 2,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 1,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2271
+          },
+          {
+            "index": 0,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 4373
+          },
+          {
+            "index": 2,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 4193
+          },
+          {
+            "index": 3,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 4021
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 153436160,
+            "heapTotal": 49983488,
+            "heapUsed": 46242632,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 109645824
+        },
+        "peak": {
+          "rss": 307609600,
+          "heapTotal": 51048448,
+          "heapUsed": 46930176,
+          "external": 28220822,
+          "arrayBuffers": 23409253
+        },
+        "peakMaxRss": 310099968,
+        "totalDurationMs": 8395,
+        "leftovers": {
+          "photoDirFiles": 8,
+          "expectedPhotoDirFiles": 8,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 4718436,
+        "allocated": 4751360,
+        "files": 14
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-webp-c4",
+        "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+        "fixtures": [
+          "webp-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 4,
+        "path": "upload"
+      },
+      "exitCode": 2,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 235,
+      "observedProcessRss": 312553472,
+      "observedProcessHwm": 312553472,
+      "observedGroupRss": 313892864,
+      "diskPeak": {
+        "logical": 35899098,
+        "allocated": 35921920,
+        "files": 15
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 63565824,
+          "peak": 63565824,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1388544,
+        "peak": 64090112,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906983797,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 253263872,
+        "peak": 272752640,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 8273920,
+        "peak": 272752640,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 5832,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:56:23.305672485Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": null,
+      "finalDisk": {
+        "logical": 4089462,
+        "allocated": 4116480,
+        "files": 12
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-sequential-12",
+        "description": "Twelve sequential near-limit mixed transforms",
+        "fixtures": [
+          "jpeg-near-limit",
+          "png-near-limit",
+          "webp-near-limit"
+        ],
+        "ops": 12,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 303,
+      "observedProcessRss": 357957632,
+      "observedProcessHwm": 359772160,
+      "observedGroupRss": 359456768,
+      "diskPeak": {
+        "logical": 24559627,
+        "allocated": 24621056,
+        "files": 33
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 58429440,
+          "peak": 58429440,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1789952,
+        "peak": 58953728,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791906996196,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 310943744,
+        "peak": 321064960,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 15364096,
+        "peak": 321064960,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 6043,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:56:35.704483329Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-sequential-12",
+          "description": "Twelve sequential near-limit mixed transforms",
+          "fixtures": [
+            "jpeg-near-limit",
+            "png-near-limit",
+            "webp-near-limit"
+          ],
+          "ops": 12,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 742
+          },
+          {
+            "index": 1,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 595
+          },
+          {
+            "index": 2,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2066
+          },
+          {
+            "index": 3,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 701
+          },
+          {
+            "index": 4,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 651
+          },
+          {
+            "index": 5,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2044
+          },
+          {
+            "index": 6,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 701
+          },
+          {
+            "index": 7,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 647
+          },
+          {
+            "index": 8,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2052
+          },
+          {
+            "index": 9,
+            "fixture": "jpeg-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 701
+          },
+          {
+            "index": 10,
+            "fixture": "png-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 667
+          },
+          {
+            "index": 11,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2052
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 153497600,
+            "heapTotal": 49983488,
+            "heapUsed": 45336976,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 110399488
+        },
+        "peak": {
+          "rss": 359772160,
+          "heapTotal": 52359168,
+          "heapUsed": 46766264,
+          "external": 25951260,
+          "arrayBuffers": 21139691
+        },
+        "peakMaxRss": 359772160,
+        "totalDurationMs": 13620,
+        "leftovers": {
+          "photoDirFiles": 24,
+          "expectedPhotoDirFiles": 24,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 10618601,
+        "allocated": 10682368,
+        "files": 30
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-invalid",
+        "description": "Synthetic random bytes must be rejected",
+        "fixtures": [
+          "invalid-random-bytes"
+        ],
+        "ops": 1,
+        "concurrency": 1,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 32,
+      "observedProcessRss": 154710016,
+      "observedProcessHwm": 154710016,
+      "observedGroupRss": 156053504,
+      "diskPeak": {
+        "logical": 6302096,
+        "allocated": 6311936,
+        "files": 9
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 58302464,
+          "peak": 58302464,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 2220032,
+        "peak": 58826752,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791907012046,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 111271936,
+        "peak": 111271936,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 6619136,
+        "peak": 111538176,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 6278,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:56:51.543520548Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-invalid",
+          "description": "Synthetic random bytes must be rejected",
+          "fixtures": [
+            "invalid-random-bytes"
+          ],
+          "ops": 1,
+          "concurrency": 1,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 0,
+            "fixture": "invalid-random-bytes",
+            "status": 400,
+            "code": "PHOTO_UPLOAD_INVALID",
+            "ok": false,
+            "asExpected": true,
+            "durationMs": 33
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 151457792,
+            "heapTotal": 50507776,
+            "heapUsed": 45194816,
+            "external": 4898890,
+            "arrayBuffers": 93334
+          },
+          "cgroupCurrent": 108466176
+        },
+        "peak": {
+          "rss": 154521600,
+          "heapTotal": 51294208,
+          "heapUsed": 46767184,
+          "external": 5882888,
+          "arrayBuffers": 1077332
+        },
+        "peakMaxRss": 154521600,
+        "totalDurationMs": 35,
+        "leftovers": {
+          "photoDirFiles": 0,
+          "expectedPhotoDirFiles": 0,
+          "tmpDirFiles": [
+            "tsx-1001"
+          ]
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 2202520,
+        "allocated": 2211840,
+        "files": 6
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Cleanup/output-count mismatch",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-stress-144mp-c4",
+        "description": "Last, explicitly bounded OOM-risk stress case",
+        "fixtures": [
+          "png-stress-144mp"
+        ],
+        "ops": 4,
+        "concurrency": 4,
+        "path": "upload"
+      },
+      "exitCode": 2,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 34,
+      "observedProcessRss": 157667328,
+      "observedProcessHwm": 157667328,
+      "observedGroupRss": 159154176,
+      "diskPeak": {
+        "logical": 8784282,
+        "allocated": 8794112,
+        "files": 11
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/evidence",
+            "rw": true
+          },
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 58806272,
+          "peak": 58806272,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1912832,
+        "peak": 59068416,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791907014258,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 109973504,
+        "peak": 119369728,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 8224768,
+        "peak": 119369728,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 6480,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T15:56:53.73336297Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": null,
+      "finalDisk": {
+        "logical": 2202530,
+        "allocated": 2211840,
+        "files": 6
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "jpeg-near-limit",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 9670997,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "jpeg",
+      "quality": 86,
+      "sha256": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-near-limit",
+      "mimetype": "image/png",
+      "sizeBytes": 10026026,
+      "width": 2350,
+      "height": 1500,
+      "megapixels": 3.53,
+      "format": "png",
+      "sha256": "f517a233086aebe6765eef458315e5a1b6f65f50e718ab7e6e1295523f3f4d8a",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "webp-near-limit",
+      "mimetype": "image/webp",
+      "sizeBytes": 9831282,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "webp",
+      "quality": 80,
+      "sha256": "dab8de194ad8b80b516ef52b4d6cbc059e752e1feb29777f3ad7111d91961a8d",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "png-stress-144mp",
+      "mimetype": "image/png",
+      "sizeBytes": 1919037,
+      "width": 12000,
+      "height": 12000,
+      "megapixels": 144,
+      "format": "png",
+      "sha256": "4c4d09e3c7e7d83873d103375d11b31ca3506a17cbe3e0633a6d888393af335c",
+      "tags": [
+        "decompression-stress"
+      ],
+      "expectValid": true
+    },
+    {
+      "name": "invalid-random-bytes",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 524288,
+      "sha256": "8e48a2e7a74e99d17b484ce00706c0371312a61e1ea59c969571662355075b56",
+      "tags": [
+        "invalid"
+      ],
+      "expectValid": false
+    }
+  ],
+  "host": {
+    "platform": "linux",
+    "kernel": "6.17.0-1022-azure",
+    "cpuModel": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "logicalCpus": 4,
+    "totalMemory": 16765378560,
+    "dockerVersion": "28.0.4",
+    "image": "sha256:0a04d798e8248db9941a9ad42742f9d6a9f26cdb84515bcce818d2842c28a17e"
+  },
+  "finishedAt": "2026-10-13T15:56:56.035Z",
+  "expectedCases": 12,
+  "status": "FAIL"
+}

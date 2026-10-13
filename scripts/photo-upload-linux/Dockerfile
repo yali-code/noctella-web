@@ -11,5 +11,5 @@ COPY apps/api/src ./apps/api/src
 COPY packages/shared ./packages/shared
 RUN npm run build -w packages/shared && npm run build -w apps/api
 COPY scripts/photo-upload-linux ./scripts/photo-upload-linux
-ENV NODE_ENV=test TMPDIR=/work/tmp TMP=/work/tmp TEMP=/work/tmp PRODUCT_PHOTO_DIR=/work/photos
+ENV NODE_ENV=test TSX_DISABLE_CACHE=1 TMPDIR=/work/tmp TMP=/work/tmp TEMP=/work/tmp PRODUCT_PHOTO_DIR=/work/photos
 CMD ["sleep", "infinity"]

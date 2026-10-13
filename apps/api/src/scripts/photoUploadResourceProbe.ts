@@ -39,12 +39,14 @@ export async function runScenario(config: any) {
     const head = Buffer.from('--' + boundary + '\r\nContent-Disposition: form-data; name="photo"; filename="synthetic"\r\nContent-Type: ' + mime + '\r\n\r\n');
     const tail = Buffer.from('\r\n--' + boundary + '--\r\n');
     const response = await new Promise<{ status: number; body: any }>((resolve, reject) => {
+      let responseSeen = false;
       const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/api/products/" + product.id + "/photos", headers: { Cookie: SESSION_COOKIE_NAME + "=" + session.rawToken, "Content-Type": "multipart/form-data; boundary=" + boundary, "Content-Length": head.length + size + tail.length } }, res => {
+        responseSeen = true;
         let text = "";
         res.on("data", chunk => { text += chunk.toString(); if (text.length > 16384) res.destroy(Error("Response too large")); });
         res.on("error", reject); res.on("end", () => { try { resolve({ status: res.statusCode!, body: JSON.parse(text) }); } catch (e) { reject(e); } });
       });
-      req.on("error", reject);
+      req.on("error", error => { if (!responseSeen) reject(error); });
       req.write(head);
       // An early overload response may close the request while its input stream is still flowing.
       const stream = createReadStream(file);

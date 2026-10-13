@@ -167,6 +167,29 @@ describe("staged processing and publication", () => {
     const f = await input(Buffer.from("invalid"));
     await expect(new LocalStagedProductPhotoStorage(f.canonical).saveStagedProductPhoto(f.file)).rejects.toMatchObject({ code: "PHOTO_UPLOAD_INVALID" });
   }, 30000);
+  it("rejects truncated encoded input without publishing any canonical files", async () => {
+    const bytes = await sharp({ create: { width: 1000, height: 700, channels: 3, background: "blue" } }).jpeg().toBuffer();
+    const f = await input(bytes.subarray(0, Math.floor(bytes.length / 2)), "image/jpeg");
+    await expect(new LocalStagedProductPhotoStorage(f.canonical).saveStagedProductPhoto(f.file)).rejects.toMatchObject({ code: "PHOTO_UPLOAD_INVALID" });
+    await expect(stat(f.canonical)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+  it("fails closed on cross-filesystem publication without fallback copy or canonical files", async () => {
+    const f = await input(await sharp({ create: { width: 20, height: 10, channels: 3, background: "blue" } }).png().toBuffer());
+    const publish: typeof link = async () => { throw Object.assign(new Error("cross-device"), { code: "EXDEV" }); };
+    await expect(new LocalStagedProductPhotoStorage(f.canonical, publish).saveStagedProductPhoto(f.file)).rejects.toMatchObject({ code: "PHOTO_STORAGE_UNAVAILABLE" });
+    expect(await readdir(f.canonical)).toEqual([]);
+  });
+  it.each(["ENOSPC", "oversized"])("rejects %s during native file encoding before publication", async mode => {
+    const f = await input(await sharp({ create: { width: 20, height: 10, channels: 3, background: "blue" } }).png().toBuffer());
+    const encode = async (_image: sharp.Sharp, destination: string): Promise<sharp.OutputInfo> => {
+      await writeFile(destination, "partial");
+      if (mode === "ENOSPC") throw Object.assign(new Error("private host path"), { code: "ENOSPC" });
+      await truncate(destination, 16 * 1024 * 1024 + 1);
+      return {} as sharp.OutputInfo;
+    };
+    await expect(new LocalStagedProductPhotoStorage(f.canonical, link, encode).saveStagedProductPhoto(f.file)).rejects.toMatchObject({ code: mode === "ENOSPC" ? "PHOTO_STORAGE_UNAVAILABLE" : "PHOTO_UPLOAD_LIMIT" });
+    await expect(stat(f.canonical)).rejects.toMatchObject({ code: "ENOENT" });
+  });
   it("rolls back only this request's published main if thumbnail publication collides", async () => {
     const f = await input(await sharp({ create: { width: 20, height: 10, channels: 3, background: "blue" } }).png().toBuffer());
     let calls = 0, existing = "";

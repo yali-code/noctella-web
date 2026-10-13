@@ -128,7 +128,8 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
         committed = true;
       } catch (err) {
         error = err;
-        if (err instanceof PhotoUploadError && err.code === "PHOTO_STORAGE_UNAVAILABLE") admission.close();
+        if (/^(ENOSPC|EACCES|EPERM|EIO|EROFS|EMFILE|ENFILE|ENOENT|ELOOP)$/.test((err as NodeJS.ErrnoException)?.code ?? "")) error = new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo storage is unavailable");
+        if (error instanceof PhotoUploadError && error.code === "PHOTO_STORAGE_UNAVAILABLE") admission.close();
       } finally {
         if (timer) clearTimeout(timer);
         req.removeListener("data", countBody);
