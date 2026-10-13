@@ -40,7 +40,7 @@ New contracts capture legacy orientation/WebP/deterministic retry bytes and post
 
 Regression suites include existing photos, outbox workflow/restart/stale-lock/scheduler, backup/recovery and deterministic AI-intake services/routes/restart. CI runs all repository tests, typechecks, builds, lint and real disposable PostgreSQL tests. See PR for executed totals and actual CI status.
 
-The dedicated photo-upload-linux workflow is explicit workflow_dispatch or same-repository PR title edit starting [run-upload-512m]. Normal PRs only run eight fast policy tests. It builds a source-only disposable context, generates pinned synthetic fixtures, then fresh 512-MiB/no-swap/network-none/read-only-root one-CPU containers per case. It checks limits inside and outside, retains a keepalive observer on worker OOM, samples RSS/cgroup/disk, captures exact peak/events/exits and always uploads evidence. Twelve bounded smoke cases cover near-limit JPEG/PNG/WebP at client concurrency1/2/4, sequential12, invalid input and four144-MP rejects. Only fixture generation gets2GiB; generation is outside measurements.
+The dedicated photo-upload-linux workflow is explicit workflow_dispatch or same-repository PR title edit starting [run-upload-512m]. Normal PRs only run nine fast policy tests. It builds a source-only disposable context, generates pinned synthetic fixtures, then fresh 512-MiB/no-swap/network-none/read-only-root one-CPU containers per case. It checks limits inside and outside, retains a keepalive observer on worker OOM, samples RSS/cgroup/disk, captures exact peak/events/exits and always uploads evidence. Twelve bounded smoke cases cover near-limit JPEG/PNG/WebP at client concurrency1/2/4, sequential12, invalid input and four144-MP rejects. Only fixture generation gets2GiB; generation is outside measurements.
 
 The worker imports the actual app, seeds isolated SQLite/auth/category/product, streams loopback multipart via files and checks DB/outbox/output counts. No index schedulers, customer photos, production keys, provider calls or network access. The streaming client is in-process and shares the measured cgroup; full API startup and auth are included in peak, while a separately reported warm baseline follows setup. Runs are one trial per case, not production or full acceptance. c4 overload is expected only with PHOTO_CAPACITY_BUSY; normal cases must have successes and c1/c2 may not overload. Queue timeouts fail evidence. Exceeding384MiB or any max/OOM counter fails, even with valid outputs.
 
@@ -72,7 +72,7 @@ Leave/unset the gate to use the existing route. No migrations or key transformat
 | apps/admin/src/app/products/[id]/photos/page.tsx | sequential awaited uploads, per-file status, successful uploads never automatically retried; no UI edits |
 | Publishing consumers | same photo IDs, URLs, primary/order and alt fields; no provider calls or provider adapters changed |
 
-Rejected requests reserve no transform/disk work. To reliably deliver an early response for a valid near-limit body, a bounded raw discard (at most body budget or250ms) precedes Connection:close; chunks are never parsed/concatenated/stored. This adds a finite error-path delay and transport work. Extreme/slow oversized senders can still observe connection closure rather than a complete JSON response; overload drain and overall HTTP connection limits need adversarial acceptance before enabling.
+Rejected requests reserve no transform/disk work. To reliably deliver an early response for a valid near-limit body, a bounded raw discard (at most body budget or1000ms) precedes Connection:close; chunks are never parsed/concatenated/stored. This adds a finite error-path delay and transport work. Extreme/slow oversized senders can still observe connection closure rather than a complete JSON response; overload drain and overall HTTP connection limits need adversarial acceptance before enabling.
 
 ## Evidence ledger (intermediate, not final acceptance)
 
@@ -81,3 +81,23 @@ Rejected requests reserve no transform/disk work. To reliably deliver an early r
 - Successful native cases' peak cgroup MiB: JPEG c1 226.69/c2 235.37; PNG c1 260.11/c2 257.85; WebP c1 289.25/c2 287.45; mixed sequential12 337.03; invalid122.61. Corresponding process RSS/HWM differs and must not replace cgroup accounting.
 - The c4 retry profile selects exactly four failed cases after bounded rejection-discard correction; it never silently skips failures from a full run. The combined evidence spans explicit revisions; it is not a full final-head12-case rerun, three trials, soak or production acceptance.
 - Temporary disk observer counts all disposable /work bytes (including SQLite and canonical outputs); transient hardlinks may be double-counted. It is conservative logical/allocated high-water, not exclusively private staging usage. Heap/external/ArrayBuffer samples begin at warm baseline; OS process high-water and cgroup peak also cover startup.
+
+## Regression and follow-on acceptance matrix
+
+| Failure/contract | Evidence in B1 | Required before enablement |
+| --- | --- | --- |
+| Real auth, role denial,201 metadata/primary/order/alt/outbox | productPhotoStagedRoute; existing productPhotos/outbox suites | provider payload/UI review on accepted limits |
+| EXIF/main/thumb byte parity and deterministic retries/conflict | photoUploadContractsP22B1; real staged-route byte comparison; existing deterministic finalize/restart suites | all shared entry points under the same admission |
+| Admission1+2, FIFO, queue timeout, alarm, queued abort/no early native release | productPhotoBoundedUpload | multi-route/worker stress and orderly shutdown drain |
+| Exact10MiB/+1, malformed/extra parts, fields and raw limits | productPhotoBoundedUpload | slow/adversarial HTTP connections and rejected-body load |
+| Input and output ENOSPC, publication collision/EXDEV, oversize output | injected deterministic tests | real Linux quota/disk-full, partial publish and restart |
+| Partial upload/client abort/receive timeout | real local HTTP tests | hard-kill active native encode and ownership recovery |
+| Invalid/truncated images, alpha,24MP and over-limit/edge | storage tests and Linux invalid/144MP rejection cases | additional format/animation/representative pixel-boundary corpus |
+| Private cleanup fail, inventory orphans/no blind deletion | deterministic fault tests | crash sweep protocol, DB-aware canonical reconciliation |
+| Post-commit response failure must keep referenced pair | regression red on original code, green after compensation boundary fix | PostgreSQL commit-ambiguity/retry analysis |
+|512MiB/no swap, target384, cgroup/RSS/disk/exits | measured versioned Linux HTTP smoke evidence | final-head full12 cases, three trials +30min soak and combined AI/outbox/backup load |
+
+
+Candidate transaction errors retain published files because a lost commit acknowledgement cannot prove rollback. They return503 PHOTO_STORAGE_UNAVAILABLE and close admission for operator recovery, even if the transaction actually rolled back. This can retain one unreferenced pair per failure/restart; do not automatically retry or delete it. A committed-then-throw regression proves the row survives without a destructive compensation attempt. Legacy rollback compensation remains unchanged; its network commit-ambiguity analysis is follow-on. Post-commit response-read failures preserve files on both paths.
+
+c4 retry ae41eea / Actions38428694945 / artifact11829967653 (SHA256 e0b849dc33711c9c441a28c5e7e3b78ed269e4c712a45e80c301363adc89ee6d): JPEG233.55MiB, PNG239.15MiB and144MP rejection137.60MiB passed. WebP failed with write EPIPE; three admitted requests still returned201, but the early503 transport was not reliable under the250ms discard deadline. The deadline is now bounded at1s and only the remaining WebP case will be retried. Raw summary c4-ae41eea-summary.json preserves the failure. Memory target and cgroup limits are unchanged.

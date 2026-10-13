@@ -6,7 +6,7 @@ import { PROFILES } from "../../apps/api/src/scripts/photoMemoryBenchmark/scenar
 import { createRequire } from "node:module";
 const sharp = createRequire(new URL("../../apps/api/package.json", import.meta.url))("sharp");
 const { runScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/photoUploadResourceProbe.js");
-import { FIXTURES, parseEvents, validateLimits } from "./policy.mjs";
+import { FIXTURES, selectedScenarios, parseEvents, validateLimits } from "./policy.mjs";
 
 async function cgroup() {
   const value = async (name: string) => (await fs.readFile("/sys/fs/cgroup/" + name, "utf8")).trim();
@@ -19,7 +19,8 @@ async function cgroup() {
 async function main() {
   const mode = process.argv[2];
   if (mode === "generate") {
-    const specs = PROFILES.full.fixtures.filter((spec) => FIXTURES.includes(spec.name));
+    const needed = new Set(selectedScenarios(true, process.env.CASE_PROFILE ?? "full").flatMap((s: { fixtures: string[] }) => s.fixtures));
+    const specs = PROFILES.full.fixtures.filter((spec) => FIXTURES.includes(spec.name) && needed.has(spec.name));
     const fixtures = await generateFixtures(specs, "/fixtures");
     await fs.writeFile("/fixtures/fixtures.json", JSON.stringify(fixtures, null, 2), { flag: "wx" });
     return;

@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ProductStatus, ProductType } from "@noctella/shared";
 import { createTestDb } from "./testDb";
 import { createCategory } from "../src/services/categories";
-import { createProduct, uploadProductPhoto } from "../src/services/products";
+import { createProduct, uploadProductPhoto, uploadStagedProductPhoto } from "../src/services/products";
 import type { PhotoStorage } from "../src/services/photoStorage";
 
 let root: string;
@@ -65,4 +65,18 @@ describe("P2-2B existing contracts", () => {
     await expect(uploadProductPhoto(failing, product.id, { buffer: Buffer.from("x"), size: 1, mimetype: "image/png" }, "front", fake)).rejects.toThrow("postcommit read");
     expect(fake.deleteProductPhoto).not.toHaveBeenCalled();
   });
+  it("retains staged canonical ownership on a lost transaction commit acknowledgement", async () => {
+    const db = createTestDb();
+    const category = await createCategory(db, { name: "Commit ambiguity", displayOrder: 0, isActive: true });
+    const product = await createProduct(db, { sku: "P22B-AMBIGUOUS", title: "Synthetic", type: ProductType.UniqueItem, status: ProductStatus.Draft, categoryId: category.id, priceEur: 10, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false });
+    const saved = { filename: "owned.webp", url: "/images/product-photos/owned.webp", thumbnailUrl: "/images/product-photos/owned-thumb.webp", mimeType: "image/webp", sizeBytes: 1, width: 1, height: 1 };
+    const fake = { saveStagedProductPhoto: vi.fn(async () => saved), deleteProductPhoto: vi.fn(async () => {}) };
+    const ambiguous = Object.create(db) as typeof db;
+    ambiguous.transaction = ((...args: any[]) => { (db.transaction as any)(...args); throw Error("lost commit acknowledgement"); }) as never;
+    await expect(uploadStagedProductPhoto(ambiguous, product.id, { path: "/unused/input", workDir: "/unused", size: 1, mimetype: "image/png", signal: new AbortController().signal }, undefined, fake)).rejects.toMatchObject({ status: 503, code: "PHOTO_STORAGE_UNAVAILABLE" });
+    const { productPhotos } = await import("../src/db/schema");
+    expect(await db.select().from(productPhotos)).toHaveLength(1);
+    expect(fake.deleteProductPhoto).not.toHaveBeenCalled();
+  });
+
 });

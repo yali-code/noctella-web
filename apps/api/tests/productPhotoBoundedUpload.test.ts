@@ -113,6 +113,18 @@ describe("bounded private multipart ingress", () => {
     expect(JSON.stringify(result.body)).not.toContain("private host"); expect(f.upload).not.toHaveBeenCalled();
     expect(await readdir(f.root)).toEqual([]); expect(f.admission.snapshot()).toMatchObject({ held: 0, closed: true });
   });
+  it("rejects malformed multipart and removes partial staging", async () => {
+    const f = await fixture();
+    const body = '--broken\r\nContent-Disposition: form-data; name="photo"; filename="x.png"\r\nContent-Type: image/png\r\n\r\npartial';
+    await post(f.app).set("Content-Type", "multipart/form-data; boundary=broken").send(body).expect(400);
+    expect(f.upload).not.toHaveBeenCalled(); expect(await readdir(f.root)).toEqual([]);
+  });
+  it("rejects excess raw epilogue bytes without retaining them", async () => {
+    const f = await fixture();
+    const body = Buffer.concat([Buffer.from('--raw\r\nContent-Disposition: form-data; name="photo"; filename="x.png"\r\nContent-Type: image/png\r\n\r\nx\r\n--raw--\r\n'), Buffer.alloc(11 * 1024 * 1024)]);
+    await post(f.app).set("Content-Type", "multipart/form-data; boundary=raw").send(body).expect(413);
+    expect(f.upload).not.toHaveBeenCalled(); expect(await readdir(f.root)).toEqual([]);
+  });
   it("retains crash orphans and fails safe on exhausted staging budget", async () => {
     const root = await temp(); await mkdir(path.join(root, "orphan")); const orphan = path.join(root, "orphan", "input"); await writeFile(orphan, "x"); await truncate(orphan, 128 * 1024 * 1024 + 1);
     const f = await fixture({ root });

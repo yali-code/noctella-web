@@ -21,7 +21,7 @@ async function discardRejectedBody(req: Request) {
     let bytes = 0;
     const finish = () => { clearTimeout(timer); req.off("data", data); req.off("end", finish); req.off("aborted", finish); req.off("error", finish); req.pause(); resolve(); };
     const data = (chunk: Buffer) => { bytes += chunk.length; if (bytes >= BODY_LIMIT) finish(); };
-    const timer = setTimeout(finish, 250);
+    const timer = setTimeout(finish, 1000);
     req.on("data", data); req.once("end", finish); req.once("aborted", finish); req.once("error", finish); req.resume();
   });
 }

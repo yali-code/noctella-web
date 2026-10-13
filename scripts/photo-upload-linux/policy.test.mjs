@@ -54,5 +54,6 @@ test("retry profile selects only four failed c4 cases and rejects unbounded prof
   assert.equal(selectedScenarios(true, "full").length, 12);
   assert.equal(selectedScenarios(true, "c4").length, 4);
   assert.ok(selectedScenarios(true, "c4").every(s => s.concurrency === 4));
+  assert.deepEqual(selectedScenarios(true, "webp-c4").map(s => s.name), ["linux-webp-c4"]);
   assert.throws(() => selectedScenarios(true, "unknown"));
 });

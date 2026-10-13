@@ -1,5 +1,5 @@
 import { stagedProductPhotoStorage, type StagedProductPhotoInput, type StagedProductPhotoStorage } from "./stagedProductPhotoStorage";
-import { abortedError } from "./photoUploadAdmission";
+import { abortedError, PhotoUploadError } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
@@ -466,10 +466,10 @@ export async function uploadStagedProductPhoto(db: DbClient, productId: string, 
   await getProductById(db, productId);
   const stored = await storage.saveStagedProductPhoto(file);
   if (file.signal.aborted) { await storage.deleteProductPhoto(stored); throw abortedError(); }
-  return persistUploadedProductPhoto(db, productId, stored, altText, storage);
+  return persistUploadedProductPhoto(db, productId, stored, altText, storage, false);
 }
 
-async function persistUploadedProductPhoto(db: DbClient, productId: string, stored: StoredProductPhoto, altText: string | undefined, storage: Pick<PhotoStorage, "deleteProductPhoto">): Promise<ProductPhoto> {
+async function persistUploadedProductPhoto(db: DbClient, productId: string, stored: StoredProductPhoto, altText: string | undefined, storage: Pick<PhotoStorage, "deleteProductPhoto">, compensateOnTransactionFailure = true): Promise<ProductPhoto> {
   const now = new Date().toISOString();
   const id = randomUUID();
   const driver = ((process.env.DATABASE_DRIVER as string) || "sqlite") as ProductPhotoMutationLockDriver;
@@ -518,6 +518,8 @@ async function persistUploadedProductPhoto(db: DbClient, productId: string, stor
       }),
     );
   } catch (err) {
+    // A lost commit acknowledgement cannot prove rollback. Retain candidate files and fail closed for recovery.
+    if (!compensateOnTransactionFailure) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo persistence requires recovery");
     await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
     throw err;
   }

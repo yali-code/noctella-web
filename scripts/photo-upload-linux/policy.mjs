@@ -69,6 +69,6 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
 }
 
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4"].includes(profile)) throw Error("Unknown bounded resource profile");
-  return scenarios(includeStress).filter(s => profile === "full" || s.concurrency === 4);
+  if (!["full", "c4", "webp-c4"].includes(profile)) throw Error("Unknown bounded resource profile");
+  return scenarios(includeStress).filter(s => profile === "full" || (profile === "c4" ? s.concurrency === 4 : s.name === "linux-webp-c4"));
 }
