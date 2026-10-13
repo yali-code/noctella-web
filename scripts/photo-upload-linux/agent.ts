@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import os from "node:os";
-import sharp from "sharp";
+
 import { generateFixtures } from "../../apps/api/src/scripts/photoMemoryBenchmark/fixtures";
 import { PROFILES } from "../../apps/api/src/scripts/photoMemoryBenchmark/scenarios";
 import { createRequire } from "node:module";
+const sharp = createRequire(new URL("../../apps/api/package.json", import.meta.url))("sharp");
 const { runScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/photoUploadResourceProbe.js");
 import { FIXTURES, parseEvents, validateLimits } from "./policy.mjs";
 

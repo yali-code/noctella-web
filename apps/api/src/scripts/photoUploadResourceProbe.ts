@@ -6,7 +6,7 @@ import path from "node:path";
 
 export async function runScenario(config: any) {
   if (process.platform !== "linux" || process.env.PRODUCT_PHOTO_DIR !== "/work/photos" || process.env.TMPDIR !== "/work/tmp") throw Error("Disposable Linux environment required");
-  Object.assign(process.env, { NODE_ENV: "test", DATABASE_URL: "/work/api.sqlite", PRODUCT_PHOTO_DISK_STAGING_ENABLED: "true", AI_INTAKE_PHOTO_DIR: "/work/intake", MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString("base64"), MARKETPLACE_OAUTH_STATE_SECRET: "offline-probe-state", ADMIN_APP_ORIGIN: "http://localhost:3001", STOREFRONT_APP_ORIGIN: "http://localhost:3000", SCHEDULER_AUTH_TOKEN: "offline-probe-scheduler" });
+  Object.assign(process.env, { NODE_ENV: "test", DATABASE_DRIVER: "sqlite", DATABASE_URL: "/work/api.sqlite", PRODUCT_PHOTO_DISK_STAGING_ENABLED: "true", AI_INTAKE_PHOTO_DIR: "/work/intake", MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString("base64"), MARKETPLACE_OAUTH_STATE_SECRET: "offline-probe-state", ADMIN_APP_ORIGIN: "http://localhost:3001", STOREFRONT_APP_ORIGIN: "http://localhost:3000", SCHEDULER_AUTH_TOKEN: "offline-probe-scheduler" });
   const { AdminRole, ProductType, ProductStatus } = await import("@noctella/shared");
   const app = (await import("../app")).default;
   const { db, dbRuntime } = await import("../db/client");
@@ -53,7 +53,8 @@ export async function runScenario(config: any) {
       stream.pipe(req, { end: false }); stream.once("end", () => req.end(tail));
     });
     const expectedInvalid = fixtureName === "invalid-random-bytes" || fixtureName === "png-stress-144mp";
-    const asExpected = expectedInvalid ? response.status === 400 : response.status === 201 || (config.scenario.concurrency === 4 && response.status === 503 && response.body.code === "PHOTO_CAPACITY_BUSY");
+    const overloaded = config.scenario.concurrency === 4 && response.status === 503 && response.body.code === "PHOTO_CAPACITY_BUSY";
+    const asExpected = overloaded || (expectedInvalid ? response.status === 400 : response.status === 201);
     operations.push({ index, fixture: fixtureName, status: response.status, code: response.body.code, ok: response.status === 201, asExpected, durationMs: Date.now() - start });
   }
   try {
@@ -64,8 +65,9 @@ export async function runScenario(config: any) {
     const successes = operations.filter(op => op.ok).length;
     if (!config.scenario.fixtures.includes("invalid-random-bytes") && !config.scenario.fixtures.includes("png-stress-144mp") && !successes) throw Error("No successful candidate transforms");
     if (rows.length !== successes || events.length !== successes || productPhotoAdmission.snapshot().held !== 0) throw Error("Persistence/admission mismatch");
+    if (config.scenario.fixtures.some((name: string) => name === "invalid-random-bytes" || name === "png-stress-144mp") && !operations.some(op => op.status === 400)) throw Error("Missing invalid-image rejection");
     const files = await fs.readdir("/work/photos");
-    const tmpDirFiles = await fs.readdir("/work/.product-photo-upload-staging").catch(() => []);
+    const tmpDirFiles = [...await fs.readdir("/work/tmp"), ...await fs.readdir("/work/.product-photo-upload-staging").catch(() => [])];
     return { scenario: config.scenario, operations, baseline, peak, peakMaxRss: process.resourceUsage().maxRSS * 1024, totalDurationMs: Date.now() - started, leftovers: { photoDirFiles: files.length, expectedPhotoDirFiles: successes * 2, tmpDirFiles }, scope: "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance" };
   } finally { clearInterval(sampling); await new Promise<void>((resolve, reject) => server.close(err => err ? reject(err) : resolve())); await dbRuntime.shutdown(); }
 }
