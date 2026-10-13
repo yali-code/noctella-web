@@ -79,7 +79,7 @@ async function publishableProduct(database: TestDb, id = "p1", overrides: Record
   await database.insert(schema.products).values({
     id, sku: id, title: "Moon", slug: id, type: "single", status: "approved", stockQuantity: 2, priceEur: 10,
     ebayTitle: "eBay Moon", ebayDescription: "Desc", ebayCategory: "cat", ebayListingPriceEur: 12,
-    etsyTitle: "Etsy Moon", etsyDescription: "Desc", etsyTags: JSON.stringify(["tag"]), etsyListingPriceEur: 13,
+    etsyTitle: "Etsy Moon", etsyDescription: "Desc", etsyTags: JSON.stringify(["tag"]), etsyListingPriceEur: 13, etsyTaxonomyId: "1234", etsyWhoMade: "someone_else", etsyIsSupply: false, etsyWhenMade: "1970s", etsyShippingProfileId: "1111", etsyProcessingProfileId: "2222", etsyReturnPolicyId: "3333",
     wooProductName: "Web Moon", wooShortDescription: "Short", wooLongDescription: "Long description", wooListingPriceEur: 11,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     ...overrides,
