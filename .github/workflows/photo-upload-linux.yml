@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20.20.0'
-      - run: node --test scripts/photo-upload-linux/policy.test.mjs scripts/photo-upload-linux/recipe-worker.test.cjs
+      - run: node --test scripts/photo-upload-linux/policy.test.mjs scripts/photo-upload-linux/recipe-worker.test.cjs scripts/photo-upload-linux/analyze-native.test.mjs
 
   benchmark:
     needs: tooling-tests

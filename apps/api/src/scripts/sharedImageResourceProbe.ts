@@ -21,7 +21,7 @@ export async function runCombinedScenario(config: any) {
   const sharp=(await import("sharp")).default;
   const trace = (phase:string, details:Record<string,unknown>={}) => {
     const number=(name:string)=>Number(readFileSync("/sys/fs/cgroup/"+name,"utf8"));
-    appendFileSync("/evidence/phases.ndjson",JSON.stringify({time:Date.now(),phase,...details,memory:process.memoryUsage(),cgroupCurrent:number("memory.current"),cgroupPeak:number("memory.peak"),events:readFileSync("/sys/fs/cgroup/memory.events","utf8"),stat:readFileSync("/sys/fs/cgroup/memory.stat","utf8"),cache:sharp.cache(),sharpCounters:sharp.counters(),sharpConcurrency:sharp.concurrency(),resourceUsage:process.resourceUsage(),admission:imageProcessingAdmission.snapshot()})+"\n");
+    appendFileSync("/evidence/phases.ndjson",JSON.stringify({time:Date.now(),phase,...details,memory:process.memoryUsage(),cgroupCurrent:number("memory.current"),cgroupPeak:number("memory.peak"),events:readFileSync("/sys/fs/cgroup/memory.events","utf8"),stat:readFileSync("/sys/fs/cgroup/memory.stat","utf8"),cache:sharp.cache(),sharpCounters:sharp.counters(),sharpConcurrency:sharp.concurrency(),resourceUsage:process.resourceUsage(),admission:imageProcessingAdmission.snapshot(),allocatorPolicy:{mmapThreshold:process.env.MALLOC_MMAP_THRESHOLD_,trimThreshold:process.env.MALLOC_TRIM_THRESHOLD_}})+"\n");
   };
   const originalRead=fs.readFile;
   fs.readFile=(async(...args:any[])=>{trace("read.start",{file:String(args[0])});const result=await (originalRead as any)(...args);trace("read.end",{file:String(args[0]),bytes:result.length});return result;}) as typeof fs.readFile;
