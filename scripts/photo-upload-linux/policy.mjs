@@ -76,3 +76,15 @@ export function selectedScenarios(includeStress = true, profile = "full") {
   if (profile === "combined") return [1, 2, 3].map(trial => ({ name: "linux-combined-t" + trial, description: "Combined gated product, AI upload/finalization and Instagram synthetic workflows", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial }));
   return scenarios(includeStress).filter(s => profile === "full" || (profile === "c4" ? s.concurrency === 4 : s.name === "linux-webp-c4"));
 }
+
+export const COMBINED_INPUT_SHA='2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7';
+export function validateCombinedMode(scenario,environment,fixture,actualSha){
+ if(scenario.path!=='combined')return {role:'other-profile'};
+ if(scenario.ops!==8||fixture.name!=='jpeg-near-limit'||fixture.width!==6000||fixture.height!==4000||fixture.sizeBytes!==9670997||actualSha!==COMBINED_INPUT_SHA) {
+  if(scenario.acceptanceRole!=='diagnostic-only')throw Error('Original combined workload changed');
+ }
+ const role=scenario.acceptanceRole==='diagnostic-only'?'diagnostic-only':'acceptance';
+ const allocator=Object.fromEntries(Object.entries(environment).filter(([name,value])=>value&&(name.startsWith('MALLOC_')||name==='LD_PRELOAD'||name==='NOCTELLA_NATIVE_TRACE')));
+ if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
+ return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
+}

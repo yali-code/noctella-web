@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "7c6ab55237e996fef041c60bb06f45b7d0fc2061",
+  "harnessSha": "3a76be6e2f654221bdf6a7e387951d8870a91829",
+  "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38452470778",
+  "startedAt": "2026-10-13T19:10:56.565Z",
+  "scope": "gated real product HTTP route; synthetic SQLite and in-process streaming client; not final API acceptance",
+  "cases": [
+    {
+      "scenario": {
+        "name": "linux-native-worker-24mp",
+        "description": "DIAGNOSTIC ONLY: unchanged mixed workload with isolated AI recipe or glibc mmap policy; not final acceptance",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 3,
+        "path": "combined",
+        "trial": 1,
+        "recipeWorker": true,
+        "mmapPolicy": false,
+        "acceptanceRole": "diagnostic-only"
+      },
+      "exitCode": 2,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 317,
+      "observedProcessRss": 403030016,
+      "observedProcessHwm": 403070976,
+      "observedGroupRss": 647327744,
+      "diskPeak": {
+        "logical": 36132228,
+        "allocated": 36151296,
+        "files": 11
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 58462208,
+          "peak": 59588608,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1449984,
+        "peak": 59588608,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791918657222,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 203821056,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 256,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 2506752,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 256,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": true,
+        "Dead": false,
+        "Pid": 4377,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T19:10:56.656982334Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": true,
+      "result": null,
+      "finalDisk": {
+        "logical": 13700812,
+        "allocated": 13717504,
+        "files": 8
+      },
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 256,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "jpeg-near-limit",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 9670997,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "jpeg",
+      "quality": 86,
+      "sha256": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    }
+  ],
+  "host": {
+    "platform": "linux",
+    "kernel": "6.17.0-1022-azure",
+    "cpuModel": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "logicalCpus": 4,
+    "totalMemory": 16765378560,
+    "dockerVersion": "28.0.4",
+    "image": "sha256:c20a5ae95380dff2e61285d84225fb92ba022be8b0ece3d0e0a4eef8dba685a3"
+  },
+  "finishedAt": "2026-10-13T19:11:13.240Z",
+  "expectedCases": 1,
+  "status": "FAIL"
+}

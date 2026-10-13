@@ -73,3 +73,12 @@ test("smaller reference is explicitly diagnostic and never replaces combined acc
 test("native allocator diagnostics cannot masquerade as uninstrumented final acceptance",async()=>{const {selectedScenarios}=await import("./policy.mjs");const d=selectedScenarios(true,"native-profile");assert.equal(d.length,1);assert.equal(d[0].acceptanceRole,"diagnostic-only");assert.equal(d[0].nativeTrace,true);assert.deepEqual(d[0].fixtures,["jpeg-near-limit"]);assert.ok(selectedScenarios(true,"combined").every(s=>!s.nativeTrace));});
 
 test("worker and allocator experiments remain diagnostic with unchanged fixture and acceptance",async()=>{const {selectedScenarios}=await import("./policy.mjs");for(const p of ["native-worker","native-mmap"]){const d=selectedScenarios(true,p);assert.equal(d.length,1);assert.equal(d[0].acceptanceRole,"diagnostic-only");assert.equal(d[0].ops,8);assert.deepEqual(d[0].fixtures,["jpeg-near-limit"]);}assert.ok(selectedScenarios(true,"combined").every(s=>!s.recipeWorker&&!s.mmapPolicy&&!s.nativeTrace));});
+
+test('final combined mode verifies exact bytes and forbids allocator/worker instrumentation',async()=>{
+ const {selectedScenarios,validateCombinedMode,COMBINED_INPUT_SHA}=await import('./policy.mjs');
+ const scenario=selectedScenarios(true,'combined')[0],fixture={name:'jpeg-near-limit',width:6000,height:4000,sizeBytes:9670997};
+ assert.equal(validateCombinedMode(scenario,{},fixture,COMBINED_INPUT_SHA).role,'acceptance');
+ for(const env of [{LD_PRELOAD:'tracer'},{MALLOC_MMAP_THRESHOLD_:'131072'},{MALLOC_ARENA_MAX:'1'},{NOCTELLA_NATIVE_TRACE:'synthetic-only'}])assert.throws(()=>validateCombinedMode(scenario,env,fixture,COMBINED_INPUT_SHA));
+ for(const override of [{ops:7},{recipeWorker:true},{mmapPolicy:true},{nativeTrace:true}])assert.throws(()=>validateCombinedMode({...scenario,...override},{},fixture,COMBINED_INPUT_SHA));
+ assert.throws(()=>validateCombinedMode(scenario,{},fixture,'wrong'));assert.throws(()=>validateCombinedMode(scenario,{},{...fixture,width:4032},COMBINED_INPUT_SHA));
+});

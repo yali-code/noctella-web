@@ -1,0 +1,126 @@
+{
+  "scenario": {
+    "name": "linux-native-mmap-24mp",
+    "description": "DIAGNOSTIC ONLY: unchanged mixed workload with isolated AI recipe or glibc mmap policy; not final acceptance",
+    "fixtures": [
+      "jpeg-near-limit"
+    ],
+    "ops": 8,
+    "concurrency": 3,
+    "path": "combined",
+    "trial": 1,
+    "recipeWorker": false,
+    "mmapPolicy": true,
+    "acceptanceRole": "diagnostic-only"
+  },
+  "operations": [
+    {
+      "index": 0,
+      "kind": "product.setup",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 874
+    },
+    {
+      "index": 1,
+      "kind": "ai.upload.setup",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 4681
+    },
+    {
+      "index": 2,
+      "kind": "instagram.prepare",
+      "status": 200,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 414
+    },
+    {
+      "index": 3,
+      "kind": "product.upload.wave1",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 1224
+    },
+    {
+      "index": 4,
+      "kind": "ai.upload.wave1",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 5721
+    },
+    {
+      "index": 5,
+      "kind": "instagram.inspect",
+      "status": 200,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 26
+    },
+    {
+      "index": 6,
+      "kind": "ai.finalize",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 2818
+    },
+    {
+      "index": 7,
+      "kind": "product.upload.wave2",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 3497
+    }
+  ],
+  "baseline": {
+    "memory": {
+      "rss": 143663104,
+      "heapTotal": 50507776,
+      "heapUsed": 45781264,
+      "external": 4898850,
+      "arrayBuffers": 93350
+    },
+    "cgroupCurrent": 111489024
+  },
+  "warmBeforeCombined": {
+    "memory": {
+      "rss": 177209344,
+      "heapTotal": 51310592,
+      "heapUsed": 45545168,
+      "external": 16430681,
+      "arrayBuffers": 11616054
+    },
+    "cgroupCurrent": 155099136
+  },
+  "peak": {
+    "rss": 532705280,
+    "heapTotal": 52514816,
+    "heapUsed": 46473808,
+    "external": 48543329,
+    "arrayBuffers": 43236430
+  },
+  "peakMaxRss": 532836352,
+  "totalDurationMs": 14941,
+  "nativePeak": 1,
+  "nativeCalls": 24,
+  "admission": {
+    "held": 0,
+    "active": 0,
+    "waiting": 0,
+    "closed": false
+  },
+  "retainedAiSourceFiles": 2,
+  "leftovers": {
+    "photoDirFiles": 9,
+    "expectedPhotoDirFiles": 9,
+    "tmpDirFiles": []
+  },
+  "scope": "synthetic authenticated product/AI HTTP and local-only Instagram; no provider calls; not full production acceptance"
+}

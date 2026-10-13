@@ -27,6 +27,15 @@ async function usage(root) {
   }
   return { logical, allocated, files };
 }
+async function inventory(root, dir = root, result = []) {
+  for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name), info = await fsp.lstat(file);
+    if (info.isSymbolicLink()) throw Error("Unexpected symlink in disposable inventory");
+    if (entry.isDirectory()) await inventory(root, file, result);
+    else { if (result.length >= 1000) throw Error("Inventory budget exceeded"); result.push({ path: path.relative(root, file), size: info.size }); }
+  }
+  return result;
+}
 async function cgroup(root) {
   const value = async (name) => (await fsp.readFile(path.join(root, name), "utf8")).trim();
   return { max: Number(await value("memory.max")), swapMax: Number(await value("memory.swap.max")), current: Number(await value("memory.current")), peak: Number(await value("memory.peak")), events: parseEvents(await value("memory.events")) };
@@ -114,6 +123,7 @@ async function run() {
       item.oomKilled = item.dockerState.OOMKilled;
       item.result = JSON.parse(await fsp.readFile(path.join(evidence, "result.json"), "utf8").catch(() => "null"));
       item.finalDisk = await usage(work);
+      item.finalInventory = await inventory(work);
       item.diskPeak.logical = Math.max(item.diskPeak.logical, item.finalDisk.logical);
       item.diskPeak.allocated = Math.max(item.diskPeak.allocated, item.finalDisk.allocated);
       item.diskPeak.files = Math.max(item.diskPeak.files, item.finalDisk.files);
