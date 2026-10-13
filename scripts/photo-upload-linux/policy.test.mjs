@@ -69,3 +69,5 @@ test("smaller reference is explicitly diagnostic and never replaces combined acc
   assert.equal(reference[0].fixtures[0],"jpeg-typical-landscape");
   assert.equal(selectedScenarios(true,"combined").length,3);
 });
+
+test("native allocator diagnostics cannot masquerade as uninstrumented final acceptance",async()=>{const {selectedScenarios}=await import("./policy.mjs");const d=selectedScenarios(true,"native-profile");assert.equal(d.length,1);assert.equal(d[0].acceptanceRole,"diagnostic-only");assert.equal(d[0].nativeTrace,true);assert.deepEqual(d[0].fixtures,["jpeg-near-limit"]);assert.ok(selectedScenarios(true,"combined").every(s=>!s.nativeTrace));});

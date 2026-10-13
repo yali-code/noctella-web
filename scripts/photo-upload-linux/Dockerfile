@@ -11,5 +11,6 @@ COPY apps/api/src ./apps/api/src
 COPY packages/shared ./packages/shared
 RUN npm run build -w packages/shared && npm run build -w apps/api
 COPY scripts/photo-upload-linux ./scripts/photo-upload-linux
+RUN gcc -shared -fPIC -O2 -Wall -Wextra -Werror -o scripts/photo-upload-linux/native-alloc.so scripts/photo-upload-linux/native-alloc.c -ldl
 ENV NODE_ENV=test TSX_DISABLE_CACHE=1 TMPDIR=/work/tmp TMP=/work/tmp TEMP=/work/tmp PRODUCT_PHOTO_DIR=/work/photos
 CMD ["sleep", "infinity"]
