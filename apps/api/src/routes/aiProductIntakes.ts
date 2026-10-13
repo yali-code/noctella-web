@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import { createProductPhotoUploadHandler } from "./productPhotoUpload";
@@ -8,7 +7,7 @@ import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
 import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../services/aiProductIntakes";
-import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
+import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntakePhoto, uploadStagedIntakePhoto } from "../services/aiIntakePhotos";
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
@@ -122,9 +121,7 @@ const stagedIntakePhotoUpload = createProductPhotoUploadHandler({
   },
   upload: async (id, file) => {
     if (!file.actorAdminUserId) throw new BadRequestError("Authenticated actor is required");
-    // The shared active scope is already held, before this full input read.
-    const buffer = await readFile(file.path);
-    return uploadIntakePhoto(db, id, { buffer, size: file.size, mimetype: file.mimetype }, file.originalname ?? "photo", file.actorAdminUserId);
+    return uploadStagedIntakePhoto(db, id, file, file.originalname ?? "photo", file.actorAdminUserId);
   },
 });
 router.post("/:id/photos", requirePermission("ai_product_intakes.manage"),
