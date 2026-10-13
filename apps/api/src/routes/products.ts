@@ -1,8 +1,9 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import { createProductPhotoUploadHandler } from "./productPhotoUpload";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
-import { archiveProduct, createProduct, deleteProductPhoto, getProductArchiveSafety, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
+import { archiveProduct, createProduct, deleteProductPhoto, getProductArchiveSafety, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto, uploadStagedProductPhoto } from "../services/products";
 import { createProductSchema, productListQuerySchema, updateProductRequestSchema } from "../validation/product";
 import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
@@ -261,7 +262,7 @@ router.put("/:id", requirePermission("products.edit"), async (req, res) => {
 });
 
 
-router.post("/:id/photos", requirePermission("products.edit"), upload.single("photo"), async (req, res) => {
+const legacyPhotoUpload: RequestHandler = async (req, res) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: "Photo file is required" });
@@ -272,7 +273,13 @@ router.post("/:id/photos", requirePermission("products.edit"), upload.single("ph
   } catch (err) {
     handleRouteError(err, res);
   }
+};
+const boundedPhotoUpload = createProductPhotoUploadHandler({
+  assertProduct: id => getProductById(db, id),
+  upload: (id, file, altText) => uploadStagedProductPhoto(db, id, file, altText),
 });
+// Candidate remains off until independent full-API resource/compatibility acceptance.
+router.post("/:id/photos", requirePermission("products.edit"), process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? boundedPhotoUpload : [upload.single("photo"), legacyPhotoUpload]);
 
 router.put("/:id/photos/:photoId", requirePermission("products.edit"), async (req, res) => {
   try {

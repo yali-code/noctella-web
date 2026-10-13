@@ -1,3 +1,5 @@
+import { stagedProductPhotoStorage, type StagedProductPhotoInput, type StagedProductPhotoStorage } from "./stagedProductPhotoStorage";
+import { abortedError } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
@@ -457,6 +459,17 @@ export async function uploadProductPhoto(
 ): Promise<ProductPhoto> {
   await getProductById(db, productId);
   const stored = await storage.saveProductPhoto(file);
+  return persistUploadedProductPhoto(db, productId, stored, altText, storage);
+}
+
+export async function uploadStagedProductPhoto(db: DbClient, productId: string, file: StagedProductPhotoInput, altText?: string, storage: StagedProductPhotoStorage = stagedProductPhotoStorage): Promise<ProductPhoto> {
+  await getProductById(db, productId);
+  const stored = await storage.saveStagedProductPhoto(file);
+  if (file.signal.aborted) { await storage.deleteProductPhoto(stored); throw abortedError(); }
+  return persistUploadedProductPhoto(db, productId, stored, altText, storage);
+}
+
+async function persistUploadedProductPhoto(db: DbClient, productId: string, stored: StoredProductPhoto, altText: string | undefined, storage: Pick<PhotoStorage, "deleteProductPhoto">): Promise<ProductPhoto> {
   const now = new Date().toISOString();
   const id = randomUUID();
   const driver = ((process.env.DATABASE_DRIVER as string) || "sqlite") as ProductPhotoMutationLockDriver;
@@ -504,12 +517,12 @@ export async function uploadProductPhoto(
         return createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, { values, outboxEvent });
       }),
     );
-    await ensureSinglePrimary(db, productId);
-    return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
   } catch (err) {
     await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
     throw err;
   }
+  await ensureSinglePrimary(db, productId);
+  return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
 }
 
 export async function updateProductPhoto(db: DbClient, productId: string, photoId: string, altText?: string): Promise<ProductPhoto> {
