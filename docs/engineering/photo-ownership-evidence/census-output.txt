@@ -1,0 +1,11 @@
+✔ every filesystem mutation call site in apps/api/src is in the 14-writer matrix (392.3422ms)
+✔ development-only photo capabilities are not imported by application code (237.1178ms)
+✔ PRODUCT_PHOTO_DISK_STAGING_ENABLED stays disabled unless explicitly "true" (103.1954ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 987.8024

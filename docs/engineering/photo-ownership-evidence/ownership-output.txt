@@ -1,0 +1,23 @@
+✔ sqlite: proposed DDL is additive, idempotent, atomic on failure and reversible (376.3769ms)
+✔ sqlite: atomic finalize, idempotent retry after a lost acknowledgement, rollback on failure (316.5521ms)
+✔ sqlite: concurrent claims and binding uniqueness admit exactly one owner (455.5518ms)
+✔ sqlite: lease-gated reclaim, stale tokens and nonce reuse (ABA) are rejected (324.7359ms)
+✔ sqlite: historical/outbox-only references and a deleted committed photo force review, never re-creation (322.751ms)
+✔ sqlite: mixed-version legacy writer row moves the operation to review without duplicates (333.1081ms)
+✔ sqlite: pending publication is classified as referenced; ENOSPC keeps the operation sealed and closes the budget (357.3457ms)
+﹣ postgres: proposed DDL is additive, idempotent, atomic on failure and reversible (0.2532ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: atomic finalize, idempotent retry after a lost acknowledgement, rollback on failure (0.2529ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: concurrent claims and binding uniqueness admit exactly one owner (0.3692ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: lease-gated reclaim, stale tokens and nonce reuse (ABA) are rejected (0.1908ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: historical/outbox-only references and a deleted committed photo force review, never re-creation (0.2268ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: mixed-version legacy writer row moves the operation to review without duplicates (0.1139ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: pending publication is classified as referenced; ENOSPC keeps the operation sealed and closes the budget (0.1075ms) # POSTGRES_TEST_DATABASE_URL not configured
+✔ sqlite: SIGKILL between canonical publication and the finalize transaction, then restart (638.7465ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 7
+ℹ todo 0
+ℹ duration_ms 3472.8513
