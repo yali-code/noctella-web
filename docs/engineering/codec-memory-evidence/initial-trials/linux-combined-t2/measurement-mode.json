@@ -1,0 +1,19 @@
+{
+  "role": "acceptance",
+  "nativeTrace": false,
+  "recipeWorker": false,
+  "mmapPolicy": false,
+  "allocator": {},
+  "actualSha": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+  "dimensions": [
+    6000,
+    4000
+  ],
+  "inputBytes": 9670997,
+  "ops": 8,
+  "recipe": {
+    "autoOrient": true,
+    "webpQuality": 86,
+    "resize": false
+  }
+}

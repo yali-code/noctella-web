@@ -1,0 +1,5 @@
+{"event":"request_complete","requestId":"226d4e24-fa75-460b-84f1-94d2644939f2","method":"POST","route":"/api/products/:id/photos","status":201,"durationMs":704,"category":"success"}
+{"event":"request_complete","requestId":"f95ca98e-d3b9-4300-a657-49c3a9ee7c45","method":"POST","route":"/api/ai-product-intakes/","status":201,"durationMs":7.9,"category":"success"}
+{"event":"request_complete","requestId":"0aaf5514-8a3e-404e-9b8e-5baec590d0c7","method":"POST","route":"/api/ai-product-intakes/","status":201,"durationMs":1.7,"category":"success"}
+{"event":"request_complete","requestId":"584ea700-3493-429b-94ca-0385dd279bf1","method":"POST","route":"/api/ai-product-intakes/:id/photos","status":201,"durationMs":3750.8,"category":"success"}
+{"event":"request_complete","requestId":"359086ff-7f18-463f-8df6-2451fd45e653","method":"POST","route":"/api/products/:id/photos","status":201,"durationMs":897.8,"category":"success"}

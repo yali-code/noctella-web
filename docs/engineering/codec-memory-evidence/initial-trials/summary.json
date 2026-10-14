@@ -1,0 +1,768 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "7c6ab55237e996fef041c60bb06f45b7d0fc2061",
+  "harnessSha": "e9f29cefd7db5cb0ee8bf054f939d830da72dfed",
+  "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38536976507",
+  "startedAt": "2026-10-14T08:44:33.053Z",
+  "scope": "gated real product HTTP route; synthetic SQLite and in-process streaming client; not final API acceptance",
+  "cases": [
+    {
+      "scenario": {
+        "name": "linux-combined-t1",
+        "description": "Combined gated product, AI upload/finalization and Instagram synthetic workflows",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 3,
+        "path": "combined",
+        "trial": 1
+      },
+      "exitCode": 137,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 195,
+      "observedProcessRss": 575926272,
+      "observedProcessHwm": 575926272,
+      "observedGroupRss": 596938752,
+      "diskPeak": {
+        "logical": 36616451,
+        "allocated": 36638720,
+        "files": 12
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 60502016,
+          "peak": 60502016,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1863680,
+        "peak": 60502016,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791967473716,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 330129408,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 136,
+          "oom": 2,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1171456,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 136,
+          "oom": 2,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": true,
+        "Dead": false,
+        "Pid": 6180,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-14T08:44:33.237373166Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": true,
+      "result": null,
+      "finalDisk": {
+        "logical": 26946970,
+        "allocated": 26968064,
+        "files": 12
+      },
+      "finalInventory": [
+        {
+          "path": ".ai-intake-upload-ingress/request-iz8GNU/input",
+          "size": 9670997
+        },
+        {
+          "path": "api.sqlite",
+          "size": 1581056
+        },
+        {
+          "path": "api.sqlite-shm",
+          "size": 32768
+        },
+        {
+          "path": "api.sqlite-wal",
+          "size": 4124152
+        },
+        {
+          "path": "config.json",
+          "size": 842
+        },
+        {
+          "path": "intake/4dddab32-b2f1-4589-b59f-5a1bd39a4f93.webp",
+          "size": 0
+        },
+        {
+          "path": "intake/96dbe9a6-b455-42e9-a3a7-95b471e91591.webp",
+          "size": 10463844
+        },
+        {
+          "path": "photos/1791967476187-e874e23e-c763-4b6c-b55a-2f7508f05d73-thumb.webp",
+          "size": 1516
+        },
+        {
+          "path": "photos/1791967476187-e874e23e-c763-4b6c-b55a-2f7508f05d73.webp",
+          "size": 484350
+        },
+        {
+          "path": "photos/1791967480931-069a6d20-f3d5-4afc-8c93-e1ae37bf690d-thumb.webp",
+          "size": 1516
+        },
+        {
+          "path": "photos/1791967480931-069a6d20-f3d5-4afc-8c93-e1ae37bf690d.webp",
+          "size": 484350
+        },
+        {
+          "path": "photos/instagram-v1-bea9cf0df0a714e928ee642aa1a198f155656e5ca65f96bf6e34b5505dae5db2.jpg",
+          "size": 101579
+        }
+      ],
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 136,
+          "oom": 2,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-combined-t2",
+        "description": "Combined gated product, AI upload/finalization and Instagram synthetic workflows",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 3,
+        "path": "combined",
+        "trial": 2
+      },
+      "exitCode": 137,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 191,
+      "observedProcessRss": 578011136,
+      "observedProcessHwm": 578011136,
+      "observedGroupRss": 599076864,
+      "diskPeak": {
+        "logical": 36616451,
+        "allocated": 36638720,
+        "files": 12
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 57880576,
+          "peak": 58290176,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1617920,
+        "peak": 58400768,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791967484241,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 536391680,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 95,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 4669440,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 116,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": true,
+        "Dead": false,
+        "Pid": 6393,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-14T08:44:43.792302152Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": true,
+      "result": null,
+      "finalDisk": {
+        "logical": 26946970,
+        "allocated": 26968064,
+        "files": 12
+      },
+      "finalInventory": [
+        {
+          "path": ".ai-intake-upload-ingress/request-O9B0gh/input",
+          "size": 9670997
+        },
+        {
+          "path": "api.sqlite",
+          "size": 1581056
+        },
+        {
+          "path": "api.sqlite-shm",
+          "size": 32768
+        },
+        {
+          "path": "api.sqlite-wal",
+          "size": 4124152
+        },
+        {
+          "path": "config.json",
+          "size": 842
+        },
+        {
+          "path": "intake/93a317ef-d0df-40b6-8abb-745a6f404ffe.webp",
+          "size": 0
+        },
+        {
+          "path": "intake/b80bdc79-21a8-4d68-8bd2-8f1c4ace61c3.webp",
+          "size": 10463844
+        },
+        {
+          "path": "photos/1791967486537-48e1607a-e8ec-428e-a617-8ae84811464f-thumb.webp",
+          "size": 1516
+        },
+        {
+          "path": "photos/1791967486537-48e1607a-e8ec-428e-a617-8ae84811464f.webp",
+          "size": 484350
+        },
+        {
+          "path": "photos/1791967491239-07419879-a02e-45d6-9510-33ddc3b40a88-thumb.webp",
+          "size": 1516
+        },
+        {
+          "path": "photos/1791967491239-07419879-a02e-45d6-9510-33ddc3b40a88.webp",
+          "size": 484350
+        },
+        {
+          "path": "photos/instagram-v1-e567f876c0602e72f5a0e0a417f32facc519e5e9217e392d1cbef219368b0194.jpg",
+          "size": 101579
+        }
+      ],
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 116,
+          "oom": 1,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      }
+    },
+    {
+      "scenario": {
+        "name": "linux-combined-t3",
+        "description": "Combined gated product, AI upload/finalization and Instagram synthetic workflows",
+        "fixtures": [
+          "jpeg-near-limit"
+        ],
+        "ops": 8,
+        "concurrency": 3,
+        "path": "combined",
+        "trial": 3
+      },
+      "exitCode": 137,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 176,
+      "observedProcessRss": 576724992,
+      "observedProcessHwm": 576724992,
+      "observedGroupRss": 596488192,
+      "diskPeak": {
+        "logical": 36132101,
+        "allocated": 36151296,
+        "files": 11
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 60276736,
+          "peak": 60276736,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1822720,
+        "peak": 60276736,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791967494416,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 477478912,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 177,
+          "oom": 2,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1294336,
+        "peak": 536870912,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 177,
+          "oom": 2,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": true,
+        "Dead": false,
+        "Pid": 6605,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-14T08:44:53.935065224Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": true,
+      "result": null,
+      "finalDisk": {
+        "logical": 36132101,
+        "allocated": 36151296,
+        "files": 11
+      },
+      "finalInventory": [
+        {
+          "path": ".ai-intake-upload-ingress/request-o9Xdxk/input",
+          "size": 9670997
+        },
+        {
+          "path": ".product-photo-upload-staging/request-xkcgIf/input",
+          "size": 9670997
+        },
+        {
+          "path": "api.sqlite",
+          "size": 1581056
+        },
+        {
+          "path": "api.sqlite-shm",
+          "size": 32768
+        },
+        {
+          "path": "api.sqlite-wal",
+          "size": 4124152
+        },
+        {
+          "path": "config.json",
+          "size": 842
+        },
+        {
+          "path": "intake/16bf6182-df80-4913-81e6-d7dffeb9a8c9.webp",
+          "size": 0
+        },
+        {
+          "path": "intake/34543324-91c8-48f5-80d0-79bb78cbfebb.webp",
+          "size": 10463844
+        },
+        {
+          "path": "photos/1791967496597-e533e444-9a4f-4fa3-bbda-8a59b3755472-thumb.webp",
+          "size": 1516
+        },
+        {
+          "path": "photos/1791967496597-e533e444-9a4f-4fa3-bbda-8a59b3755472.webp",
+          "size": 484350
+        },
+        {
+          "path": "photos/instagram-v1-5853d4f427c5bf51946d36296f734224d593a46103e166f79e34b32be4303eba.jpg",
+          "size": 101579
+        }
+      ],
+      "assessment": {
+        "status": "FAIL",
+        "reason": "Exit/timeout/disk/memory-limit event",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 177,
+          "oom": 2,
+          "oom_kill": 1,
+          "oom_group_kill": 0
+        }
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "jpeg-near-limit",
+      "mimetype": "image/jpeg",
+      "sizeBytes": 9670997,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "jpeg",
+      "quality": 86,
+      "sha256": "2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    }
+  ],
+  "host": {
+    "platform": "linux",
+    "kernel": "6.17.0-1022-azure",
+    "cpuModel": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpus": 4,
+    "totalMemory": 16766414848,
+    "dockerVersion": "28.0.4",
+    "image": "sha256:92f79673d2f41566064ec49dd7b1a3e53828822b370451703fc1a3ab5948fb11"
+  },
+  "finishedAt": "2026-10-14T08:45:03.302Z",
+  "expectedCases": 3,
+  "status": "FAIL"
+}
