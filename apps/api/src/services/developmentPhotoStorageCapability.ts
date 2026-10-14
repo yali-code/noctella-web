@@ -61,7 +61,7 @@ export class DevelopmentPhotoStorageCapability {
     const marker=path.join(locks,id+".lock");let fd:number;
     try{fd=fs.openSync(marker,"wx",0o600);}catch(error){if((error as NodeJS.ErrnoException).code==="EEXIST")fail("PHOTO_OPERATION_REVIEW_REQUIRED");throw error;}
     const owned=fs.fstatSync(fd,{bigint:true}),nonce=randomUUID();let initialized=false;
-    try{fs.writeSync(fd,JSON.stringify({id,nonce}));fs.fsyncSync(fd);initialized=true;
+    try{const record=Buffer.from(JSON.stringify({id,nonce}));let offset=0;while(offset<record.length){const written=fs.writeSync(fd,record,offset,record.length-offset,null);if(written<=0)fail("PHOTO_MARKER_WRITE_FAILED_RETAINED");offset+=written;}fs.fsyncSync(fd);initialized=true;
       const identities=[this.#privateRoot,locks,this.#canonicalRoot].map(dir=>{directory(dir,dir!==this.#canonicalRoot);const stat=fs.lstatSync(dir,{bigint:true});return{dev:stat.dev.toString(),ino:stat.ino.toString()};});
       const rootId=createHash("sha256").update(this.#privateRoot+"\0"+this.#canonicalRoot).digest("hex");
       if(!await this.authority.assertRoots(rootId,JSON.stringify(identities)))fail("PHOTO_ROOT_IDENTITY_CHANGED");
@@ -69,7 +69,12 @@ export class DevelopmentPhotoStorageCapability {
     finally{
       fs.closeSync(fd);
       // No stale-marker removal. Only this still-live invocation can release its exact marker.
-      if(initialized){const current=fs.lstatSync(marker,{bigint:true});if(current.dev!==owned.dev||current.ino!==owned.ino||current.isSymbolicLink())fail("PHOTO_MARKER_CHANGED_RETAINED");fs.unlinkSync(marker);}
+      if(initialized){
+        const current=fs.lstatSync(marker,{bigint:true});if(current.dev!==owned.dev||current.ino!==owned.ino||!current.isFile()||current.isSymbolicLink()||current.size>1024n)fail("PHOTO_MARKER_CHANGED_RETAINED");
+        const check=fs.openSync(marker,fs.constants.O_RDONLY|(fs.constants.O_NOFOLLOW??0));
+        try{const stat=fs.fstatSync(check,{bigint:true});if(stat.dev!==owned.dev||stat.ino!==owned.ino||stat.size>1024n)fail("PHOTO_MARKER_CHANGED_RETAINED");const bytes=Buffer.alloc(1024);const count=fs.readSync(check,bytes,0,bytes.length,0);let record;try{record=JSON.parse(bytes.subarray(0,count).toString("utf8"));}catch{fail("PHOTO_MARKER_CHANGED_RETAINED");}if(record.id!==id||record.nonce!==nonce)fail("PHOTO_MARKER_CHANGED_RETAINED");}finally{fs.closeSync(check);}
+        fs.unlinkSync(marker);
+      }
     }
   }
   begin(id:string,owner:string,nonce:string,now:number,ttl:number){return this.#exclusive(id,()=>this.authority.create(id,owner,nonce,now,ttl));}
