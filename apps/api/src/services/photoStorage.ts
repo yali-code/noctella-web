@@ -1,3 +1,5 @@
+import os from "node:os";
+import { realpathSync } from "node:fs";
 import { runImageOperation } from "./photoUploadAdmission";
 import { productPhotoImage, productPhotoDerivative } from "./photoProcessingRecipe";
 import { randomUUID } from "node:crypto";
@@ -137,14 +139,14 @@ export interface DeterministicProductPhotoResult {
  * writeIdempotent for safe, non-destructive retry behavior. Never touches
  * the staged intake-photo source file.
  */
-async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProductPhotoInput): Promise<DeterministicProductPhotoResult> {
+async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProductPhotoInput, destinationRoot = uploadRoot): Promise<DeterministicProductPhotoResult> {
   assertSafeDeterministicKey(input.mainStorageKey);
   assertSafeDeterministicKey(input.thumbnailStorageKey);
   const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
-  await mkdir(uploadRoot, { recursive: true });
+  await mkdir(destinationRoot, { recursive: true });
 
-  const mainPath = path.join(uploadRoot, input.mainStorageKey);
-  const thumbPath = path.join(uploadRoot, input.thumbnailStorageKey);
+  const mainPath = path.join(destinationRoot, input.mainStorageKey);
+  const thumbPath = path.join(destinationRoot, input.thumbnailStorageKey);
   await writeIdempotent(mainPath, mainBytes, input.mainStorageKey);
   await writeIdempotent(thumbPath, thumbBytes, input.thumbnailStorageKey);
 
@@ -160,8 +162,16 @@ async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProd
   };
 }
 
-export const writeDeterministicProductPhoto: typeof writeDeterministicProductPhotoUnadmitted = input =>
+export const writeDeterministicProductPhoto: (input: DeterministicProductPhotoInput) => Promise<DeterministicProductPhotoResult> = input =>
   runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input));
+
+/** Explicit test/development private-root producer; existing exports retain their default root. */
+export function writeDeterministicProductPhotoInPrivateRoot(input: DeterministicProductPhotoInput, privateRoot: string) {
+  if (!["test", "development"].includes(process.env.NODE_ENV ?? "") || process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED !== "true") throw new Error("PHOTO_DEVELOPMENT_CAPABILITY_DISABLED");
+  const resolved = path.resolve(privateRoot);
+  if (!resolved.startsWith(path.join(os.tmpdir(), "noctella-photo-fence-")) || path.basename(resolved) !== "raw" || realpathSync(resolved) !== resolved) throw new Error("PHOTO_DISPOSABLE_PRIVATE_ROOT_REQUIRED");
+  return runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input, resolved));
+}
 
 export class LocalPhotoStorage implements PhotoStorage {
   async saveProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredProductPhoto> {
