@@ -55,6 +55,33 @@ for (const driver of ["sqlite", "postgres"] as const) describe.skipIf(driver ===
       expect((await photos.findByIdAndIntake("intake", "private"))?.updatedAt).toBe(iso);
       await repo.create({ ...input, id: "cancel" });
       expect((await repo.cancelWithExpectedState({ id: "cancel", expectedStatus: "open", cancelledAt: iso, cancelledByAdminUserId: "synthetic-admin", updatedAt: iso })).row).toMatchObject({ cancelledAt: iso, updatedAt: iso });
+      const time = driver === "postgres" ? new Date(iso) : iso;
+      await db.insert(schema.products).values({ id: "product", sku: "SYNTHETIC", slug: "synthetic", title: "Synthetic", type: "unique_item", status: "draft", createdAt: time, updatedAt: time });
+      const execution = driver === "postgres" ? "asynchronous" : "synchronous";
+      const apply = { id: "intake", resultProductId: "product", appliedAt: iso, appliedByAdminUserId: "synthetic-admin", updatedAt: iso };
+      expect((await applyIntakeWithExpectedStateInTransaction(db, schema, execution, apply)).row).toMatchObject({ appliedAt: iso, updatedAt: iso });
+      expect((await applyIntakeWithExpectedStateInTransaction(db, schema, execution, apply)).updated).toBe(false);
+      const finalize = { id: "intake", finalizedAt: iso, finalizedByAdminUserId: "synthetic-admin", updatedAt: iso };
+      expect((await finalizeIntakeWithExpectedStateInTransaction(db, schema, execution, finalize)).row).toMatchObject({ finalizedAt: iso, updatedAt: iso });
+      expect((await finalizeIntakeWithExpectedStateInTransaction(db, schema, execution, finalize)).updated).toBe(false);
+      const write = (tx: any, id: string) => createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, {
+        values: { id, productId: "product", url: "/photo.webp", thumbnailUrl: "/thumb.webp", filename: "photo.webp", mimeType: "image/webp", sizeBytes: 72, width: 32, height: 24, isPrimary: true, processingUpdatedAt: iso, createdAt: iso, updatedAt: iso },
+        outboxEvent: { id, aggregateType: "ProductPhoto", aggregateId: id, eventType: "product_photo.promote_requested", idempotencyKey: "promote:" + id, payload: JSON.stringify({ photoId: id, productId: "product" }), status: "Pending", availableAt: iso, createdAt: iso, updatedAt: iso },
+      });
+      // Keep SQLite transaction callbacks fully synchronous; await only the outer PG transaction.
+      const transaction = (work: (tx: any) => any) => db.transaction(work);
+      await transaction((tx: any) => write(tx, "canonical"));
+      const [photo] = await db.select().from(schema.productPhotos);
+      const [event] = await db.select().from(schema.outboxEvents);
+      expect(photoTimestampRecord(photo, photoTimestampFields)).toMatchObject({ createdAt: iso, updatedAt: iso, processingUpdatedAt: iso });
+      expect(photoTimestampRecord(event, photoOutboxTimestampFields)).toMatchObject({ createdAt: iso, updatedAt: iso, availableAt: iso, idempotencyKey: "promote:canonical" });
+      if (driver === "postgres") {
+        await expect(transaction(async (tx: any) => { await write(tx, "rolled-back"); throw Error("synthetic rollback"); })).rejects.toThrow("synthetic rollback");
+      } else {
+        expect(() => transaction((tx: any) => { write(tx, "rolled-back"); throw Error("synthetic rollback"); })).toThrow("synthetic rollback");
+      }
+      expect(await db.select().from(schema.productPhotos).where(eq(schema.productPhotos.id, "rolled-back"))).toHaveLength(0);
+      expect(await db.select().from(schema.outboxEvents).where(eq(schema.outboxEvents.id, "rolled-back"))).toHaveLength(0);
       if (driver === "postgres") {
         await repo.create({ ...input, id: "native", createdAt: new Date(iso) as any, updatedAt: new Date(iso) as any });
         await expect(repo.create({ ...input, id: "bad", createdAt: "invalid" })).rejects.toThrow("INVALID_PHOTO_TIMESTAMP");
