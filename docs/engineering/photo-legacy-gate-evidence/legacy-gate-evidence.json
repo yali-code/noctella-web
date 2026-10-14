@@ -1,0 +1,75 @@
+[
+  {
+    "name": "ungated-baseline",
+    "deleted": [
+      "base-del",
+      "base-tmp",
+      "base-ai"
+    ]
+  },
+  {
+    "name": "sigkill-lease",
+    "exit": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "inflight": [
+      "W6_AI_CLEANUP-48412ec3-a100-4195-a684-c9f802c6dff7.json"
+    ]
+  },
+  {
+    "name": "rollback",
+    "report": {
+      "epoch": 2,
+      "state": "DRAINING",
+      "inflight": [],
+      "dangerousEvents": [],
+      "outboxKnown": true,
+      "ready": true
+    },
+    "reopened": {
+      "epoch": 4,
+      "state": "OPEN",
+      "reason": "rollback",
+      "at": "2026-10-14T19:07:22.383Z"
+    },
+    "proof": [
+      "1792004841654-9d8b2e98-4762-484f-bc64-86a2ce3c9035-thumb.webp 562949954305613 70 371b1dd3688836e9b336c35b0a58660d222aa24d7c136c5c30c5e8fd70bc0315",
+      "1792004841654-9d8b2e98-4762-484f-bc64-86a2ce3c9035.webp 1407374884437578 70 125c7d6cf4a2ede209f990576aa8035653f76c2f5fc3fbb7b63755b9f11c0131",
+      "1792004841791-6203aa02-681c-45ff-8d8b-1e69bcddfc5d-thumb.webp 562949954305636 66 74ef525eff23d4a9fa8bd022d27f545bc3faab8d9becbcf52e9384b27e694245",
+      "1792004841791-6203aa02-681c-45ff-8d8b-1e69bcddfc5d.webp 844424931016290 68 7085d41538beed918598360388ab435e57abd0622c843a115f9ee7d30e87e0c2",
+      "k-thumb.webp 562949954305644 9 de056fbff14edd03c6d6586eb9bb904f0c4ddff103945e114828d46c9cd674ba",
+      "k.webp 1125899907726953 21 0f7fbcceb41ddc73727493a90b1ebece34e563dad0feaf105c36180aad6a39bc",
+      "ob-thumb.webp 562949954305620 2 dbdbc97d5de3e2fe6756986e0f1f2885727d3dd8cd5a22183fa33c241ab6d28e",
+      "ob.webp 844424931016274 2 dbdbc97d5de3e2fe6756986e0f1f2885727d3dd8cd5a22183fa33c241ab6d28e",
+      "rb-thumb.webp 562949954305663 2 64f232610aa64e4f7f03c51728b5050d82d294b55c3040704f0e5d83c129b8f0",
+      "rb.webp 844424931016317 2 64f232610aa64e4f7f03c51728b5050d82d294b55c3040704f0e5d83c129b8f0"
+    ]
+  },
+  {
+    "driver": "sqlite",
+    "name": "outbox-drain-parity",
+    "report": {
+      "epoch": 2,
+      "state": "DRAINING",
+      "inflight": [],
+      "dangerousEvents": [
+        "c1:product_photo.cleanup_temp_requested:processing"
+      ],
+      "outboxKnown": true,
+      "ready": false
+    },
+    "classified": [
+      [
+        "hist-thumb.webp",
+        "REFERENCED",
+        "outbox_events.product_photo.delete_requested.completed:h1"
+      ],
+      [
+        "hist.webp",
+        "REFERENCED",
+        "outbox_events.product_photo.delete_requested.completed:h1"
+      ]
+    ]
+  }
+]

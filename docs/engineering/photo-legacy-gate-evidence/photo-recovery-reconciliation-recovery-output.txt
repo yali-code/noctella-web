@@ -1,0 +1,27 @@
+✔ sqlite: referenced canonical photo and its sealed links are preserved, no review (513.5996ms)
+✔ sqlite: historical outbox-only reference keeps the canonical file referenced (442.7885ms)
+✔ sqlite: lost COMMIT acknowledgement is ambiguous until the authoritative row is visible (506.4507ms)
+✔ sqlite: stale generation, seals, ABA future generation and unknown operation (637.4417ms)
+✔ sqlite: zero-byte and partial artifacts are never treated as safe outside a superseded generation (1278.7198ms)
+✔ sqlite: unavailable or incomplete database state classifies everything ambiguous and closes admission (745.0971ms)
+✔ sqlite: legacy writers and deleters (mixed version) force review (665.4196ms)
+✔ sqlite: concurrent recovery and an active writer never yield a changing file as a candidate (935.0248ms)
+✔ sqlite: retained-generation accounting is unchanged by recovery and review closes the disk budget (904.3674ms)
+﹣ postgres: referenced canonical photo and its sealed links are preserved, no review (1.2318ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: historical outbox-only reference keeps the canonical file referenced (0.4111ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: lost COMMIT acknowledgement is ambiguous until the authoritative row is visible (0.1882ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: stale generation, seals, ABA future generation and unknown operation (0.2158ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: zero-byte and partial artifacts are never treated as safe outside a superseded generation (0.1363ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: unavailable or incomplete database state classifies everything ambiguous and closes admission (0.1097ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: legacy writers and deleters (mixed version) force review (0.1757ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: concurrent recovery and an active writer never yield a changing file as a candidate (0.1723ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: retained-generation accounting is unchanged by recovery and review closes the disk budget (0.1351ms) # POSTGRES_TEST_DATABASE_URL not configured
+✔ sqlite: SIGKILL inside the operation marker section is retained across restart and forces review (1517.1318ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 9
+ℹ todo 0
+ℹ duration_ms 8684.4771

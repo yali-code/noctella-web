@@ -1,0 +1,16 @@
+
+> @noctella/shared@2.1.0-rc.2 typecheck
+> tsc --noEmit
+
+
+> @noctella/admin@2.1.0-rc.2 typecheck
+> tsc --noEmit
+
+
+> @noctella/api@2.1.0-rc.2 typecheck
+> tsc --noEmit
+
+
+> @noctella/storefront@2.1.0-rc.2 typecheck
+> tsc --noEmit
+
