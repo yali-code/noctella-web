@@ -14,14 +14,19 @@ let stage='connect';let details={};const checkpoint=phase=>{const record={phase,
  const schema=require('../../apps/api/src/db/schema.'+(driver==='sqlite'?'sqlite':'postgres')+'.ts');
  if(driver==='sqlite') {const Database=api('better-sqlite3');connection=new Database(path.join(root,'test.sqlite'));connection.pragma('journal_mode = WAL');require('../../apps/api/src/db/migrate.ts').ensureSchema(connection);db=api('drizzle-orm/better-sqlite3').drizzle(connection,{schema});}
  else {require('../../apps/api/tests/postgresTestDb.ts').assertDisposablePostgresUrl(process.env.POSTGRES_TEST_DATABASE_URL);const u=new URL(process.env.POSTGRES_TEST_DATABASE_URL);if(!['localhost','127.0.0.1','::1'].includes(u.hostname)||!/^sprint151_test_[a-f0-9]+$/.test(schemaName))throw Error('Local disposable PostgreSQL only');const pg=api('pg');connection=new pg.Pool({connectionString:process.env.POSTGRES_TEST_DATABASE_URL,options:'-c search_path='+schemaName,max:2});db=api('drizzle-orm/node-postgres').drizzle(connection,{schema});}
- if(boundary.startsWith('pg-protocol-')){
+ if(boundary.startsWith('pg-protocol-')||boundary==='pg-ai-persistence-error'){
   if(driver!=='postgres')throw Error('PostgreSQL fixture only');
   const processor=api('sharp');const canonical=path.join(root,'canonical');
   const workDir=path.join(root,'ai-ingress','request-protocol');fs.mkdirSync(workDir,{recursive:true,mode:0o700});const bytes=await processor({create:{width:32,height:24,channels:3,background:'#a08060'}}).png().toBuffer();fs.writeFileSync(path.join(workDir,'input'),bytes,{flag:'wx',mode:0o600});
   const staged={path:path.join(workDir,'input'),workDir,size:bytes.length,mimetype:'image/png',signal:new AbortController().signal};
+  if(boundary==='pg-ai-persistence-error'){
+   await connection.query("INSERT INTO ai_product_intakes (id,created_by_admin_user_id) VALUES ('protocol-intake','synthetic-admin')");
+   try{await service('aiIntakePhotos').uploadStagedIntakePhoto(db,'protocol-intake',staged,'synthetic.png','synthetic-admin');}catch(error){const gate=service('photoUploadAdmission');if(error.code!=='PHOTO_STORAGE_UNAVAILABLE'||!gate.imageProcessingAdmission.snapshot().closed)throw error;details={scope:'actual-postgres-AI-persistence-error-handler',code:error.code,admission:gate.imageProcessingAdmission.snapshot()};checkpoint('actual-ai-rejected-source-retained');}
+   throw Error('Unexpected PostgreSQL service success; revisit baseline compatibility blocker');
+  }
   const privatePhoto=await new (service('aiIntakePhotoStorage').LocalAiIntakePhotoStorage)(path.join(root,'intake')).saveStagedIntakePhoto(staged);
   const stored=await new (service('stagedProductPhotoStorage').LocalStagedProductPhotoStorage)(canonical).saveStagedProductPhoto(staged);
-  await connection.query("INSERT INTO products (id,sku,title,slug,type,status) VALUES ('protocol-product','PROTOCOL-SYNTHETIC','Synthetic','protocol-synthetic','UniqueItem','Draft')");
+  await connection.query("INSERT INTO products (id,sku,title,slug,type,status) VALUES ('protocol-product','PROTOCOL-SYNTHETIC','Synthetic','protocol-synthetic','unique_item','draft')");
   await connection.query("INSERT INTO ai_product_intakes (id,created_by_admin_user_id) VALUES ('protocol-intake','synthetic-admin')");
   const client=await connection.connect();await client.query('BEGIN');
   const outboxOnly=boundary==='pg-protocol-outbox-only';

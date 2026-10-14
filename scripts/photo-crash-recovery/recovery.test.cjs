@@ -56,14 +56,14 @@ for(const driver of ['sqlite','postgres'])for(const boundary of ['ai-reserved-ou
  });
 }
 
-for(const boundary of ['pg-protocol-uncommitted','pg-protocol-committed','pg-protocol-outbox-only'])test('postgres protocol fixture '+boundary,{skip:!process.env.POSTGRES_TEST_DATABASE_URL,timeout:120000},async()=>{
+for(const boundary of ['pg-protocol-uncommitted','pg-protocol-committed','pg-protocol-outbox-only','pg-ai-persistence-error'])test('postgres protocol fixture '+boundary,{skip:!process.env.POSTGRES_TEST_DATABASE_URL,timeout:120000},async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'noctella-photo-crash-'));const h=await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb();
  const target=evidence?path.join(evidence,'postgres-'+boundary+'-'+path.basename(root)):null;
  try{
   const death=await readyAndKill(root,'postgres',boundary,h.schemaName);if(target)fs.cpSync(root,target+'-before-restart',{recursive:true});
   const first=restart(root,'postgres',h.schemaName),second=restart(root,'postgres',h.schemaName);assert.deepEqual(first,second);const report=plan(first);assert.deepEqual(report,plan(second));
   const committed=boundary==='pg-protocol-committed',outboxOnly=boundary==='pg-protocol-outbox-only';assert.equal(first.photos.length,committed?1:0);assert.equal(first.aiPhotos.length,committed?1:0);assert.equal(first.outbox.length,committed||outboxOnly?1:0);
-  const canonical=report.entries.filter(e=>e.root==='canonical');assert.equal(canonical.length,2);assert.ok(canonical.every(e=>e.state===(committed||outboxOnly?'protected-reference':'unproven-ownership')));assert.ok(report.entries.every(e=>e.action==='retain'));assert.equal(report.safeToMutate,false);
-  const record={driver:'postgres',boundary,scope:'native-SQL-transaction-fixture-not-full-photo-service',death,first,second,report,sourceSha:process.env.NOCTELLA_PROBE_SOURCE_SHA||'local'};fs.writeFileSync(path.join(root,'evidence.json'),JSON.stringify(record,null,2));
+  const canonical=report.entries.filter(e=>e.root==='canonical');assert.equal(canonical.length,boundary==='pg-ai-persistence-error'?0:2);if(boundary==='pg-ai-persistence-error'){assert.equal(first.files.filter(f=>f.root==='intake').length,1);assert.equal(death.checkpoint.code,'PHOTO_STORAGE_UNAVAILABLE');assert.equal(death.checkpoint.admission.closed,true);}assert.ok(canonical.every(e=>e.state===(committed||outboxOnly?'protected-reference':'unproven-ownership')));assert.ok(report.entries.every(e=>e.action==='retain'));assert.equal(report.safeToMutate,false);
+  const record={driver:'postgres',boundary,scope:boundary==='pg-ai-persistence-error'?'actual-postgres-AI-persistence-error-handler':'native-SQL-transaction-fixture-not-full-photo-service',death,first,second,report,sourceSha:process.env.NOCTELLA_PROBE_SOURCE_SHA||'local'};fs.writeFileSync(path.join(root,'evidence.json'),JSON.stringify(record,null,2));
  }finally{if(target)fs.cpSync(root,target+'-final',{recursive:true});await h.close();}
 });
