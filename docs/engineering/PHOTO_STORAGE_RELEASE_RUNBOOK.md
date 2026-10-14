@@ -7,10 +7,13 @@ Applies to `feat/photo-storage-production-completion`. Every step marked **[AUTH
 | Area | State |
 | --- | --- |
 | Ownership tables | Registered: SQLite `schema.sql` via `ensureSchema`, and PostgreSQL `0040_photo_operation_ownership.sql`. Additive only. **Created automatically when the API starts on a database**, which happens on deploy, so deploying is itself the migration step |
-| `PHOTO_OWNERSHIP_FENCING_ENABLED` | OFF unless exactly `"true"`. OFF keeps every existing behavior (full API suite 6,115 passed; one known Stripe timing flake that passes in isolation) |
+| `PHOTO_OWNERSHIP_FENCING_ENABLED` | OFF only when unset, `""` or `"false"`; `"true"` is ON. **Any other value (`TRUE`, `1`, `true `) is reported invalid and treated as ON**, so a mistyped intent does not leave destructive paths enabled. Default deployment leaves it unset (OFF) |
+| Always-on safety corrections (flag OFF too) | **W1/W10:** after an ambiguous commit the legacy upload keeps the files when the row exists and fails closed (503) when the outcome cannot be proven; it deletes only after a provable SQLite rollback. **W8:** production delete events carry no keys, so they are dead-lettered (`PHOTO_DELETE_KEYS_ABSENT`) instead of being falsely acknowledged; keyed events delete only after an authoritative unreferenced check. **W9:** never deletes in the canonical root. These change operator-visible outbox state: every photo delete now produces a dead letter for review |
 | With the flag ON | W1/W2/W10 uploads → 503; W6 AI cleanup canonical delete, W7 distinct-root promotion, and W8/W9 delete/cleanup events → refused (outbox dead-letters with `PHOTO_FENCING_WRITER_NOT_ADOPTED`); W11 Instagram → retryable refusal. **W4 AI finalization keeps writing unfenced**, because the fenced writer is not wired (see below) |
 | Fenced W4 writer | **BLOCKED.** Wiring the #406 capability into production roots and committing ownership inside the real finalization transaction was refused by the automated safety review. It needs explicit owner authorization. The validated design is in `proposed-photo-ownership/photoOwnershipAuthority.ts.proposal` and the disposable end-to-end harness `scripts/photo-final-readiness` |
 | #390 24-MP memory | FAIL / BLOCKED (see `PHOTO_STORAGE_RELEASE_READINESS.md` §4) |
+
+**Default-OFF deployment still mutates the SQLite schema:** `ensureSchema` creates the four ownership tables at startup. Resolve the PostgreSQL `0039` (Etsy) / `0040` (photo) ordering on `main` before any deployment.
 
 **Consequence:** turning the flag ON today pauses product uploads, Instagram preparation and canonical deletion without adding any fenced writer. It is an emergency stop for destructive paths, not a feature activation.
 
@@ -66,7 +69,12 @@ Repeat steps 1–7 on staging. Run the full CI suite and the Linux 512-MiB workf
 ## 10. Monitoring and emergency stop
 
 - Alert on dead letters with `PHOTO_FENCING_WRITER_NOT_ADOPTED`, upload 503s with the same code, disk free-space floor breaches, and OOM or exit 137.
-- Emergency stop: set `PHOTO_OWNERSHIP_FENCING_ENABLED=true` and restart. This pauses destructive photo paths; uploads also pause.
+- **Partial** stop: set `PHOTO_OWNERSHIP_FENCING_ENABLED=true` and restart. This pauses uploads, AI-cleanup canonical deletion, outbox delete/temp-cleanup execution and Instagram preparation.
+- It is **not a complete emergency stop**:
+  - real W4 AI finalization still writes canonical files unfenced;
+  - W3, W5, W12, W13 and W14 keep running.
+
+  A full stop of media mutation requires stopping the service.
 
 ## 11. Production activation [AUTH; currently BLOCKED]
 
