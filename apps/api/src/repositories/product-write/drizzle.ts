@@ -12,6 +12,11 @@ const rows = (q: any, execution: Execution = "asynchronous"): Result<any[]> => e
 const first = (q: any, execution: Execution = "asynchronous"): Result<any> => then(typeof q?.limit === "function" ? rows(q.limit(1), execution) : rows(q, execution), values => values[0] ?? null);
 const run = (q: any, execution: Execution = "asynchronous"): Result<unknown> => execution === "synchronous" ? q.run() : Promise.resolve(q);
 const bool = (v: unknown) => v === true || v === 1;
+// PostgreSQL stores this photo flag as integer; SQLite's column maps booleans itself.
+const photoWriteValues = (values: Record<string, unknown>, dateMode: boolean) => photoTimestampValues({
+  ...values,
+  ...(dateMode && typeof values.isPrimary === "boolean" ? { isPrimary: Number(values.isPrimary) } : {}),
+}, photoTimestampFields, dateMode);
 
 /**
  * Sprint 98: PostgreSQL code 23505, or the established SQLite driver's
@@ -230,7 +235,7 @@ export function createProductPhotoWithPromotionOutboxInTransaction(
   const outboxTable = table(schema, "outboxEvents");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === undefined ? null : v]));
   return then(
-    run(db.insert(photosTable).values(photoTimestampValues(normalize(input.values), photoTimestampFields, photosTable.createdAt.dataType === "date")), execution),
+    run(db.insert(photosTable).values(photoWriteValues(normalize(input.values), photosTable.createdAt.dataType === "date")), execution),
     () => then(run(db.insert(outboxTable).values(photoTimestampValues(input.outboxEvent, photoOutboxTimestampFields, outboxTable.createdAt.dataType === "date")), execution), () => ({ id: String(input.values.id) })),
   );
 }
@@ -271,7 +276,7 @@ export function findProductPhotosByIdsInTransaction(
 export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres", execution: Execution = "asynchronous"): any {
   const products = table(schema, "products"), productErpMetadata = table(schema, "productErpMetadata"), categories = table(schema, "categories"), collections = table(schema, "collections"), productPhotos = table(schema, "productPhotos");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v === undefined ? null : v]));
-  const photoValues = (values: Record<string, unknown>) => photoTimestampValues(values, photoTimestampFields, dialect === "postgres");
+  const photoValues = (values: Record<string, unknown>) => photoWriteValues(values, dialect === "postgres");
   const productTimestamp = (value: unknown) => dialect === "postgres" && typeof value === "string" ? new Date(value) : value;
   const normalizeProductValues = (values: Record<string, unknown>) => normalize({
     ...values,

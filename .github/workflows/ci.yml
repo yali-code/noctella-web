@@ -87,4 +87,3 @@ jobs:
           path: ${{ runner.temp }}/photo-crash-evidence/
           retention-days: 14
           if-no-files-found: warn
-
