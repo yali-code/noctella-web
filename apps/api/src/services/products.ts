@@ -528,8 +528,19 @@ async function persistUploadedProductPhoto(db: DbClient, productId: string, stor
   } catch (err) {
     // A lost commit acknowledgement cannot prove rollback. Retain candidate files and fail closed for recovery.
     if (!compensateOnTransactionFailure) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo persistence requires recovery");
-    await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
-    throw err;
+    // Legacy path (W1/W10): never delete bytes a committed row may reference. Re-read authoritatively:
+    // committed -> keep files and return the photo; provably absent on SQLite (local, synchronous
+    // commit) -> the existing compensation; anything else (PostgreSQL ack loss, unreadable DB) ->
+    // retain the files and fail closed for operator recovery.
+    let committed: boolean | null = null;
+    try { committed = (await getPhotosForProduct(db, productId)).some((photo) => photo.id === id); } catch { committed = null; }
+    if (committed !== true) {
+      if (committed === false && driver === "sqlite") {
+        await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
+        throw err;
+      }
+      throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo persistence requires recovery");
+    }
   }
   await ensureSinglePrimary(db, productId);
   return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
