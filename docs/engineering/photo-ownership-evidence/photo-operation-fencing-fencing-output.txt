@@ -1,0 +1,43 @@
+✔ sqlite intent-idempotency-and-history (487.2798ms)
+✔ sqlite lease-expiry-renewal-and-aba (317.1903ms)
+✔ sqlite preflight-race-and-generation-namespaces (324.5389ms)
+✔ sqlite atomic-domain-rollback-and-lost-ack (292.8178ms)
+✔ sqlite abort-shutdown-and-zero-byte-retention (349.8695ms)
+✔ sqlite outbox-only-historical-reference (358.0333ms)
+✔ sqlite independent concurrent claimers (790.8345ms)
+✔ sqlite SIGKILL restart intent (630.9253ms)
+✔ sqlite SIGKILL restart reserved (680.0372ms)
+✔ sqlite SIGKILL restart materialized (632.3345ms)
+✔ sqlite SIGKILL restart prepared (662.7063ms)
+✔ sqlite SIGKILL restart uncommitted (663.3246ms)
+✔ sqlite SIGKILL restart committed (654.2959ms)
+✔ sqlite database outage fails before file callback (319.8603ms)
+﹣ postgres intent-idempotency-and-history (0.2449ms) # SKIP
+﹣ postgres lease-expiry-renewal-and-aba (0.2508ms) # SKIP
+﹣ postgres preflight-race-and-generation-namespaces (0.2079ms) # SKIP
+﹣ postgres atomic-domain-rollback-and-lost-ack (0.1599ms) # SKIP
+﹣ postgres abort-shutdown-and-zero-byte-retention (0.1379ms) # SKIP
+﹣ postgres outbox-only-historical-reference (0.2494ms) # SKIP
+﹣ postgres independent concurrent claimers (0.1222ms) # SKIP
+﹣ postgres SIGKILL restart intent (0.1196ms) # SKIP
+﹣ postgres SIGKILL restart reserved (0.1213ms) # SKIP
+﹣ postgres SIGKILL restart materialized (0.108ms) # SKIP
+﹣ postgres SIGKILL restart prepared (0.0983ms) # SKIP
+﹣ postgres SIGKILL restart uncommitted (0.0972ms) # SKIP
+﹣ postgres SIGKILL restart committed (0.0988ms) # SKIP
+﹣ postgres database outage fails before file callback (0.158ms) # SKIP
+✔ sqlite database lock prevents reclaim during sealed publication (907.0178ms)
+✔ sqlite COUNTEREXAMPLE existing compensation ignores newer journal generation (537.8276ms)
+﹣ postgres database lock prevents reclaim during sealed publication (0.3344ms) # SKIP
+﹣ postgres COUNTEREXAMPLE existing compensation ignores newer journal generation (0.1188ms) # SKIP
+✔ SQLite COUNTEREXAMPLE rejecting an async transaction callback does not cancel it (957.2683ms)
+✔ sqlite COUNTEREXAMPLE actual deterministic preflight overwrites newer result (1182.9079ms)
+﹣ postgres COUNTEREXAMPLE actual deterministic preflight overwrites newer result (0.3744ms) # SKIP
+ℹ tests 35
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 17
+ℹ todo 0
+ℹ duration_ms 11113.754
