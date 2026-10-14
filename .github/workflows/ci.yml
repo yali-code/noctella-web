@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b]
   push:
     branches: [main]
 
@@ -39,8 +39,21 @@ jobs:
       - name: Build shared package
         run: npm run build -w packages/shared
 
+      - name: Disposable photo operation fencing design experiments
+        timeout-minutes: 5
+        env:
+          POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_sprint151_test
+          NOCTELLA_PROBE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NOCTELLA_FENCE_EVIDENCE_DIR: ${{ runner.temp }}/photo-fence-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$NOCTELLA_FENCE_EVIDENCE_DIR"
+          node --import tsx --test scripts/photo-operation-fencing/fencing.test.cjs 2>&1 | tee "$NOCTELLA_FENCE_EVIDENCE_DIR/test-output.txt"
+
       - name: Synthetic photo crash/restart recovery (SQLite and PostgreSQL)
         id: photo-recovery
+        if: success() || failure()
         timeout-minutes: 10
         env:
           POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_sprint151_test
@@ -85,5 +98,14 @@ jobs:
         with:
           name: photo-crash-recovery-${{ github.run_id }}
           path: ${{ runner.temp }}/photo-crash-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Preserve ownership experiment evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-operation-fencing-${{ github.run_id }}
+          path: ${{ runner.temp }}/photo-fence-evidence/
           retention-days: 14
           if-no-files-found: warn
