@@ -1,0 +1,31 @@
+
+ RUN  v4.1.10 <WORKTREE>/apps/api
+
+ ❯ tests/stripeCheckoutSprint127.test.ts (23 tests | 2 failed) 22906ms
+     × serializes genuinely concurrent duplicate delivery from separate workers 6113ms
+     × survives response-loss replay after closing and reopening the database 10850ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/stripeCheckoutSprint127.test.ts > Sprint 127 verified webhook atomicity > serializes genuinely concurrent duplicate delivery from separate workers
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/stripeCheckoutSprint127.test.ts:25:2
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/stripeCheckoutSprint127.test.ts > Sprint 127 verified webhook atomicity > survives response-loss replay after closing and reopening the database
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/stripeCheckoutSprint127.test.ts:31:2
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 21 passed (23)
+   Start at  19:02:05
+   Duration  31.56s (transform 3.84s, setup 0ms, import 7.98s, tests 22.91s, environment 0ms)
+

@@ -1,0 +1,287 @@
+
+> @noctella/shared@2.1.0-rc.2 build
+> tsc
+
+
+> @noctella/admin@2.1.0-rc.2 build
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./src/app/social/ContentEditor.tsx
+60:106  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/social/page.tsx
+37:32  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/social/planner/page.tsx
+36:9  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/social/ProductMediaPicker.tsx
+53:7  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/stock/[productId]/card/page.tsx
+56:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/96) ...
+   Generating static pages (24/96) 
+   Generating static pages (48/96) 
+   Generating static pages (72/96) 
+ ✓ Generating static pages (96/96)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                         Size     First Load JS
+┌ ƒ /                                                               192 B          96.2 kB
+├ ○ /_not-found                                                     876 B          88.2 kB
+├ ○ /ai-drafts                                                      1.83 kB         104 kB
+├ ƒ /ai-drafts/[id]                                                 3.16 kB         105 kB
+├ ○ /ai-product-intakes                                             2.41 kB         105 kB
+├ ƒ /ai-product-intakes/[id]                                        6.85 kB         109 kB
+├ ○ /ai-support                                                     247 B          87.5 kB
+├ ○ /analytics                                                      247 B          87.5 kB
+├ ƒ /api/erp/commands/company-profile/update                        0 B                0 B
+├ ƒ /api/erp/commands/customers/merge                               0 B                0 B
+├ ƒ /api/erp/commands/customers/merge-candidates                    0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/calculation-mode         0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/cancel                   0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/issue                    0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/lines/[lineId]/update    0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/mark-paid                0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/recalculate              0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/refresh-seller-snapshot  0 B                0 B
+├ ƒ /api/erp/commands/invoices/[invoiceId]/update                   0 B                0 B
+├ ƒ /api/erp/commands/orders/[orderId]/invoices/create              0 B                0 B
+├ ƒ /api/erp/commands/orders/[orderId]/packing/create               0 B                0 B
+├ ƒ /api/erp/commands/orders/[orderId]/picking/create               0 B                0 B
+├ ƒ /api/erp/commands/packing/[taskId]/cancel                       0 B                0 B
+├ ƒ /api/erp/commands/packing/[taskId]/complete                     0 B                0 B
+├ ƒ /api/erp/commands/packing/[taskId]/ready-for-shipment           0 B                0 B
+├ ƒ /api/erp/commands/packing/[taskId]/start                        0 B                0 B
+├ ƒ /api/erp/commands/packing/[taskId]/update                       0 B                0 B
+├ ƒ /api/erp/commands/picking/[taskId]/cancel                       0 B                0 B
+├ ƒ /api/erp/commands/picking/[taskId]/complete                     0 B                0 B
+├ ƒ /api/erp/commands/picking/[taskId]/lines/[lineId]/confirm       0 B                0 B
+├ ƒ /api/erp/commands/picking/[taskId]/lines/[lineId]/short         0 B                0 B
+├ ƒ /api/erp/commands/picking/[taskId]/start                        0 B                0 B
+├ ƒ /api/erp/commands/purchases/[purchaseId]/allocate               0 B                0 B
+├ ƒ /api/erp/commands/purchases/[purchaseId]/cancel                 0 B                0 B
+├ ƒ /api/erp/commands/purchases/[purchaseId]/mark-ordered           0 B                0 B
+├ ƒ /api/erp/commands/purchases/[purchaseId]/receive                0 B                0 B
+├ ƒ /api/erp/commands/purchases/create                              0 B                0 B
+├ ƒ /api/erp/commands/reservations/[reservationId]/cancel           0 B                0 B
+├ ƒ /api/erp/commands/reservations/[reservationId]/consume          0 B                0 B
+├ ƒ /api/erp/commands/reservations/[reservationId]/release          0 B                0 B
+├ ƒ /api/erp/commands/reservations/create                           0 B                0 B
+├ ƒ /api/erp/commands/suppliers/[supplierId]/update                 0 B                0 B
+├ ƒ /api/erp/commands/suppliers/create                              0 B                0 B
+├ ƒ /api/erp/commands/warehouse-locations/create                    0 B                0 B
+├ ƒ /api/erp/commands/warehouses/[id]/deactivate                    0 B                0 B
+├ ƒ /api/erp/commands/warehouses/[id]/reactivate                    0 B                0 B
+├ ƒ /api/erp/commands/warehouses/create                             0 B                0 B
+├ ƒ /api/erp/company-profile                                        0 B                0 B
+├ ƒ /api/erp/customers                                              0 B                0 B
+├ ƒ /api/erp/customers/[id]                                         0 B                0 B
+├ ƒ /api/erp/customers/[id]/history                                 0 B                0 B
+├ ƒ /api/erp/customers/[id]/notes                                   0 B                0 B
+├ ƒ /api/erp/customers/[id]/preferences                             0 B                0 B
+├ ƒ /api/erp/customers/[id]/statistics                              0 B                0 B
+├ ƒ /api/erp/finance/orders/[id]                                    0 B                0 B
+├ ƒ /api/erp/invoices                                               0 B                0 B
+├ ƒ /api/erp/invoices/[id]                                          0 B                0 B
+├ ƒ /api/erp/invoices/[id]/events                                   0 B                0 B
+├ ƒ /api/erp/invoices/[id]/issue-readiness                          0 B                0 B
+├ ƒ /api/erp/orders/[id]/invoices                                   0 B                0 B
+├ ƒ /api/erp/orders/[id]/sales-summary                              0 B                0 B
+├ ƒ /api/erp/packing                                                0 B                0 B
+├ ƒ /api/erp/packing/[id]                                           0 B                0 B
+├ ƒ /api/erp/picking                                                0 B                0 B
+├ ƒ /api/erp/picking/[id]                                           0 B                0 B
+├ ƒ /api/erp/products/[id]/purchase-history                         0 B                0 B
+├ ƒ /api/erp/products/[id]/workspace                                0 B                0 B
+├ ƒ /api/erp/purchases                                              0 B                0 B
+├ ƒ /api/erp/purchases/[id]                                         0 B                0 B
+├ ƒ /api/erp/purchases/[id]/landed-cost                             0 B                0 B
+├ ƒ /api/erp/reports/[type]/export                                  0 B                0 B
+├ ƒ /api/erp/reservations                                           0 B                0 B
+├ ƒ /api/erp/suppliers                                              0 B                0 B
+├ ƒ /api/erp/suppliers/[id]                                         0 B                0 B
+├ ƒ /api/erp/warehouse/events                                       0 B                0 B
+├ ƒ /api/erp/warehouse/locations                                    0 B                0 B
+├ ƒ /api/erp/warehouse/shipment-ready                               0 B                0 B
+├ ƒ /api/erp/warehouses                                             0 B                0 B
+├ ƒ /api/erp/warehouses/[id]                                        0 B                0 B
+├ ƒ /background-jobs                                                192 B          96.2 kB
+├ ƒ /background-jobs/[id]                                           2.13 kB        95.7 kB
+├ ○ /blog                                                           247 B          87.5 kB
+├ ○ /categories                                                     1.95 kB        95.5 kB
+├ ○ /collections                                                    1.91 kB        95.4 kB
+├ ○ /company-profile                                                2.34 kB        95.9 kB
+├ ○ /complete-sales                                                 247 B          87.5 kB
+├ ○ /coupons                                                        247 B          87.5 kB
+├ ○ /currencies                                                     247 B          87.5 kB
+├ ƒ /customers                                                      247 B          87.5 kB
+├ ƒ /customers/[id]                                                 248 B          87.5 kB
+├ ƒ /customers/[id]/analytics                                       248 B          87.5 kB
+├ ƒ /customers/[id]/notes                                           248 B          87.5 kB
+├ ƒ /customers/[id]/preferences                                     247 B          87.5 kB
+├ ƒ /customers/[id]/timeline                                        247 B          87.5 kB
+├ ○ /customers/merge                                                2.26 kB        95.8 kB
+├ ○ /database                                                       247 B          87.5 kB
+├ ○ /database/health                                                247 B          87.5 kB
+├ ○ /database/migration                                             248 B          87.5 kB
+├ ƒ /erp-integration                                                247 B          87.5 kB
+├ ○ /erp-migration                                                  247 B          87.5 kB
+├ ƒ /external-listings                                              853 B           103 kB
+├ ○ /finance                                                        247 B          87.5 kB
+├ ƒ /finance/orders/[id]                                            249 B          87.5 kB
+├ ○ /invoices                                                       1.77 kB        95.3 kB
+├ ƒ /invoices/[id]                                                  5.43 kB          99 kB
+├ ○ /live-visitors                                                  247 B          87.5 kB
+├ ○ /login                                                          1.51 kB        95.1 kB
+├ ○ /marketing                                                      7 kB            101 kB
+├ ƒ /marketplace-orders                                             858 B           103 kB
+├ ƒ /marketplace-orders/[id]                                        858 B           103 kB
+├ ƒ /marketplace-sync                                               247 B          87.5 kB
+├ ○ /marketplaces                                                   1.15 kB        94.7 kB
+├ ○ /offers                                                         1.09 kB         103 kB
+├ ○ /orders                                                         2.05 kB         104 kB
+├ ƒ /orders/[id]                                                    6.14 kB         108 kB
+├ ○ /packing                                                        2.97 kB        96.5 kB
+├ ƒ /packing/[id]                                                   4.06 kB        97.6 kB
+├ ○ /pages                                                          247 B          87.5 kB
+├ ○ /payments                                                       1.41 kB         104 kB
+├ ƒ /payments/[id]                                                  1.29 kB         104 kB
+├ ○ /picking                                                        2.95 kB        96.5 kB
+├ ƒ /picking/[id]                                                   4.17 kB        97.7 kB
+├ ○ /products                                                       1.96 kB         104 kB
+├ ƒ /products/[id]                                                  1.99 kB         104 kB
+├ ƒ /products/[id]/edit                                             983 B           106 kB
+├ ƒ /products/[id]/label                                            12.7 kB         106 kB
+├ ƒ /products/[id]/photos                                           2.52 kB         105 kB
+├ ƒ /products/[id]/publishing                                       1.83 kB         104 kB
+├ ƒ /products/[id]/workspace                                        247 B          87.5 kB
+├ ○ /products/new                                                   458 B           106 kB
+├ ○ /publish-jobs                                                   1.02 kB         103 kB
+├ ƒ /publish-jobs/[id]                                              967 B          94.5 kB
+├ ○ /purchases                                                      3.34 kB        96.9 kB
+├ ƒ /purchases/[id]                                                 4.83 kB        98.4 kB
+├ ○ /ready-to-publish                                               1.6 kB          104 kB
+├ ƒ /refunds                                                        247 B          87.5 kB
+├ ƒ /refunds/[id]                                                   2.46 kB          96 kB
+├ ○ /reports                                                        247 B          87.5 kB
+├ ƒ /reports/channels                                               247 B          87.5 kB
+├ ƒ /reports/customers                                              247 B          87.5 kB
+├ ƒ /reports/finance                                                247 B          87.5 kB
+├ ƒ /reports/inventory                                              248 B          87.5 kB
+├ ƒ /reports/purchasing                                             247 B          87.5 kB
+├ ƒ /reports/returns-refunds                                        247 B          87.5 kB
+├ ƒ /reports/sales                                                  247 B          87.5 kB
+├ ƒ /reports/shipping                                               247 B          87.5 kB
+├ ƒ /reports/suppliers                                              247 B          87.5 kB
+├ ƒ /reports/warehouse                                              247 B          87.5 kB
+├ ○ /reservations                                                   3.13 kB        96.7 kB
+├ ƒ /reservations/[id]                                              3.58 kB        97.1 kB
+├ ƒ /returns                                                        247 B          87.5 kB
+├ ƒ /returns/[id]                                                   3.29 kB        96.8 kB
+├ ○ /seo                                                            247 B          87.5 kB
+├ ○ /settings                                                       247 B          87.5 kB
+├ ○ /settings/shipping                                              2.79 kB        96.3 kB
+├ ƒ /shipments                                                      192 B          96.2 kB
+├ ƒ /shipments/[id]                                                 3.49 kB         106 kB
+├ ○ /shipping                                                       247 B          87.5 kB
+├ ○ /social                                                         1.86 kB         104 kB
+├ ƒ /social/[id]                                                    142 B          98.4 kB
+├ ○ /social/instagram                                               2.27 kB        95.8 kB
+├ ○ /social/media                                                   1.82 kB         104 kB
+├ ƒ /social/new                                                     143 B          98.4 kB
+├ ○ /social/planner                                                 2.83 kB        96.4 kB
+├ ○ /stock                                                          3.57 kB         106 kB
+├ ƒ /stock-sync                                                     1.67 kB        95.2 kB
+├ ƒ /stock-sync/conflicts                                           192 B          96.2 kB
+├ ƒ /stock-sync/conflicts/[id]                                      2.17 kB         104 kB
+├ ƒ /stock/[productId]                                              2.52 kB        96.1 kB
+├ ƒ /stock/[productId]/card                                         4.7 kB          107 kB
+├ ○ /suppliers                                                      2.75 kB        96.3 kB
+├ ƒ /suppliers/[id]                                                 2.88 kB        96.4 kB
+├ ○ /users-roles                                                    247 B          87.5 kB
+├ ○ /warehouse/events                                               2.41 kB        95.9 kB
+├ ○ /warehouse/locations                                            3.09 kB        96.6 kB
+├ ○ /warehouse/shipment-ready                                       3.72 kB        97.3 kB
+├ ○ /warehouses                                                     2.95 kB        96.5 kB
+└ ƒ /warehouses/[id]                                                3.56 kB        97.1 kB
++ First Load JS shared by all                                       87.3 kB
+  ├ chunks/1528-1112d91a34542275.js                                 31.7 kB
+  ├ chunks/1dd3208c-cee89553e64e9fcb.js                             53.6 kB
+  └ other shared chunks (total)                                     1.93 kB
+
+
+ƒ Middleware                                                        26.6 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+> @noctella/api@2.1.0-rc.2 build
+> tsc -p tsconfig.json && node scripts/copy-build-asset.mjs src/db/schema.sql dist/db/schema.sql
+
+
+> @noctella/storefront@2.1.0-rc.2 build
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/25) ...
+   Generating static pages (6/25) 
+   Generating static pages (12/25) 
+   Generating static pages (18/25) 
+ ✓ Generating static pages (25/25)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    2.94 kB         105 kB
+├ ○ /_not-found                          873 B          88.1 kB
+├ ○ /about                               173 B          87.4 kB
+├ ○ /account                             2.89 kB         105 kB
+├ ○ /archive                             1.45 kB         103 kB
+├ ○ /cart                                3.15 kB         105 kB
+├ ○ /categories                          793 B           103 kB
+├ ƒ /category/[slug]                     2.52 kB         104 kB
+├ ○ /checkout                            6.11 kB         108 kB
+├ ○ /checkout/cancel                     1.2 kB          103 kB
+├ ○ /checkout/payment                    5.86 kB         108 kB
+├ ○ /checkout/payment/confirm            4.51 kB         106 kB
+├ ○ /checkout/review                     5.22 kB         107 kB
+├ ○ /checkout/success                    2.51 kB         104 kB
+├ ƒ /collection/[slug]                   2.59 kB         104 kB
+├ ○ /collections                         909 B           103 kB
+├ ○ /contact                             173 B          87.4 kB
+├ ○ /customs-duties                      173 B          87.4 kB
+├ ○ /faq                                 173 B          87.4 kB
+├ ƒ /product/[slug]                      5.06 kB         107 kB
+├ ○ /returns-policy                      173 B          87.4 kB
+├ ○ /robots.txt                          0 B                0 B
+├ ○ /shipping-delivery                   174 B          96.1 kB
+├ ○ /shop                                3.44 kB         105 kB
+├ ○ /sitemap.xml                         0 B                0 B
+└ ○ /wishlist                            2.18 kB         104 kB
++ First Load JS shared by all            87.2 kB
+  ├ chunks/1dd3208c-e02384b752b39c82.js  53.6 kB
+  ├ chunks/528-4341ddcf373ea276.js       31.7 kB
+  └ other shared chunks (total)          1.89 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

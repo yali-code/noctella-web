@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 <WORKTREE>/apps/admin
+
+
+ Test Files  130 passed (130)
+      Tests  925 passed (925)
+   Start at  19:03:32
+   Duration  186.74s (transform 10.66s, setup 94.07s, import 34.84s, tests 164.38s, environment 192.17s)
+

@@ -1,0 +1,90 @@
+[
+  {
+    "name": "profiles",
+    "b1": {
+      "bytes": 44052480,
+      "inodes": 5
+    },
+    "d1": {
+      "bytes": 77631488,
+      "inodes": 14
+    },
+    "viaHttp": {
+      "bytes": 88129536,
+      "inodes": 16
+    },
+    "deterministic": {
+      "bytes": 67145728,
+      "inodes": 13
+    }
+  },
+  {
+    "name": "hardlink-zero-byte",
+    "inventory": {
+      "bytes": 3149824,
+      "inodes": 2,
+      "entries": 3
+    },
+    "linked": true
+  },
+  {
+    "name": "cross-process-race",
+    "capacity": 3,
+    "outcomes": [
+      {
+        "event": "reserved",
+        "id": "1b0aa8d4-156e-4ebf-b98f-877c49150c2c",
+        "bytes": 44052480
+      },
+      {
+        "event": "rejected",
+        "code": "PHOTO_DISK_BUDGET_EXHAUSTED"
+      },
+      {
+        "event": "reserved",
+        "id": "aea5da13-0681-4e7b-a8cb-452f6b84e175",
+        "bytes": 44052480
+      },
+      {
+        "event": "rejected",
+        "code": "PHOTO_DISK_BUDGET_EXHAUSTED"
+      },
+      {
+        "event": "reserved",
+        "id": "79c0b2c0-f70a-49af-b871-b6ff5ed2ab95",
+        "bytes": 44052480
+      },
+      {
+        "event": "rejected",
+        "code": "PHOTO_DISK_BUDGET_EXHAUSTED"
+      }
+    ],
+    "snapshot": {
+      "retainedBytes": 0,
+      "reservedBytes": 132157440,
+      "reservations": 3,
+      "budgetBytes": 1073741824,
+      "freeBytes": 1099511627776,
+      "freeInodes": null,
+      "closed": false
+    }
+  },
+  {
+    "name": "sigkill-reservation",
+    "exit": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "retained": [
+      "2c4fb866-e543-41cd-9be4-a4d64ce65db8.json"
+    ]
+  },
+  {
+    "name": "sigkill-ledger-lock",
+    "exit": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "lockRetained": true
+  }
+]
