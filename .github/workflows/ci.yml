@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1, feat/photo-storage-writer-integration-p2-2b3d2, feat/photo-recovery-reconciliation-p2-2b3d3, feat/photo-writer-fencing-adoption-p2-2b3d4]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1, feat/photo-storage-writer-integration-p2-2b3d2, feat/photo-recovery-reconciliation-p2-2b3d3, feat/photo-writer-fencing-adoption-p2-2b3d4, feat/photo-ownership-schema-p2-2b3d5]
   push:
     branches: [main]
 
@@ -110,6 +110,18 @@ jobs:
           mkdir -p "$NOCTELLA_OWNERSHIP_EVIDENCE_DIR"
           node --import tsx --test scripts/photo-ownership-schema/ownership.test.cjs 2>&1 | tee "$NOCTELLA_OWNERSHIP_EVIDENCE_DIR/test-output.txt"
 
+      - name: Legacy photo writer shutdown gate (SQLite and PostgreSQL)
+        if: success() || failure()
+        timeout-minutes: 10
+        env:
+          POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_sprint151_test
+          NOCTELLA_LEGACY_GATE_EVIDENCE_DIR: ${{ runner.temp }}/photo-legacy-gate-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$NOCTELLA_LEGACY_GATE_EVIDENCE_DIR"
+          node --import tsx --test scripts/photo-legacy-gate/gate.test.cjs 2>&1 | tee "$NOCTELLA_LEGACY_GATE_EVIDENCE_DIR/test-output.txt"
+
       - name: Disposable photo operation fencing design experiments
         if: success() || failure()
         timeout-minutes: 5
@@ -206,6 +218,15 @@ jobs:
         with:
           name: photo-ownership-${{ github.run_id }}
           path: ${{ runner.temp }}/photo-ownership-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Preserve legacy gate evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-legacy-gate-${{ github.run_id }}
+          path: ${{ runner.temp }}/photo-legacy-gate-evidence/
           retention-days: 14
           if-no-files-found: warn
 

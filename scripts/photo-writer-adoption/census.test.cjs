@@ -31,8 +31,10 @@ const EXPECTED = {
   'services/developmentPhotoStorageCapability.ts': { sites: 6, writers: ['DEV'] },
   'services/developmentPhotoDiskBudget.ts': { sites: 4, writers: ['DEV'] },
   'services/developmentPhotoRecovery.ts': { sites: 1, writers: ['DEV'] },
+  // P2-2B3D6: gate epochs/lease markers/lock only (bookkeeping, never media).
+  'services/developmentLegacyWriterGate.ts': { sites: 4, writers: ['DEV'] },
 };
-const DEV_MODULES = ['developmentPhotoStorageCapability', 'developmentPhotoDiskBudget', 'developmentPhotoRecovery'];
+const DEV_MODULES = ['developmentPhotoStorageCapability', 'developmentPhotoDiskBudget', 'developmentPhotoRecovery', 'developmentLegacyWriterGate'];
 
 function sources() {
   const files = [];

@@ -1,0 +1,20 @@
+✔ feature OFF: the gate refuses construction without the development flag or a disposable root (2.684ms)
+✔ baseline (ungated, current code): legacy delete, temp cleanup and AI cleanup remove canonical bytes (65.3381ms)
+✔ in-flight legacy upload during shutdown: checkpoint denies new mutation, closure waits for the lease (94.5586ms)
+✔ outbox worker interrupted before/after acknowledgement: parked when not OPEN, closure needs terminal events (35.5259ms)
+✔ stale legacy writer after shutdown and repeated shutdown/startup cannot reuse an old epoch (ABA) (54.2896ms)
+✔ lost COMMIT acknowledgement: gated rollback deletion is refused once draining, bytes retained (37.1517ms)
+✔ concurrent delete versus a new sealed generation at the same key: the delete stays parked (27.068ms)
+✔ unknown or unavailable state fails closed (27.0017ms)
+✔ SIGKILL inside a legacy lease, then restart: the marker is retained and closure stays refused (453.1587ms)
+✔ rollback to OPEN deletes nothing; all canonical bytes and inodes unchanged across the whole shutdown cycle (78.1018ms)
+✔ sqlite: drain readiness reads real outbox rows; outbox-only history keeps canonical bytes referenced while gated (323.8011ms)
+﹣ postgres: drain readiness reads real outbox rows; outbox-only history keeps canonical bytes referenced while gated (0.2132ms) # POSTGRES_TEST_DATABASE_URL not configured
+ℹ tests 12
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 3717.1142
