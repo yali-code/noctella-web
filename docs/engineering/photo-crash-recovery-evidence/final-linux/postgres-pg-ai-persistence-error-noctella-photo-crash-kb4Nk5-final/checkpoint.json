@@ -1,0 +1,14 @@
+{
+  "phase": "actual-ai-rejected-source-retained",
+  "boundary": "pg-ai-persistence-error",
+  "driver": "postgres",
+  "syntheticOnly": true,
+  "scope": "actual-postgres-AI-persistence-error-handler",
+  "code": "PHOTO_STORAGE_UNAVAILABLE",
+  "admission": {
+    "held": 0,
+    "active": 0,
+    "waiting": 0,
+    "closed": true
+  }
+}

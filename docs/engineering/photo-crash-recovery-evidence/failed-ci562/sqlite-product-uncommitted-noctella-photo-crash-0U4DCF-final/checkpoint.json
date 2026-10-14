@@ -1,0 +1,6 @@
+{
+  "phase": "rows-and-outbox-before-commit",
+  "boundary": "product-uncommitted",
+  "driver": "sqlite",
+  "syntheticOnly": true
+}

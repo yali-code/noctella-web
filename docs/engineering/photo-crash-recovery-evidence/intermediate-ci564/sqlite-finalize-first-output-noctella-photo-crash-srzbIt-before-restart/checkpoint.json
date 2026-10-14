@@ -1,0 +1,7 @@
+{
+  "phase": "first-deterministic-output-before-thumbnail",
+  "boundary": "finalize-first-output",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal"
+}

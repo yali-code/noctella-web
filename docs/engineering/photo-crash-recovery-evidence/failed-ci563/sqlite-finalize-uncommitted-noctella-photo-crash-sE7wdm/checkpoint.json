@@ -1,0 +1,7 @@
+{
+  "phase": "rows-and-outbox-before-commit",
+  "boundary": "finalize-uncommitted",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal"
+}

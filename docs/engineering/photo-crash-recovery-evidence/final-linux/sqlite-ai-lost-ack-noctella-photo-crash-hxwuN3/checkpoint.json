@@ -1,0 +1,16 @@
+{
+  "phase": "persistence-error-after-service-handler",
+  "boundary": "ai-lost-ack",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal",
+  "code": "PHOTO_STORAGE_UNAVAILABLE",
+  "admission": {
+    "held": 0,
+    "active": 0,
+    "waiting": 0,
+    "closed": true
+  },
+  "enabledWorkRejected": true,
+  "legacyBypass": true
+}

@@ -1,0 +1,7 @@
+{
+  "phase": "encoded-output-before-db",
+  "boundary": "ai-encoded-output",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal"
+}

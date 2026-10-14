@@ -1,0 +1,252 @@
+{
+  "driver": "sqlite",
+  "boundary": "finalize-committed",
+  "death": {
+    "checkpoint": {
+      "phase": "commit-complete-before-response",
+      "boundary": "finalize-committed",
+      "driver": "sqlite",
+      "syntheticOnly": true
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "linux"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [
+      {
+        "id": "1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+        "filename": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "url": "/images/product-photos/synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "thumbnailUrl": "/images/product-photos/synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "storageKey": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "thumbnailStorageKey": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "processingStatus": "Processing"
+      }
+    ],
+    "aiPhotos": [
+      {
+        "id": "1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+        "intakeId": "5749bde2-c73d-4948-be19-a081cb916655",
+        "storageKey": "5a4fedc2-9775-4a81-8f4e-54d301314b16.webp"
+      }
+    ],
+    "outbox": [
+      {
+        "id": "5b27a1e0-ca30-4d7c-84e8-8021eaff3ef5",
+        "eventType": "product_photo.promote_requested",
+        "aggregateId": "1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+        "status": "Pending",
+        "payload": "{\"photoId\":\"1afc3dc2-8eb0-4ead-9587-49056a24b5dd\",\"productId\":\"synthetic-product\"}"
+      }
+    ],
+    "intakes": [
+      {
+        "id": "5749bde2-c73d-4948-be19-a081cb916655",
+        "status": "finalized",
+        "resultProductId": "synthetic-product"
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801389,
+        "nlink": 1,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801388,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "intake",
+        "key": "5a4fedc2-9775-4a81-8f4e-54d301314b16.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801386,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801384,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [
+      {
+        "id": "1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+        "filename": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "url": "/images/product-photos/synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "thumbnailUrl": "/images/product-photos/synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "storageKey": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "thumbnailStorageKey": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "processingStatus": "Processing"
+      }
+    ],
+    "aiPhotos": [
+      {
+        "id": "1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+        "intakeId": "5749bde2-c73d-4948-be19-a081cb916655",
+        "storageKey": "5a4fedc2-9775-4a81-8f4e-54d301314b16.webp"
+      }
+    ],
+    "outbox": [
+      {
+        "id": "5b27a1e0-ca30-4d7c-84e8-8021eaff3ef5",
+        "eventType": "product_photo.promote_requested",
+        "aggregateId": "1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+        "status": "Pending",
+        "payload": "{\"photoId\":\"1afc3dc2-8eb0-4ead-9587-49056a24b5dd\",\"productId\":\"synthetic-product\"}"
+      }
+    ],
+    "intakes": [
+      {
+        "id": "5749bde2-c73d-4948-be19-a081cb916655",
+        "status": "finalized",
+        "resultProductId": "synthetic-product"
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801389,
+        "nlink": 1,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801388,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "intake",
+        "key": "5a4fedc2-9775-4a81-8f4e-54d301314b16.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801386,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801384,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd-thumb.webp",
+        "size": 72,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003",
+        "owners": [
+          "ai-finalization:1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+          "photo:1afc3dc2-8eb0-4ead-9587-49056a24b5dd"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-1afc3dc2-8eb0-4ead-9587-49056a24b5dd.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [
+          "ai-finalization:1afc3dc2-8eb0-4ead-9587-49056a24b5dd",
+          "photo:1afc3dc2-8eb0-4ead-9587-49056a24b5dd"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      },
+      {
+        "root": "intake",
+        "key": "5a4fedc2-9775-4a81-8f4e-54d301314b16.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [
+          "ai:1afc3dc2-8eb0-4ead-9587-49056a24b5dd"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      }
+    ]
+  },
+  "retries": [
+    {
+      "ok": true,
+      "created": false
+    },
+    {
+      "ok": true,
+      "created": false
+    }
+  ],
+  "sourceSha": "253b74c77addf5ab662f9d757b719d3553b7bc4f",
+  "runtimeSha256": "6bdcbadfdc2207344e51eb4324bee8ad29557a55aac796d9aea93b737d3a1ddc",
+  "retainedRoot": "/tmp/noctella-photo-crash-aZjfGM"
+}

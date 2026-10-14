@@ -1,0 +1,7 @@
+{
+  "phase": "protocol-outbox-only-after-commit",
+  "boundary": "pg-protocol-outbox-only",
+  "driver": "postgres",
+  "syntheticOnly": true,
+  "scope": "native-postgresql-transaction-fixture-not-photo-service"
+}
