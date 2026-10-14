@@ -34,7 +34,8 @@
     "ads:paid:preview": "tsx src/scripts/previewPaidCampaign.ts",
     "ads:meta:verify": "tsx src/scripts/verifyMetaPaidAccount.ts",
     "ads:meta:e07": "tsx src/scripts/runMetaE07Staging.ts",
-    "ads:meta:e07:backup": "tsx src/scripts/checkMetaE07StagingBackup.ts"
+    "ads:meta:e07:backup": "tsx src/scripts/checkMetaE07StagingBackup.ts",
+    "ads:meta:ab:preview": "tsx src/scripts/previewMetaAdAb.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
