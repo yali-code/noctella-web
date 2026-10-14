@@ -1,0 +1,45 @@
+✔ planner protects all referenced zero-byte, canonical and private files; never grants mutation (25.7707ms)
+✔ outbox delete/cleanup payloads protect bytes after photo-row disappearance regardless of status (0.5472ms)
+✔ unknown ownership, malformed outbox, DB outages, live writers and unsafe paths never authorize cleanup (7.2018ms)
+✔ sqlite restart ai-reserved-output (2760.3657ms)
+✔ sqlite restart ai-encoded-output (2088.1469ms)
+✔ sqlite restart ai-uncommitted (1989.6573ms)
+✔ sqlite restart ai-committed (1999.0104ms)
+✔ sqlite restart ai-lost-ack (1910.4691ms)
+✔ sqlite restart ai-rollback-error (2162.2314ms)
+✔ sqlite restart product-one-link (2756.6642ms)
+✔ sqlite restart product-uncommitted (2205.4296ms)
+✔ sqlite restart product-committed (2073.4133ms)
+✔ sqlite restart product-lost-ack (2039.4025ms)
+✔ sqlite restart finalize-uncommitted (5167.6957ms)
+✔ sqlite restart finalize-committed (4750.3093ms)
+✔ sqlite restart finalize-first-output (5007.757ms)
+✔ sqlite restart finalize-zero-output (5850.1876ms)
+✔ sqlite restart instagram-temp (2849.0008ms)
+﹣ postgres restart ai-reserved-output (0.3418ms) # SKIP
+﹣ postgres restart ai-encoded-output (0.1384ms) # SKIP
+﹣ postgres restart ai-uncommitted (0.1017ms) # SKIP
+﹣ postgres restart ai-committed (0.0966ms) # SKIP
+﹣ postgres restart ai-lost-ack (0.0999ms) # SKIP
+﹣ postgres restart ai-rollback-error (0.0912ms) # SKIP
+﹣ postgres restart product-one-link (0.092ms) # SKIP
+﹣ postgres restart product-uncommitted (0.0852ms) # SKIP
+﹣ postgres restart product-committed (0.0841ms) # SKIP
+﹣ postgres restart product-lost-ack (0.0883ms) # SKIP
+﹣ postgres restart finalize-uncommitted (0.0869ms) # SKIP
+﹣ postgres restart finalize-committed (0.0818ms) # SKIP
+﹣ postgres restart finalize-first-output (0.083ms) # SKIP
+﹣ postgres restart finalize-zero-output (0.0803ms) # SKIP
+﹣ postgres restart instagram-temp (0.0834ms) # SKIP
+﹣ postgres protocol fixture pg-protocol-uncommitted (0.0809ms) # SKIP
+﹣ postgres protocol fixture pg-protocol-committed (0.0877ms) # SKIP
+﹣ postgres protocol fixture pg-protocol-outbox-only (0.0965ms) # SKIP
+﹣ postgres protocol fixture pg-ai-persistence-error (0.094ms) # SKIP
+ℹ tests 37
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 19
+ℹ todo 0
+ℹ duration_ms 45986.3934
