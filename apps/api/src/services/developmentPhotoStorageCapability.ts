@@ -7,6 +7,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { LocalStagedProductPhotoStorage } from "./stagedProductPhotoStorage";
 import { writeDeterministicProductPhotoInPrivateRoot } from "./photoStorage";
 
+declare const rootPermitBrand: unique symbol;
+export type DevelopmentPrivatePhotoRoot = { readonly [rootPermitBrand]: true };
+const rootPermits = new WeakMap<object,string>();
 export interface PhotoOwnerToken { id: string; generation: number; owner: string; nonce: string }
 export interface PhotoBinding { main: string; thumbnail: string; inputHash: string }
 export interface PhotoSeal { id: string; operation: string; generation: number; relative: string; mainHash: string; thumbHash: string; mainSize: number; thumbSize: number; mainDev: string; mainIno: string; thumbDev: string; thumbIno: string }
@@ -27,6 +30,11 @@ const chain = <T,U>(value: Maybe<T>, next: (value:T)=>Maybe<U>): Maybe<U> => val
 const safe = (key: string) => /^[a-zA-Z0-9._-]{1,160}$/.test(key) && !key.includes("..") && key !== "." && !key.endsWith(".") && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(key);
 const fail = (code: string): never => { throw new Error(code); };
 const boundary = () => { if(scopes.getStore()) fail("PHOTO_ASYNC_SQLITE_SCOPE_FORBIDDEN"); if(lifetimes.getStore()?.active===false)fail("PHOTO_MUTATION_CAPABILITY_REVOKED"); };
+/** Resolve only an issued, still-live private producer permit; callers cannot choose paths. */
+export function resolvePrivatePhotoRootPermit(permit:DevelopmentPrivatePhotoRoot):string {
+  boundary();if(!permit||typeof permit!=="object"||!rootPermits.has(permit))fail("PHOTO_PRIVATE_ROOT_PERMIT_REQUIRED");
+  return rootPermits.get(permit)!;
+}
 function directory(dir: string, privateMode: boolean) {
   boundary();
   fs.mkdirSync(dir, {recursive:true,mode:privateMode?0o700:0o755});
@@ -94,12 +102,13 @@ export class DevelopmentPhotoStorageCapability {
       });
     }));
   }
-  async #prepare(token:PhotoOwnerToken,now:number,bytes:Buffer,produce:(raw:string,work:string)=>Promise<{main:string;thumbnail:string}>):Promise<string>{
+  async #prepare(token:PhotoOwnerToken,now:number,bytes:Buffer,produce:(raw:string,work:string,permit:DevelopmentPrivatePhotoRoot)=>Promise<{main:string;thumbnail:string}>):Promise<string>{
     token=Object.freeze({...token});
-    boundary();let raw="",work="";const attempt=randomUUID();
-    await this.#fenced(token,now,()=>chain(this.authority.binding(token.id),binding=>{if(binding.inputHash!==createHash("sha256").update(bytes).digest("hex"))fail("PHOTO_SOURCE_IDENTITY_MISMATCH");const op=path.join(this.#privateRoot,token.id);directory(op,true);const gen=path.join(op,"g"+token.generation);directory(gen,true);const attemptDir=path.join(gen,attempt);directory(attemptDir,true);raw=path.join(attemptDir,"raw");work=path.join(attemptDir,"work");directory(raw,true);directory(work,true);}));
+    boundary();let raw="",work="";const attempt=randomUUID();const permit=Object.freeze({}) as DevelopmentPrivatePhotoRoot;
+    await this.#fenced(token,now,()=>chain(this.authority.binding(token.id),binding=>{if(binding.inputHash!==createHash("sha256").update(bytes).digest("hex"))fail("PHOTO_SOURCE_IDENTITY_MISMATCH");const op=path.join(this.#privateRoot,token.id);directory(op,true);const gen=path.join(op,"g"+token.generation);directory(gen,true);const attemptDir=path.join(gen,attempt);directory(attemptDir,true);raw=path.join(attemptDir,"raw");work=path.join(attemptDir,"work");directory(raw,true);directory(work,true);rootPermits.set(permit,raw);}));
     // Native work can finish only in this immutable generation/attempt namespace.
-    const output=await produce(raw,work);
+    let output:{main:string;thumbnail:string};
+    try{output=await produce(raw,work,permit);}finally{rootPermits.delete(permit);}
     return this.#fenced(token,now,()=>{
       const sealed=path.join(path.dirname(raw),"sealed");directory(sealed,true);
       for(const [source,key]of [[output.main,"main.webp"],[output.thumbnail,"thumb.webp"]]){
@@ -111,13 +120,13 @@ export class DevelopmentPhotoStorageCapability {
       return chain(this.authority.saveSeal(seal),()=>attempt);
     });
   }
-  prepareProduct(token:PhotoOwnerToken,now:number,bytes:Buffer){if(bytes.length>10*1024*1024)fail("PHOTO_INPUT_LIMIT");bytes=Buffer.from(bytes);return this.#prepare(token,now,bytes,async(raw,work)=>{
+  prepareProduct(token:PhotoOwnerToken,now:number,bytes:Buffer,mimetype="image/png"){if(bytes.length>10*1024*1024)fail("PHOTO_INPUT_LIMIT");bytes=Buffer.from(bytes);return this.#prepare(token,now,bytes,async(raw,work)=>{
     const input=path.join(work,"input");fs.writeFileSync(input,bytes,{flag:"wx",mode:0o600});
-    const storage=new LocalStagedProductPhotoStorage(raw);const photo=await storage.saveStagedProductPhoto({path:input,workDir:work,mimetype:"image/png",size:bytes.length,signal:new AbortController().signal});
+    const storage=new LocalStagedProductPhotoStorage(raw);const photo=await storage.saveStagedProductPhoto({path:input,workDir:work,mimetype,size:bytes.length,signal:new AbortController().signal});
     return{main:path.join(raw,photo.filename),thumbnail:path.join(raw,path.basename(photo.thumbnailUrl))};
   });}
-  prepareDeterministic(token:PhotoOwnerToken,now:number,bytes:Buffer){if(bytes.length>10*1024*1024)fail("PHOTO_INPUT_LIMIT");bytes=Buffer.from(bytes);return this.#prepare(token,now,bytes,async(raw)=>{
-    await writeDeterministicProductPhotoInPrivateRoot({buffer:bytes,mimetype:"image/png",size:bytes.length,mainStorageKey:"main.webp",thumbnailStorageKey:"thumb.webp"},raw);
+  prepareDeterministic(token:PhotoOwnerToken,now:number,bytes:Buffer,mimetype="image/png"){if(bytes.length>10*1024*1024)fail("PHOTO_INPUT_LIMIT");bytes=Buffer.from(bytes);return this.#prepare(token,now,bytes,async(raw,_work,permit)=>{
+    await writeDeterministicProductPhotoInPrivateRoot({buffer:bytes,mimetype,size:bytes.length,mainStorageKey:"main.webp",thumbnailStorageKey:"thumb.webp"},permit);
     return{main:path.join(raw,"main.webp"),thumbnail:path.join(raw,"thumb.webp")};
   });}
   /** Canonical compensation is retain-only; no URL/path-based deletion authority. */

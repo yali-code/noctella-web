@@ -1,3 +1,4 @@
+import type { DevelopmentPrivatePhotoRoot } from "./developmentPhotoStorageCapability";
 import os from "node:os";
 import { realpathSync } from "node:fs";
 import { runImageOperation } from "./photoUploadAdmission";
@@ -166,8 +167,9 @@ export const writeDeterministicProductPhoto: (input: DeterministicProductPhotoIn
   runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input));
 
 /** Explicit test/development private-root producer; existing exports retain their default root. */
-export function writeDeterministicProductPhotoInPrivateRoot(input: DeterministicProductPhotoInput, privateRoot: string) {
+export function writeDeterministicProductPhotoInPrivateRoot(input: DeterministicProductPhotoInput, permit: DevelopmentPrivatePhotoRoot) {
   if (!["test", "development"].includes(process.env.NODE_ENV ?? "") || process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED !== "true") throw new Error("PHOTO_DEVELOPMENT_CAPABILITY_DISABLED");
+  const privateRoot = (require("./developmentPhotoStorageCapability") as typeof import("./developmentPhotoStorageCapability")).resolvePrivatePhotoRootPermit(permit);
   const resolved = path.resolve(privateRoot);
   if (!resolved.startsWith(path.join(os.tmpdir(), "noctella-photo-fence-")) || path.basename(resolved) !== "raw" || realpathSync(resolved) !== resolved) throw new Error("PHOTO_DISPOSABLE_PRIVATE_ROOT_REQUIRED");
   return runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input, resolved));
