@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1, feat/photo-storage-writer-integration-p2-2b3d2]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1, feat/photo-storage-writer-integration-p2-2b3d2, feat/photo-recovery-reconciliation-p2-2b3d3]
   push:
     branches: [main]
 
@@ -89,6 +89,14 @@ jobs:
           set -euo pipefail
           mkdir -p "$NOCTELLA_RECOVERY_EVIDENCE_DIR"
           node --import tsx --test scripts/photo-recovery-reconciliation/recovery.test.cjs 2>&1 | tee "$NOCTELLA_RECOVERY_EVIDENCE_DIR/test-output.txt"
+
+      - name: Photo writer adoption census guard
+        if: success() || failure()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/photo-writer-adoption/census.test.cjs
 
       - name: Disposable photo operation fencing design experiments
         if: success() || failure()
