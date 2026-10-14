@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/ai-native-memory-p2-2b2c]
     types: [opened, synchronize, reopened, edited]
     paths:
       - scripts/photo-upload-linux/**
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20.20.0'
-      - run: node --test scripts/photo-upload-linux/policy.test.mjs scripts/photo-upload-linux/recipe-worker.test.cjs scripts/photo-upload-linux/analyze-native.test.mjs
+      - run: node --test scripts/photo-upload-linux/policy.test.mjs scripts/photo-upload-linux/recipe-worker.test.cjs scripts/photo-upload-linux/analyze-native.test.mjs scripts/photo-upload-linux/codec-metrics.test.cjs
 
   benchmark:
     needs: tooling-tests
@@ -100,6 +100,11 @@ jobs:
         continue-on-error: true
         timeout-minutes: 20
         run: node scripts/photo-upload-linux/run-host.mjs "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures"
+      - name: Codec-only feasibility comparison (not API acceptance)
+        if: env.CASE_PROFILE == 'combined'
+        continue-on-error: true
+        timeout-minutes: 8
+        run: bash scripts/photo-upload-linux/run-codec.sh
       - name: Preserve and stop any container left by a step timeout
         if: always()
         timeout-minutes: 2
@@ -123,6 +128,14 @@ jobs:
         with:
           name: photo-upload-linux-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/photo-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Preserve complete codec diagnostics including generated outputs
+        if: always() && env.CASE_PROFILE == 'combined'
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-codec-linux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/photo-codec-evidence/
           retention-days: 14
           if-no-files-found: warn
       - name: Preserve failing status; artifact upload is not acceptance
