@@ -1,0 +1,4 @@
+
+> @noctella/api@2.1.0-rc.2 build
+> tsc -p tsconfig.json && node scripts/copy-build-asset.mjs src/db/schema.sql dist/db/schema.sql
+
