@@ -1,0 +1,56 @@
+[
+  {
+    "name": "control",
+    "sha256": "c7a66870d873374abef3c0da90a4e06db4865e25ceb4dd360f2c93e659cf07dc",
+    "bytes": 10463844,
+    "metadata": {
+      "format": "webp",
+      "width": 6000,
+      "height": 4000,
+      "space": "srgb",
+      "channels": 3,
+      "depth": "uchar",
+      "isProgressive": false,
+      "isPalette": false,
+      "hasProfile": false,
+      "hasAlpha": false,
+      "autoOrient": {
+        "width": 6000,
+        "height": 4000
+      }
+    },
+    "decodedSampleCount": 72000000,
+    "differingSamples": 0,
+    "maxAbsoluteError": 0,
+    "mse": 0,
+    "psnrDb": "infinite",
+    "decodedIdentical": true
+  },
+  {
+    "name": "low-memory",
+    "sha256": "52c859a9622dd806cb51cd90147653e4d12261e33fe68ccaa12f6825c00b7a02",
+    "bytes": 10141098,
+    "metadata": {
+      "format": "webp",
+      "width": 6000,
+      "height": 4000,
+      "space": "srgb",
+      "channels": 3,
+      "depth": "uchar",
+      "isProgressive": false,
+      "isPalette": false,
+      "hasProfile": false,
+      "hasAlpha": false,
+      "autoOrient": {
+        "width": 6000,
+        "height": 4000
+      }
+    },
+    "decodedSampleCount": 72000000,
+    "differingSamples": 43121088,
+    "maxAbsoluteError": 23,
+    "mse": 4.916989222222222,
+    "psnrDb": 41.21381104527016,
+    "decodedIdentical": false
+  }
+]

@@ -1,5 +1,5 @@
 FROM node:20.20.0-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ cmake && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -15,3 +15,7 @@ RUN gcc -shared -fPIC -O2 -Wall -Wextra -Werror -o scripts/photo-upload-linux/na
 RUN gcc -O2 -Wall -Wextra -Werror -o /tmp/native-alloc-smoke scripts/photo-upload-linux/native-alloc-smoke.c && mkdir /evidence && /tmp/native-alloc-smoke && test ! -e /evidence/native-alloc.ndjson && LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so NOCTELLA_NATIVE_TRACE=synthetic-only /tmp/native-alloc-smoke && node scripts/photo-upload-linux/native-alloc-smoke.cjs && rm -rf /evidence /tmp/native-alloc-smoke
 ENV NODE_ENV=test TSX_DISABLE_CACHE=1 TMPDIR=/work/tmp TMP=/work/tmp TEMP=/work/tmp PRODUCT_PHOTO_DIR=/work/photos
 CMD ["sleep", "infinity"]
+ADD --checksum=sha256:e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564 https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz /tmp/libwebp.tar.gz
+RUN mkdir /tmp/codec-src && tar xzf /tmp/libwebp.tar.gz -C /tmp/codec-src --strip-components=1 && cmake -S /tmp/codec-src -B /tmp/codec-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/codec -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF > /opt/codec-configure.log && cmake --build /tmp/codec-build -j2 > /opt/codec-build.log && cmake --install /tmp/codec-build > /opt/codec-install.log
+RUN gcc -O2 -Wall -Wextra -Werror -I/opt/codec/include -o scripts/photo-upload-linux/codec-probe scripts/photo-upload-linux/codec-probe.c /opt/codec/lib/libwebp.a /opt/codec/lib/libsharpyuv.a -lm -lpthread && gcc --version > /opt/codec-compiler.txt
+RUN sha256sum /tmp/libwebp.tar.gz /opt/codec/lib/libwebp.a /opt/codec/lib/libsharpyuv.a scripts/photo-upload-linux/codec-probe > /opt/codec-provenance.txt && ldd scripts/photo-upload-linux/codec-probe >> /opt/codec-provenance.txt && cat /tmp/codec-build/CMakeCache.txt >> /opt/codec-provenance.txt

@@ -1,0 +1,1233 @@
+﻿2026-10-14T08:42:24.3894099Z Current runner version: '2.337.0'
+2026-10-14T08:42:24.3916274Z ##[group]Runner Image Provisioner
+2026-10-14T08:42:24.3917017Z Hosted Compute Agent
+2026-10-14T08:42:24.3917499Z Version: 20261002.596
+2026-10-14T08:42:24.3918073Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+2026-10-14T08:42:24.3918721Z Build Date: 2026-10-02T22:28:27Z
+2026-10-14T08:42:24.3919323Z Worker ID: {fe4a27db-d939-47a1-8131-bd073691c21e}
+2026-10-14T08:42:24.3919915Z Region: westus3
+2026-10-14T08:42:24.3920370Z Cloud: Azure
+2026-10-14T08:42:24.3920850Z ##[endgroup]
+2026-10-14T08:42:24.3922296Z ##[group]Operating System
+2026-10-14T08:42:24.3922795Z Ubuntu
+2026-10-14T08:42:24.3923297Z 24.04.5
+2026-10-14T08:42:24.3923715Z LTS
+2026-10-14T08:42:24.3924165Z ##[endgroup]
+2026-10-14T08:42:24.3924793Z ##[group]Runner Image
+2026-10-14T08:42:24.3925310Z Image: ubuntu-24.04
+2026-10-14T08:42:24.3925827Z Version: 20261004.327.1
+2026-10-14T08:42:24.3926836Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-14T08:42:24.3928123Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+2026-10-14T08:42:24.3928882Z ##[endgroup]
+2026-10-14T08:42:24.3929834Z ##[group]GITHUB_TOKEN Permissions
+2026-10-14T08:42:24.3931345Z Contents: read
+2026-10-14T08:42:24.3931954Z Metadata: read
+2026-10-14T08:42:24.3932412Z ##[endgroup]
+2026-10-14T08:42:24.3934180Z Secret source: Actions
+2026-10-14T08:42:24.3935299Z Cache mode: write
+2026-10-14T08:42:24.3935940Z Prepare workflow directory
+2026-10-14T08:42:24.4425035Z Prepare all required actions
+2026-10-14T08:42:24.4465207Z Getting action download info
+2026-10-14T08:42:24.7292814Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-14T08:42:24.8463675Z Download action repository 'actions/setup-node@v7' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+2026-10-14T08:42:25.6661983Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-14T08:42:25.8986272Z Complete job name: benchmark
+2026-10-14T08:42:25.9589529Z ##[group]Run actions/checkout@v7
+2026-10-14T08:42:25.9590243Z with:
+2026-10-14T08:42:25.9590653Z   ref: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:25.9591176Z   persist-credentials: false
+2026-10-14T08:42:25.9591627Z   repository: yali-code/noctella-web
+2026-10-14T08:42:25.9595253Z   token: ***
+2026-10-14T08:42:25.9595636Z   ssh-strict: true
+2026-10-14T08:42:25.9596022Z   ssh-user: git
+2026-10-14T08:42:25.9596379Z   clean: true
+2026-10-14T08:42:25.9596773Z   sparse-checkout-cone-mode: true
+2026-10-14T08:42:25.9597237Z   fetch-depth: 1
+2026-10-14T08:42:25.9597614Z   fetch-tags: false
+2026-10-14T08:42:25.9598016Z   show-progress: true
+2026-10-14T08:42:25.9598410Z   lfs: false
+2026-10-14T08:42:25.9598764Z   submodules: false
+2026-10-14T08:42:25.9599150Z   set-safe-directory: true
+2026-10-14T08:42:25.9599579Z   allow-unsafe-pr-checkout: false
+2026-10-14T08:42:25.9600173Z env:
+2026-10-14T08:42:25.9600553Z   INCLUDE_STRESS: true
+2026-10-14T08:42:25.9600993Z   CASE_PROFILE: combined
+2026-10-14T08:42:25.9601466Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:25.9602161Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:42:25.9602778Z ##[endgroup]
+2026-10-14T08:42:26.0510745Z Syncing repository: yali-code/noctella-web
+2026-10-14T08:42:26.0512309Z ##[group]Getting Git version info
+2026-10-14T08:42:26.0512971Z Working directory is '/home/runner/work/noctella-web/noctella-web'
+2026-10-14T08:42:26.0513955Z [command]/usr/bin/git version
+2026-10-14T08:42:26.0559170Z git version 2.55.0
+2026-10-14T08:42:26.0575393Z ##[endgroup]
+2026-10-14T08:42:26.0585654Z Temporarily overriding HOME='/home/runner/work/_temp/044ec727-c652-4a0a-9ba6-34a4931d3873' before making global git config changes
+2026-10-14T08:42:26.0587638Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-14T08:42:26.0591131Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/noctella-web/noctella-web
+2026-10-14T08:42:26.0642582Z Deleting the contents of '/home/runner/work/noctella-web/noctella-web'
+2026-10-14T08:42:26.0645667Z ##[group]Determining repository object format
+2026-10-14T08:42:26.0647110Z ##[endgroup]
+2026-10-14T08:42:26.0647747Z ##[group]Initializing the repository
+2026-10-14T08:42:26.0651889Z [command]/usr/bin/git init /home/runner/work/noctella-web/noctella-web
+2026-10-14T08:42:26.0725288Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-14T08:42:26.0726922Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-14T08:42:26.0729330Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-14T08:42:26.0730548Z hint: call:
+2026-10-14T08:42:26.0731050Z hint:
+2026-10-14T08:42:26.0731652Z hint: 	git config --global init.defaultBranch <name>
+2026-10-14T08:42:26.0732334Z hint:
+2026-10-14T08:42:26.0732963Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-14T08:42:26.0733976Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-14T08:42:26.0735295Z hint:
+2026-10-14T08:42:26.0736065Z hint: 	git branch -m <name>
+2026-10-14T08:42:26.0736646Z hint:
+2026-10-14T08:42:26.0737338Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-14T08:42:26.0738471Z Initialized empty Git repository in /home/runner/work/noctella-web/noctella-web/.git/
+2026-10-14T08:42:26.0740469Z [command]/usr/bin/git remote add origin https://github.com/yali-code/noctella-web
+2026-10-14T08:42:26.0777737Z ##[endgroup]
+2026-10-14T08:42:26.0778435Z ##[group]Disabling automatic garbage collection
+2026-10-14T08:42:26.0781217Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-14T08:42:26.0810801Z ##[endgroup]
+2026-10-14T08:42:26.0811778Z ##[group]Setting up auth
+2026-10-14T08:42:26.0812515Z Removing SSH command configuration
+2026-10-14T08:42:26.0816745Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-14T08:42:26.0845503Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-14T08:42:26.1143269Z Removing HTTP extra header
+2026-10-14T08:42:26.1144755Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-14T08:42:26.1179031Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-14T08:42:26.1377131Z Removing includeIf entries pointing to credentials config files
+2026-10-14T08:42:26.1378530Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-14T08:42:26.1414567Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-14T08:42:26.1612181Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-14T08:42:26.1647351Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/noctella-web/noctella-web/.git.path /home/runner/work/_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:26.1679029Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/noctella-web/noctella-web/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:26.1712019Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:26.1743258Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:26.1772095Z ##[endgroup]
+2026-10-14T08:42:26.1773272Z ##[group]Fetching the repository
+2026-10-14T08:42:26.1778531Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:27.7086611Z From https://github.com/yali-code/noctella-web
+2026-10-14T08:42:27.7088196Z  * branch            e9f29cefd7db5cb0ee8bf054f939d830da72dfed -> FETCH_HEAD
+2026-10-14T08:42:27.7093994Z [command]/usr/bin/git rev-parse --verify --quiet e9f29cefd7db5cb0ee8bf054f939d830da72dfed^{object}
+2026-10-14T08:42:27.7120497Z e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:27.7124516Z ##[endgroup]
+2026-10-14T08:42:27.7125163Z ##[group]Determining the checkout info
+2026-10-14T08:42:27.7125759Z ##[endgroup]
+2026-10-14T08:42:27.7127865Z [command]/usr/bin/git sparse-checkout disable
+2026-10-14T08:42:27.7172688Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-14T08:42:27.7201875Z ##[group]Checking out the ref
+2026-10-14T08:42:27.7205236Z [command]/usr/bin/git checkout --progress --force e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:27.8127455Z Note: switching to 'e9f29cefd7db5cb0ee8bf054f939d830da72dfed'.
+2026-10-14T08:42:27.8127796Z 
+2026-10-14T08:42:27.8127998Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-14T08:42:27.8128474Z changes and commit them, and you can discard any commits you make in this
+2026-10-14T08:42:27.8128960Z state without impacting any branches by switching back to a branch.
+2026-10-14T08:42:27.8129228Z 
+2026-10-14T08:42:27.8129404Z If you want to create a new branch to retain commits you create, you may
+2026-10-14T08:42:27.8129816Z do so (now or later) by using -c with the switch command. Example:
+2026-10-14T08:42:27.8130053Z 
+2026-10-14T08:42:27.8130168Z   git switch -c <new-branch-name>
+2026-10-14T08:42:27.8130408Z 
+2026-10-14T08:42:27.8130822Z Or undo this operation with:
+2026-10-14T08:42:27.8131381Z 
+2026-10-14T08:42:27.8131496Z   git switch -
+2026-10-14T08:42:27.8131626Z 
+2026-10-14T08:42:27.8131830Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-14T08:42:27.8132159Z 
+2026-10-14T08:42:27.8132529Z HEAD is now at e9f29ce fix(benchmark): use pinned codec CMake build and retain full configuration
+2026-10-14T08:42:27.8136852Z ##[endgroup]
+2026-10-14T08:42:27.8180363Z [command]/usr/bin/git log -1 --format=%H
+2026-10-14T08:42:27.8205785Z e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:27.8216398Z ##[group]Removing auth
+2026-10-14T08:42:27.8216712Z Removing SSH command configuration
+2026-10-14T08:42:27.8218317Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-14T08:42:27.8247548Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-14T08:42:27.8442787Z Removing HTTP extra header
+2026-10-14T08:42:27.8450054Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-14T08:42:27.8481078Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-14T08:42:27.8672657Z Removing includeIf entries pointing to credentials config files
+2026-10-14T08:42:27.8675560Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-14T08:42:27.8702050Z includeif.gitdir:/home/runner/work/noctella-web/noctella-web/.git.path
+2026-10-14T08:42:27.8703111Z includeif.gitdir:/home/runner/work/noctella-web/noctella-web/.git/worktrees/*.path
+2026-10-14T08:42:27.8703994Z includeif.gitdir:/github/workspace/.git.path
+2026-10-14T08:42:27.8704824Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-14T08:42:27.8710420Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/noctella-web/noctella-web/.git.path
+2026-10-14T08:42:27.8735081Z /home/runner/work/_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:27.8742134Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/noctella-web/noctella-web/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-1c76a264\-1518\-44a1\-889f\-d9b7e2ab422e\.config
+2026-10-14T08:42:27.8776421Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/noctella-web/noctella-web/.git/worktrees/*.path
+2026-10-14T08:42:27.8798856Z /home/runner/work/_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:27.8805700Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/noctella-web/noctella-web/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-1c76a264\-1518\-44a1\-889f\-d9b7e2ab422e\.config
+2026-10-14T08:42:27.8839712Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-14T08:42:27.8862729Z /github/runner_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:27.8869136Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-1c76a264\-1518\-44a1\-889f\-d9b7e2ab422e\.config
+2026-10-14T08:42:27.8935846Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-14T08:42:27.8974033Z /github/runner_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config
+2026-10-14T08:42:27.8980884Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-1c76a264\-1518\-44a1\-889f\-d9b7e2ab422e\.config
+2026-10-14T08:42:27.9012322Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-14T08:42:27.9200798Z Removing credentials config '/home/runner/work/_temp/git-credentials-1c76a264-1518-44a1-889f-d9b7e2ab422e.config'
+2026-10-14T08:42:27.9208637Z ##[endgroup]
+2026-10-14T08:42:27.9424955Z ##[group]Run actions/checkout@v7
+2026-10-14T08:42:27.9425245Z with:
+2026-10-14T08:42:27.9425490Z   ref: 7c6ab55237e996fef041c60bb06f45b7d0fc2061
+2026-10-14T08:42:27.9425783Z   path: benchmark-source
+2026-10-14T08:42:27.9426040Z   persist-credentials: false
+2026-10-14T08:42:27.9426313Z   sparse-checkout-cone-mode: false
+2026-10-14T08:42:27.9426879Z   sparse-checkout: /apps/api/src/scripts/photoMemoryBenchmark/
+/apps/api/src/services/photoStorage.ts
+/apps/api/src/services/errors.ts
+
+2026-10-14T08:42:27.9427439Z   repository: yali-code/noctella-web
+2026-10-14T08:42:27.9429628Z   token: ***
+2026-10-14T08:42:27.9429849Z   ssh-strict: true
+2026-10-14T08:42:27.9430080Z   ssh-user: git
+2026-10-14T08:42:27.9430297Z   clean: true
+2026-10-14T08:42:27.9430518Z   fetch-depth: 1
+2026-10-14T08:42:27.9430776Z   fetch-tags: false
+2026-10-14T08:42:27.9431005Z   show-progress: true
+2026-10-14T08:42:27.9431236Z   lfs: false
+2026-10-14T08:42:27.9431446Z   submodules: false
+2026-10-14T08:42:27.9431717Z   set-safe-directory: true
+2026-10-14T08:42:27.9431984Z   allow-unsafe-pr-checkout: false
+2026-10-14T08:42:27.9432247Z env:
+2026-10-14T08:42:27.9432466Z   INCLUDE_STRESS: true
+2026-10-14T08:42:27.9432708Z   CASE_PROFILE: combined
+2026-10-14T08:42:27.9432988Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:27.9433406Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:42:27.9433765Z ##[endgroup]
+2026-10-14T08:42:28.0117874Z Syncing repository: yali-code/noctella-web
+2026-10-14T08:42:28.0118502Z ##[group]Getting Git version info
+2026-10-14T08:42:28.0118996Z Working directory is '/home/runner/work/noctella-web/noctella-web/benchmark-source'
+2026-10-14T08:42:28.0146913Z [command]/usr/bin/git version
+2026-10-14T08:42:28.0183132Z git version 2.55.0
+2026-10-14T08:42:28.0200464Z ##[endgroup]
+2026-10-14T08:42:28.0209509Z Temporarily overriding HOME='/home/runner/work/_temp/ce2379ec-8d73-4db4-a862-b5d12286abdd' before making global git config changes
+2026-10-14T08:42:28.0210647Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-14T08:42:28.0213948Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/noctella-web/noctella-web/benchmark-source
+2026-10-14T08:42:28.0243715Z ##[group]Determining repository object format
+2026-10-14T08:42:28.0250004Z ##[endgroup]
+2026-10-14T08:42:28.0258578Z ##[group]Initializing the repository
+2026-10-14T08:42:28.0259578Z [command]/usr/bin/git init /home/runner/work/noctella-web/noctella-web/benchmark-source
+2026-10-14T08:42:28.0287845Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-14T08:42:28.0288896Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-14T08:42:28.0290135Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-14T08:42:28.0290920Z hint: call:
+2026-10-14T08:42:28.0291225Z hint:
+2026-10-14T08:42:28.0291661Z hint: 	git config --global init.defaultBranch <name>
+2026-10-14T08:42:28.0292103Z hint:
+2026-10-14T08:42:28.0292553Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-14T08:42:28.0293265Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-14T08:42:28.0293799Z hint:
+2026-10-14T08:42:28.0294114Z hint: 	git branch -m <name>
+2026-10-14T08:42:28.0294798Z hint:
+2026-10-14T08:42:28.0295287Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-14T08:42:28.0296202Z Initialized empty Git repository in /home/runner/work/noctella-web/noctella-web/benchmark-source/.git/
+2026-10-14T08:42:28.0301439Z [command]/usr/bin/git remote add origin https://github.com/yali-code/noctella-web
+2026-10-14T08:42:28.0333230Z ##[endgroup]
+2026-10-14T08:42:28.0337494Z ##[group]Disabling automatic garbage collection
+2026-10-14T08:42:28.0337875Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-14T08:42:28.0363982Z ##[endgroup]
+2026-10-14T08:42:28.0365075Z ##[group]Setting up auth
+2026-10-14T08:42:28.0365407Z Removing SSH command configuration
+2026-10-14T08:42:28.0369050Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-14T08:42:28.0398590Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-14T08:42:28.0602186Z Removing HTTP extra header
+2026-10-14T08:42:28.0608211Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-14T08:42:28.0640455Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-14T08:42:28.0850860Z Removing includeIf entries pointing to credentials config files
+2026-10-14T08:42:28.0854923Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-14T08:42:28.0889823Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-14T08:42:28.1098020Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-14T08:42:28.1132720Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git.path /home/runner/work/_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:28.1162253Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:28.1190729Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/benchmark-source/.git.path /github/runner_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:28.1219325Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/benchmark-source/.git/worktrees/*.path /github/runner_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:28.1244966Z ##[endgroup]
+2026-10-14T08:42:28.1245381Z ##[group]Fetching the repository
+2026-10-14T08:42:28.1250732Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --filter=blob:none --depth=1 origin 7c6ab55237e996fef041c60bb06f45b7d0fc2061
+2026-10-14T08:42:28.8053343Z From https://github.com/yali-code/noctella-web
+2026-10-14T08:42:28.8054032Z  * branch            7c6ab55237e996fef041c60bb06f45b7d0fc2061 -> FETCH_HEAD
+2026-10-14T08:42:28.8062367Z [command]/usr/bin/git rev-parse --verify --quiet 7c6ab55237e996fef041c60bb06f45b7d0fc2061^{object}
+2026-10-14T08:42:28.8089247Z 7c6ab55237e996fef041c60bb06f45b7d0fc2061
+2026-10-14T08:42:28.8095589Z ##[endgroup]
+2026-10-14T08:42:28.8096079Z ##[group]Determining the checkout info
+2026-10-14T08:42:28.8096617Z ##[endgroup]
+2026-10-14T08:42:28.8097095Z ##[group]Setting up sparse checkout
+2026-10-14T08:42:28.8097678Z [command]/usr/bin/git config core.sparseCheckout true
+2026-10-14T08:42:28.8129267Z [command]/usr/bin/git rev-parse --git-path info/sparse-checkout
+2026-10-14T08:42:28.8151891Z .git/info/sparse-checkout
+2026-10-14T08:42:28.8158120Z ##[endgroup]
+2026-10-14T08:42:28.8158432Z ##[group]Checking out the ref
+2026-10-14T08:42:28.8163403Z [command]/usr/bin/git checkout --progress --force 7c6ab55237e996fef041c60bb06f45b7d0fc2061
+2026-10-14T08:42:29.2518286Z Note: switching to '7c6ab55237e996fef041c60bb06f45b7d0fc2061'.
+2026-10-14T08:42:29.2518678Z 
+2026-10-14T08:42:29.2518932Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-14T08:42:29.2519578Z changes and commit them, and you can discard any commits you make in this
+2026-10-14T08:42:29.2520434Z state without impacting any branches by switching back to a branch.
+2026-10-14T08:42:29.2520782Z 
+2026-10-14T08:42:29.2521010Z If you want to create a new branch to retain commits you create, you may
+2026-10-14T08:42:29.2521595Z do so (now or later) by using -c with the switch command. Example:
+2026-10-14T08:42:29.2529026Z 
+2026-10-14T08:42:29.2529373Z   git switch -c <new-branch-name>
+2026-10-14T08:42:29.2529632Z 
+2026-10-14T08:42:29.2529772Z Or undo this operation with:
+2026-10-14T08:42:29.2529973Z 
+2026-10-14T08:42:29.2530085Z   git switch -
+2026-10-14T08:42:29.2530232Z 
+2026-10-14T08:42:29.2530501Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-14T08:42:29.2530892Z 
+2026-10-14T08:42:29.2531196Z HEAD is now at 7c6ab55 docs(media): normalize supplemental benchmark transcript whitespace
+2026-10-14T08:42:29.2532438Z ##[endgroup]
+2026-10-14T08:42:29.2574798Z [command]/usr/bin/git log -1 --format=%H
+2026-10-14T08:42:29.2596316Z 7c6ab55237e996fef041c60bb06f45b7d0fc2061
+2026-10-14T08:42:29.2604130Z ##[group]Removing auth
+2026-10-14T08:42:29.2604672Z Removing SSH command configuration
+2026-10-14T08:42:29.2608409Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-14T08:42:29.2641020Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-14T08:42:29.2836708Z Removing HTTP extra header
+2026-10-14T08:42:29.2840494Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-14T08:42:29.2874105Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-14T08:42:29.3067486Z Removing includeIf entries pointing to credentials config files
+2026-10-14T08:42:29.3085498Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-14T08:42:29.3095593Z includeif.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git.path
+2026-10-14T08:42:29.3096694Z includeif.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git/worktrees/*.path
+2026-10-14T08:42:29.3097727Z includeif.gitdir:/github/workspace/benchmark-source/.git.path
+2026-10-14T08:42:29.3098551Z includeif.gitdir:/github/workspace/benchmark-source/.git/worktrees/*.path
+2026-10-14T08:42:29.3103512Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git.path
+2026-10-14T08:42:29.3126856Z /home/runner/work/_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:29.3134825Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-6b5080d5\-a7fe\-4302\-837d\-44d7b8ece536\.config
+2026-10-14T08:42:29.3167787Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git/worktrees/*.path
+2026-10-14T08:42:29.3190174Z /home/runner/work/_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:29.3196855Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/noctella-web/noctella-web/benchmark-source/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-6b5080d5\-a7fe\-4302\-837d\-44d7b8ece536\.config
+2026-10-14T08:42:29.3229683Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/benchmark-source/.git.path
+2026-10-14T08:42:29.3251786Z /github/runner_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:29.3258567Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/benchmark-source/.git.path \/github\/runner_temp\/git\-credentials\-6b5080d5\-a7fe\-4302\-837d\-44d7b8ece536\.config
+2026-10-14T08:42:29.3305464Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/benchmark-source/.git/worktrees/*.path
+2026-10-14T08:42:29.3344032Z /github/runner_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config
+2026-10-14T08:42:29.3349762Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/benchmark-source/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-6b5080d5\-a7fe\-4302\-837d\-44d7b8ece536\.config
+2026-10-14T08:42:29.3381253Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-14T08:42:29.3568879Z Removing credentials config '/home/runner/work/_temp/git-credentials-6b5080d5-a7fe-4302-837d-44d7b8ece536.config'
+2026-10-14T08:42:29.3577410Z ##[endgroup]
+2026-10-14T08:42:29.3737413Z ##[group]Run actions/setup-node@v7
+2026-10-14T08:42:29.3737736Z with:
+2026-10-14T08:42:29.3737975Z   node-version: 20.20.0
+2026-10-14T08:42:29.3738260Z   check-latest: false
+2026-10-14T08:42:29.3742085Z   token: ***
+2026-10-14T08:42:29.3742374Z   package-manager-cache: true
+2026-10-14T08:42:29.3742621Z env:
+2026-10-14T08:42:29.3742783Z   INCLUDE_STRESS: true
+2026-10-14T08:42:29.3742967Z   CASE_PROFILE: combined
+2026-10-14T08:42:29.3743196Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:29.3743554Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:42:29.3743860Z ##[endgroup]
+2026-10-14T08:42:29.4745110Z Attempting to download 20.20.0...
+2026-10-14T08:42:30.5049584Z Acquiring 20.20.0 - x64 from https://github.com/actions/node-versions/releases/download/20.20.0-20981710805/node-20.20.0-linux-x64.tar.gz
+2026-10-14T08:42:31.0380779Z Extracting ...
+2026-10-14T08:42:31.0478051Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/a111475e-7005-49f6-9951-a1c513362c0b -f /home/runner/work/_temp/ac471b33-6cb5-4107-bb39-4d26243fe534
+2026-10-14T08:42:31.8846097Z Adding to the cache ...
+2026-10-14T08:42:33.5869170Z ##[group]Environment details
+2026-10-14T08:42:33.7615653Z node: v20.20.0
+2026-10-14T08:42:33.7615970Z npm: 10.8.2
+2026-10-14T08:42:33.7616202Z yarn: 1.22.22
+2026-10-14T08:42:33.7616658Z ##[endgroup]
+2026-10-14T08:42:33.7767634Z ##[group]Run set -euo pipefail
+2026-10-14T08:42:33.7767969Z [36;1mset -euo pipefail[0m
+2026-10-14T08:42:33.7768206Z [36;1mctx="$RUNNER_TEMP/photo-context"[0m
+2026-10-14T08:42:33.7768830Z [36;1mmkdir -p "$ctx/apps/api" "$ctx/packages/shared" "$ctx/scripts/photo-upload-linux" "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures" "$RUNNER_TEMP/photo-generator/tmp"[0m
+2026-10-14T08:42:33.7769458Z [36;1mcp package.json package-lock.json "$ctx/"[0m
+2026-10-14T08:42:33.7769767Z [36;1mcp apps/api/{package.json,tsconfig.json} "$ctx/apps/api/"[0m
+2026-10-14T08:42:33.7770101Z [36;1mcp -r apps/api/{src,scripts} "$ctx/apps/api/"[0m
+2026-10-14T08:42:33.7770442Z [36;1mcp packages/shared/{package.json,tsconfig.json} "$ctx/packages/shared/"[0m
+2026-10-14T08:42:33.7770794Z [36;1mcp -r packages/shared/src "$ctx/packages/shared/"[0m
+2026-10-14T08:42:33.7771108Z [36;1mmkdir -p "$ctx/apps/api/src/scripts/photoMemoryBenchmark"[0m
+2026-10-14T08:42:33.7771697Z [36;1mcp benchmark-source/apps/api/src/scripts/photoMemoryBenchmark/{fixtures,scenarios}.ts "$ctx/apps/api/src/scripts/photoMemoryBenchmark/"[0m
+2026-10-14T08:42:33.7772305Z [36;1mcp scripts/photo-upload-linux/* "$ctx/scripts/photo-upload-linux/"[0m
+2026-10-14T08:42:33.7772855Z [36;1msha256sum benchmark-source/apps/api/src/scripts/photoMemoryBenchmark/*.ts > "$RUNNER_TEMP/photo-evidence/source-sha256.txt"[0m
+2026-10-14T08:42:33.7773368Z [36;1mdocker info > "$RUNNER_TEMP/photo-evidence/docker-info.txt"[0m
+2026-10-14T08:42:33.7968380Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-14T08:42:33.7968702Z env:
+2026-10-14T08:42:33.7968878Z   INCLUDE_STRESS: true
+2026-10-14T08:42:33.7969067Z   CASE_PROFILE: combined
+2026-10-14T08:42:33.7969305Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:33.7969669Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:42:33.7969971Z ##[endgroup]
+2026-10-14T08:42:34.2378948Z ##[group]Run docker build -f scripts/photo-upload-linux/Dockerfile -t noctella-photo-upload:isolated "$RUNNER_TEMP/photo-context"
+2026-10-14T08:42:34.2379678Z [36;1mdocker build -f scripts/photo-upload-linux/Dockerfile -t noctella-photo-upload:isolated "$RUNNER_TEMP/photo-context"[0m
+2026-10-14T08:42:34.2436242Z shell: /usr/bin/bash -e {0}
+2026-10-14T08:42:34.2436453Z env:
+2026-10-14T08:42:34.2436619Z   INCLUDE_STRESS: true
+2026-10-14T08:42:34.2436810Z   CASE_PROFILE: combined
+2026-10-14T08:42:34.2437038Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:42:34.2437402Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:42:34.2437725Z ##[endgroup]
+2026-10-14T08:42:34.9146256Z #0 building with "default" instance using docker driver
+2026-10-14T08:42:34.9146515Z 
+2026-10-14T08:42:34.9146705Z #1 [internal] load build definition from Dockerfile
+2026-10-14T08:42:34.9147058Z #1 transferring dockerfile: 2.85kB 0.0s done
+2026-10-14T08:42:34.9147370Z #1 DONE 0.0s
+2026-10-14T08:42:34.9147472Z 
+2026-10-14T08:42:34.9147719Z #2 [internal] load metadata for docker.io/library/node:20.20.0-bookworm-slim
+2026-10-14T08:42:35.0961070Z #2 ...
+2026-10-14T08:42:35.0961281Z 
+2026-10-14T08:42:35.0961578Z #3 [auth] library/node:pull token for registry-1.docker.io
+2026-10-14T08:42:35.0961881Z #3 DONE 0.0s
+2026-10-14T08:42:35.2458297Z 
+2026-10-14T08:42:35.2459258Z #2 [internal] load metadata for docker.io/library/node:20.20.0-bookworm-slim
+2026-10-14T08:42:35.7792887Z #2 DONE 1.0s
+2026-10-14T08:42:35.9148336Z 
+2026-10-14T08:42:35.9149468Z #4 [internal] load .dockerignore
+2026-10-14T08:42:35.9150220Z #4 transferring context: 2B done
+2026-10-14T08:42:35.9150564Z #4 DONE 0.0s
+2026-10-14T08:42:35.9150722Z 
+2026-10-14T08:42:35.9150897Z #5 [internal] load build context
+2026-10-14T08:42:35.9151295Z #5 transferring context: 3.66MB 0.1s done
+2026-10-14T08:42:35.9151655Z #5 DONE 0.1s
+2026-10-14T08:42:35.9151789Z 
+2026-10-14T08:42:35.9152545Z #6 [ 1/19] FROM docker.io/library/node:20.20.0-bookworm-slim@sha256:d8a35d586fad3af7abb6fdb9ba972388395405f4d462da9e4a4ddcde67b5e0fb
+2026-10-14T08:42:35.9154038Z #6 resolve docker.io/library/node:20.20.0-bookworm-slim@sha256:d8a35d586fad3af7abb6fdb9ba972388395405f4d462da9e4a4ddcde67b5e0fb done
+2026-10-14T08:42:35.9155769Z #6 sha256:d8a35d586fad3af7abb6fdb9ba972388395405f4d462da9e4a4ddcde67b5e0fb 6.49kB / 6.49kB done
+2026-10-14T08:42:35.9157289Z #6 sha256:7d49fead4dbde89ba791d165a904f76eec446a4c1143862f14325e6348a3486d 1.93kB / 1.93kB done
+2026-10-14T08:42:35.9158643Z #6 sha256:b810c2b3e7cced317a4a3b7a02aaf60f86e92ec9d49a3db7fbe7d280944e0c70 6.88kB / 6.88kB done
+2026-10-14T08:42:35.9159768Z #6 sha256:84a2afebaf4de2e8eb885634a69abd0087b79c947c53fa4f0481235d6dfadc6c 14.68MB / 28.24MB 0.1s
+2026-10-14T08:42:35.9160791Z #6 sha256:05988a666f72e9607315b845938dece280a7f80deebc985944c7330233b75e93 0B / 3.31kB 0.1s
+2026-10-14T08:42:35.9161765Z #6 sha256:a0655704972fcc45126ac8450b9a9f55556904429b00db4b3f7737fa2937f7a7 0B / 40.98MB 0.1s
+2026-10-14T08:42:36.1136067Z #6 sha256:84a2afebaf4de2e8eb885634a69abd0087b79c947c53fa4f0481235d6dfadc6c 28.24MB / 28.24MB 0.3s
+2026-10-14T08:42:36.1136743Z #6 sha256:05988a666f72e9607315b845938dece280a7f80deebc985944c7330233b75e93 3.31kB / 3.31kB 0.1s done
+2026-10-14T08:42:36.1137355Z #6 sha256:a0655704972fcc45126ac8450b9a9f55556904429b00db4b3f7737fa2937f7a7 40.98MB / 40.98MB 0.3s
+2026-10-14T08:42:36.1138089Z #6 sha256:2664cf4489e51990ef76f94201408a31e43d6a369473cecdf7f8b8a40aeb1c29 1.71MB / 1.71MB 0.3s
+2026-10-14T08:42:36.4135138Z #6 ...
+2026-10-14T08:42:36.4135372Z 
+2026-10-14T08:42:36.4136768Z #7 [16/19] ADD --checksum=sha256:e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564 https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz /tmp/libwebp.tar.gz
+2026-10-14T08:42:36.4138036Z #7 DONE 0.5s
+2026-10-14T08:42:36.4138196Z 
+2026-10-14T08:42:36.4139258Z #6 [ 1/19] FROM docker.io/library/node:20.20.0-bookworm-slim@sha256:d8a35d586fad3af7abb6fdb9ba972388395405f4d462da9e4a4ddcde67b5e0fb
+2026-10-14T08:42:36.4140515Z #6 sha256:84a2afebaf4de2e8eb885634a69abd0087b79c947c53fa4f0481235d6dfadc6c 28.24MB / 28.24MB 0.5s done
+2026-10-14T08:42:36.4141608Z #6 sha256:a0655704972fcc45126ac8450b9a9f55556904429b00db4b3f7737fa2937f7a7 40.98MB / 40.98MB 0.5s done
+2026-10-14T08:42:36.4142670Z #6 sha256:2664cf4489e51990ef76f94201408a31e43d6a369473cecdf7f8b8a40aeb1c29 1.71MB / 1.71MB 0.5s done
+2026-10-14T08:42:36.4143668Z #6 sha256:c2b9c0e674a1fd2c4d4825d85568fd9a852f660171cafc4466a8de90e329413b 448B / 448B 0.5s done
+2026-10-14T08:42:36.4144744Z #6 extracting sha256:84a2afebaf4de2e8eb885634a69abd0087b79c947c53fa4f0481235d6dfadc6c
+2026-10-14T08:42:37.1567351Z #6 extracting sha256:84a2afebaf4de2e8eb885634a69abd0087b79c947c53fa4f0481235d6dfadc6c 0.8s done
+2026-10-14T08:42:37.1568313Z #6 extracting sha256:05988a666f72e9607315b845938dece280a7f80deebc985944c7330233b75e93
+2026-10-14T08:42:37.3078005Z #6 extracting sha256:05988a666f72e9607315b845938dece280a7f80deebc985944c7330233b75e93 done
+2026-10-14T08:42:39.1294805Z #6 extracting sha256:a0655704972fcc45126ac8450b9a9f55556904429b00db4b3f7737fa2937f7a7
+2026-10-14T08:42:40.1318209Z #6 extracting sha256:a0655704972fcc45126ac8450b9a9f55556904429b00db4b3f7737fa2937f7a7 0.9s done
+2026-10-14T08:42:40.6400893Z #6 extracting sha256:2664cf4489e51990ef76f94201408a31e43d6a369473cecdf7f8b8a40aeb1c29
+2026-10-14T08:42:40.7402598Z #6 extracting sha256:2664cf4489e51990ef76f94201408a31e43d6a369473cecdf7f8b8a40aeb1c29 0.0s done
+2026-10-14T08:42:40.7403517Z #6 extracting sha256:c2b9c0e674a1fd2c4d4825d85568fd9a852f660171cafc4466a8de90e329413b done
+2026-10-14T08:42:40.7403924Z #6 DONE 4.9s
+2026-10-14T08:42:40.7404500Z 
+2026-10-14T08:42:40.7404983Z #8 [ 2/19] RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ cmake && rm -rf /var/lib/apt/lists/*
+2026-10-14T08:42:40.9603039Z #8 0.220 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+2026-10-14T08:42:41.1338647Z #8 0.247 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+2026-10-14T08:42:41.1339270Z #8 0.394 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+2026-10-14T08:42:41.2376161Z #8 0.403 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+2026-10-14T08:42:41.2376960Z #8 0.489 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+2026-10-14T08:42:41.2377743Z #8 0.497 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [349 kB]
+2026-10-14T08:42:41.8843145Z #8 1.144 Fetched 9388 kB in 1s (9963 kB/s)
+2026-10-14T08:42:42.2264538Z #8 1.144 Reading package lists...
+2026-10-14T08:42:42.5820478Z #8 1.500 Reading package lists...
+2026-10-14T08:42:42.6898675Z #8 1.849 Building dependency tree...
+2026-10-14T08:42:42.9387325Z #8 1.949 Reading state information...
+2026-10-14T08:42:42.9387940Z #8 2.047 The following additional packages will be installed:
+2026-10-14T08:42:42.9388501Z #8 2.047   binutils binutils-common binutils-x86-64-linux-gnu cmake-data cpp cpp-12
+2026-10-14T08:42:42.9389000Z #8 2.047   g++-12 gcc gcc-12 libarchive13 libasan8 libatomic1 libbinutils libbrotli1
+2026-10-14T08:42:42.9389482Z #8 2.047   libc-bin libc-dev-bin libc6 libc6-dev libcc1-0 libcrypt-dev libctf-nobfd0
+2026-10-14T08:42:42.9389922Z #8 2.047   libctf0 libcurl4 libexpat1 libgcc-12-dev libgomp1 libgprofng0
+2026-10-14T08:42:42.9390364Z #8 2.047   libgssapi-krb5-2 libicu72 libisl23 libitm1 libjansson4 libjsoncpp25
+2026-10-14T08:42:42.9390904Z #8 2.047   libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0 libldap-2.5-0 liblsan0
+2026-10-14T08:42:42.9391411Z #8 2.047   libmpc3 libmpfr6 libncursesw6 libnghttp2-14 libnsl-dev libnsl2 libproc2-0
+2026-10-14T08:42:42.9391896Z #8 2.047   libpsl5 libpython3-stdlib libpython3.11-minimal libpython3.11-stdlib
+2026-10-14T08:42:42.9392389Z #8 2.047   libquadmath0 libreadline8 librhash0 librtmp1 libsasl2-2 libsasl2-modules-db
+2026-10-14T08:42:42.9393057Z #8 2.047   libsqlite3-0 libssh2-1 libssl3 libstdc++-12-dev libtirpc-common libtirpc-dev
+2026-10-14T08:42:42.9393918Z #8 2.047   libtirpc3 libtsan2 libubsan1 libuv1 libxml2 linux-libc-dev media-types
+2026-10-14T08:42:42.9394701Z #8 2.047   procps python3-minimal python3.11 python3.11-minimal readline-common
+2026-10-14T08:42:42.9395039Z #8 2.047   rpcsvc-proto
+2026-10-14T08:42:42.9395251Z #8 2.048 Suggested packages:
+2026-10-14T08:42:42.9395617Z #8 2.048   binutils-doc cmake-doc cmake-format elpa-cmake-mode ninja-build cpp-doc
+2026-10-14T08:42:42.9396067Z #8 2.048   gcc-12-locales cpp-12-doc g++-multilib g++-12-multilib gcc-12-doc
+2026-10-14T08:42:42.9396531Z #8 2.048   gcc-multilib manpages-dev autoconf automake libtool flex bison gdb gcc-doc
+2026-10-14T08:42:42.9397019Z #8 2.048   gcc-12-multilib lrzip glibc-doc libc-l10n locales libnss-nis libnss-nisplus
+2026-10-14T08:42:42.9397483Z #8 2.048   krb5-doc krb5-user libstdc++-12-doc make-doc python3-doc python3-tk
+2026-10-14T08:42:42.9397947Z #8 2.048   python3-venv python3.11-venv python3.11-doc binfmt-support readline-doc
+2026-10-14T08:42:42.9398293Z #8 2.048 Recommended packages:
+2026-10-14T08:42:42.9398646Z #8 2.048   manpages manpages-dev libc-devtools ca-certificates krb5-locales
+2026-10-14T08:42:42.9399064Z #8 2.048   libldap-common libgpm2 publicsuffix libsasl2-modules psmisc
+2026-10-14T08:42:43.0527153Z #8 2.312 The following NEW packages will be installed:
+2026-10-14T08:42:43.0527941Z #8 2.312   binutils binutils-common binutils-x86-64-linux-gnu cmake cmake-data cpp
+2026-10-14T08:42:43.1821411Z #8 2.312   cpp-12 g++ g++-12 gcc gcc-12 libarchive13 libasan8 libatomic1 libbinutils
+2026-10-14T08:42:43.1822278Z #8 2.312   libbrotli1 libc-dev-bin libc6-dev libcc1-0 libcrypt-dev libctf-nobfd0
+2026-10-14T08:42:43.1823565Z #8 2.312   libctf0 libcurl4 libexpat1 libgcc-12-dev libgomp1 libgprofng0
+2026-10-14T08:42:43.1824616Z #8 2.312   libgssapi-krb5-2 libicu72 libisl23 libitm1 libjansson4 libjsoncpp25
+2026-10-14T08:42:43.1825568Z #8 2.312   libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0 libldap-2.5-0 liblsan0
+2026-10-14T08:42:43.1826573Z #8 2.312   libmpc3 libmpfr6 libncursesw6 libnghttp2-14 libnsl-dev libnsl2 libproc2-0
+2026-10-14T08:42:43.1827532Z #8 2.313   libpsl5 libpython3-stdlib libpython3.11-minimal libpython3.11-stdlib
+2026-10-14T08:42:43.1828500Z #8 2.313   libquadmath0 libreadline8 librhash0 librtmp1 libsasl2-2 libsasl2-modules-db
+2026-10-14T08:42:43.1829543Z #8 2.313   libsqlite3-0 libssh2-1 libssl3 libstdc++-12-dev libtirpc-common libtirpc-dev
+2026-10-14T08:42:43.1830530Z #8 2.313   libtirpc3 libtsan2 libubsan1 libuv1 libxml2 linux-libc-dev make media-types
+2026-10-14T08:42:43.1831563Z #8 2.313   procps python3 python3-minimal python3.11 python3.11-minimal readline-common
+2026-10-14T08:42:43.1832286Z #8 2.313   rpcsvc-proto
+2026-10-14T08:42:43.1832894Z #8 2.313 The following packages will be upgraded:
+2026-10-14T08:42:43.1833346Z #8 2.314   libc-bin libc6
+2026-10-14T08:42:43.1833879Z #8 2.334 2 upgraded, 77 newly installed, 0 to remove and 13 not upgraded.
+2026-10-14T08:42:43.1834533Z #8 2.334 Need to get 100 MB of archives.
+2026-10-14T08:42:43.1835116Z #8 2.334 After this operation, 380 MB of additional disk space will be used.
+2026-10-14T08:42:43.1835967Z #8 2.334 Get:1 http://deb.debian.org/debian bookworm/main amd64 libc6 amd64 2.36-9+deb12u14 [2759 kB]
+2026-10-14T08:42:43.1836667Z #8 2.354 Get:2 http://deb.debian.org/debian bookworm/main amd64 libc-bin amd64 2.36-9+deb12u14 [609 kB]
+2026-10-14T08:42:43.1837301Z #8 2.356 Get:3 http://deb.debian.org/debian-security bookworm-security/main amd64 libssl3 amd64 3.0.22-1~deb12u1 [2039 kB]
+2026-10-14T08:42:43.1838047Z #8 2.362 Get:4 http://deb.debian.org/debian-security bookworm-security/main amd64 libpython3.11-minimal amd64 3.11.2-6+deb12u9 [821 kB]
+2026-10-14T08:42:43.1838826Z #8 2.363 Get:5 http://deb.debian.org/debian-security bookworm-security/main amd64 libexpat1 amd64 2.5.0-1+deb12u4 [106 kB]
+2026-10-14T08:42:43.1839562Z #8 2.364 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 python3.11-minimal amd64 3.11.2-6+deb12u9 [2055 kB]
+2026-10-14T08:42:43.1840409Z #8 2.367 Get:7 http://deb.debian.org/debian bookworm/main amd64 python3-minimal amd64 3.11.2-1+b1 [26.3 kB]
+2026-10-14T08:42:43.1841007Z #8 2.367 Get:8 http://deb.debian.org/debian bookworm/main amd64 media-types all 10.0.0 [26.1 kB]
+2026-10-14T08:42:43.1841753Z #8 2.369 Get:9 http://deb.debian.org/debian bookworm/main amd64 libncursesw6 amd64 6.4-4 [134 kB]
+2026-10-14T08:42:43.1842734Z #8 2.369 Get:10 http://deb.debian.org/debian bookworm/main amd64 libkrb5support0 amd64 1.20.1-2+deb12u5 [33.2 kB]
+2026-10-14T08:42:43.1843809Z #8 2.369 Get:11 http://deb.debian.org/debian bookworm/main amd64 libk5crypto3 amd64 1.20.1-2+deb12u5 [79.7 kB]
+2026-10-14T08:42:43.1845063Z #8 2.369 Get:12 http://deb.debian.org/debian bookworm/main amd64 libkeyutils1 amd64 1.6.3-2 [8808 B]
+2026-10-14T08:42:43.1845998Z #8 2.369 Get:13 http://deb.debian.org/debian bookworm/main amd64 libkrb5-3 amd64 1.20.1-2+deb12u5 [332 kB]
+2026-10-14T08:42:43.1846673Z #8 2.370 Get:14 http://deb.debian.org/debian bookworm/main amd64 libgssapi-krb5-2 amd64 1.20.1-2+deb12u5 [135 kB]
+2026-10-14T08:42:43.1847300Z #8 2.371 Get:15 http://deb.debian.org/debian bookworm/main amd64 libtirpc-common all 1.3.3+ds-1 [14.0 kB]
+2026-10-14T08:42:43.1847856Z #8 2.371 Get:16 http://deb.debian.org/debian bookworm/main amd64 libtirpc3 amd64 1.3.3+ds-1 [85.2 kB]
+2026-10-14T08:42:43.1848381Z #8 2.372 Get:17 http://deb.debian.org/debian bookworm/main amd64 libnsl2 amd64 1.3.0-2 [39.5 kB]
+2026-10-14T08:42:43.1848938Z #8 2.372 Get:18 http://deb.debian.org/debian bookworm/main amd64 readline-common all 8.2-1.3 [69.0 kB]
+2026-10-14T08:42:43.1849471Z #8 2.373 Get:19 http://deb.debian.org/debian bookworm/main amd64 libreadline8 amd64 8.2-1.3 [166 kB]
+2026-10-14T08:42:43.1850193Z #8 2.374 Get:20 http://deb.debian.org/debian bookworm/main amd64 libsqlite3-0 amd64 3.40.1-2+deb12u2 [839 kB]
+2026-10-14T08:42:43.1851162Z #8 2.377 Get:21 http://deb.debian.org/debian-security bookworm-security/main amd64 libpython3.11-stdlib amd64 3.11.2-6+deb12u9 [1798 kB]
+2026-10-14T08:42:43.1852459Z #8 2.380 Get:22 http://deb.debian.org/debian-security bookworm-security/main amd64 python3.11 amd64 3.11.2-6+deb12u9 [575 kB]
+2026-10-14T08:42:43.1853490Z #8 2.382 Get:23 http://deb.debian.org/debian bookworm/main amd64 libpython3-stdlib amd64 3.11.2-1+b1 [9312 B]
+2026-10-14T08:42:43.1854657Z #8 2.382 Get:24 http://deb.debian.org/debian bookworm/main amd64 python3 amd64 3.11.2-1+b1 [26.3 kB]
+2026-10-14T08:42:43.1855407Z #8 2.383 Get:25 http://deb.debian.org/debian bookworm/main amd64 libproc2-0 amd64 2:4.0.2-3 [62.8 kB]
+2026-10-14T08:42:43.1855940Z #8 2.383 Get:26 http://deb.debian.org/debian bookworm/main amd64 procps amd64 2:4.0.2-3 [709 kB]
+2026-10-14T08:42:43.1856494Z #8 2.386 Get:27 http://deb.debian.org/debian bookworm/main amd64 binutils-common amd64 2.40-2 [2487 kB]
+2026-10-14T08:42:43.1857030Z #8 2.394 Get:28 http://deb.debian.org/debian bookworm/main amd64 libbinutils amd64 2.40-2 [572 kB]
+2026-10-14T08:42:43.1857553Z #8 2.397 Get:29 http://deb.debian.org/debian bookworm/main amd64 libctf-nobfd0 amd64 2.40-2 [153 kB]
+2026-10-14T08:42:43.1858066Z #8 2.397 Get:30 http://deb.debian.org/debian bookworm/main amd64 libctf0 amd64 2.40-2 [89.8 kB]
+2026-10-14T08:42:43.1858580Z #8 2.398 Get:31 http://deb.debian.org/debian bookworm/main amd64 libgprofng0 amd64 2.40-2 [812 kB]
+2026-10-14T08:42:43.1859108Z #8 2.401 Get:32 http://deb.debian.org/debian bookworm/main amd64 libjansson4 amd64 2.14-2 [40.8 kB]
+2026-10-14T08:42:43.1859683Z #8 2.401 Get:33 http://deb.debian.org/debian bookworm/main amd64 binutils-x86-64-linux-gnu amd64 2.40-2 [2246 kB]
+2026-10-14T08:42:43.1860234Z #8 2.409 Get:34 http://deb.debian.org/debian bookworm/main amd64 binutils amd64 2.40-2 [65.0 kB]
+2026-10-14T08:42:43.1860772Z #8 2.410 Get:35 http://deb.debian.org/debian bookworm/main amd64 libicu72 amd64 72.1-3+deb12u1 [9376 kB]
+2026-10-14T08:42:43.1861664Z #8 2.442 Get:36 http://deb.debian.org/debian bookworm/main amd64 libxml2 amd64 2.9.14+dfsg-1.3~deb12u6 [689 kB]
+2026-10-14T08:42:43.3058510Z #8 2.444 Get:37 http://deb.debian.org/debian-security bookworm-security/main amd64 libarchive13 amd64 3.6.2-1+deb12u5 [345 kB]
+2026-10-14T08:42:43.3059540Z #8 2.445 Get:38 http://deb.debian.org/debian bookworm/main amd64 libbrotli1 amd64 1.0.9-2+b6 [275 kB]
+2026-10-14T08:42:43.3060323Z #8 2.446 Get:39 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg-10 [20.3 kB]
+2026-10-14T08:42:43.3061383Z #8 2.447 Get:40 http://deb.debian.org/debian bookworm/main amd64 libsasl2-2 amd64 2.1.28+dfsg-10 [59.7 kB]
+2026-10-14T08:42:43.3062414Z #8 2.447 Get:41 http://deb.debian.org/debian bookworm/main amd64 libldap-2.5-0 amd64 2.5.13+dfsg-5 [183 kB]
+2026-10-14T08:42:43.3064581Z #8 2.448 Get:42 http://deb.debian.org/debian bookworm/main amd64 libnghttp2-14 amd64 1.52.0-1+deb12u3 [72.4 kB]
+2026-10-14T08:42:43.3066166Z #8 2.448 Get:43 http://deb.debian.org/debian bookworm/main amd64 libpsl5 amd64 0.21.2-1 [58.7 kB]
+2026-10-14T08:42:43.3067235Z #8 2.449 Get:44 http://deb.debian.org/debian bookworm/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2+b2 [60.8 kB]
+2026-10-14T08:42:43.3068481Z #8 2.449 Get:45 http://deb.debian.org/debian-security bookworm-security/main amd64 libssh2-1 amd64 1.10.0-3+deb12u1 [176 kB]
+2026-10-14T08:42:43.3070008Z #8 2.450 Get:46 http://deb.debian.org/debian bookworm/main amd64 libcurl4 amd64 7.88.1-10+deb12u15 [392 kB]
+2026-10-14T08:42:43.3070843Z #8 2.451 Get:47 http://deb.debian.org/debian bookworm/main amd64 libjsoncpp25 amd64 1.9.5-4 [78.6 kB]
+2026-10-14T08:42:43.3071383Z #8 2.452 Get:48 http://deb.debian.org/debian bookworm/main amd64 librhash0 amd64 1.4.3-3 [134 kB]
+2026-10-14T08:42:43.3071936Z #8 2.454 Get:49 http://deb.debian.org/debian bookworm/main amd64 libuv1 amd64 1.44.2-1+deb12u1 [136 kB]
+2026-10-14T08:42:43.3072673Z #8 2.455 Get:50 http://deb.debian.org/debian bookworm/main amd64 cmake-data all 3.25.1-1 [2026 kB]
+2026-10-14T08:42:43.3073193Z #8 2.461 Get:51 http://deb.debian.org/debian bookworm/main amd64 cmake amd64 3.25.1-1 [8692 kB]
+2026-10-14T08:42:43.3073717Z #8 2.486 Get:52 http://deb.debian.org/debian bookworm/main amd64 libisl23 amd64 0.25-1.1 [683 kB]
+2026-10-14T08:42:43.3074389Z #8 2.488 Get:53 http://deb.debian.org/debian bookworm/main amd64 libmpfr6 amd64 4.2.0-1 [701 kB]
+2026-10-14T08:42:43.3075020Z #8 2.491 Get:54 http://deb.debian.org/debian bookworm/main amd64 libmpc3 amd64 1.3.1-1 [51.5 kB]
+2026-10-14T08:42:43.3075568Z #8 2.491 Get:55 http://deb.debian.org/debian bookworm/main amd64 cpp-12 amd64 12.2.0-14+deb12u1 [9768 kB]
+2026-10-14T08:42:43.3076099Z #8 2.565 Get:56 http://deb.debian.org/debian bookworm/main amd64 cpp amd64 4:12.2.0-3 [6836 B]
+2026-10-14T08:42:43.3076640Z #8 2.565 Get:57 http://deb.debian.org/debian bookworm/main amd64 libcc1-0 amd64 12.2.0-14+deb12u1 [41.7 kB]
+2026-10-14T08:42:43.4849041Z #8 2.566 Get:58 http://deb.debian.org/debian bookworm/main amd64 libgomp1 amd64 12.2.0-14+deb12u1 [116 kB]
+2026-10-14T08:42:43.4849738Z #8 2.566 Get:59 http://deb.debian.org/debian bookworm/main amd64 libitm1 amd64 12.2.0-14+deb12u1 [26.1 kB]
+2026-10-14T08:42:43.4850362Z #8 2.567 Get:60 http://deb.debian.org/debian bookworm/main amd64 libatomic1 amd64 12.2.0-14+deb12u1 [9376 B]
+2026-10-14T08:42:43.4850961Z #8 2.567 Get:61 http://deb.debian.org/debian bookworm/main amd64 libasan8 amd64 12.2.0-14+deb12u1 [2193 kB]
+2026-10-14T08:42:43.4851535Z #8 2.574 Get:62 http://deb.debian.org/debian bookworm/main amd64 liblsan0 amd64 12.2.0-14+deb12u1 [969 kB]
+2026-10-14T08:42:43.4852094Z #8 2.577 Get:63 http://deb.debian.org/debian bookworm/main amd64 libtsan2 amd64 12.2.0-14+deb12u1 [2197 kB]
+2026-10-14T08:42:43.4852696Z #8 2.583 Get:64 http://deb.debian.org/debian bookworm/main amd64 libubsan1 amd64 12.2.0-14+deb12u1 [883 kB]
+2026-10-14T08:42:43.4853277Z #8 2.586 Get:65 http://deb.debian.org/debian bookworm/main amd64 libquadmath0 amd64 12.2.0-14+deb12u1 [145 kB]
+2026-10-14T08:42:43.4853887Z #8 2.587 Get:66 http://deb.debian.org/debian bookworm/main amd64 libgcc-12-dev amd64 12.2.0-14+deb12u1 [2437 kB]
+2026-10-14T08:42:43.4855027Z #8 2.594 Get:67 http://deb.debian.org/debian bookworm/main amd64 gcc-12 amd64 12.2.0-14+deb12u1 [19.3 MB]
+2026-10-14T08:42:43.5354134Z #8 2.795 Get:68 http://deb.debian.org/debian bookworm/main amd64 gcc amd64 4:12.2.0-3 [5216 B]
+2026-10-14T08:42:43.7357340Z #8 2.795 Get:69 http://deb.debian.org/debian bookworm/main amd64 libc-dev-bin amd64 2.36-9+deb12u14 [48.1 kB]
+2026-10-14T08:42:43.7358108Z #8 2.796 Get:70 http://deb.debian.org/debian-security bookworm-security/main amd64 linux-libc-dev amd64 6.1.187-1 [2357 kB]
+2026-10-14T08:42:43.7358758Z #8 2.799 Get:71 http://deb.debian.org/debian bookworm/main amd64 libcrypt-dev amd64 1:4.4.33-2 [118 kB]
+2026-10-14T08:42:43.7359322Z #8 2.800 Get:72 http://deb.debian.org/debian bookworm/main amd64 libtirpc-dev amd64 1.3.3+ds-1 [191 kB]
+2026-10-14T08:42:43.7359898Z #8 2.801 Get:73 http://deb.debian.org/debian bookworm/main amd64 libnsl-dev amd64 1.3.0-2 [66.4 kB]
+2026-10-14T08:42:43.7360463Z #8 2.801 Get:74 http://deb.debian.org/debian bookworm/main amd64 rpcsvc-proto amd64 1.4.3-1 [63.3 kB]
+2026-10-14T08:42:43.7361047Z #8 2.802 Get:75 http://deb.debian.org/debian bookworm/main amd64 libc6-dev amd64 2.36-9+deb12u14 [1904 kB]
+2026-10-14T08:42:43.7361669Z #8 2.807 Get:76 http://deb.debian.org/debian bookworm/main amd64 libstdc++-12-dev amd64 12.2.0-14+deb12u1 [2047 kB]
+2026-10-14T08:42:43.7362280Z #8 2.814 Get:77 http://deb.debian.org/debian bookworm/main amd64 g++-12 amd64 12.2.0-14+deb12u1 [10.7 MB]
+2026-10-14T08:42:43.7362807Z #8 2.845 Get:78 http://deb.debian.org/debian bookworm/main amd64 g++ amd64 4:12.2.0-3 [1356 B]
+2026-10-14T08:42:43.7363299Z #8 2.845 Get:79 http://deb.debian.org/debian bookworm/main amd64 make amd64 4.3-4.1 [396 kB]
+2026-10-14T08:42:43.7406220Z #8 3.000 debconf: delaying package configuration, since apt-utils is not installed
+2026-10-14T08:42:43.8505686Z #8 3.017 Fetched 100 MB in 1s (190 MB/s)
+2026-10-14T08:42:43.8506194Z #8 3.029 (Reading database ... 
+2026-10-14T08:42:43.8506554Z (Reading database ... 5%
+2026-10-14T08:42:43.8506875Z (Reading database ... 10%
+2026-10-14T08:42:43.8507191Z (Reading database ... 15%
+2026-10-14T08:42:43.8507536Z (Reading database ... 20%
+2026-10-14T08:42:43.8507849Z (Reading database ... 25%
+2026-10-14T08:42:43.8508152Z (Reading database ... 30%
+2026-10-14T08:42:43.8508465Z (Reading database ... 35%
+2026-10-14T08:42:43.8508767Z (Reading database ... 40%
+2026-10-14T08:42:43.8508977Z (Reading database ... 45%
+2026-10-14T08:42:43.8509167Z (Reading database ... 50%
+2026-10-14T08:42:43.8509366Z (Reading database ... 55%
+2026-10-14T08:42:43.8509569Z (Reading database ... 60%
+2026-10-14T08:42:43.8509763Z (Reading database ... 65%
+2026-10-14T08:42:43.8509958Z (Reading database ... 70%
+2026-10-14T08:42:43.8510148Z (Reading database ... 75%
+2026-10-14T08:42:43.8510349Z (Reading database ... 80%
+2026-10-14T08:42:43.8510539Z (Reading database ... 85%
+2026-10-14T08:42:43.8510722Z (Reading database ... 90%
+2026-10-14T08:42:43.8510917Z (Reading database ... 95%
+2026-10-14T08:42:43.8511112Z (Reading database ... 100%
+2026-10-14T08:42:43.8511438Z (Reading database ... 6096 files and directories currently installed.)
+2026-10-14T08:42:43.8511866Z #8 3.034 Preparing to unpack .../libc6_2.36-9+deb12u14_amd64.deb ...
+2026-10-14T08:42:43.8512240Z #8 3.083 debconf: unable to initialize frontend: Dialog
+2026-10-14T08:42:43.8512615Z #8 3.083 debconf: (TERM is not set, so the dialog frontend is not usable.)
+2026-10-14T08:42:43.8512981Z #8 3.083 debconf: falling back to frontend: Readline
+2026-10-14T08:42:43.8513313Z #8 3.084 debconf: unable to initialize frontend: Readline
+2026-10-14T08:42:43.8515974Z #8 3.084 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+2026-10-14T08:42:43.8518076Z #8 3.084 debconf: falling back to frontend: Teletype
+2026-10-14T08:42:43.8518966Z #8 3.110 Unpacking libc6:amd64 (2.36-9+deb12u14) over (2.36-9+deb12u13) ...
+2026-10-14T08:42:45.0530744Z #8 4.313 Setting up libc6:amd64 (2.36-9+deb12u14) ...
+2026-10-14T08:42:45.2529674Z #8 4.362 debconf: unable to initialize frontend: Dialog
+2026-10-14T08:42:45.2530236Z #8 4.362 debconf: (TERM is not set, so the dialog frontend is not usable.)
+2026-10-14T08:42:45.2530630Z #8 4.362 debconf: falling back to frontend: Readline
+2026-10-14T08:42:45.2530980Z #8 4.362 debconf: unable to initialize frontend: Readline
+2026-10-14T08:42:45.2532557Z #8 4.362 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+2026-10-14T08:42:45.2533804Z #8 4.362 debconf: falling back to frontend: Teletype
+2026-10-14T08:42:46.2928742Z #8 5.450 (Reading database ... 
+2026-10-14T08:42:46.2929156Z (Reading database ... 5%
+2026-10-14T08:42:46.2929483Z (Reading database ... 10%
+2026-10-14T08:42:46.2929820Z (Reading database ... 15%
+2026-10-14T08:42:46.2930114Z (Reading database ... 20%
+2026-10-14T08:42:46.2930408Z (Reading database ... 25%
+2026-10-14T08:42:46.2930722Z (Reading database ... 30%
+2026-10-14T08:42:46.2931012Z (Reading database ... 35%
+2026-10-14T08:42:46.2931352Z (Reading database ... 40%
+2026-10-14T08:42:46.2931645Z (Reading database ... 45%
+2026-10-14T08:42:46.2931943Z (Reading database ... 50%
+2026-10-14T08:42:46.2932504Z (Reading database ... 55%
+2026-10-14T08:42:46.2932799Z (Reading database ... 60%
+2026-10-14T08:42:46.2933110Z (Reading database ... 65%
+2026-10-14T08:42:46.2933680Z (Reading database ... 70%
+2026-10-14T08:42:46.2934001Z (Reading database ... 75%
+2026-10-14T08:42:46.2934461Z (Reading database ... 80%
+2026-10-14T08:42:46.2934782Z (Reading database ... 85%
+2026-10-14T08:42:46.2935078Z (Reading database ... 90%
+2026-10-14T08:42:46.2935382Z (Reading database ... 95%
+2026-10-14T08:42:46.2935677Z (Reading database ... 100%
+2026-10-14T08:42:46.2936349Z (Reading database ... 6096 files and directories currently installed.)
+2026-10-14T08:42:46.2937047Z #8 5.454 Preparing to unpack .../libc-bin_2.36-9+deb12u14_amd64.deb ...
+2026-10-14T08:42:46.2937710Z #8 5.456 Unpacking libc-bin (2.36-9+deb12u14) over (2.36-9+deb12u13) ...
+2026-10-14T08:42:46.2938275Z #8 5.525 Setting up libc-bin (2.36-9+deb12u14) ...
+2026-10-14T08:42:46.2938827Z #8 5.553 Selecting previously unselected package libssl3:amd64.
+2026-10-14T08:42:46.4489267Z #8 5.553 (Reading database ... 
+2026-10-14T08:42:46.4489673Z (Reading database ... 5%
+2026-10-14T08:42:46.4489983Z (Reading database ... 10%
+2026-10-14T08:42:46.4490203Z (Reading database ... 15%
+2026-10-14T08:42:46.4490421Z (Reading database ... 20%
+2026-10-14T08:42:46.4490617Z (Reading database ... 25%
+2026-10-14T08:42:46.4490830Z (Reading database ... 30%
+2026-10-14T08:42:46.4491027Z (Reading database ... 35%
+2026-10-14T08:42:46.4491214Z (Reading database ... 40%
+2026-10-14T08:42:46.4491405Z (Reading database ... 45%
+2026-10-14T08:42:46.4491611Z (Reading database ... 50%
+2026-10-14T08:42:46.4491830Z (Reading database ... 55%
+2026-10-14T08:42:46.4492168Z (Reading database ... 60%
+2026-10-14T08:42:46.4492460Z (Reading database ... 65%
+2026-10-14T08:42:46.4492985Z (Reading database ... 70%
+2026-10-14T08:42:46.4493340Z (Reading database ... 75%
+2026-10-14T08:42:46.4493606Z (Reading database ... 80%
+2026-10-14T08:42:46.4493995Z (Reading database ... 85%
+2026-10-14T08:42:46.4494511Z (Reading database ... 90%
+2026-10-14T08:42:46.4494930Z (Reading database ... 95%
+2026-10-14T08:42:46.4495215Z (Reading database ... 100%
+2026-10-14T08:42:46.4495619Z (Reading database ... 6096 files and directories currently installed.)
+2026-10-14T08:42:46.4496199Z #8 5.557 Preparing to unpack .../libssl3_3.0.22-1~deb12u1_amd64.deb ...
+2026-10-14T08:42:46.4496955Z #8 5.558 Unpacking libssl3:amd64 (3.0.22-1~deb12u1) ...
+2026-10-14T08:42:46.5009463Z #8 5.761 Selecting previously unselected package libpython3.11-minimal:amd64.
+2026-10-14T08:42:46.6987003Z #8 5.762 Preparing to unpack .../libpython3.11-minimal_3.11.2-6+deb12u9_amd64.deb ...
+2026-10-14T08:42:46.6987621Z #8 5.763 Unpacking libpython3.11-minimal:amd64 (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:46.6988034Z #8 5.826 Selecting previously unselected package libexpat1:amd64.
+2026-10-14T08:42:46.6988450Z #8 5.827 Preparing to unpack .../libexpat1_2.5.0-1+deb12u4_amd64.deb ...
+2026-10-14T08:42:46.6988827Z #8 5.828 Unpacking libexpat1:amd64 (2.5.0-1+deb12u4) ...
+2026-10-14T08:42:46.6989226Z #8 5.958 Selecting previously unselected package python3.11-minimal.
+2026-10-14T08:42:46.8174758Z #8 5.959 Preparing to unpack .../python3.11-minimal_3.11.2-6+deb12u9_amd64.deb ...
+2026-10-14T08:42:46.8175356Z #8 5.962 Unpacking python3.11-minimal (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:46.8175746Z #8 6.077 Setting up libssl3:amd64 (3.0.22-1~deb12u1) ...
+2026-10-14T08:42:46.9796790Z #8 6.239 Setting up libpython3.11-minimal:amd64 (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:47.1346546Z #8 6.242 Setting up libexpat1:amd64 (2.5.0-1+deb12u4) ...
+2026-10-14T08:42:47.1346986Z #8 6.244 Setting up python3.11-minimal (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:47.4473656Z #8 6.707 Selecting previously unselected package python3-minimal.
+2026-10-14T08:42:47.6308863Z #8 6.707 (Reading database ... 
+2026-10-14T08:42:47.6309281Z (Reading database ... 5%
+2026-10-14T08:42:47.6309619Z (Reading database ... 10%
+2026-10-14T08:42:47.6309931Z (Reading database ... 15%
+2026-10-14T08:42:47.6310231Z (Reading database ... 20%
+2026-10-14T08:42:47.6311005Z (Reading database ... 25%
+2026-10-14T08:42:47.6311316Z (Reading database ... 30%
+2026-10-14T08:42:47.6311616Z (Reading database ... 35%
+2026-10-14T08:42:47.6311857Z (Reading database ... 40%
+2026-10-14T08:42:47.6312051Z (Reading database ... 45%
+2026-10-14T08:42:47.6312246Z (Reading database ... 50%
+2026-10-14T08:42:47.6312463Z (Reading database ... 55%
+2026-10-14T08:42:47.6312655Z (Reading database ... 60%
+2026-10-14T08:42:47.6312844Z (Reading database ... 65%
+2026-10-14T08:42:47.6313028Z (Reading database ... 70%
+2026-10-14T08:42:47.6313225Z (Reading database ... 75%
+2026-10-14T08:42:47.6313412Z (Reading database ... 80%
+2026-10-14T08:42:47.6313596Z (Reading database ... 85%
+2026-10-14T08:42:47.6313793Z (Reading database ... 90%
+2026-10-14T08:42:47.6313982Z (Reading database ... 95%
+2026-10-14T08:42:47.6314184Z (Reading database ... 100%
+2026-10-14T08:42:47.6314710Z (Reading database ... 6424 files and directories currently installed.)
+2026-10-14T08:42:47.6315178Z #8 6.712 Preparing to unpack .../00-python3-minimal_3.11.2-1+b1_amd64.deb ...
+2026-10-14T08:42:47.6315559Z #8 6.712 Unpacking python3-minimal (3.11.2-1+b1) ...
+2026-10-14T08:42:47.6315906Z #8 6.726 Selecting previously unselected package media-types.
+2026-10-14T08:42:47.6316290Z #8 6.726 Preparing to unpack .../01-media-types_10.0.0_all.deb ...
+2026-10-14T08:42:47.6316615Z #8 6.727 Unpacking media-types (10.0.0) ...
+2026-10-14T08:42:47.6316967Z #8 6.738 Selecting previously unselected package libncursesw6:amd64.
+2026-10-14T08:42:47.6317360Z #8 6.739 Preparing to unpack .../02-libncursesw6_6.4-4_amd64.deb ...
+2026-10-14T08:42:47.6317709Z #8 6.740 Unpacking libncursesw6:amd64 (6.4-4) ...
+2026-10-14T08:42:47.6701610Z #8 6.930 Selecting previously unselected package libkrb5support0:amd64.
+2026-10-14T08:42:47.8509762Z #8 6.931 Preparing to unpack .../03-libkrb5support0_1.20.1-2+deb12u5_amd64.deb ...
+2026-10-14T08:42:47.8510310Z #8 6.932 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:47.8510758Z #8 6.943 Selecting previously unselected package libk5crypto3:amd64.
+2026-10-14T08:42:47.8511190Z #8 6.944 Preparing to unpack .../04-libk5crypto3_1.20.1-2+deb12u5_amd64.deb ...
+2026-10-14T08:42:47.8511578Z #8 6.945 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:47.8511946Z #8 6.959 Selecting previously unselected package libkeyutils1:amd64.
+2026-10-14T08:42:47.8512778Z #8 6.960 Preparing to unpack .../05-libkeyutils1_1.6.3-2_amd64.deb ...
+2026-10-14T08:42:47.8513141Z #8 6.960 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
+2026-10-14T08:42:47.8877945Z #8 7.147 Selecting previously unselected package libkrb5-3:amd64.
+2026-10-14T08:42:48.0700214Z #8 7.149 Preparing to unpack .../06-libkrb5-3_1.20.1-2+deb12u5_amd64.deb ...
+2026-10-14T08:42:48.0700695Z #8 7.149 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:48.0701110Z #8 7.178 Selecting previously unselected package libgssapi-krb5-2:amd64.
+2026-10-14T08:42:48.0701583Z #8 7.179 Preparing to unpack .../07-libgssapi-krb5-2_1.20.1-2+deb12u5_amd64.deb ...
+2026-10-14T08:42:48.0702040Z #8 7.179 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:48.0818044Z #8 7.342 Selecting previously unselected package libtirpc-common.
+2026-10-14T08:42:48.2745270Z #8 7.343 Preparing to unpack .../08-libtirpc-common_1.3.3+ds-1_all.deb ...
+2026-10-14T08:42:48.2745980Z #8 7.343 Unpacking libtirpc-common (1.3.3+ds-1) ...
+2026-10-14T08:42:48.2746577Z #8 7.354 Selecting previously unselected package libtirpc3:amd64.
+2026-10-14T08:42:48.2747230Z #8 7.355 Preparing to unpack .../09-libtirpc3_1.3.3+ds-1_amd64.deb ...
+2026-10-14T08:42:48.2747783Z #8 7.356 Unpacking libtirpc3:amd64 (1.3.3+ds-1) ...
+2026-10-14T08:42:48.2748126Z #8 7.370 Selecting previously unselected package libnsl2:amd64.
+2026-10-14T08:42:48.2748499Z #8 7.371 Preparing to unpack .../10-libnsl2_1.3.0-2_amd64.deb ...
+2026-10-14T08:42:48.2748851Z #8 7.372 Unpacking libnsl2:amd64 (1.3.0-2) ...
+2026-10-14T08:42:48.2749193Z #8 7.399 Selecting previously unselected package readline-common.
+2026-10-14T08:42:48.2749822Z #8 7.400 Preparing to unpack .../11-readline-common_8.2-1.3_all.deb ...
+2026-10-14T08:42:48.2750165Z #8 7.401 Unpacking readline-common (8.2-1.3) ...
+2026-10-14T08:42:48.2750513Z #8 7.534 Selecting previously unselected package libreadline8:amd64.
+2026-10-14T08:42:48.4932296Z #8 7.535 Preparing to unpack .../12-libreadline8_8.2-1.3_amd64.deb ...
+2026-10-14T08:42:48.4932864Z #8 7.536 Unpacking libreadline8:amd64 (8.2-1.3) ...
+2026-10-14T08:42:48.4933251Z #8 7.559 Selecting previously unselected package libsqlite3-0:amd64.
+2026-10-14T08:42:48.4933697Z #8 7.560 Preparing to unpack .../13-libsqlite3-0_3.40.1-2+deb12u2_amd64.deb ...
+2026-10-14T08:42:48.4934112Z #8 7.560 Unpacking libsqlite3-0:amd64 (3.40.1-2+deb12u2) ...
+2026-10-14T08:42:48.4934693Z #8 7.601 Selecting previously unselected package libpython3.11-stdlib:amd64.
+2026-10-14T08:42:48.4935186Z #8 7.602 Preparing to unpack .../14-libpython3.11-stdlib_3.11.2-6+deb12u9_amd64.deb ...
+2026-10-14T08:42:48.4935630Z #8 7.603 Unpacking libpython3.11-stdlib:amd64 (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:48.5512656Z #8 7.811 Selecting previously unselected package python3.11.
+2026-10-14T08:42:48.6821512Z #8 7.812 Preparing to unpack .../15-python3.11_3.11.2-6+deb12u9_amd64.deb ...
+2026-10-14T08:42:48.6822168Z #8 7.813 Unpacking python3.11 (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:48.6822831Z #8 7.831 Selecting previously unselected package libpython3-stdlib:amd64.
+2026-10-14T08:42:48.6823552Z #8 7.832 Preparing to unpack .../16-libpython3-stdlib_3.11.2-1+b1_amd64.deb ...
+2026-10-14T08:42:48.6824167Z #8 7.833 Unpacking libpython3-stdlib:amd64 (3.11.2-1+b1) ...
+2026-10-14T08:42:48.6824798Z #8 7.850 Setting up python3-minimal (3.11.2-1+b1) ...
+2026-10-14T08:42:48.6825314Z #8 7.942 Selecting previously unselected package python3.
+2026-10-14T08:42:48.8023046Z #8 7.942 (Reading database ... 
+2026-10-14T08:42:48.8023376Z (Reading database ... 5%
+2026-10-14T08:42:48.8023599Z (Reading database ... 10%
+2026-10-14T08:42:48.8023889Z (Reading database ... 15%
+2026-10-14T08:42:48.8024130Z (Reading database ... 20%
+2026-10-14T08:42:48.8024515Z (Reading database ... 25%
+2026-10-14T08:42:48.8024729Z (Reading database ... 30%
+2026-10-14T08:42:48.8024921Z (Reading database ... 35%
+2026-10-14T08:42:48.8025144Z (Reading database ... 40%
+2026-10-14T08:42:48.8025398Z (Reading database ... 45%
+2026-10-14T08:42:48.8025808Z (Reading database ... 50%
+2026-10-14T08:42:48.8026087Z (Reading database ... 55%
+2026-10-14T08:42:48.8026285Z (Reading database ... 60%
+2026-10-14T08:42:48.8026471Z (Reading database ... 65%
+2026-10-14T08:42:48.8026657Z (Reading database ... 70%
+2026-10-14T08:42:48.8026938Z (Reading database ... 75%
+2026-10-14T08:42:48.8027131Z (Reading database ... 80%
+2026-10-14T08:42:48.8027315Z (Reading database ... 85%
+2026-10-14T08:42:48.8027537Z (Reading database ... 90%
+2026-10-14T08:42:48.8027795Z (Reading database ... 95%
+2026-10-14T08:42:48.8027993Z (Reading database ... 100%
+2026-10-14T08:42:48.8028384Z (Reading database ... 6932 files and directories currently installed.)
+2026-10-14T08:42:48.8028859Z #8 7.946 Preparing to unpack .../00-python3_3.11.2-1+b1_amd64.deb ...
+2026-10-14T08:42:48.8029302Z #8 7.948 Unpacking python3 (3.11.2-1+b1) ...
+2026-10-14T08:42:48.8029666Z #8 7.964 Selecting previously unselected package libproc2-0:amd64.
+2026-10-14T08:42:48.8030155Z #8 7.965 Preparing to unpack .../01-libproc2-0_2%3a4.0.2-3_amd64.deb ...
+2026-10-14T08:42:48.8030684Z #8 7.966 Unpacking libproc2-0:amd64 (2:4.0.2-3) ...
+2026-10-14T08:42:48.8031811Z #8 8.006 Selecting previously unselected package procps.
+2026-10-14T08:42:48.8032385Z #8 8.007 Preparing to unpack .../02-procps_2%3a4.0.2-3_amd64.deb ...
+2026-10-14T08:42:48.8032948Z #8 8.013 Unpacking procps (2:4.0.2-3) ...
+2026-10-14T08:42:48.8033489Z #8 8.062 Selecting previously unselected package binutils-common:amd64.
+2026-10-14T08:42:48.9396379Z #8 8.063 Preparing to unpack .../03-binutils-common_2.40-2_amd64.deb ...
+2026-10-14T08:42:48.9396992Z #8 8.064 Unpacking binutils-common:amd64 (2.40-2) ...
+2026-10-14T08:42:48.9397831Z #8 8.199 Selecting previously unselected package libbinutils:amd64.
+2026-10-14T08:42:49.0494051Z #8 8.201 Preparing to unpack .../04-libbinutils_2.40-2_amd64.deb ...
+2026-10-14T08:42:49.0494883Z #8 8.201 Unpacking libbinutils:amd64 (2.40-2) ...
+2026-10-14T08:42:49.0495327Z #8 8.240 Selecting previously unselected package libctf-nobfd0:amd64.
+2026-10-14T08:42:49.0495742Z #8 8.241 Preparing to unpack .../05-libctf-nobfd0_2.40-2_amd64.deb ...
+2026-10-14T08:42:49.0496086Z #8 8.309 Unpacking libctf-nobfd0:amd64 (2.40-2) ...
+2026-10-14T08:42:49.1663174Z #8 8.354 Selecting previously unselected package libctf0:amd64.
+2026-10-14T08:42:49.1663800Z #8 8.355 Preparing to unpack .../06-libctf0_2.40-2_amd64.deb ...
+2026-10-14T08:42:49.1664436Z #8 8.356 Unpacking libctf0:amd64 (2.40-2) ...
+2026-10-14T08:42:49.1664938Z #8 8.371 Selecting previously unselected package libgprofng0:amd64.
+2026-10-14T08:42:49.1665508Z #8 8.373 Preparing to unpack .../07-libgprofng0_2.40-2_amd64.deb ...
+2026-10-14T08:42:49.1666034Z #8 8.373 Unpacking libgprofng0:amd64 (2.40-2) ...
+2026-10-14T08:42:49.1666537Z #8 8.426 Selecting previously unselected package libjansson4:amd64.
+2026-10-14T08:42:49.3132784Z #8 8.427 Preparing to unpack .../08-libjansson4_2.14-2_amd64.deb ...
+2026-10-14T08:42:49.3133378Z #8 8.428 Unpacking libjansson4:amd64 (2.14-2) ...
+2026-10-14T08:42:49.3133977Z #8 8.438 Selecting previously unselected package binutils-x86-64-linux-gnu.
+2026-10-14T08:42:49.3134807Z #8 8.439 Preparing to unpack .../09-binutils-x86-64-linux-gnu_2.40-2_amd64.deb ...
+2026-10-14T08:42:49.3135375Z #8 8.440 Unpacking binutils-x86-64-linux-gnu (2.40-2) ...
+2026-10-14T08:42:49.3135852Z #8 8.573 Selecting previously unselected package binutils.
+2026-10-14T08:42:49.4821215Z #8 8.574 Preparing to unpack .../10-binutils_2.40-2_amd64.deb ...
+2026-10-14T08:42:49.4821820Z #8 8.575 Unpacking binutils (2.40-2) ...
+2026-10-14T08:42:49.4822403Z #8 8.590 Selecting previously unselected package libicu72:amd64.
+2026-10-14T08:42:49.4823099Z #8 8.591 Preparing to unpack .../11-libicu72_72.1-3+deb12u1_amd64.deb ...
+2026-10-14T08:42:49.4823751Z #8 8.591 Unpacking libicu72:amd64 (72.1-3+deb12u1) ...
+2026-10-14T08:42:49.6844862Z #8 8.943 Selecting previously unselected package libxml2:amd64.
+2026-10-14T08:42:49.8056286Z #8 8.944 Preparing to unpack .../12-libxml2_2.9.14+dfsg-1.3~deb12u6_amd64.deb ...
+2026-10-14T08:42:49.8057038Z #8 8.945 Unpacking libxml2:amd64 (2.9.14+dfsg-1.3~deb12u6) ...
+2026-10-14T08:42:49.8057474Z #8 9.037 Selecting previously unselected package libarchive13:amd64.
+2026-10-14T08:42:49.8057915Z #8 9.038 Preparing to unpack .../13-libarchive13_3.6.2-1+deb12u5_amd64.deb ...
+2026-10-14T08:42:49.8058309Z #8 9.038 Unpacking libarchive13:amd64 (3.6.2-1+deb12u5) ...
+2026-10-14T08:42:49.8058673Z #8 9.065 Selecting previously unselected package libbrotli1:amd64.
+2026-10-14T08:42:49.9081104Z #8 9.067 Preparing to unpack .../14-libbrotli1_1.0.9-2+b6_amd64.deb ...
+2026-10-14T08:42:49.9081590Z #8 9.067 Unpacking libbrotli1:amd64 (1.0.9-2+b6) ...
+2026-10-14T08:42:49.9082038Z #8 9.090 Selecting previously unselected package libsasl2-modules-db:amd64.
+2026-10-14T08:42:49.9082513Z #8 9.092 Preparing to unpack .../15-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
+2026-10-14T08:42:49.9082931Z #8 9.092 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+2026-10-14T08:42:49.9083329Z #8 9.103 Selecting previously unselected package libsasl2-2:amd64.
+2026-10-14T08:42:49.9083738Z #8 9.104 Preparing to unpack .../16-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
+2026-10-14T08:42:49.9084105Z #8 9.104 Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+2026-10-14T08:42:49.9084627Z #8 9.118 Selecting previously unselected package libldap-2.5-0:amd64.
+2026-10-14T08:42:49.9086131Z #8 9.119 Preparing to unpack .../17-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
+2026-10-14T08:42:49.9086807Z #8 9.119 Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+2026-10-14T08:42:49.9087451Z #8 9.138 Selecting previously unselected package libnghttp2-14:amd64.
+2026-10-14T08:42:49.9088219Z #8 9.139 Preparing to unpack .../18-libnghttp2-14_1.52.0-1+deb12u3_amd64.deb ...
+2026-10-14T08:42:49.9088631Z #8 9.140 Unpacking libnghttp2-14:amd64 (1.52.0-1+deb12u3) ...
+2026-10-14T08:42:49.9089114Z #8 9.154 Selecting previously unselected package libpsl5:amd64.
+2026-10-14T08:42:49.9089488Z #8 9.155 Preparing to unpack .../19-libpsl5_0.21.2-1_amd64.deb ...
+2026-10-14T08:42:49.9089924Z #8 9.156 Unpacking libpsl5:amd64 (0.21.2-1) ...
+2026-10-14T08:42:49.9090263Z #8 9.168 Selecting previously unselected package librtmp1:amd64.
+2026-10-14T08:42:50.0176784Z #8 9.169 Preparing to unpack .../20-librtmp1_2.4+20151223.gitfa8646d.1-2+b2_amd64.deb ...
+2026-10-14T08:42:50.0177458Z #8 9.169 Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+2026-10-14T08:42:50.0177872Z #8 9.182 Selecting previously unselected package libssh2-1:amd64.
+2026-10-14T08:42:50.0178305Z #8 9.183 Preparing to unpack .../21-libssh2-1_1.10.0-3+deb12u1_amd64.deb ...
+2026-10-14T08:42:50.0178690Z #8 9.183 Unpacking libssh2-1:amd64 (1.10.0-3+deb12u1) ...
+2026-10-14T08:42:50.0179074Z #8 9.201 Selecting previously unselected package libcurl4:amd64.
+2026-10-14T08:42:50.0179496Z #8 9.202 Preparing to unpack .../22-libcurl4_7.88.1-10+deb12u15_amd64.deb ...
+2026-10-14T08:42:50.0179870Z #8 9.203 Unpacking libcurl4:amd64 (7.88.1-10+deb12u15) ...
+2026-10-14T08:42:50.0180247Z #8 9.231 Selecting previously unselected package libjsoncpp25:amd64.
+2026-10-14T08:42:50.0180659Z #8 9.232 Preparing to unpack .../23-libjsoncpp25_1.9.5-4_amd64.deb ...
+2026-10-14T08:42:50.0181018Z #8 9.233 Unpacking libjsoncpp25:amd64 (1.9.5-4) ...
+2026-10-14T08:42:50.0181378Z #8 9.277 Selecting previously unselected package librhash0:amd64.
+2026-10-14T08:42:50.2133411Z #8 9.279 Preparing to unpack .../24-librhash0_1.4.3-3_amd64.deb ...
+2026-10-14T08:42:50.2134048Z #8 9.279 Unpacking librhash0:amd64 (1.4.3-3) ...
+2026-10-14T08:42:50.2134848Z #8 9.296 Selecting previously unselected package libuv1:amd64.
+2026-10-14T08:42:50.2135506Z #8 9.297 Preparing to unpack .../25-libuv1_1.44.2-1+deb12u1_amd64.deb ...
+2026-10-14T08:42:50.2136118Z #8 9.297 Unpacking libuv1:amd64 (1.44.2-1+deb12u1) ...
+2026-10-14T08:42:50.2136666Z #8 9.318 Selecting previously unselected package cmake-data.
+2026-10-14T08:42:50.2137280Z #8 9.319 Preparing to unpack .../26-cmake-data_3.25.1-1_all.deb ...
+2026-10-14T08:42:50.2137799Z #8 9.323 Unpacking cmake-data (3.25.1-1) ...
+2026-10-14T08:42:50.4572458Z #8 9.717 Selecting previously unselected package cmake.
+2026-10-14T08:42:50.6101901Z #8 9.719 Preparing to unpack .../27-cmake_3.25.1-1_amd64.deb ...
+2026-10-14T08:42:50.6102290Z #8 9.720 Unpacking cmake (3.25.1-1) ...
+2026-10-14T08:42:50.8317355Z #8 10.09 Selecting previously unselected package libisl23:amd64.
+2026-10-14T08:42:50.9552486Z #8 10.09 Preparing to unpack .../28-libisl23_0.25-1.1_amd64.deb ...
+2026-10-14T08:42:50.9553104Z #8 10.09 Unpacking libisl23:amd64 (0.25-1.1) ...
+2026-10-14T08:42:50.9553528Z #8 10.14 Selecting previously unselected package libmpfr6:amd64.
+2026-10-14T08:42:50.9553924Z #8 10.14 Preparing to unpack .../29-libmpfr6_4.2.0-1_amd64.deb ...
+2026-10-14T08:42:50.9555072Z #8 10.14 Unpacking libmpfr6:amd64 (4.2.0-1) ...
+2026-10-14T08:42:50.9555450Z #8 10.21 Selecting previously unselected package libmpc3:amd64.
+2026-10-14T08:42:51.1213653Z #8 10.22 Preparing to unpack .../30-libmpc3_1.3.1-1_amd64.deb ...
+2026-10-14T08:42:51.1214103Z #8 10.22 Unpacking libmpc3:amd64 (1.3.1-1) ...
+2026-10-14T08:42:51.1214565Z #8 10.23 Selecting previously unselected package cpp-12.
+2026-10-14T08:42:51.1214970Z #8 10.23 Preparing to unpack .../31-cpp-12_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.1215344Z #8 10.23 Unpacking cpp-12 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.3836876Z #8 10.64 Selecting previously unselected package cpp.
+2026-10-14T08:42:51.4981620Z #8 10.64 Preparing to unpack .../32-cpp_4%3a12.2.0-3_amd64.deb ...
+2026-10-14T08:42:51.4982232Z #8 10.65 Unpacking cpp (4:12.2.0-3) ...
+2026-10-14T08:42:51.4982767Z #8 10.73 Selecting previously unselected package libcc1-0:amd64.
+2026-10-14T08:42:51.4983705Z #8 10.73 Preparing to unpack .../33-libcc1-0_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.4984453Z #8 10.73 Unpacking libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.4984903Z #8 10.74 Selecting previously unselected package libgomp1:amd64.
+2026-10-14T08:42:51.4985309Z #8 10.74 Preparing to unpack .../34-libgomp1_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.4985692Z #8 10.74 Unpacking libgomp1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.4986058Z #8 10.76 Selecting previously unselected package libitm1:amd64.
+2026-10-14T08:42:51.6747500Z #8 10.76 Preparing to unpack .../35-libitm1_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.6748156Z #8 10.76 Unpacking libitm1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.6748558Z #8 10.77 Selecting previously unselected package libatomic1:amd64.
+2026-10-14T08:42:51.6748990Z #8 10.77 Preparing to unpack .../36-libatomic1_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.6749387Z #8 10.77 Unpacking libatomic1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.6749798Z #8 10.78 Selecting previously unselected package libasan8:amd64.
+2026-10-14T08:42:51.6750199Z #8 10.78 Preparing to unpack .../37-libasan8_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.6750566Z #8 10.79 Unpacking libasan8:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.6750930Z #8 10.93 Selecting previously unselected package liblsan0:amd64.
+2026-10-14T08:42:51.8882416Z #8 10.94 Preparing to unpack .../38-liblsan0_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.8882899Z #8 10.94 Unpacking liblsan0:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.8883285Z #8 11.00 Selecting previously unselected package libtsan2:amd64.
+2026-10-14T08:42:51.8883699Z #8 11.00 Preparing to unpack .../39-libtsan2_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:51.8884072Z #8 11.00 Unpacking libtsan2:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:51.9119802Z #8 11.17 Selecting previously unselected package libubsan1:amd64.
+2026-10-14T08:42:52.0646386Z #8 11.17 Preparing to unpack .../40-libubsan1_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:52.0646923Z #8 11.17 Unpacking libubsan1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:52.1238521Z #8 11.38 Selecting previously unselected package libquadmath0:amd64.
+2026-10-14T08:42:52.2653914Z #8 11.38 Preparing to unpack .../41-libquadmath0_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:52.2654876Z #8 11.39 Unpacking libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:52.2655292Z #8 11.40 Selecting previously unselected package libgcc-12-dev:amd64.
+2026-10-14T08:42:52.2655736Z #8 11.40 Preparing to unpack .../42-libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:52.2656144Z #8 11.40 Unpacking libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:52.2656498Z #8 11.53 Selecting previously unselected package gcc-12.
+2026-10-14T08:42:52.4179442Z #8 11.53 Preparing to unpack .../43-gcc-12_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:52.4180100Z #8 11.53 Unpacking gcc-12 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:52.8744620Z #8 12.13 Selecting previously unselected package gcc.
+2026-10-14T08:42:53.0441826Z #8 12.14 Preparing to unpack .../44-gcc_4%3a12.2.0-3_amd64.deb ...
+2026-10-14T08:42:53.0442239Z #8 12.14 Unpacking gcc (4:12.2.0-3) ...
+2026-10-14T08:42:53.0442579Z #8 12.15 Selecting previously unselected package libc-dev-bin.
+2026-10-14T08:42:53.0443046Z #8 12.15 Preparing to unpack .../45-libc-dev-bin_2.36-9+deb12u14_amd64.deb ...
+2026-10-14T08:42:53.0443434Z #8 12.15 Unpacking libc-dev-bin (2.36-9+deb12u14) ...
+2026-10-14T08:42:53.0443814Z #8 12.16 Selecting previously unselected package linux-libc-dev:amd64.
+2026-10-14T08:42:53.0444229Z #8 12.16 Preparing to unpack .../46-linux-libc-dev_6.1.187-1_amd64.deb ...
+2026-10-14T08:42:53.0444771Z #8 12.16 Unpacking linux-libc-dev:amd64 (6.1.187-1) ...
+2026-10-14T08:42:53.0445144Z #8 12.30 Selecting previously unselected package libcrypt-dev:amd64.
+2026-10-14T08:42:53.2485227Z #8 12.31 Preparing to unpack .../47-libcrypt-dev_1%3a4.4.33-2_amd64.deb ...
+2026-10-14T08:42:53.2486149Z #8 12.31 Unpacking libcrypt-dev:amd64 (1:4.4.33-2) ...
+2026-10-14T08:42:53.2486711Z #8 12.32 Selecting previously unselected package libtirpc-dev:amd64.
+2026-10-14T08:42:53.2487344Z #8 12.33 Preparing to unpack .../48-libtirpc-dev_1.3.3+ds-1_amd64.deb ...
+2026-10-14T08:42:53.2487868Z #8 12.33 Unpacking libtirpc-dev:amd64 (1.3.3+ds-1) ...
+2026-10-14T08:42:53.2488406Z #8 12.35 Selecting previously unselected package libnsl-dev:amd64.
+2026-10-14T08:42:53.2488965Z #8 12.35 Preparing to unpack .../49-libnsl-dev_1.3.0-2_amd64.deb ...
+2026-10-14T08:42:53.2489441Z #8 12.35 Unpacking libnsl-dev:amd64 (1.3.0-2) ...
+2026-10-14T08:42:53.2489919Z #8 12.36 Selecting previously unselected package rpcsvc-proto.
+2026-10-14T08:42:53.2490468Z #8 12.36 Preparing to unpack .../50-rpcsvc-proto_1.4.3-1_amd64.deb ...
+2026-10-14T08:42:53.2490938Z #8 12.36 Unpacking rpcsvc-proto (1.4.3-1) ...
+2026-10-14T08:42:53.2491403Z #8 12.38 Selecting previously unselected package libc6-dev:amd64.
+2026-10-14T08:42:53.2491966Z #8 12.38 Preparing to unpack .../51-libc6-dev_2.36-9+deb12u14_amd64.deb ...
+2026-10-14T08:42:53.2492485Z #8 12.38 Unpacking libc6-dev:amd64 (2.36-9+deb12u14) ...
+2026-10-14T08:42:53.2493011Z #8 12.51 Selecting previously unselected package libstdc++-12-dev:amd64.
+2026-10-14T08:42:53.4010911Z #8 12.51 Preparing to unpack .../52-libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:53.4011473Z #8 12.51 Unpacking libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:53.4011855Z #8 12.66 Selecting previously unselected package g++-12.
+2026-10-14T08:42:53.5538314Z #8 12.66 Preparing to unpack .../53-g++-12_12.2.0-14+deb12u1_amd64.deb ...
+2026-10-14T08:42:53.5538949Z #8 12.66 Unpacking g++-12 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:53.8474021Z #8 13.11 Selecting previously unselected package g++.
+2026-10-14T08:42:53.9481107Z #8 13.11 Preparing to unpack .../54-g++_4%3a12.2.0-3_amd64.deb ...
+2026-10-14T08:42:53.9481888Z #8 13.11 Unpacking g++ (4:12.2.0-3) ...
+2026-10-14T08:42:53.9483732Z #8 13.12 Selecting previously unselected package make.
+2026-10-14T08:42:53.9484417Z #8 13.12 Preparing to unpack .../55-make_4.3-4.1_amd64.deb ...
+2026-10-14T08:42:53.9484905Z #8 13.12 Unpacking make (4.3-4.1) ...
+2026-10-14T08:42:53.9485181Z #8 13.18 Setting up media-types (10.0.0) ...
+2026-10-14T08:42:53.9485591Z #8 13.18 Setting up libkeyutils1:amd64 (1.6.3-2) ...
+2026-10-14T08:42:53.9486124Z #8 13.18 Setting up libpsl5:amd64 (0.21.2-1) ...
+2026-10-14T08:42:53.9486577Z #8 13.18 Setting up libicu72:amd64 (72.1-3+deb12u1) ...
+2026-10-14T08:42:53.9486892Z #8 13.18 Setting up libtirpc-common (1.3.3+ds-1) ...
+2026-10-14T08:42:53.9487249Z #8 13.19 Setting up libbrotli1:amd64 (1.0.9-2+b6) ...
+2026-10-14T08:42:53.9487638Z #8 13.19 Setting up libsqlite3-0:amd64 (3.40.1-2+deb12u2) ...
+2026-10-14T08:42:53.9487963Z #8 13.19 Setting up binutils-common:amd64 (2.40-2) ...
+2026-10-14T08:42:53.9488414Z #8 13.19 Setting up libnghttp2-14:amd64 (1.52.0-1+deb12u3) ...
+2026-10-14T08:42:53.9488788Z #8 13.20 Setting up linux-libc-dev:amd64 (6.1.187-1) ...
+2026-10-14T08:42:53.9489102Z #8 13.20 Setting up libctf-nobfd0:amd64 (2.40-2) ...
+2026-10-14T08:42:53.9489412Z #8 13.20 Setting up libgomp1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:53.9489726Z #8 13.20 Setting up libjansson4:amd64 (2.14-2) ...
+2026-10-14T08:42:53.9490073Z #8 13.20 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:53.9490613Z #8 13.20 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+2026-10-14T08:42:53.9490963Z #8 13.20 Setting up libuv1:amd64 (1.44.2-1+deb12u1) ...
+2026-10-14T08:42:53.9491367Z #8 13.21 Setting up rpcsvc-proto (1.4.3-1) ...
+2026-10-14T08:42:53.9491633Z #8 13.21 Setting up make (4.3-4.1) ...
+2026-10-14T08:42:53.9492009Z #8 13.21 Setting up libmpfr6:amd64 (4.2.0-1) ...
+2026-10-14T08:42:54.0500249Z #8 13.21 Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+2026-10-14T08:42:54.0500979Z #8 13.21 Setting up libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0501514Z #8 13.21 Setting up libproc2-0:amd64 (2:4.0.2-3) ...
+2026-10-14T08:42:54.0502271Z #8 13.21 Setting up libmpc3:amd64 (1.3.1-1) ...
+2026-10-14T08:42:54.0502770Z #8 13.22 Setting up libatomic1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0503263Z #8 13.22 Setting up libjsoncpp25:amd64 (1.9.5-4) ...
+2026-10-14T08:42:54.0503640Z #8 13.22 Setting up libncursesw6:amd64 (6.4-4) ...
+2026-10-14T08:42:54.0503996Z #8 13.22 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:54.0505387Z #8 13.22 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+2026-10-14T08:42:54.0505752Z #8 13.22 Setting up libubsan1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0506092Z #8 13.22 Setting up librhash0:amd64 (1.4.3-3) ...
+2026-10-14T08:42:54.0506486Z #8 13.23 Setting up libcrypt-dev:amd64 (1:4.4.33-2) ...
+2026-10-14T08:42:54.0506804Z #8 13.23 Setting up libasan8:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0507099Z #8 13.23 Setting up procps (2:4.0.2-3) ...
+2026-10-14T08:42:54.0507390Z #8 13.25 Setting up libssh2-1:amd64 (1.10.0-3+deb12u1) ...
+2026-10-14T08:42:54.0507697Z #8 13.25 Setting up cmake-data (3.25.1-1) ...
+2026-10-14T08:42:54.0507998Z #8 13.26 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:54.0508298Z #8 13.26 Setting up libtsan2:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0508707Z #8 13.26 Setting up libbinutils:amd64 (2.40-2) ...
+2026-10-14T08:42:54.0509004Z #8 13.26 Setting up libisl23:amd64 (0.25-1.1) ...
+2026-10-14T08:42:54.0509297Z #8 13.26 Setting up libc-dev-bin (2.36-9+deb12u14) ...
+2026-10-14T08:42:54.0509587Z #8 13.26 Setting up readline-common (8.2-1.3) ...
+2026-10-14T08:42:54.0509998Z #8 13.27 Setting up libxml2:amd64 (2.9.14+dfsg-1.3~deb12u6) ...
+2026-10-14T08:42:54.0510333Z #8 13.27 Setting up libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0510647Z #8 13.27 Setting up liblsan0:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0510961Z #8 13.27 Setting up libitm1:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0511251Z #8 13.27 Setting up libctf0:amd64 (2.40-2) ...
+2026-10-14T08:42:54.0511550Z #8 13.27 Setting up cpp-12 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0511861Z #8 13.28 Setting up libarchive13:amd64 (3.6.2-1+deb12u5) ...
+2026-10-14T08:42:54.0512212Z #8 13.28 Setting up libreadline8:amd64 (8.2-1.3) ...
+2026-10-14T08:42:54.0512563Z #8 13.28 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+2026-10-14T08:42:54.0513043Z #8 13.28 Setting up libgprofng0:amd64 (2.40-2) ...
+2026-10-14T08:42:54.0513372Z #8 13.28 Setting up libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0513730Z #8 13.28 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+2026-10-14T08:42:54.0514040Z #8 13.29 Setting up cpp (4:12.2.0-3) ...
+2026-10-14T08:42:54.0514517Z #8 13.29 Setting up libcurl4:amd64 (7.88.1-10+deb12u15) ...
+2026-10-14T08:42:54.0514865Z #8 13.29 Setting up binutils-x86-64-linux-gnu (2.40-2) ...
+2026-10-14T08:42:54.0515172Z #8 13.29 Setting up libtirpc3:amd64 (1.3.3+ds-1) ...
+2026-10-14T08:42:54.0515449Z #8 13.29 Setting up binutils (2.40-2) ...
+2026-10-14T08:42:54.0515811Z #8 13.30 Setting up libtirpc-dev:amd64 (1.3.3+ds-1) ...
+2026-10-14T08:42:54.0516113Z #8 13.30 Setting up gcc-12 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.0516399Z #8 13.30 Setting up libnsl2:amd64 (1.3.0-2) ...
+2026-10-14T08:42:54.0516662Z #8 13.30 Setting up cmake (3.25.1-1) ...
+2026-10-14T08:42:54.0516993Z #8 13.30 Setting up libpython3.11-stdlib:amd64 (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:54.0517323Z #8 13.30 Setting up gcc (4:12.2.0-3) ...
+2026-10-14T08:42:54.0517619Z #8 13.31 Setting up libnsl-dev:amd64 (1.3.0-2) ...
+2026-10-14T08:42:54.2058671Z #8 13.31 Setting up libc6-dev:amd64 (2.36-9+deb12u14) ...
+2026-10-14T08:42:54.2059240Z #8 13.31 Setting up libpython3-stdlib:amd64 (3.11.2-1+b1) ...
+2026-10-14T08:42:54.2059716Z #8 13.32 Setting up python3.11 (3.11.2-6+deb12u9) ...
+2026-10-14T08:42:54.5112562Z #8 13.77 Setting up libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.7312166Z #8 13.77 Setting up python3 (3.11.2-1+b1) ...
+2026-10-14T08:42:54.7312629Z #8 13.78 running python rtupdate hooks for python3.11...
+2026-10-14T08:42:54.7313334Z #8 13.78 running python post-rtupdate hooks for python3.11...
+2026-10-14T08:42:54.7313681Z #8 13.83 Setting up g++-12 (12.2.0-14+deb12u1) ...
+2026-10-14T08:42:54.7313966Z #8 13.84 Setting up g++ (4:12.2.0-3) ...
+2026-10-14T08:42:54.7314495Z #8 13.84 update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+2026-10-14T08:42:54.7314947Z #8 13.84 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+2026-10-14T08:42:56.3955086Z #8 DONE 15.7s
+2026-10-14T08:42:56.5810393Z 
+2026-10-14T08:42:56.5810913Z #9 [ 3/19] WORKDIR /app
+2026-10-14T08:42:56.5811261Z #9 DONE 0.0s
+2026-10-14T08:42:56.5811415Z 
+2026-10-14T08:42:56.5811593Z #10 [ 4/19] COPY package.json package-lock.json ./
+2026-10-14T08:42:56.5811869Z #10 DONE 0.0s
+2026-10-14T08:42:56.5811969Z 
+2026-10-14T08:42:56.5812160Z #11 [ 5/19] COPY apps/api/package.json ./apps/api/package.json
+2026-10-14T08:42:56.5812445Z #11 DONE 0.0s
+2026-10-14T08:42:56.5812546Z 
+2026-10-14T08:42:56.5812780Z #12 [ 6/19] COPY packages/shared/package.json ./packages/shared/package.json
+2026-10-14T08:42:56.5813111Z #12 DONE 0.0s
+2026-10-14T08:42:56.5813210Z 
+2026-10-14T08:42:56.5813635Z #13 [ 7/19] RUN npm ci --ignore-scripts --no-audit --no-fund && npm_config_nodedir=/usr/local npm rebuild better-sqlite3 esbuild sharp
+2026-10-14T08:42:56.9111377Z #13 0.480 npm warn EBADENGINE Unsupported engine {
+2026-10-14T08:42:56.9112050Z #13 0.480 npm warn EBADENGINE   package: 'gcp-metadata@9.0.4',
+2026-10-14T08:42:56.9112666Z #13 0.480 npm warn EBADENGINE   required: { node: '>=22' },
+2026-10-14T08:42:56.9113439Z #13 0.480 npm warn EBADENGINE   current: { node: 'v20.20.0', npm: '10.8.2' }
+2026-10-14T08:42:56.9113985Z #13 0.480 npm warn EBADENGINE }
+2026-10-14T08:42:57.0615585Z #13 0.480 npm warn EBADENGINE Unsupported engine {
+2026-10-14T08:42:57.0616300Z #13 0.480 npm warn EBADENGINE   package: 'google-auth-library@11.1.0',
+2026-10-14T08:42:57.0616942Z #13 0.480 npm warn EBADENGINE   required: { node: '>=22' },
+2026-10-14T08:42:57.0617638Z #13 0.480 npm warn EBADENGINE   current: { node: 'v20.20.0', npm: '10.8.2' }
+2026-10-14T08:42:57.0618171Z #13 0.480 npm warn EBADENGINE }
+2026-10-14T08:42:57.0618596Z #13 0.480 npm warn EBADENGINE Unsupported engine {
+2026-10-14T08:42:57.0619192Z #13 0.480 npm warn EBADENGINE   package: 'google-logging-utils@2.0.1',
+2026-10-14T08:42:57.0620176Z #13 0.480 npm warn EBADENGINE   required: { node: '>=22' },
+2026-10-14T08:42:57.0620858Z #13 0.480 npm warn EBADENGINE   current: { node: 'v20.20.0', npm: '10.8.2' }
+2026-10-14T08:42:57.0621341Z #13 0.480 npm warn EBADENGINE }
+2026-10-14T08:42:57.9765599Z #13 1.546 npm warn deprecated prebuild-install@7.1.3: No longer maintained. Please contact the author of the relevant native addon; alternatives are available.
+2026-10-14T08:42:58.4134164Z #13 1.983 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+2026-10-14T08:42:58.6600849Z #13 2.229 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+2026-10-14T08:42:58.6602119Z #13 2.229 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+2026-10-14T08:43:01.0531139Z #13 4.622 
+2026-10-14T08:43:01.0531570Z #13 4.622 added 341 packages in 4s
+2026-10-14T08:43:01.2045490Z #13 4.623 npm notice
+2026-10-14T08:43:01.2045984Z #13 4.623 npm notice New major version of npm available! 10.8.2 -> 12.2.0
+2026-10-14T08:43:01.2046484Z #13 4.623 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+2026-10-14T08:43:01.2046909Z #13 4.623 npm notice To update run: npm install -g npm@12.2.0
+2026-10-14T08:43:01.2047186Z #13 4.623 npm notice
+2026-10-14T08:43:52.2887783Z #13 55.86 rebuilt dependencies successfully
+2026-10-14T08:43:52.3890975Z #13 DONE 56.0s
+2026-10-14T08:43:52.3891438Z 
+2026-10-14T08:43:52.3891990Z #14 [ 8/19] COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
+2026-10-14T08:43:52.5610381Z #14 DONE 0.0s
+2026-10-14T08:43:52.5610565Z 
+2026-10-14T08:43:52.5610752Z #15 [ 9/19] COPY apps/api/scripts ./apps/api/scripts
+2026-10-14T08:43:52.5611525Z #15 DONE 0.0s
+2026-10-14T08:43:52.5611634Z 
+2026-10-14T08:43:52.5611774Z #16 [10/19] COPY apps/api/src ./apps/api/src
+2026-10-14T08:43:52.6229480Z #16 DONE 0.2s
+2026-10-14T08:43:52.7844578Z 
+2026-10-14T08:43:52.7845285Z #17 [11/19] COPY packages/shared ./packages/shared
+2026-10-14T08:43:52.7845747Z #17 DONE 0.0s
+2026-10-14T08:43:52.7845944Z 
+2026-10-14T08:43:52.7846337Z #18 [12/19] RUN npm run build -w packages/shared && npm run build -w apps/api
+2026-10-14T08:43:52.8280361Z #18 0.194 
+2026-10-14T08:43:52.8280809Z #18 0.194 > @noctella/shared@2.1.0-rc.2 build
+2026-10-14T08:43:52.8281217Z #18 0.194 > tsc
+2026-10-14T08:43:52.8281489Z #18 0.194 
+2026-10-14T08:43:53.8449134Z #18 1.211 
+2026-10-14T08:43:53.8449437Z #18 1.211 > @noctella/api@2.1.0-rc.2 build
+2026-10-14T08:43:53.8449984Z #18 1.211 > tsc -p tsconfig.json && node scripts/copy-build-asset.mjs src/db/schema.sql dist/db/schema.sql
+2026-10-14T08:43:53.8450373Z #18 1.211 
+2026-10-14T08:44:05.9277448Z #18 DONE 13.3s
+2026-10-14T08:44:06.0989531Z 
+2026-10-14T08:44:06.0990391Z #19 [13/19] COPY scripts/photo-upload-linux ./scripts/photo-upload-linux
+2026-10-14T08:44:06.0990798Z #19 DONE 0.0s
+2026-10-14T08:44:06.0990908Z 
+2026-10-14T08:44:06.0991495Z #20 [14/19] RUN gcc -shared -fPIC -O2 -Wall -Wextra -Werror -o scripts/photo-upload-linux/native-alloc.so scripts/photo-upload-linux/native-alloc.c -ldl
+2026-10-14T08:44:06.1176054Z #20 DONE 0.2s
+2026-10-14T08:44:06.2678522Z 
+2026-10-14T08:44:06.2680362Z #21 [15/19] RUN gcc -O2 -Wall -Wextra -Werror -o /tmp/native-alloc-smoke scripts/photo-upload-linux/native-alloc-smoke.c && mkdir /evidence && /tmp/native-alloc-smoke && test ! -e /evidence/native-alloc.ndjson && LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so NOCTELLA_NATIVE_TRACE=synthetic-only /tmp/native-alloc-smoke && node scripts/photo-upload-linux/native-alloc-smoke.cjs && rm -rf /evidence /tmp/native-alloc-smoke
+2026-10-14T08:44:06.2732614Z #21 0.156 glibc tracer malloc/calloc/realloc/free smoke PASS
+2026-10-14T08:44:06.4772441Z #21 DONE 0.2s
+2026-10-14T08:44:06.4772814Z 
+2026-10-14T08:44:06.4773661Z #22 [16/19] ADD --checksum=sha256:e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564 https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz /tmp/libwebp.tar.gz
+2026-10-14T08:44:06.4774558Z #22 DONE 0.0s
+2026-10-14T08:44:06.4774665Z 
+2026-10-14T08:44:06.4777008Z #23 [17/19] RUN mkdir /tmp/codec-src && tar xzf /tmp/libwebp.tar.gz -C /tmp/codec-src --strip-components=1 && cmake -S /tmp/codec-src -B /tmp/codec-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/codec -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF > /opt/codec-configure.log && cmake --build /tmp/codec-build -j2 > /opt/codec-build.log && cmake --install /tmp/codec-build > /opt/codec-install.log
+2026-10-14T08:44:19.9896525Z #23 DONE 13.7s
+2026-10-14T08:44:20.1411116Z 
+2026-10-14T08:44:20.1412669Z #24 [18/19] RUN gcc -O2 -Wall -Wextra -Werror -I/opt/codec/include -o scripts/photo-upload-linux/codec-probe scripts/photo-upload-linux/codec-probe.c /opt/codec/lib/libwebp.a /opt/codec/lib/libsharpyuv.a -lm -lpthread && gcc --version > /opt/codec-compiler.txt
+2026-10-14T08:44:20.1758401Z #24 DONE 0.2s
+2026-10-14T08:44:20.3275273Z 
+2026-10-14T08:44:20.3277540Z #25 [19/19] RUN sha256sum /tmp/libwebp.tar.gz /opt/codec/lib/libwebp.a /opt/codec/lib/libsharpyuv.a scripts/photo-upload-linux/codec-probe > /opt/codec-provenance.txt && ldd scripts/photo-upload-linux/codec-probe >> /opt/codec-provenance.txt && cat /tmp/codec-build/CMakeCache.txt >> /opt/codec-provenance.txt
+2026-10-14T08:44:20.3617392Z #25 DONE 0.2s
+2026-10-14T08:44:20.5126676Z 
+2026-10-14T08:44:20.5127286Z #26 exporting to image
+2026-10-14T08:44:20.5127715Z #26 exporting layers
+2026-10-14T08:44:26.9631513Z #26 exporting layers 6.6s done
+2026-10-14T08:44:26.9775693Z #26 writing image sha256:92f79673d2f41566064ec49dd7b1a3e53828822b370451703fc1a3ab5948fb11 done
+2026-10-14T08:44:26.9776447Z #26 naming to docker.io/library/noctella-photo-upload:isolated done
+2026-10-14T08:44:26.9776891Z #26 DONE 6.6s
+2026-10-14T08:44:26.9857963Z ##[group]Run timeout --kill-after=10s 420s docker run --name "noctella-photo-generator-$GITHUB_RUN_ID" --rm --env "CASE_PROFILE=$CASE_PROFILE" --network none --memory 2g --memory-swap 2g --cpus 2 --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges --read-only --user "$(id -u):$(id -g)" --mount "type=bind,src=$RUNNER_TEMP/photo-fixtures,dst=/fixtures" --mount "type=bind,src=$RUNNER_TEMP/photo-generator,dst=/work" noctella-photo-upload:isolated node --import tsx scripts/photo-upload-linux/agent.ts generate
+2026-10-14T08:44:26.9862482Z [36;1mtimeout --kill-after=10s 420s docker run --name "noctella-photo-generator-$GITHUB_RUN_ID" --rm --env "CASE_PROFILE=$CASE_PROFILE" --network none --memory 2g --memory-swap 2g --cpus 2 --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges --read-only --user "$(id -u):$(id -g)" --mount "type=bind,src=$RUNNER_TEMP/photo-fixtures,dst=/fixtures" --mount "type=bind,src=$RUNNER_TEMP/photo-generator,dst=/work" noctella-photo-upload:isolated node --import tsx scripts/photo-upload-linux/agent.ts generate[0m
+2026-10-14T08:44:26.9865547Z [36;1mcp "$RUNNER_TEMP/photo-fixtures/fixtures.json" "$RUNNER_TEMP/photo-evidence/fixtures.json"[0m
+2026-10-14T08:44:26.9927008Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-14T08:44:26.9927293Z env:
+2026-10-14T08:44:26.9927458Z   INCLUDE_STRESS: true
+2026-10-14T08:44:26.9927639Z   CASE_PROFILE: combined
+2026-10-14T08:44:26.9927868Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:44:26.9928227Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:44:26.9928524Z ##[endgroup]
+2026-10-14T08:44:33.0187282Z ##[group]Run node scripts/photo-upload-linux/run-host.mjs "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures"
+2026-10-14T08:44:33.0187948Z [36;1mnode scripts/photo-upload-linux/run-host.mjs "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures"[0m
+2026-10-14T08:44:33.0243585Z shell: /usr/bin/bash -e {0}
+2026-10-14T08:44:33.0243783Z env:
+2026-10-14T08:44:33.0243944Z   INCLUDE_STRESS: true
+2026-10-14T08:44:33.0244123Z   CASE_PROFILE: combined
+2026-10-14T08:44:33.0244524Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:44:33.0244879Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:44:33.0245177Z ##[endgroup]
+2026-10-14T08:44:33.0859208Z {"type":"environment","sourceSha":"7c6ab55237e996fef041c60bb06f45b7d0fc2061","harnessSha":"e9f29cefd7db5cb0ee8bf054f939d830da72dfed","runUrl":"https://github.com/yali-code/noctella-web/actions/runs/38536976507","host":{"platform":"linux","kernel":"6.17.0-1022-azure","cpuModel":"AMD EPYC 9V74 80-Core Processor","logicalCpus":4,"totalMemory":16766414848,"dockerVersion":"28.0.4","image":"sha256:92f79673d2f41566064ec49dd7b1a3e53828822b370451703fc1a3ab5948fb11"},"fixtures":[{"name":"jpeg-near-limit","mimetype":"image/jpeg","sizeBytes":9670997,"width":6000,"height":4000,"megapixels":24,"format":"jpeg","quality":86,"sha256":"2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7","tags":["near-limit","landscape"],"expectValid":true}]}
+2026-10-14T08:44:43.5990133Z {"scenario":"linux-combined-t1","status":"FAIL","peakCgroupMiB":512,"peakProcessMiB":null,"exitCode":137,"timedOut":false,"oomKilled":true,"cgroupBefore":{"max":536870912,"swapMax":0,"current":1863680,"peak":60502016,"events":{"low":0,"high":0,"max":0,"oom":0,"oom_kill":0,"oom_group_kill":0}},"cgroupAfter":{"max":536870912,"swapMax":0,"current":1171456,"peak":536870912,"events":{"low":0,"high":0,"max":136,"oom":2,"oom_kill":1,"oom_group_kill":0}},"events":{"low":0,"high":0,"max":136,"oom":2,"oom_kill":1,"oom_group_kill":0},"observedProcessRssBytes":575926272,"observedProcessHwmBytes":575926272,"peakHeapMiB":null,"peakExternalMiB":null,"peakArrayBuffersMiB":null,"versions":{"node":"v20.20.0","sharp":{"aom":"3.13.1","archive":"3.8.2","cairo":"1.18.4","cgif":"0.5.0","exif":"0.6.25","expat":"2.7.3","ffi":"3.5.2","fontconfig":"2.17.1","freetype":"2.14.1","fribidi":"1.0.16","glib":"2.86.1","harfbuzz":"12.1.0","heif":"1.20.2","highway":"1.3.0","imagequant":"2.4.1","lcms":"2.17","mozjpeg":"0826579","pango":"1.57.0","pixman":"0.46.4","png":"1.6.50","proxy-libintl":"0.5","rsvg":"2.61.2","spng":"0.7.4","tiff":"4.7.1","vips":"8.17.3","webp":"1.6.0","xml2":"2.15.1","zlib-ng":"2.2.5","sharp":"0.34.5"},"sharpConcurrency":1},"peakDiskBytes":{"logical":36616451,"allocated":36638720,"files":12},"cleanup":true,"reason":"Exit/timeout/disk/memory-limit event"}
+2026-10-14T08:44:53.8944875Z {"scenario":"linux-combined-t2","status":"FAIL","peakCgroupMiB":512,"peakProcessMiB":null,"exitCode":137,"timedOut":false,"oomKilled":true,"cgroupBefore":{"max":536870912,"swapMax":0,"current":1617920,"peak":58400768,"events":{"low":0,"high":0,"max":0,"oom":0,"oom_kill":0,"oom_group_kill":0}},"cgroupAfter":{"max":536870912,"swapMax":0,"current":4669440,"peak":536870912,"events":{"low":0,"high":0,"max":116,"oom":1,"oom_kill":1,"oom_group_kill":0}},"events":{"low":0,"high":0,"max":116,"oom":1,"oom_kill":1,"oom_group_kill":0},"observedProcessRssBytes":578011136,"observedProcessHwmBytes":578011136,"peakHeapMiB":null,"peakExternalMiB":null,"peakArrayBuffersMiB":null,"versions":{"node":"v20.20.0","sharp":{"aom":"3.13.1","archive":"3.8.2","cairo":"1.18.4","cgif":"0.5.0","exif":"0.6.25","expat":"2.7.3","ffi":"3.5.2","fontconfig":"2.17.1","freetype":"2.14.1","fribidi":"1.0.16","glib":"2.86.1","harfbuzz":"12.1.0","heif":"1.20.2","highway":"1.3.0","imagequant":"2.4.1","lcms":"2.17","mozjpeg":"0826579","pango":"1.57.0","pixman":"0.46.4","png":"1.6.50","proxy-libintl":"0.5","rsvg":"2.61.2","spng":"0.7.4","tiff":"4.7.1","vips":"8.17.3","webp":"1.6.0","xml2":"2.15.1","zlib-ng":"2.2.5","sharp":"0.34.5"},"sharpConcurrency":1},"peakDiskBytes":{"logical":36616451,"allocated":36638720,"files":12},"cleanup":true,"reason":"Exit/timeout/disk/memory-limit event"}
+2026-10-14T08:45:03.3032832Z {"scenario":"linux-combined-t3","status":"FAIL","peakCgroupMiB":512,"peakProcessMiB":null,"exitCode":137,"timedOut":false,"oomKilled":true,"cgroupBefore":{"max":536870912,"swapMax":0,"current":1822720,"peak":60276736,"events":{"low":0,"high":0,"max":0,"oom":0,"oom_kill":0,"oom_group_kill":0}},"cgroupAfter":{"max":536870912,"swapMax":0,"current":1294336,"peak":536870912,"events":{"low":0,"high":0,"max":177,"oom":2,"oom_kill":1,"oom_group_kill":0}},"events":{"low":0,"high":0,"max":177,"oom":2,"oom_kill":1,"oom_group_kill":0},"observedProcessRssBytes":576724992,"observedProcessHwmBytes":576724992,"peakHeapMiB":null,"peakExternalMiB":null,"peakArrayBuffersMiB":null,"versions":{"node":"v20.20.0","sharp":{"aom":"3.13.1","archive":"3.8.2","cairo":"1.18.4","cgif":"0.5.0","exif":"0.6.25","expat":"2.7.3","ffi":"3.5.2","fontconfig":"2.17.1","freetype":"2.14.1","fribidi":"1.0.16","glib":"2.86.1","harfbuzz":"12.1.0","heif":"1.20.2","highway":"1.3.0","imagequant":"2.4.1","lcms":"2.17","mozjpeg":"0826579","pango":"1.57.0","pixman":"0.46.4","png":"1.6.50","proxy-libintl":"0.5","rsvg":"2.61.2","spng":"0.7.4","tiff":"4.7.1","vips":"8.17.3","webp":"1.6.0","xml2":"2.15.1","zlib-ng":"2.2.5","sharp":"0.34.5"},"sharpConcurrency":1},"peakDiskBytes":{"logical":36132101,"allocated":36151296,"files":11},"cleanup":true,"reason":"Exit/timeout/disk/memory-limit event"}
+2026-10-14T08:45:03.3092006Z ##[error]Process completed with exit code 1.
+2026-10-14T08:45:03.3140111Z ##[group]Run bash scripts/photo-upload-linux/run-codec.sh
+2026-10-14T08:45:03.3140448Z [36;1mbash scripts/photo-upload-linux/run-codec.sh[0m
+2026-10-14T08:45:03.3196199Z shell: /usr/bin/bash -e {0}
+2026-10-14T08:45:03.3196419Z env:
+2026-10-14T08:45:03.3196581Z   INCLUDE_STRESS: true
+2026-10-14T08:45:03.3196764Z   CASE_PROFILE: combined
+2026-10-14T08:45:03.3196987Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:45:03.3197348Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:45:03.3197823Z ##[endgroup]
+2026-10-14T08:45:03.4778256Z Error: Unsupported output format /codec/input.rgb
+2026-10-14T08:45:03.5216794Z ##[error]Process completed with exit code 2.
+2026-10-14T08:45:03.5243590Z ##[group]Run mkdir -p "$RUNNER_TEMP/photo-evidence"
+2026-10-14T08:45:03.5243920Z [36;1mmkdir -p "$RUNNER_TEMP/photo-evidence"[0m
+2026-10-14T08:45:03.5244388Z [36;1mfor id in $(docker ps -aq --filter 'name=^/noctella-photo-'); do[0m
+2026-10-14T08:45:03.5244810Z [36;1m  docker inspect "$id" > "$RUNNER_TEMP/photo-evidence/interrupted-$id.json" || true[0m
+2026-10-14T08:45:03.5245185Z [36;1m  pid=$(docker inspect --format '{{.State.Pid}}' "$id")[0m
+2026-10-14T08:45:03.5245480Z [36;1m  if [ "$pid" != 0 ] && [ -r "/proc/$pid/cgroup" ]; then[0m
+2026-10-14T08:45:03.5245775Z [36;1m    cg=$(awk -F: '$1 == "0" {print $3}' "/proc/$pid/cgroup")[0m
+2026-10-14T08:45:03.5246145Z [36;1m    for file in memory.max memory.swap.max memory.current memory.peak memory.events; do[0m
+2026-10-14T08:45:03.5246649Z [36;1m      cat "/sys/fs/cgroup$cg/$file" > "$RUNNER_TEMP/photo-evidence/interrupted-$id-$file.txt" || true[0m
+2026-10-14T08:45:03.5247001Z [36;1m    done[0m
+2026-10-14T08:45:03.5247183Z [36;1m  fi[0m
+2026-10-14T08:45:03.5247362Z [36;1m  docker rm --force "$id" || true[0m
+2026-10-14T08:45:03.5247571Z [36;1mdone[0m
+2026-10-14T08:45:03.5302941Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-14T08:45:03.5303206Z env:
+2026-10-14T08:45:03.5303368Z   INCLUDE_STRESS: true
+2026-10-14T08:45:03.5303555Z   CASE_PROFILE: combined
+2026-10-14T08:45:03.5303793Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:45:03.5304147Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:45:03.5304943Z ##[endgroup]
+2026-10-14T08:45:03.5531251Z ##[group]Run actions/upload-artifact@v4
+2026-10-14T08:45:03.5531507Z with:
+2026-10-14T08:45:03.5531696Z   name: photo-upload-linux-38536976507-1
+2026-10-14T08:45:03.5531974Z   path: /home/runner/work/_temp/photo-evidence/
+2026-10-14T08:45:03.5532218Z   retention-days: 14
+2026-10-14T08:45:03.5532399Z   if-no-files-found: warn
+2026-10-14T08:45:03.5532589Z   compression-level: 6
+2026-10-14T08:45:03.5532764Z   overwrite: false
+2026-10-14T08:45:03.5532934Z   include-hidden-files: false
+2026-10-14T08:45:03.5533116Z env:
+2026-10-14T08:45:03.5533264Z   INCLUDE_STRESS: true
+2026-10-14T08:45:03.5533434Z   CASE_PROFILE: combined
+2026-10-14T08:45:03.5533655Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:45:03.5534000Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:45:03.5534634Z ##[endgroup]
+2026-10-14T08:45:03.6894901Z (node:6875) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-14T08:45:03.6895533Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-14T08:45:03.6987749Z With the provided path, there will be 28 files uploaded
+2026-10-14T08:45:03.6989286Z Artifact name is valid!
+2026-10-14T08:45:03.6990014Z Root directory input is valid!
+2026-10-14T08:45:04.0284568Z Beginning upload of artifact content to blob storage
+2026-10-14T08:45:04.0761398Z (node:6875) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-14T08:45:04.3644399Z Uploaded bytes 45477
+2026-10-14T08:45:04.4212828Z Finished uploading artifact content to blob storage!
+2026-10-14T08:45:04.4213928Z SHA256 digest of uploaded artifact zip is 28188440a9cdc7a05bf5744cd145988794f99fa6f55e3ab88e1b92dc813bf87b
+2026-10-14T08:45:04.4214830Z Finalizing artifact upload
+2026-10-14T08:45:04.7032156Z Artifact photo-upload-linux-38536976507-1.zip successfully finalized. Artifact ID 11880531858
+2026-10-14T08:45:04.7032945Z Artifact photo-upload-linux-38536976507-1 has been successfully uploaded! Final size is 45477 bytes. Artifact ID is 11880531858
+2026-10-14T08:45:04.7038801Z Artifact download URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507/artifacts/11880531858
+2026-10-14T08:45:04.7169187Z ##[group]Run actions/upload-artifact@v4
+2026-10-14T08:45:04.7169422Z with:
+2026-10-14T08:45:04.7169611Z   name: photo-codec-linux-38536976507-1
+2026-10-14T08:45:04.7169866Z   path: /home/runner/work/_temp/photo-codec-evidence/
+2026-10-14T08:45:04.7170118Z   retention-days: 14
+2026-10-14T08:45:04.7170317Z   if-no-files-found: warn
+2026-10-14T08:45:04.7170509Z   compression-level: 6
+2026-10-14T08:45:04.7170687Z   overwrite: false
+2026-10-14T08:45:04.7170860Z   include-hidden-files: false
+2026-10-14T08:45:04.7171054Z env:
+2026-10-14T08:45:04.7171208Z   INCLUDE_STRESS: true
+2026-10-14T08:45:04.7171385Z   CASE_PROFILE: combined
+2026-10-14T08:45:04.7171610Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:45:04.7171964Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:45:04.7172277Z ##[endgroup]
+2026-10-14T08:45:04.8553827Z (node:6887) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-14T08:45:04.8554707Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-14T08:45:04.8614639Z ##[warning]No files were found with the provided path: /home/runner/work/_temp/photo-codec-evidence/. No artifacts will be uploaded.
+2026-10-14T08:45:04.8742104Z ##[group]Run test "$MEASUREMENT_OUTCOME" = success
+2026-10-14T08:45:04.8742440Z [36;1mtest "$MEASUREMENT_OUTCOME" = success[0m
+2026-10-14T08:45:04.8808147Z shell: /usr/bin/bash -e {0}
+2026-10-14T08:45:04.8808519Z env:
+2026-10-14T08:45:04.8808825Z   INCLUDE_STRESS: true
+2026-10-14T08:45:04.8809172Z   CASE_PROFILE: combined
+2026-10-14T08:45:04.8809567Z   HARNESS_SHA: e9f29cefd7db5cb0ee8bf054f939d830da72dfed
+2026-10-14T08:45:04.8810155Z   RUN_URL: https://github.com/yali-code/noctella-web/actions/runs/38536976507
+2026-10-14T08:45:04.8810719Z   MEASUREMENT_OUTCOME: failure
+2026-10-14T08:45:04.8811056Z ##[endgroup]
+2026-10-14T08:45:04.8938268Z ##[error]Process completed with exit code 1.
+2026-10-14T08:45:04.9015415Z Post job cleanup.
+2026-10-14T08:45:04.9707956Z [command]/usr/bin/git version
+2026-10-14T08:45:04.9751322Z git version 2.55.0
+2026-10-14T08:45:04.9780163Z Temporarily overriding HOME='/home/runner/work/_temp/7cca3fba-c16d-4e01-be9b-3e28e83d7a2b' before making global git config changes
+2026-10-14T08:45:04.9781297Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-14T08:45:04.9785010Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/noctella-web/noctella-web/benchmark-source
+2026-10-14T08:45:04.9815852Z Removing SSH command configuration
+2026-10-14T08:45:04.9821206Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-14T08:45:04.9851162Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-14T08:45:05.0055728Z Removing HTTP extra header
+2026-10-14T08:45:05.0060727Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-14T08:45:05.0092563Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-14T08:45:05.0309218Z Removing includeIf entries pointing to credentials config files
+2026-10-14T08:45:05.0315553Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-14T08:45:05.0349770Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-14T08:45:05.0697485Z Post job cleanup.
+2026-10-14T08:45:05.1400304Z [command]/usr/bin/git version
+2026-10-14T08:45:05.1456573Z git version 2.55.0
+2026-10-14T08:45:05.1495841Z Temporarily overriding HOME='/home/runner/work/_temp/3324b695-118c-4e33-a570-87fd86314f93' before making global git config changes
+2026-10-14T08:45:05.1497318Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-14T08:45:05.1498511Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/noctella-web/noctella-web
+2026-10-14T08:45:05.1532207Z Removing SSH command configuration
+2026-10-14T08:45:05.1539462Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-14T08:45:05.1592767Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-14T08:45:05.1852124Z Removing HTTP extra header
+2026-10-14T08:45:05.1858231Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-14T08:45:05.1902112Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-14T08:45:05.2116635Z Removing includeIf entries pointing to credentials config files
+2026-10-14T08:45:05.2119203Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-14T08:45:05.2154170Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-14T08:45:05.2525312Z Cleaning up orphan processes
+2026-10-14T08:45:05.2806293Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,247 @@
+[
+    {
+        "Id": "e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5",
+        "Created": "2026-10-14T08:49:22.789638346Z",
+        "Path": "docker-entrypoint.sh",
+        "Args": [
+            "sleep",
+            "infinity"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 6781,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-10-14T08:49:22.812180779Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:31d66f5ff57f88413ae4356c1071f4611bdf7e7405d8062357db2b4c8d6a4992",
+        "ResolvConfPath": "/var/lib/docker/containers/e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5/hostname",
+        "HostsPath": "/var/lib/docker/containers/e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5/hosts",
+        "LogPath": "/var/lib/docker/containers/e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5/e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5-json.log",
+        "Name": "/noctella-photo-codec-control-38537514014",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "docker-default",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "none",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": [
+                "ALL"
+            ],
+            "CgroupnsMode": "private",
+            "Dns": [],
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": true,
+            "SecurityOpt": [
+                "no-new-privileges"
+            ],
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 536870912,
+            "NanoCpus": 1000000000,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 536870912,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 128,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "Mounts": [
+                {
+                    "Type": "bind",
+                    "Source": "/home/runner/work/_temp/photo-codec-evidence/control",
+                    "Target": "/codec"
+                },
+                {
+                    "Type": "bind",
+                    "Source": "/home/runner/work/_temp/photo-codec-evidence/input.rgb",
+                    "Target": "/codec/input.rgb",
+                    "ReadOnly": true
+                }
+            ],
+            "MaskedPaths": [
+                "/proc/asound",
+                "/proc/acpi",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/sys/firmware",
+                "/sys/devices/virtual/powercap"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "e43bf062b7ca5da464112d7a4c908acdcb418540cf81a1f3e2e6c574b55958d5",
+                "LowerDir": "/var/lib/docker/overlay2/7709f461d21892b32a9072c36a60da1d1e2cb7fdf1d234a0026d33e26e0644ee-init/diff:/var/lib/docker/overlay2/jtcptwyxez3qkc130cfb9lqli/diff:/var/lib/docker/overlay2/njokvb7kblvterkkiof0r5o3h/diff:/var/lib/docker/overlay2/uowgk7x6ncph44zjjg3lmo2c4/diff:/var/lib/docker/overlay2/k74rlxglyiqvham5mw3104woq/diff:/var/lib/docker/overlay2/1wze1rtr5nrjxzcxmevz9akyh/diff:/var/lib/docker/overlay2/xxpp56bhqwd3om85l4ugx7bon/diff:/var/lib/docker/overlay2/tv4h3qbj72f6nwwn6drq9g4fe/diff:/var/lib/docker/overlay2/oqvergckoueqvmq1lgd1ka54o/diff:/var/lib/docker/overlay2/jvm34hbz17on9h97j9zt180u4/diff:/var/lib/docker/overlay2/kvv046ckq180o5yl5m0iwp2xz/diff:/var/lib/docker/overlay2/v1c0mjpyy7yzsarrv7v3nix8i/diff:/var/lib/docker/overlay2/esbhrx8a04iowpve1fo1m8aih/diff:/var/lib/docker/overlay2/t1hemx3qxatwp98s0w4sj7sk5/diff:/var/lib/docker/overlay2/74eclstutgs3l2b92wsve65cn/diff:/var/lib/docker/overlay2/al93pt25d9wg0jrsth8qx423p/diff:/var/lib/docker/overlay2/gktse7ksiwlryoez7reoasfqp/diff:/var/lib/docker/overlay2/38anbudytnswf6ddfobnt8c2m/diff:/var/lib/docker/overlay2/ehuda0i89slbeujz1stsxz2ky/diff:/var/lib/docker/overlay2/ed663b5817956f78d5095db9128f7c8c2a74d63ecec2c9b6901c3765450cdc87/diff:/var/lib/docker/overlay2/8f87f4ba858f5f0c04d5c130c2ea424e6d1ea6cd444c5686e674a7b001893743/diff:/var/lib/docker/overlay2/dfb18a882df54d910bbaa6b899008f2ac89b5f669843d28bcdc015a34fe84691/diff:/var/lib/docker/overlay2/0f2d4f6189172ebb3eaaf2a42c53faa0d9699603d71221b4edce2f183613e2f7/diff:/var/lib/docker/overlay2/f9a27c7a209fe7d98ef8fb3fbf5570710d21e2e0643d27ee022fa7d1030d9898/diff",
+                "MergedDir": "/var/lib/docker/overlay2/7709f461d21892b32a9072c36a60da1d1e2cb7fdf1d234a0026d33e26e0644ee/merged",
+                "UpperDir": "/var/lib/docker/overlay2/7709f461d21892b32a9072c36a60da1d1e2cb7fdf1d234a0026d33e26e0644ee/diff",
+                "WorkDir": "/var/lib/docker/overlay2/7709f461d21892b32a9072c36a60da1d1e2cb7fdf1d234a0026d33e26e0644ee/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/home/runner/work/_temp/photo-codec-evidence/control",
+                "Destination": "/codec",
+                "Mode": "",
+                "RW": true,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "bind",
+                "Source": "/home/runner/work/_temp/photo-codec-evidence/input.rgb",
+                "Destination": "/codec/input.rgb",
+                "Mode": "",
+                "RW": false,
+                "Propagation": "rprivate"
+            }
+        ],
+        "Config": {
+            "Hostname": "e43bf062b7ca",
+            "Domainname": "",
+            "User": "1001:1001",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NODE_VERSION=20.20.0",
+                "YARN_VERSION=1.22.22",
+                "NODE_ENV=test",
+                "TSX_DISABLE_CACHE=1",
+                "TMPDIR=/work/tmp",
+                "TMP=/work/tmp",
+                "TEMP=/work/tmp",
+                "PRODUCT_PHOTO_DIR=/work/photos"
+            ],
+            "Cmd": [
+                "sleep",
+                "infinity"
+            ],
+            "Image": "noctella-photo-upload:isolated",
+            "Volumes": null,
+            "WorkingDir": "/app",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {}
+        },
+        "NetworkSettings": {
+            "Bridge": "",
+            "SandboxID": "8778009dbf9ce198113054c03b8277482cbe5615cd256986c7f2e9154af05fc9",
+            "SandboxKey": "/var/run/docker/netns/8778009dbf9c",
+            "Ports": {},
+            "HairpinMode": false,
+            "LinkLocalIPv6Address": "",
+            "LinkLocalIPv6PrefixLen": 0,
+            "SecondaryIPAddresses": null,
+            "SecondaryIPv6Addresses": null,
+            "EndpointID": "",
+            "Gateway": "",
+            "GlobalIPv6Address": "",
+            "GlobalIPv6PrefixLen": 0,
+            "IPAddress": "",
+            "IPPrefixLen": 0,
+            "IPv6Gateway": "",
+            "MacAddress": "",
+            "Networks": {
+                "none": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "MacAddress": "",
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "970808d014ab7f69dcf39e1b3bc9ceaa5b02b8a264fea188751318bee1a1d8f9",
+                    "EndpointID": "dd5f3aa6388fd1ad7cf97057ff69ddbfaec7c297348d0e3f2564f912291b7f18",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        }
+    }
+]

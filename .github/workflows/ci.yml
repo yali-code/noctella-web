@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/ai-native-memory-p2-2b2c]
   push:
     branches: [main]
 
