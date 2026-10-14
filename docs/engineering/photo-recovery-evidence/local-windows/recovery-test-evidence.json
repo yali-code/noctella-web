@@ -1,0 +1,1777 @@
+[
+  {
+    "driver": "sqlite",
+    "name": "referenced",
+    "recordPath": "recovery-fa12d424-b5d3-4724-a00f-0d3036cb72aa.json",
+    "report": {
+      "id": "fa12d424-b5d3-4724-a00f-0d3036cb72aa",
+      "generatedAt": "2026-10-14T17:12:40.443Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": false,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "op-thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716786",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.thumbnail_url:photo-1",
+            "product_photos.thumbnail_storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "1407374884427441",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.url:photo-1",
+            "product_photos.filename:photo-1",
+            "product_photos.storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/raw/1791997960343-5f89ddc4-7e06-4db0-8c49-f2557202c49a-thumb.webp",
+          "dev": "638787863",
+          "ino": "844424931006126",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/raw/1791997960343-5f89ddc4-7e06-4db0-8c49-f2557202c49a.webp",
+          "dev": "638787863",
+          "ino": "1407374884427437",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1407374884427441",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716786",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/work/input",
+          "dev": "638787863",
+          "ino": "1407374884427431",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/work/main.webp",
+          "dev": "638787863",
+          "ino": "1407374884427437",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/283bdc41-0949-4565-a0a8-d6e5a237ea35/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "844424931006126",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "REFERENCED": 164,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "outbox-historical",
+    "recordPath": "recovery-45102a59-a78b-4751-b611-0162691e6f03.json",
+    "report": {
+      "id": "45102a59-a78b-4751-b611-0162691e6f03",
+      "generatedAt": "2026-10-14T17:12:41.039Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": false,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "op-thumb.webp",
+          "dev": "638787863",
+          "ino": "1407374884427442",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "outbox_events.product_photo.delete_requested.completed:evt-1",
+            "outbox_events.product_photo.delete_requested.completed:evt-1"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "1688849861138097",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "outbox_events.product_photo.delete_requested.completed:evt-1",
+            "outbox_events.product_photo.delete_requested.completed:evt-1"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/raw/1791997960972-3ce5a26c-7909-48cd-b250-e524c6c3d7b5-thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716782",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/raw/1791997960972-3ce5a26c-7909-48cd-b250-e524c6c3d7b5.webp",
+          "dev": "638787863",
+          "ino": "1688849861138093",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1688849861138097",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1407374884427442",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/work/input",
+          "dev": "638787863",
+          "ino": "2251799814559399",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/work/main.webp",
+          "dev": "638787863",
+          "ino": "1688849861138093",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/72632f4f-c0e8-4411-a52f-24ec245efc26/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716782",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "REFERENCED": 164,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "lost-commit-ack",
+    "recordPath": "recovery-70cd9c9e-b2db-4326-b662-9703f57244ed.json",
+    "report": {
+      "id": "70cd9c9e-b2db-4326-b662-9703f57244ed",
+      "generatedAt": "2026-10-14T17:12:41.658Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "op-thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138098",
+          "size": 82,
+          "class": "AMBIGUOUS_UNFENCED_ROOT",
+          "reasons": [
+            "no authoritative reference; root has unfenced writers"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "1970324837848753",
+          "size": 82,
+          "class": "AMBIGUOUS_UNFENCED_ROOT",
+          "reasons": [
+            "no authoritative reference; root has unfenced writers"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/raw/1791997961583-fc5b2129-de04-4af6-ae62-d2a9a178988f-thumb.webp",
+          "dev": "638787863",
+          "ino": "1407374884427438",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/raw/1791997961583-fc5b2129-de04-4af6-ae62-d2a9a178988f.webp",
+          "dev": "638787863",
+          "ino": "1970324837848749",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1970324837848753",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138098",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/work/input",
+          "dev": "638787863",
+          "ino": "3096224744691367",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/work/main.webp",
+          "dev": "638787863",
+          "ino": "1970324837848749",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1407374884427438",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "AMBIGUOUS_UNFENCED_ROOT": 164,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "lost-commit-ack",
+    "recordPath": "recovery-3ebb66b3-99e9-43e3-8208-6f3cdb0f2e9f.json",
+    "report": {
+      "id": "3ebb66b3-99e9-43e3-8208-6f3cdb0f2e9f",
+      "generatedAt": "2026-10-14T17:12:41.694Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": false,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "op-thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138098",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.thumbnail_url:photo-1",
+            "product_photos.thumbnail_storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "1970324837848753",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.url:photo-1",
+            "product_photos.filename:photo-1",
+            "product_photos.storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/raw/1791997961583-fc5b2129-de04-4af6-ae62-d2a9a178988f-thumb.webp",
+          "dev": "638787863",
+          "ino": "1407374884427438",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/raw/1791997961583-fc5b2129-de04-4af6-ae62-d2a9a178988f.webp",
+          "dev": "638787863",
+          "ino": "1970324837848749",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1970324837848753",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138098",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/work/input",
+          "dev": "638787863",
+          "ino": "3096224744691367",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/work/main.webp",
+          "dev": "638787863",
+          "ino": "1970324837848749",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/575fd94d-8551-471b-b1de-827a746a34af/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1407374884427438",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "REFERENCED": 164,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "stale-generation-aba",
+    "recordPath": "recovery-822bfc76-3846-4726-87b6-a020b0578e4c.json",
+    "report": {
+      "id": "822bfc76-3846-4726-87b6-a020b0578e4c",
+      "generatedAt": "2026-10-14T17:12:42.324Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "op-thumb.webp",
+          "dev": "638787863",
+          "ino": "844424931006141",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.thumbnail_url:photo-1",
+            "product_photos.thumbnail_storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "1125899907716796",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.url:photo-1",
+            "product_photos.filename:photo-1",
+            "product_photos.storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "ghost/g1/x/raw/orphan.webp",
+          "dev": "638787863",
+          "ino": "3377699721402053",
+          "size": 5,
+          "class": "AMBIGUOUS_UNKNOWN_OPERATION",
+          "reasons": [
+            "operation ghost not in the authority snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/raw/1791997962154-8479ddab-d592-48de-82cd-1ffd55baa7a1-thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138094",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/raw/1791997962154-8479ddab-d592-48de-82cd-1ffd55baa7a1.webp",
+          "dev": "638787863",
+          "ino": "2251799814559405",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "2251799814559409",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848754",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/work/input",
+          "dev": "638787863",
+          "ino": "3940649674823335",
+          "size": 126,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/work/main.webp",
+          "dev": "638787863",
+          "ino": "2251799814559405",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/7bfe59f0-4ec0-4ff8-b3bd-c0858413a923/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138094",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/raw/1791997962236-3823c407-a4ed-41d5-8a32-7107b3d59c15-thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138104",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/raw/1791997962236-3823c407-a4ed-41d5-8a32-7107b3d59c15.webp",
+          "dev": "638787863",
+          "ino": "1407374884427447",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1125899907716796",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "844424931006141",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/work/input",
+          "dev": "638787863",
+          "ino": "4222124651533999",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/work/main.webp",
+          "dev": "638787863",
+          "ino": "1407374884427447",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/5b5482d3-bb7e-4b42-a161-cf42c5c8cde4/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1688849861138104",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g9/x/raw/late.webp",
+          "dev": "638787863",
+          "ino": "844424931006144",
+          "size": 3,
+          "class": "AMBIGUOUS_FUTURE_GENERATION",
+          "reasons": [
+            "generation 9 > authoritative 2 (rollback/ABA)"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "REFERENCED": 164,
+        "AMBIGUOUS_UNKNOWN_OPERATION": 5,
+        "UNREFERENCED_CANDIDATE": 290,
+        "SEALED_RECORD_RETAINED": 164,
+        "CURRENT_GENERATION_RETAINED": 290,
+        "AMBIGUOUS_FUTURE_GENERATION": 3
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "zero-byte-partial",
+    "recordPath": "recovery-b1a0a7ab-7ce6-4b1c-bb0e-948cef8f0f3a.json",
+    "report": {
+      "id": "b1a0a7ab-7ce6-4b1c-bb0e-948cef8f0f3a",
+      "generatedAt": "2026-10-14T17:12:42.815Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "reserved-placeholder.webp",
+          "dev": "638787863",
+          "ino": "1970324837848755",
+          "size": 0,
+          "class": "AMBIGUOUS_ZERO_BYTE",
+          "reasons": [
+            "zero-byte file outside a fenced generation (reserved placeholder or partial write)"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/raw/1791997962753-55cc1e43-99a4-46d6-9574-74651d46a0ff-thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848750",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/raw/1791997962753-55cc1e43-99a4-46d6-9574-74651d46a0ff.webp",
+          "dev": "638787863",
+          "ino": "2533274791270061",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/raw/killed-encode.webp",
+          "dev": "638787863",
+          "ino": "5066549581665967",
+          "size": 0,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable; zero-byte partial output"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "2533274791270065",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "2251799814559410",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/work/input",
+          "dev": "638787863",
+          "ino": "4785074604955303",
+          "size": 126,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/work/main.webp",
+          "dev": "638787863",
+          "ino": "2533274791270061",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/134be2ce-8c99-479e-9ab5-5db6aa2e6fae/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848750",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "AMBIGUOUS_ZERO_BYTE": 0,
+        "UNREFERENCED_CANDIDATE": 290,
+        "SEALED_RECORD_RETAINED": 164
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "db-unavailable",
+    "recordPath": "recovery-13d4b27e-3bc3-4a7f-97ac-ca07024ee78b.json",
+    "report": {
+      "id": "13d4b27e-3bc3-4a7f-97ac-ca07024ee78b",
+      "generatedAt": "2026-10-14T17:12:43.280Z",
+      "engine": null,
+      "snapshotError": "PHOTO_REFERENCE_SOURCE_MISSING:product_photos",
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "op-thumb.webp",
+          "dev": "638787863",
+          "ino": "2533274791270066",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "2814749767980721",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/raw/1791997963223-079651d5-70cf-4028-8130-95b5d258185d-thumb.webp",
+          "dev": "638787863",
+          "ino": "2251799814559406",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/raw/1791997963223-079651d5-70cf-4028-8130-95b5d258185d.webp",
+          "dev": "638787863",
+          "ino": "2814749767980717",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "2814749767980721",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "2533274791270066",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/work/input",
+          "dev": "638787863",
+          "ino": "5629499535087271",
+          "size": 126,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/work/main.webp",
+          "dev": "638787863",
+          "ino": "2814749767980717",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/2362b224-4a65-4950-98b6-5c60a42ab031/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "2251799814559406",
+          "size": 82,
+          "class": "AMBIGUOUS_DB_UNAVAILABLE",
+          "reasons": [
+            "no authoritative reference snapshot"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "AMBIGUOUS_DB_UNAVAILABLE": 454
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "mixed-version-legacy",
+    "recordPath": "recovery-4574cc54-0848-4b3b-8439-3116e5097172.json",
+    "report": {
+      "id": "4574cc54-0848-4b3b-8439-3116e5097172",
+      "generatedAt": "2026-10-14T17:12:43.748Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": ".instagram-tmp.tmp",
+          "dev": "638787863",
+          "ino": "2533274791270067",
+          "size": 14,
+          "class": "AMBIGUOUS_UNFENCED_ROOT",
+          "reasons": [
+            "no authoritative reference; root has unfenced writers"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "1700000000000-legacy.webp",
+          "dev": "638787863",
+          "ino": "6755399441929903",
+          "size": 22,
+          "class": "AMBIGUOUS_UNFENCED_ROOT",
+          "reasons": [
+            "no authoritative reference; root has unfenced writers"
+          ]
+        },
+        {
+          "root": "canonical",
+          "path": "op.webp",
+          "dev": "638787863",
+          "ino": "3096224744691377",
+          "size": 82,
+          "class": "REFERENCED",
+          "reasons": [
+            "product_photos.url:photo-1",
+            "product_photos.filename:photo-1",
+            "product_photos.storage_key:photo-1"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/raw/1791997963688-54351f78-6230-49da-b2be-cc80af321dcd-thumb.webp",
+          "dev": "638787863",
+          "ino": "2533274791270062",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/raw/1791997963688-54351f78-6230-49da-b2be-cc80af321dcd.webp",
+          "dev": "638787863",
+          "ino": "3096224744691373",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "3096224744691377",
+          "size": 82,
+          "class": "REFERENCED_VIA_CANONICAL_LINK",
+          "reasons": [
+            "sealed inode is a canonical hardlink"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980722",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/work/input",
+          "dev": "638787863",
+          "ino": "6473924465219239",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/work/main.webp",
+          "dev": "638787863",
+          "ino": "3096224744691373",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/e53dee71-35ce-48b3-a0bb-7a70eb70196b/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "2533274791270062",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [
+        {
+          "name": "op-thumb.webp",
+          "sources": [
+            "product_photos.thumbnail_url:photo-1",
+            "product_photos.thumbnail_storage_key:photo-1"
+          ]
+        }
+      ],
+      "retainedBytesByClass": {
+        "AMBIGUOUS_UNFENCED_ROOT": 36,
+        "REFERENCED": 82,
+        "CURRENT_GENERATION_RETAINED": 290,
+        "SEALED_RECORD_RETAINED": 82
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "concurrent-active-writer",
+    "recordPath": "recovery-50f63827-7624-4068-ab6f-5b7aa9262b4e.json",
+    "report": {
+      "id": "50f63827-7624-4068-ab6f-5b7aa9262b4e",
+      "generatedAt": "2026-10-14T17:12:44.346Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/raw/1791997964211-1659a6cf-043a-4823-9526-f6d7384250f9-thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980718",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/raw/1791997964211-1659a6cf-043a-4823-9526-f6d7384250f9.webp",
+          "dev": "638787863",
+          "ino": "3377699721402029",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "3377699721402033",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "3096224744691378",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/input",
+          "dev": "638787863",
+          "ino": "7318349395351207",
+          "size": 130,
+          "class": "AMBIGUOUS_CHANGING",
+          "reasons": [
+            "stale generation changed between inventories (late native writer)"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/main.webp",
+          "dev": "638787863",
+          "ino": "3377699721402029",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980718",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/raw/1791997964308-a19c5f89-4e87-4099-9242-8dd1218bb7c7-thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848760",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/raw/1791997964308-a19c5f89-4e87-4099-9242-8dd1218bb7c7.webp",
+          "dev": "638787863",
+          "ino": "1688849861138103",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1407374884427452",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716797",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/input",
+          "dev": "638787863",
+          "ino": "7881299348772527",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/main.webp",
+          "dev": "638787863",
+          "ino": "1688849861138103",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848760",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "UNREFERENCED_CANDIDATE": 164,
+        "SEALED_RECORD_RETAINED": 328,
+        "AMBIGUOUS_CHANGING": 130,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "concurrent-active-writer",
+    "recordPath": "recovery-717251bf-c694-493b-afd3-920a1d893215.json",
+    "report": {
+      "id": "717251bf-c694-493b-afd3-920a1d893215",
+      "generatedAt": "2026-10-14T17:12:44.414Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": false,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/raw/1791997964211-1659a6cf-043a-4823-9526-f6d7384250f9-thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980718",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/raw/1791997964211-1659a6cf-043a-4823-9526-f6d7384250f9.webp",
+          "dev": "638787863",
+          "ino": "3377699721402029",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "3377699721402033",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "3096224744691378",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/input",
+          "dev": "638787863",
+          "ino": "7318349395351207",
+          "size": 130,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/main.webp",
+          "dev": "638787863",
+          "ino": "3377699721402029",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980718",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/raw/1791997964308-a19c5f89-4e87-4099-9242-8dd1218bb7c7-thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848760",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/raw/1791997964308-a19c5f89-4e87-4099-9242-8dd1218bb7c7.webp",
+          "dev": "638787863",
+          "ino": "1688849861138103",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1407374884427452",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716797",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/input",
+          "dev": "638787863",
+          "ino": "7881299348772527",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/main.webp",
+          "dev": "638787863",
+          "ino": "1688849861138103",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848760",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "UNREFERENCED_CANDIDATE": 294,
+        "SEALED_RECORD_RETAINED": 328,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "concurrent-active-writer",
+    "recordPath": "recovery-4726bf71-5d47-47f0-ad34-6e90261fc447.json",
+    "report": {
+      "id": "4726bf71-5d47-47f0-ad34-6e90261fc447",
+      "generatedAt": "2026-10-14T17:12:44.424Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": false,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/raw/1791997964211-1659a6cf-043a-4823-9526-f6d7384250f9-thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980718",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/raw/1791997964211-1659a6cf-043a-4823-9526-f6d7384250f9.webp",
+          "dev": "638787863",
+          "ino": "3377699721402029",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "3377699721402033",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "3096224744691378",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/input",
+          "dev": "638787863",
+          "ino": "7318349395351207",
+          "size": 130,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/main.webp",
+          "dev": "638787863",
+          "ino": "3377699721402029",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/4d206fa2-9226-49fc-8a7c-0b231c7fb297/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "2814749767980718",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/raw/1791997964308-a19c5f89-4e87-4099-9242-8dd1218bb7c7-thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848760",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/raw/1791997964308-a19c5f89-4e87-4099-9242-8dd1218bb7c7.webp",
+          "dev": "638787863",
+          "ino": "1688849861138103",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "1407374884427452",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "1125899907716797",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/input",
+          "dev": "638787863",
+          "ino": "7881299348772527",
+          "size": 126,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/main.webp",
+          "dev": "638787863",
+          "ino": "1688849861138103",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g2/0fee8c1b-477e-47aa-9f37-c1117a481abd/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "1970324837848760",
+          "size": 82,
+          "class": "CURRENT_GENERATION_RETAINED",
+          "reasons": [
+            "current generation: an owner may still be producing or publishing"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "UNREFERENCED_CANDIDATE": 294,
+        "SEALED_RECORD_RETAINED": 328,
+        "CURRENT_GENERATION_RETAINED": 290
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "budget-accounting",
+    "recordPath": "recovery-bd3570ed-1979-4ece-9035-24ca9f8ef3d5.json",
+    "report": {
+      "id": "bd3570ed-1979-4ece-9035-24ca9f8ef3d5",
+      "generatedAt": "2026-10-14T17:12:44.853Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "canonical",
+          "path": "unreferenced.webp",
+          "dev": "638787863",
+          "ino": "2533274791270068",
+          "size": 1,
+          "class": "AMBIGUOUS_UNFENCED_ROOT",
+          "reasons": [
+            "no authoritative reference; root has unfenced writers"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/raw/1791997964809-33ff5587-1952-4621-885b-35efa20f5f4c-thumb.webp",
+          "dev": "638787863",
+          "ino": "3096224744691374",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/raw/1791997964809-33ff5587-1952-4621-885b-35efa20f5f4c.webp",
+          "dev": "638787863",
+          "ino": "3659174698112685",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/sealed/main.webp",
+          "dev": "638787863",
+          "ino": "3659174698112689",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/sealed/thumb.webp",
+          "dev": "638787863",
+          "ino": "3377699721402034",
+          "size": 82,
+          "class": "SEALED_RECORD_RETAINED",
+          "reasons": [
+            "seal record references this sealed copy"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/work/input",
+          "dev": "638787863",
+          "ino": "8162774325483175",
+          "size": 126,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/work/main.webp",
+          "dev": "638787863",
+          "ino": "3659174698112685",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        },
+        {
+          "root": "private",
+          "path": "op/g1/50ddf7d0-ae1c-4719-8fa7-479339d5c85e/work/thumb.webp",
+          "dev": "638787863",
+          "ino": "3096224744691374",
+          "size": 82,
+          "class": "UNREFERENCED_CANDIDATE",
+          "reasons": [
+            "generation 1 superseded by 2; unsealed; no marker; stable"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "AMBIGUOUS_UNFENCED_ROOT": 1,
+        "UNREFERENCED_CANDIDATE": 290,
+        "SEALED_RECORD_RETAINED": 164
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "sigkill-restart",
+    "recordPath": "recovery-cea473eb-965b-4f6a-8591-671c6a8f88b2.json",
+    "report": {
+      "id": "cea473eb-965b-4f6a-8591-671c6a8f88b2",
+      "generatedAt": "2026-10-14T17:12:45.824Z",
+      "engine": "sqlite",
+      "snapshotError": null,
+      "missingOptional": [],
+      "reviewRequired": true,
+      "cleanup": "BLOCKED_NOT_AUTHORIZED",
+      "artifacts": [
+        {
+          "root": "private",
+          "path": "locks/killed-op.lock",
+          "dev": "638787863",
+          "ino": "8444249302193831",
+          "size": 65,
+          "class": "OPERATION_MARKER_RETAINED",
+          "reasons": [
+            "live or crash-retained operation marker (never removed automatically)"
+          ]
+        }
+      ],
+      "missingReferenced": [],
+      "retainedBytesByClass": {
+        "OPERATION_MARKER_RETAINED": 65
+      }
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "sigkill-exit",
+    "exit": {
+      "code": null,
+      "signal": "SIGKILL"
+    }
+  }
+]
