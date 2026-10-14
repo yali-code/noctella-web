@@ -1,0 +1,7 @@
+{
+  "scope": "actual-photo-service-blocked",
+  "driver": "postgres",
+  "boundary": "product-lost-ack",
+  "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+  "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+}

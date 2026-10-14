@@ -1,0 +1,6 @@
+{
+  "phase": "reserved-output-before-encode",
+  "boundary": "ai-reserved-output",
+  "driver": "sqlite",
+  "syntheticOnly": true
+}

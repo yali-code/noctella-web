@@ -1,0 +1,1382 @@
+{
+  "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+  "scope": "Crash/restart diagnosis plus gated source-retention safeguard; automatic recovery and full PostgreSQL workflows BLOCKED",
+  "nodeTest": {
+    "total": 37,
+    "passed": 22,
+    "skippedBlocked": 15,
+    "failed": 0
+  },
+  "records": [
+    {
+      "driver": "postgres",
+      "boundary": "pg-ai-persistence-error",
+      "scope": "actual-postgres-AI-persistence-error-handler",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "actual-ai-rejected-source-retained",
+        "boundary": "pg-ai-persistence-error",
+        "driver": "postgres",
+        "syntheticOnly": true,
+        "scope": "actual-postgres-AI-persistence-error-handler",
+        "code": "PHOTO_STORAGE_UNAVAILABLE",
+        "admission": {
+          "held": 0,
+          "active": 0,
+          "waiting": 0,
+          "closed": true
+        }
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "intake",
+          "key": "c6da7824-d204-4f55-91c9-97f205ec095c.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801187,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801185,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-protocol-committed",
+      "scope": "native-SQL-transaction-fixture-not-full-photo-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "protocol-rows-after-commit",
+        "boundary": "pg-protocol-committed",
+        "driver": "postgres",
+        "syntheticOnly": true,
+        "scope": "native-postgresql-transaction-fixture-not-photo-service"
+      },
+      "rows": {
+        "photos": 1,
+        "aiPhotos": 1,
+        "outbox": 1
+      },
+      "logicalPhotoInventoryBytes": 486,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971253251-d917e3d4-c73e-497f-befe-fac43e6badcd-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801167,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791971253251-d917e3d4-c73e-497f-befe-fac43e6badcd.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801166,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "eb9426d4-d54c-4628-ae7d-7c48ce0ce4ac.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801165,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801163,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801166,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801167,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-protocol-outbox-only",
+      "scope": "native-SQL-transaction-fixture-not-full-photo-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "protocol-outbox-only-after-commit",
+        "boundary": "pg-protocol-outbox-only",
+        "driver": "postgres",
+        "syntheticOnly": true,
+        "scope": "native-postgresql-transaction-fixture-not-photo-service"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 1
+      },
+      "logicalPhotoInventoryBytes": 486,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801178,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801177,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "460d0589-9731-467a-bea4-229489c9de63.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801176,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801174,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801177,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801178,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-protocol-uncommitted",
+      "scope": "native-SQL-transaction-fixture-not-full-photo-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "protocol-rows-before-commit",
+        "boundary": "pg-protocol-uncommitted",
+        "driver": "postgres",
+        "syntheticOnly": true,
+        "scope": "native-postgresql-transaction-fixture-not-photo-service"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 486,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971251640-e4fb347b-0a4a-4836-9caa-60e9aee407d7-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801156,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791971251640-e4fb347b-0a4a-4836-9caa-60e9aee407d7.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801155,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "cbb6814c-26c5-485a-bb2a-42a5aaf5ac87.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801154,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801152,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801155,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801156,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-committed",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "commit-complete-before-response",
+        "boundary": "ai-committed",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 1,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "intake",
+          "key": "e7f1aebb-6991-45a9-b7e9-038cc5dca78e.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4800953,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800951,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-encoded-output",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "encoded-output-before-db",
+        "boundary": "ai-encoded-output",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "intake",
+          "key": "8692afb9-cf70-4939-a3a0-4564668e2069.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4800935,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800933,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-lost-ack",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "persistence-error-after-service-handler",
+        "boundary": "ai-lost-ack",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal",
+        "code": "PHOTO_STORAGE_UNAVAILABLE",
+        "admission": {
+          "held": 0,
+          "active": 0,
+          "waiting": 0,
+          "closed": true
+        },
+        "enabledWorkRejected": true,
+        "legacyBypass": true
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 1,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "intake",
+          "key": "63a45e60-1497-41b4-bd1a-6fd1a4831070.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4800962,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800960,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-reserved-output",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "reserved-output-before-encode",
+        "boundary": "ai-reserved-output",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 126,
+      "files": [
+        {
+          "root": "intake",
+          "key": "9f6bdaa8-90e8-405a-859c-a69d6600e03a.webp",
+          "kind": "file",
+          "size": 0,
+          "dev": 2049,
+          "ino": 4800926,
+          "nlink": 1,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800916,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-rollback-error",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "persistence-error-after-service-handler",
+        "boundary": "ai-rollback-error",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal",
+        "code": "PHOTO_STORAGE_UNAVAILABLE",
+        "admission": {
+          "held": 0,
+          "active": 0,
+          "waiting": 0,
+          "closed": true
+        },
+        "enabledWorkRejected": true,
+        "legacyBypass": true
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "intake",
+          "key": "acb45138-074c-4647-8981-d1a41e2547bb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4800971,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800969,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-uncommitted",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "rows-and-outbox-before-commit",
+        "boundary": "ai-uncommitted",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "intake",
+          "key": "42274395-c38f-4a4b-a2b6-6638ebe2d111.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4800944,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800942,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-committed",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "commit-complete-before-response",
+        "boundary": "finalize-committed",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 1,
+        "aiPhotos": 1,
+        "outbox": 1
+      },
+      "logicalPhotoInventoryBytes": 342,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-85691645-07f1-458a-a256-1bde118c7666-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801079,
+          "nlink": 1,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "synthetic-product-85691645-07f1-458a-a256-1bde118c7666.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801078,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "0f8e5811-aec4-4434-be0e-ced211ec64d8.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801076,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801074,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": [
+        {
+          "ok": true,
+          "created": false
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-first-output",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "first-deterministic-output-before-thumbnail",
+        "boundary": "finalize-first-output",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 1,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 270,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-897b6178-92f1-4ed3-b24f-0f4bd7592f0f.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801090,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "9c5a5c0d-8962-4289-bdff-4088baa7f115.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801088,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801086,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": [
+        {
+          "ok": true,
+          "created": true
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-uncommitted",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "rows-and-outbox-before-commit",
+        "boundary": "finalize-uncommitted",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 1,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 342,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-e37ff321-b4cb-4ca2-986d-1d601d474380-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801067,
+          "nlink": 1,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "synthetic-product-e37ff321-b4cb-4ca2-986d-1d601d474380.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801066,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "1971c745-a401-475b-8fdb-94ec4ead5101.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801059,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801057,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": [
+        {
+          "ok": true,
+          "created": true
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-zero-output",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "injected-open-before-first-write",
+        "boundary": "finalize-zero-output",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 1,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 198,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-892553ce-629d-4c56-b0c4-08abd1b6d5f1.webp",
+          "kind": "file",
+          "size": 0,
+          "dev": 2049,
+          "ino": 4801102,
+          "nlink": 1,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "root": "intake",
+          "key": "7792a326-9839-43c5-8ab3-48661005843e.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801100,
+          "nlink": 1,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801098,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": [
+        {
+          "ok": false,
+          "name": "AiIntakePhotoFinalizationDestinationConflictError"
+        },
+        {
+          "ok": false,
+          "name": "AiIntakePhotoFinalizationDestinationConflictError"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "instagram-temp",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "instagram-temp-written-before-link",
+        "boundary": "instagram-temp",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 1,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 10970,
+      "files": [
+        {
+          "root": "canonical",
+          "key": ".instagram-80bcbcc2-8607-4800-97dc-58214459103c.tmp",
+          "kind": "file",
+          "size": 10770,
+          "dev": 2049,
+          "ino": 4801117,
+          "nlink": 1,
+          "sha256": "bf53c2b9d04a9b3ee20cef49abc69dbbf6d6570f5dd2216de25107c94437183a"
+        },
+        {
+          "root": "canonical",
+          "key": "instagram-source.webp",
+          "kind": "file",
+          "size": 74,
+          "dev": 2049,
+          "ino": 4801111,
+          "nlink": 1,
+          "sha256": "074bd24e8c53f067d1597cb03d1f83a74c80d64c4efe07a0f4fa8c6f242dc2c5"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801109,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-committed",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "commit-complete-before-response",
+        "boundary": "product-committed",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 1,
+        "aiPhotos": 0,
+        "outbox": 1
+      },
+      "logicalPhotoInventoryBytes": 414,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971226035-c93c9ebb-32a4-4ca0-8ed2-02065240e493-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801039,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791971226035-c93c9ebb-32a4-4ca0-8ed2-02065240e493.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801038,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801037,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801038,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801039,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-lost-ack",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "persistence-error-after-service-handler",
+        "boundary": "product-lost-ack",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal",
+        "code": "PHOTO_STORAGE_UNAVAILABLE",
+        "admission": {
+          "held": 0,
+          "active": 0,
+          "waiting": 0,
+          "closed": false
+        },
+        "enabledWorkRejected": false,
+        "legacyBypass": true
+      },
+      "rows": {
+        "photos": 1,
+        "aiPhotos": 0,
+        "outbox": 1
+      },
+      "logicalPhotoInventoryBytes": 414,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971227042-29104543-55ac-4d3f-9b56-6d7c6935c74c-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801049,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791971227042-29104543-55ac-4d3f-9b56-6d7c6935c74c.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801048,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801047,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801048,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801049,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-one-link",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "first-canonical-link-before-second",
+        "boundary": "product-one-link",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 342,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971224007-3a707578-1c2e-4fe8-aaaa-8c065984b2ec.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801018,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4800978,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801018,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801019,
+          "nlink": 1,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-uncommitted",
+      "scope": "actual-service",
+      "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c",
+      "platform": "linux",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "rows-and-outbox-before-commit",
+        "boundary": "product-uncommitted",
+        "driver": "sqlite",
+        "syntheticOnly": true,
+        "journalMode": "wal"
+      },
+      "rows": {
+        "photos": 0,
+        "aiPhotos": 0,
+        "outbox": 0
+      },
+      "logicalPhotoInventoryBytes": 414,
+      "files": [
+        {
+          "root": "canonical",
+          "key": "1791971225024-eb111eda-507e-42c3-93cb-c0dce74c2b68-thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801029,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791971225024-eb111eda-507e-42c3-93cb-c0dce74c2b68.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801028,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "kind": "file",
+          "size": 126,
+          "dev": 2049,
+          "ino": 4801027,
+          "nlink": 1,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801028,
+          "nlink": 2,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "kind": "file",
+          "size": 72,
+          "dev": 2049,
+          "ino": 4801029,
+          "nlink": 2,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "retries": null
+    }
+  ],
+  "blockers": [
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "ai-committed",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "ai-encoded-output",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "ai-lost-ack",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "ai-reserved-output",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "ai-rollback-error",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "ai-uncommitted",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "finalize-committed",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "finalize-first-output",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "finalize-uncommitted",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "finalize-zero-output",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "instagram-temp",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "product-committed",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "product-lost-ack",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "product-one-link",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    },
+    {
+      "scope": "actual-photo-service-blocked",
+      "driver": "postgres",
+      "boundary": "product-uncommitted",
+      "reason": "Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps",
+      "diagnostic": "Worker exited before checkpoint 2 {\"name\":\"TypeError\",\"stage\":\"create-intake\",\"message\":\"value.toISOString is not a function\"}\n"
+    }
+  ]
+}

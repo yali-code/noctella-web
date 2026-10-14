@@ -1,0 +1,7 @@
+{
+  "phase": "commit-complete-before-response",
+  "boundary": "product-committed",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal"
+}

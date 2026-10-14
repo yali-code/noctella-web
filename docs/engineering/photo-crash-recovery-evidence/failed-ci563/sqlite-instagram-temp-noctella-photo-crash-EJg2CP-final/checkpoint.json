@@ -1,0 +1,7 @@
+{
+  "phase": "instagram-temp-written-before-link",
+  "boundary": "instagram-temp",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal"
+}

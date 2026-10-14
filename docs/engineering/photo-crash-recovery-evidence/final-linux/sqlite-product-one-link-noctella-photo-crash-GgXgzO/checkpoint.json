@@ -1,0 +1,7 @@
+{
+  "phase": "first-canonical-link-before-second",
+  "boundary": "product-one-link",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "journalMode": "wal"
+}

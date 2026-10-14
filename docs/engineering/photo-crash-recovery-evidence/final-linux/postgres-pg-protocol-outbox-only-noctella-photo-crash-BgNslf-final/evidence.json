@@ -1,0 +1,270 @@
+{
+  "driver": "postgres",
+  "boundary": "pg-protocol-outbox-only",
+  "scope": "native-SQL-transaction-fixture-not-full-photo-service",
+  "death": {
+    "checkpoint": {
+      "phase": "protocol-outbox-only-after-commit",
+      "boundary": "pg-protocol-outbox-only",
+      "driver": "postgres",
+      "syntheticOnly": true,
+      "scope": "native-postgresql-transaction-fixture-not-photo-service"
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "linux"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [],
+    "aiPhotos": [],
+    "outbox": [
+      {
+        "id": "protocol-event",
+        "eventType": "product_photo.delete_requested",
+        "aggregateId": "protocol-photo",
+        "status": "DeadLetter",
+        "payload": {
+          "storageKey": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff.webp",
+          "thumbnailStorageKey": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff-thumb.webp"
+        }
+      }
+    ],
+    "intakes": [
+      {
+        "id": "protocol-intake",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff-thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801178,
+        "nlink": 2,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      },
+      {
+        "root": "canonical",
+        "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801177,
+        "nlink": 2,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "intake",
+        "key": "460d0589-9731-467a-bea4-229489c9de63.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801176,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801174,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/main.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801177,
+        "nlink": 2,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801178,
+        "nlink": 2,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [],
+    "aiPhotos": [],
+    "outbox": [
+      {
+        "id": "protocol-event",
+        "eventType": "product_photo.delete_requested",
+        "aggregateId": "protocol-photo",
+        "status": "DeadLetter",
+        "payload": {
+          "storageKey": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff.webp",
+          "thumbnailStorageKey": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff-thumb.webp"
+        }
+      }
+    ],
+    "intakes": [
+      {
+        "id": "protocol-intake",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff-thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801178,
+        "nlink": 2,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      },
+      {
+        "root": "canonical",
+        "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801177,
+        "nlink": 2,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "intake",
+        "key": "460d0589-9731-467a-bea4-229489c9de63.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801176,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801174,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/main.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801177,
+        "nlink": 2,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801178,
+        "nlink": 2,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/main.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/thumb.webp",
+        "size": 72,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff-thumb.webp",
+        "size": 72,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003",
+        "owners": [
+          "outbox:protocol-event"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "1791971254840-9e8a9516-9264-45f3-b0be-ae15e67bf6ff.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [
+          "outbox:protocol-event"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      },
+      {
+        "root": "intake",
+        "key": "460d0589-9731-467a-bea4-229489c9de63.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      }
+    ]
+  },
+  "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c"
+}

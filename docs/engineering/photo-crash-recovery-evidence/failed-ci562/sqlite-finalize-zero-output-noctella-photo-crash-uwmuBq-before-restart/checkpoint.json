@@ -1,0 +1,6 @@
+{
+  "phase": "injected-open-before-first-write",
+  "boundary": "finalize-zero-output",
+  "driver": "sqlite",
+  "syntheticOnly": true
+}
