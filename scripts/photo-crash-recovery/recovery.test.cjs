@@ -28,15 +28,12 @@ for(const driver of ['sqlite','postgres'])for(const boundary of ['ai-reserved-ou
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'noctella-photo-crash-'));const caseEvidence=evidence?path.join(evidence,driver+'-'+boundary+'-'+path.basename(root)):null;let h;
   try{
    if(driver==='postgres')h=await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb();
-   let death;
-   try{death=await readyAndKill(root,driver,boundary,h?.schemaName);}catch(error){
-    if(driver==='postgres'&&error.message.includes('toISOString')&&error.message.includes('create-intake')){
-     const blocker={scope:'actual-photo-service-blocked',driver,boundary,reason:'Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps',diagnostic:error.message};fs.writeFileSync(path.join(root,'blocker.json'),JSON.stringify(blocker,null,2));t.skip('BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance');return;
-    }throw error;
-   }
+   const death=await readyAndKill(root,driver,boundary,h?.schemaName);
    if(evidence){fs.mkdirSync(evidence,{recursive:true});fs.cpSync(root,caseEvidence+'-before-restart',{recursive:true});}
    if(driver==='sqlite')assert.equal(death.checkpoint.journalMode,'wal');
    const first=restart(root,driver,h?.schemaName),second=restart(root,driver,h?.schemaName);assert.deepEqual(first,second);const report=plan(first);assert.deepEqual(report,plan(second));assert.ok(report.entries.every(e=>e.action==='retain'));
+   for(const row of [...first.photos,...first.aiPhotos,...first.outbox,...first.intakes])for(const [key,value] of Object.entries(row))if(key.endsWith('At')&&value!==null){assert.equal(typeof value,'string');assert.equal(new Date(value).toISOString(),value);}
+   for(const event of first.outbox){assert.equal(event.availableAt,event.createdAt);assert.equal(event.updatedAt,event.createdAt);}
    const committed=boundary.endsWith('-committed')||boundary.endsWith('-lost-ack');
    if(boundary.startsWith('ai-')){assert.equal(first.aiPhotos.length,committed?1:0);assert.equal(first.photos.length,0);assert.equal(first.outbox.length,0);if(boundary==='ai-reserved-output')assert.equal(first.files.filter(f=>f.root==='intake'&&f.size===0).length,1);if(boundary==='ai-lost-ack'){assert.equal(report.entries.filter(e=>e.root==='intake'&&e.state==='missing-reference').length,0);assert.equal(first.files.filter(f=>f.root==='intake').length,1);assert.equal(death.checkpoint.code,'PHOTO_STORAGE_UNAVAILABLE');assert.equal(death.checkpoint.admission.closed,true);assert.equal(death.checkpoint.enabledWorkRejected,true);assert.equal(death.checkpoint.legacyBypass,true);}if(boundary==='ai-rollback-error'){assert.equal(first.files.filter(f=>f.root==='intake').length,1);assert.equal(death.checkpoint.admission.closed,true);}}
    if(boundary==='product-one-link'&&process.platform==='linux'){const published=first.files.find(f=>f.root==='canonical');const staged=first.files.find(f=>f.root==='product-ingress'&&f.key.endsWith('/main.webp'));assert.equal(published.ino,staged.ino);assert.equal(published.dev,staged.dev);assert.equal(published.nlink,2);}

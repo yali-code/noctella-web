@@ -1,3 +1,4 @@
+import { intakeTimestampFields, photoTimestampValues, photoTimestampRecord } from "../photoTimestamps";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import type * as sqliteSchema from "../../db/schema.sqlite";
@@ -42,23 +43,25 @@ export function applyIntakeWithExpectedStateInTransaction(
   input: AiProductIntakeApplyInput,
 ): Result<AiProductIntakeApplyResult> {
   const table = (schema as Record<string, any>).aiProductIntakes;
+  const timestamps = (values: Record<string, unknown>) => photoTimestampValues(values, intakeTimestampFields, table.createdAt.dataType === "date");
+  const record = (row: any) => photoTimestampRecord(row, intakeTimestampFields);
   return then(
     rows(
       db
         .update(table)
-        .set({
+        .set(timestamps({
           status: AiProductIntakeStatus.Applied,
           resultProductId: input.resultProductId,
           appliedAt: input.appliedAt,
           appliedByAdminUserId: input.appliedByAdminUserId,
           updatedAt: input.updatedAt,
-        })
+        }))
         .where(and(eq(table.id, input.id), eq(table.status, AiProductIntakeStatus.Open), isNull(table.resultProductId)))
         .returning(),
       execution,
     ),
     (changed: any[]) => {
-      if (changed.length) return { updated: true, row: changed[0] as AiProductIntakeRecord };
+      if (changed.length) return { updated: true, row: record(changed[0]) as AiProductIntakeRecord };
       return then(rows(db.select().from(table).where(eq(table.id, input.id)), execution), (existingRows: any[]) => {
         const existing = existingRows[0];
         if (!existing) return { updated: false, conflict: { field: "id" as const, message: "AI product intake not found" } };
@@ -66,13 +69,13 @@ export function applyIntakeWithExpectedStateInTransaction(
           return {
             updated: false,
             conflict: { field: "resultProductId" as const, message: "This intake already has a result Product" },
-            row: existing as AiProductIntakeRecord,
+            row: record(existing) as AiProductIntakeRecord,
           };
         }
         return {
           updated: false,
           conflict: { field: "status" as const, message: `Expected status "${AiProductIntakeStatus.Open}" but found "${existing.status}"` },
-          row: existing as AiProductIntakeRecord,
+          row: record(existing) as AiProductIntakeRecord,
         };
       });
     },
@@ -99,29 +102,31 @@ export function finalizeIntakeWithExpectedStateInTransaction(
   input: AiProductIntakeFinalizeInput,
 ): Result<AiProductIntakeFinalizeResult> {
   const table = (schema as Record<string, any>).aiProductIntakes;
+  const timestamps = (values: Record<string, unknown>) => photoTimestampValues(values, intakeTimestampFields, table.createdAt.dataType === "date");
+  const record = (row: any) => photoTimestampRecord(row, intakeTimestampFields);
   return then(
     rows(
       db
         .update(table)
-        .set({
+        .set(timestamps({
           status: AiProductIntakeStatus.Finalized,
           finalizedAt: input.finalizedAt,
           finalizedByAdminUserId: input.finalizedByAdminUserId,
           updatedAt: input.updatedAt,
-        })
+        }))
         .where(and(eq(table.id, input.id), eq(table.status, AiProductIntakeStatus.Applied)))
         .returning(),
       execution,
     ),
     (changed: any[]) => {
-      if (changed.length) return { updated: true, row: changed[0] as AiProductIntakeRecord };
+      if (changed.length) return { updated: true, row: record(changed[0]) as AiProductIntakeRecord };
       return then(rows(db.select().from(table).where(eq(table.id, input.id)), execution), (existingRows: any[]) => {
         const existing = existingRows[0];
         if (!existing) return { updated: false, conflict: { field: "id" as const, message: "AI product intake not found" } };
         return {
           updated: false,
           conflict: { field: "status" as const, message: `Expected status "${AiProductIntakeStatus.Applied}" but found "${existing.status}"` },
-          row: existing as AiProductIntakeRecord,
+          row: record(existing) as AiProductIntakeRecord,
         };
       });
     },
@@ -139,22 +144,24 @@ export function finalizeIntakeWithExpectedStateInTransaction(
  */
 export function createDrizzleAiProductIntakeRepository(db: any, schema: Schema): AiProductIntakeRepository {
   const table = (schema as Record<string, any>).aiProductIntakes;
+  const timestamps = (values: Record<string, unknown>) => photoTimestampValues(values, intakeTimestampFields, table.createdAt.dataType === "date");
+  const record = (row: any) => photoTimestampRecord(row, intakeTimestampFields);
   return {
     async create(input: AiProductIntakeCreateInput): Promise<AiProductIntakeRecord> {
-      await db.insert(table).values({
+      await db.insert(table).values(timestamps({
         id: input.id,
         status: AiProductIntakeStatus.Open,
         createdByAdminUserId: input.createdByAdminUserId,
         createdAt: input.createdAt,
         updatedAt: input.updatedAt,
-      });
+      }));
       const [row] = await db.select().from(table).where(eq(table.id, input.id));
-      return row as AiProductIntakeRecord;
+      return record(row) as AiProductIntakeRecord;
     },
 
     async findById(id: string): Promise<AiProductIntakeRecord | null> {
       const [row] = await db.select().from(table).where(eq(table.id, id));
-      return (row as AiProductIntakeRecord) ?? null;
+      return (record(row) as AiProductIntakeRecord) ?? null;
     },
 
     async list(query: AiProductIntakeListQuery): Promise<AiProductIntakeRecord[]> {
@@ -166,7 +173,7 @@ export function createDrizzleAiProductIntakeRepository(db: any, schema: Schema):
         .orderBy(table.createdAt)
         .limit(query.pageSize)
         .offset((query.page - 1) * query.pageSize);
-      return rows as AiProductIntakeRecord[];
+      return rows.map(record) as AiProductIntakeRecord[];
     },
 
     async count(query: AiProductIntakeListQuery): Promise<number> {
@@ -181,24 +188,24 @@ export function createDrizzleAiProductIntakeRepository(db: any, schema: Schema):
     async cancelWithExpectedState(input: AiProductIntakeCancelInput): Promise<AiProductIntakeCancelResult> {
       const changed = await db
         .update(table)
-        .set({
+        .set(timestamps({
           status: AiProductIntakeStatus.Cancelled,
           cancelledAt: input.cancelledAt,
           cancelledByAdminUserId: input.cancelledByAdminUserId,
           cancellationReason: input.cancellationReason ?? null,
           updatedAt: input.updatedAt,
-        })
+        }))
         .where(and(eq(table.id, input.id), eq(table.status, input.expectedStatus)))
         .returning();
 
-      if (changed.length) return { updated: true, row: changed[0] as AiProductIntakeRecord };
+      if (changed.length) return { updated: true, row: record(changed[0]) as AiProductIntakeRecord };
 
       const [existing] = await db.select().from(table).where(eq(table.id, input.id));
       if (!existing) return { updated: false, conflict: { field: "id", message: "AI product intake not found" } };
       return {
         updated: false,
         conflict: { field: "status", message: `Expected status "${input.expectedStatus}" but found "${existing.status}"` },
-        row: existing as AiProductIntakeRecord,
+        row: record(existing) as AiProductIntakeRecord,
       };
     },
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3]
   push:
     branches: [main]
 
@@ -52,15 +52,6 @@ jobs:
           mkdir -p "$NOCTELLA_CRASH_EVIDENCE_DIR"
           node --import tsx --test scripts/photo-crash-recovery/recovery.test.cjs 2>&1 | tee "$NOCTELLA_CRASH_EVIDENCE_DIR/test-output.txt"
 
-      - name: Retain synthetic crash evidence even on failure
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: photo-crash-recovery-${{ github.run_id }}
-          path: ${{ runner.temp }}/photo-crash-evidence/
-          retention-days: 14
-          if-no-files-found: warn
-
       - name: Typecheck
         run: npm run typecheck --workspaces --if-present
 
@@ -68,7 +59,12 @@ jobs:
         run: npm test --workspaces --if-present
 
       - name: Real PostgreSQL integration tests
-        run: npm run test:postgres -w apps/api
+        if: success() || failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/photo-crash-evidence"
+          npm run test:postgres -w apps/api 2>&1 | tee "${{ runner.temp }}/photo-crash-evidence/postgres-repository-tests.txt"
         env:
           POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_sprint151_test
 
@@ -82,3 +78,12 @@ jobs:
 
       - name: Lint
         run: npm run lint --workspaces --if-present
+
+      - name: Retain synthetic crash evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-crash-recovery-${{ github.run_id }}
+          path: ${{ runner.temp }}/photo-crash-evidence/
+          retention-days: 14
+          if-no-files-found: warn

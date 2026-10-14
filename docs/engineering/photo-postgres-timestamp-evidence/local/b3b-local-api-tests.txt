@@ -1,0 +1,9 @@
+
+> @noctella/api@2.1.0-rc.2 test
+> vitest run
+
+
+ RUN  v4.1.10 C:/Users/Admin/noctella-web-p2-2b3b/apps/api
+
+ ❯ tests/stripeCheckoutSprint127.test.ts (23 tests | 1 failed) 10734ms
+     × survives response-loss replay after closing and reopening the database 6014ms
