@@ -155,7 +155,7 @@ Canonical files are never eligible. Age, PID, TTL and lease expiry never contrib
 5. #390 memory is still failing at 24 MP.
 6. External references (Instagram/marketplace URLs, backup manifests) cannot be proven absent.
 7. PostgreSQL results for this branch's end-to-end harness await CI.
-8. This machine has under 1 GiB of free disk, so local evidence is partial: the build was not run locally, and API/Admin/Storefront regressions rely on CI.
+8. This machine has under 400 MiB of free disk, so local evidence is partial: the build and the Admin/Storefront suites were not run locally and rely on CI. The full API suite passed locally.
 
 ## 10. Production gates
 
@@ -173,4 +173,4 @@ Canonical files are never eligible. Age, PID, TTL and lease expiry never contrib
 | Disk budget / ENOSPC | PASS | PASS (ext4) | NOT RUN | BLOCKED (sizing decision) |
 | 24-MP memory (#390) | n/a (no cgroup) | **FAIL** (#397) | NOT RUN | BLOCKED |
 | Default-OFF compatibility | PASS (census) | PASS | NOT RUN | PASS by construction (no wiring) |
-| API / Admin / Storefront regressions, typecheck, build, lint | partial (see evidence) | PASS on parents | NOT RUN | n/a |
+| API / Admin / Storefront regressions, typecheck, build, lint | API vitest 6,106 passed / 0 failed / 34 skipped; typecheck and lint PASS; Admin, Storefront and build not run locally (disk) | PASS on parents; pending for this branch | NOT RUN | n/a |
