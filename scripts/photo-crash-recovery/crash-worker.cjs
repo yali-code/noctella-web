@@ -12,13 +12,14 @@ let details={};const checkpoint=phase=>{const record={phase,boundary,driver,synt
 (async()=>{
  let db,connection;
  const schema=require('../../apps/api/src/db/schema.'+(driver==='sqlite'?'sqlite':'postgres')+'.ts');
- if(driver==='sqlite') {const Database=api('better-sqlite3');connection=new Database(path.join(root,'test.sqlite'));require('../../apps/api/src/db/migrate.ts').ensureSchema(connection);db=api('drizzle-orm/better-sqlite3').drizzle(connection,{schema});}
+ if(driver==='sqlite') {const Database=api('better-sqlite3');connection=new Database(path.join(root,'test.sqlite'));connection.pragma('journal_mode = WAL');require('../../apps/api/src/db/migrate.ts').ensureSchema(connection);db=api('drizzle-orm/better-sqlite3').drizzle(connection,{schema});}
  else {require('../../apps/api/tests/postgresTestDb.ts').assertDisposablePostgresUrl(process.env.POSTGRES_TEST_DATABASE_URL);const u=new URL(process.env.POSTGRES_TEST_DATABASE_URL);if(!['localhost','127.0.0.1','::1'].includes(u.hostname)||!/^sprint151_test_[a-f0-9]+$/.test(schemaName))throw Error('Local disposable PostgreSQL only');const pg=api('pg');connection=new pg.Pool({connectionString:process.env.POSTGRES_TEST_DATABASE_URL,options:'-c search_path='+schemaName,max:2});db=api('drizzle-orm/node-postgres').drizzle(connection,{schema});}
  if(boundary==='retry-finalize'){
   const [intake]=await db.select().from(schema.aiProductIntakes);
   let result;try{const finalized=await service('aiIntakePhotoFinalization').finalizeAiIntakePhotos(db,intake.id,{},'synthetic-admin');result={ok:true,created:finalized.created};}catch(error){result={ok:false,name:error.name};}
   if(driver==='sqlite')connection.close();else await connection.end();fs.writeSync(1,JSON.stringify(result)+'\n');return;
  }
+ details={journalMode:driver==='sqlite'?connection.pragma('journal_mode',{simple:true}):null};
  const processor=api('sharp');const enums=api('@noctella/shared');const time=driver==='sqlite'?new Date().toISOString():new Date();
  await db.insert(schema.products).values({id:'synthetic-product',sku:'CRASH-SYNTHETIC',title:'Synthetic',slug:'synthetic',type:enums.ProductType.UniqueItem,status:enums.ProductStatus.Draft,priceEur:driver==='sqlite'?10:'10',createdAt:time,updatedAt:time});
  const intake=await service('aiProductIntakes').createIntake(db,'synthetic-admin');
@@ -56,6 +57,6 @@ let details={};const checkpoint=phase=>{const record={phase,boundary,driver,synt
   if(isFinalize)await service('aiIntakePhotoFinalization').finalizeAiIntakePhotos(db,intake.id,{},'synthetic-admin');
   else if(isProduct)await service('products').uploadStagedProductPhoto(db,'synthetic-product',staged,'Synthetic');
   else await service('aiIntakePhotos').uploadStagedIntakePhoto(db,intake.id,staged,'synthetic.png','synthetic-admin');
- } catch(error){if(boundary.endsWith('-lost-ack')||boundary==='ai-rollback-error'){const gate=service('photoUploadAdmission');let rejected=false;try{await gate.runImageOperation(async()=>true);}catch{rejected=true;}const enabled=process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED;process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED='false';const legacyBypass=await gate.runImageOperation(async()=>true);process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED=enabled;details={code:error.code,admission:gate.imageProcessingAdmission.snapshot(),enabledWorkRejected:rejected,legacyBypass};checkpoint('persistence-error-after-service-handler');}throw error;}
+ } catch(error){if(boundary.endsWith('-lost-ack')||boundary==='ai-rollback-error'){const gate=service('photoUploadAdmission');let rejected=false;try{await gate.runImageOperation(async()=>true);}catch{rejected=true;}const enabled=process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED;process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED='false';const legacyBypass=await gate.runImageOperation(async()=>true);process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED=enabled;details={...details,code:error.code,admission:gate.imageProcessingAdmission.snapshot(),enabledWorkRejected:rejected,legacyBypass};checkpoint('persistence-error-after-service-handler');}throw error;}
  throw Error('Missed crash boundary');
 })().catch(error=>{fs.writeSync(2,JSON.stringify({name:error.name,code:error.code,message:driver==='sqlite'?String(error.message):'Synthetic PostgreSQL probe failed'})+'\n');process.exit(2);});
