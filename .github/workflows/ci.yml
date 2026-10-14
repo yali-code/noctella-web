@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1]
   push:
     branches: [main]
 
@@ -50,6 +50,32 @@ jobs:
           set -euo pipefail
           mkdir -p "$NOCTELLA_STORAGE_EVIDENCE_DIR"
           node --import tsx --test scripts/photo-storage-capability/storage.test.cjs 2>&1 | tee "$NOCTELLA_STORAGE_EVIDENCE_DIR/test-output.txt"
+
+      - name: Disposable photo disk budget (ext4 loop ENOSPC and allocation evidence)
+        if: success() || failure()
+        timeout-minutes: 20
+        env:
+          NOCTELLA_DISK_BUDGET_EVIDENCE_DIR: ${{ runner.temp }}/photo-disk-budget-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE="$NOCTELLA_DISK_BUDGET_EVIDENCE_DIR"
+          mkdir -p "$EVIDENCE"
+          # Dedicated 64 MiB ext4 loop filesystem: fits one B1 reservation, not one D1 attempt.
+          IMAGE="${{ runner.temp }}/photo-disk-budget.img"
+          MOUNT=/mnt/noctella-photo-budget
+          dd if=/dev/zero of="$IMAGE" bs=1M count=64 status=none
+          mkfs.ext4 -q -F -m 0 -N 4096 "$IMAGE"
+          sudo mkdir -p "$MOUNT"
+          sudo mount -o loop "$IMAGE" "$MOUNT"
+          sudo chown "$(id -u):$(id -g)" "$MOUNT"
+          df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-before.txt"
+          TMPDIR="$MOUNT" node --import tsx scripts/photo-disk-budget/measure.cjs --quick --out "$EVIDENCE/measure-ext4-loop-quick.json"
+          TMPDIR="$MOUNT" NOCTELLA_DISK_BUDGET_ENOSPC=1 node --import tsx --test scripts/photo-disk-budget/budget.test.cjs 2>&1 | tee "$EVIDENCE/test-output.txt"
+          df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-after.txt"
+          find "$MOUNT" -xdev -type f -printf '%i %n %s %b %p\n' | sort > "$EVIDENCE/loop-inventory.txt"
+          sudo umount "$MOUNT"
+          node --import tsx scripts/photo-disk-budget/measure.cjs --out "$EVIDENCE/measure-runner-full.json"
 
       - name: Disposable photo operation fencing design experiments
         if: success() || failure()
@@ -120,6 +146,15 @@ jobs:
         with:
           name: photo-operation-fencing-${{ github.run_id }}
           path: ${{ runner.temp }}/photo-fence-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Preserve disk budget evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-disk-budget-${{ github.run_id }}
+          path: ${{ runner.temp }}/photo-disk-budget-evidence/
           retention-days: 14
           if-no-files-found: warn
 

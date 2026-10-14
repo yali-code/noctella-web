@@ -1,0 +1,6 @@
+# Full API vitest run (dot reporter). Header lines 3-17 were appended by an earlier hung npm run that was stopped via TaskStop; that run is superseded.
+2849: FAIL  tests/stripeCheckoutSprint127.test.ts > Sprint 127 verified webhook atomicity > survives response-loss replay after closing and reopening the database
+2850:Error: Test timed out in 5000ms.
+2858: Test Files  1 failed | 275 passed | 4 skipped (280)
+2859:      Tests  1 failed | 6105 passed | 34 skipped (6140)
+2861:   Duration  1461.17s (transform 26.28s, setup 0ms, import 399.93s, tests 925.50s, environment 85ms)

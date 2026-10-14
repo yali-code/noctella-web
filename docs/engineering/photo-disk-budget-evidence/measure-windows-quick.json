@@ -1,0 +1,1731 @@
+{
+  "generatedAt": "2026-10-14T15:15:22.496Z",
+  "profile": "quick",
+  "node": "v24.18.0",
+  "platform": "win32",
+  "release": "10.0.26200",
+  "arch": "x64",
+  "sharp": {
+    "aom": "3.13.1",
+    "archive": "3.8.2",
+    "cairo": "1.18.4",
+    "cgif": "0.5.0",
+    "exif": "0.6.25",
+    "expat": "2.7.3",
+    "ffi": "3.5.2",
+    "fontconfig": "2.17.1",
+    "freetype": "2.14.1",
+    "fribidi": "1.0.16",
+    "glib": "2.86.1",
+    "harfbuzz": "12.1.0",
+    "heif": "1.20.2",
+    "highway": "1.3.0",
+    "imagequant": "2.4.1",
+    "lcms": "2.17",
+    "mozjpeg": "0826579",
+    "pango": "1.57.0",
+    "pixman": "0.46.4",
+    "png": "1.6.50",
+    "proxy-libintl": "0.5",
+    "rsvg": "2.61.2",
+    "spng": "0.7.4",
+    "tiff": "4.7.1",
+    "vips": "8.17.3",
+    "webp": "1.6.0",
+    "xml2": "2.15.1",
+    "zlib-ng": "2.2.5",
+    "sharp": "0.34.5"
+  },
+  "tmpdir": {
+    "cluster": 4096,
+    "statfsType": 0
+  },
+  "policy": {
+    "inputLimitBytes": 10485760,
+    "outputCapBytes": 16777216,
+    "b1ReservationBytes": 44040192,
+    "d1PolicyBoundBytes": 77594624
+  },
+  "results": [
+    {
+      "fixture": {
+        "name": "jpeg-quick",
+        "format": "jpeg",
+        "width": 320,
+        "height": 240,
+        "megapixels": 0.08,
+        "quality": 100,
+        "bytes": 191559,
+        "sha256": "2983c8eba9c1183f11bdca04e0222bccd6e8227b159065e9d73daf57c627ba91"
+      },
+      "runs": [
+        {
+          "path": "b1-staged-http",
+          "photo": {
+            "width": 320,
+            "height": 240
+          },
+          "outputs": [
+            {
+              "name": "1791990915891-608a1f3b-27f4-496b-aca8-afd5aa56891e-thumb.webp",
+              "size": 37408
+            },
+            {
+              "name": "1791990915891-608a1f3b-27f4-496b-aca8-afd5aa56891e.webp",
+              "size": 42604
+            }
+          ],
+          "peak": {
+            "checkpoint": "encoded-thumb.webp",
+            "cluster": 4096,
+            "inodes": 3,
+            "zeroByteInodes": 0,
+            "directories": 1,
+            "logicalBytes": 271571,
+            "logicalBytesPerPath": 271571,
+            "clusterRoundedBytes": 278528,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 278528
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 2,
+            "zeroByteInodes": 0,
+            "directories": 0,
+            "logicalBytes": 80012,
+            "logicalBytesPerPath": 80012,
+            "clusterRoundedBytes": 86016,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 86016
+          },
+          "checkpoints": [
+            {
+              "name": "input-received",
+              "cluster": 4096,
+              "inodes": 1,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 191559,
+              "logicalBytesPerPath": 191559,
+              "clusterRoundedBytes": 192512,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 192512
+            },
+            {
+              "name": "reserved-main.webp",
+              "cluster": 4096,
+              "inodes": 2,
+              "zeroByteInodes": 1,
+              "directories": 1,
+              "logicalBytes": 191559,
+              "logicalBytesPerPath": 191559,
+              "clusterRoundedBytes": 192512,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 192512
+            },
+            {
+              "name": "encoded-main.webp",
+              "cluster": 4096,
+              "inodes": 2,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 234163,
+              "logicalBytesPerPath": 234163,
+              "clusterRoundedBytes": 237568,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 237568
+            },
+            {
+              "name": "reserved-thumb.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 1,
+              "directories": 1,
+              "logicalBytes": 234163,
+              "logicalBytesPerPath": 234163,
+              "clusterRoundedBytes": 237568,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 237568
+            },
+            {
+              "name": "encoded-thumb.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 271571,
+              "logicalBytesPerPath": 271571,
+              "clusterRoundedBytes": 278528,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 278528
+            },
+            {
+              "name": "published-main.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 271571,
+              "logicalBytesPerPath": 314175,
+              "clusterRoundedBytes": 278528,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 278528
+            },
+            {
+              "name": "published-thumb.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 271571,
+              "logicalBytesPerPath": 351583,
+              "clusterRoundedBytes": 278528,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 278528
+            },
+            {
+              "name": "request-cleaned",
+              "cluster": 4096,
+              "inodes": 2,
+              "zeroByteInodes": 0,
+              "directories": 0,
+              "logicalBytes": 80012,
+              "logicalBytesPerPath": 80012,
+              "clusterRoundedBytes": 86016,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 86016
+            }
+          ],
+          "files": [
+            {
+              "path": "canonical/1791990915891-608a1f3b-27f4-496b-aca8-afd5aa56891e-thumb.webp",
+              "ino": "5629499534623660",
+              "nlink": 1,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "canonical/1791990915891-608a1f3b-27f4-496b-aca8-afd5aa56891e.webp",
+              "ino": "1970324837384811",
+              "nlink": 1,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "562949954255121",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "562949954255120",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/raw/1791990916579-72274403-660e-40fe-966e-2bd1e5efe6f2-thumb.webp",
+              "ino": "562949954255117",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/raw/1791990916579-72274403-660e-40fe-966e-2bd1e5efe6f2.webp",
+              "ino": "562949954255116",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/sealed/main.webp",
+              "ino": "562949954255120",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/sealed/thumb.webp",
+              "ino": "562949954255121",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/work/input",
+              "ino": "1407374884386770",
+              "nlink": 1,
+              "bytes": 191559,
+              "blocks": null,
+              "sha256": "2983c8eba9c1183f11bdca04e0222bccd6e8227b159065e9d73daf57c627ba91"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/work/main.webp",
+              "ino": "562949954255116",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/3f2132ef-7e38-41e2-b03d-9042455d4428/work/thumb.webp",
+              "ino": "562949954255117",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            }
+          ],
+          "path": "d1-capability-product",
+          "peak": {
+            "checkpoint": "attempt-1-sealed",
+            "cluster": 4096,
+            "inodes": 5,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 351583,
+            "logicalBytesPerPath": 431595,
+            "clusterRoundedBytes": 364544,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 364544
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 5,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 351583,
+            "logicalBytesPerPath": 511607,
+            "clusterRoundedBytes": 364544,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 364544,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": null,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 0,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 0,
+              "logicalBytesPerPath": 0,
+              "clusterRoundedBytes": 0,
+              "posixAllocatedBytes": 0,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 0,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 351583,
+              "logicalBytesPerPath": 431595,
+              "clusterRoundedBytes": 364544,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 364544,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 351583,
+              "logicalBytesPerPath": 511607,
+              "clusterRoundedBytes": 364544,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 364544,
+              "databaseBytes": 5737952
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "562949954255122",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "844424930965777",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "ingress/input",
+              "ino": "1688849861097426",
+              "nlink": 1,
+              "bytes": 191559,
+              "blocks": null,
+              "sha256": "2983c8eba9c1183f11bdca04e0222bccd6e8227b159065e9d73daf57c627ba91"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/raw/1791990917330-abaf296d-acc9-44c1-a4cd-95341a1050b6-thumb.webp",
+              "ino": "1125899907676430",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/raw/1791990917330-abaf296d-acc9-44c1-a4cd-95341a1050b6.webp",
+              "ino": "844424930965773",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/sealed/main.webp",
+              "ino": "844424930965777",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/sealed/thumb.webp",
+              "ino": "562949954255122",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/work/input",
+              "ino": "2533274791229679",
+              "nlink": 1,
+              "bytes": 191559,
+              "blocks": null,
+              "sha256": "2983c8eba9c1183f11bdca04e0222bccd6e8227b159065e9d73daf57c627ba91"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/work/main.webp",
+              "ino": "844424930965773",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/eeff3802-227c-40ea-9fb3-252ce15aa325/work/thumb.webp",
+              "ino": "1125899907676430",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            }
+          ],
+          "path": "d1-capability-product+http-ingress",
+          "peak": {
+            "checkpoint": "attempt-1-sealed",
+            "cluster": 4096,
+            "inodes": 6,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 543142,
+            "logicalBytesPerPath": 623154,
+            "clusterRoundedBytes": 557056,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 557056
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 6,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 543142,
+            "logicalBytesPerPath": 703166,
+            "clusterRoundedBytes": 557056,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 557056,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": null,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 1,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 191559,
+              "logicalBytesPerPath": 191559,
+              "clusterRoundedBytes": 192512,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 192512,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 6,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 543142,
+              "logicalBytesPerPath": 623154,
+              "clusterRoundedBytes": 557056,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 557056,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 6,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 543142,
+              "logicalBytesPerPath": 703166,
+              "clusterRoundedBytes": 557056,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 557056,
+              "databaseBytes": 5737952
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "1125899907676432",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "1407374884387087",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/4e43998b-45a1-4d1f-8280-771e4c5ed426/raw/main.webp",
+              "ino": "2533274791229394",
+              "nlink": 1,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/4e43998b-45a1-4d1f-8280-771e4c5ed426/raw/thumb.webp",
+              "ino": "1125899907676428",
+              "nlink": 1,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/4e43998b-45a1-4d1f-8280-771e4c5ed426/sealed/main.webp",
+              "ino": "1407374884387087",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/4e43998b-45a1-4d1f-8280-771e4c5ed426/sealed/thumb.webp",
+              "ino": "1125899907676432",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            }
+          ],
+          "path": "d1-capability-deterministic",
+          "peak": {
+            "checkpoint": "attempt-1-sealed",
+            "cluster": 4096,
+            "inodes": 4,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 160024,
+            "logicalBytesPerPath": 160024,
+            "clusterRoundedBytes": 172032,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 172032
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 4,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 160024,
+            "logicalBytesPerPath": 240036,
+            "clusterRoundedBytes": 172032,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 172032,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": null,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 0,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 0,
+              "logicalBytesPerPath": 0,
+              "clusterRoundedBytes": 0,
+              "posixAllocatedBytes": 0,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 0,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 4,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 160024,
+              "logicalBytesPerPath": 160024,
+              "clusterRoundedBytes": 172032,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 172032,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 4,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 160024,
+              "logicalBytesPerPath": 240036,
+              "clusterRoundedBytes": 172032,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 172032,
+              "databaseBytes": 5737952
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "1125899907676433",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "1407374884387088",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/raw/1791990918794-3d97836e-67bd-4b36-bfda-870e3dbc9cc7-thumb.webp",
+              "ino": "1688849861097741",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/raw/1791990918794-3d97836e-67bd-4b36-bfda-870e3dbc9cc7.webp",
+              "ino": "1407374884387084",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/sealed/main.webp",
+              "ino": "1407374884387088",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/sealed/thumb.webp",
+              "ino": "1125899907676433",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/work/input",
+              "ino": "3377699721361362",
+              "nlink": 1,
+              "bytes": 191559,
+              "blocks": null,
+              "sha256": "2983c8eba9c1183f11bdca04e0222bccd6e8227b159065e9d73daf57c627ba91"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/work/main.webp",
+              "ino": "1407374884387084",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g1/882e73ad-d1e3-4581-af10-250d58c20b18/work/thumb.webp",
+              "ino": "1688849861097741",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/raw/1791990919023-7982d4eb-08dd-4d01-a6e3-3d5c9030e6af-thumb.webp",
+              "ino": "562949954255127",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/raw/1791990919023-7982d4eb-08dd-4d01-a6e3-3d5c9030e6af.webp",
+              "ino": "562949954255126",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/sealed/main.webp",
+              "ino": "562949954255130",
+              "nlink": 1,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/sealed/thumb.webp",
+              "ino": "562949954255131",
+              "nlink": 1,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/work/input",
+              "ino": "2814749767940366",
+              "nlink": 1,
+              "bytes": 191559,
+              "blocks": null,
+              "sha256": "2983c8eba9c1183f11bdca04e0222bccd6e8227b159065e9d73daf57c627ba91"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/work/main.webp",
+              "ino": "562949954255126",
+              "nlink": 2,
+              "bytes": 42604,
+              "blocks": null,
+              "sha256": "01104dc07d3ef4bc6ad50224bd9a70a2ad9c6b3bab341ef277456de0662d37cc"
+            },
+            {
+              "path": "private/op/g2/76c45f99-7d5c-40d7-865b-60521d2532c8/work/thumb.webp",
+              "ino": "562949954255127",
+              "nlink": 2,
+              "bytes": 37408,
+              "blocks": null,
+              "sha256": "1f2e3aa2f8258d76d9ed48255fc0d5b0683964ce282ffbb99053004dcc8b60c3"
+            }
+          ],
+          "path": "d1-capability-product+reclaim",
+          "peak": {
+            "checkpoint": "attempt-2-sealed",
+            "cluster": 4096,
+            "inodes": 10,
+            "zeroByteInodes": 0,
+            "directories": 12,
+            "logicalBytes": 703166,
+            "logicalBytesPerPath": 943202,
+            "clusterRoundedBytes": 729088,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 729088
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 10,
+            "zeroByteInodes": 0,
+            "directories": 12,
+            "logicalBytes": 703166,
+            "logicalBytesPerPath": 943202,
+            "clusterRoundedBytes": 729088,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 729088,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": 364544,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 0,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 0,
+              "logicalBytesPerPath": 0,
+              "clusterRoundedBytes": 0,
+              "posixAllocatedBytes": 0,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 0,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 351583,
+              "logicalBytesPerPath": 431595,
+              "clusterRoundedBytes": 364544,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 364544,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 351583,
+              "logicalBytesPerPath": 511607,
+              "clusterRoundedBytes": 364544,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 364544,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-2-sealed",
+              "cluster": 4096,
+              "inodes": 10,
+              "zeroByteInodes": 0,
+              "directories": 12,
+              "logicalBytes": 703166,
+              "logicalBytesPerPath": 943202,
+              "clusterRoundedBytes": 729088,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 729088,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-2-published",
+              "cluster": 4096,
+              "inodes": 10,
+              "zeroByteInodes": 0,
+              "directories": 12,
+              "logicalBytes": 703166,
+              "logicalBytesPerPath": 943202,
+              "clusterRoundedBytes": 729088,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 729088,
+              "databaseBytes": 5737952
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "fixture": {
+        "name": "png-rgba-quick",
+        "format": "png",
+        "width": 200,
+        "height": 260,
+        "megapixels": 0.05,
+        "quality": null,
+        "bytes": 183802,
+        "sha256": "6a96e274e87366ff4a00809ae3ea5453c5cf70b0394418ff5f98a3acf19ae960"
+      },
+      "runs": [
+        {
+          "path": "b1-staged-http",
+          "photo": {
+            "width": 200,
+            "height": 260
+          },
+          "outputs": [
+            {
+              "name": "1791990919327-5674a78b-30a2-4866-a4e0-26353903c386-thumb.webp",
+              "size": 65934
+            },
+            {
+              "name": "1791990919327-5674a78b-30a2-4866-a4e0-26353903c386.webp",
+              "size": 68702
+            }
+          ],
+          "peak": {
+            "checkpoint": "encoded-thumb.webp",
+            "cluster": 4096,
+            "inodes": 3,
+            "zeroByteInodes": 0,
+            "directories": 1,
+            "logicalBytes": 318438,
+            "logicalBytesPerPath": 318438,
+            "clusterRoundedBytes": 323584,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 323584
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 2,
+            "zeroByteInodes": 0,
+            "directories": 0,
+            "logicalBytes": 134636,
+            "logicalBytesPerPath": 134636,
+            "clusterRoundedBytes": 139264,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 139264
+          },
+          "checkpoints": [
+            {
+              "name": "input-received",
+              "cluster": 4096,
+              "inodes": 1,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 183802,
+              "logicalBytesPerPath": 183802,
+              "clusterRoundedBytes": 184320,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 184320
+            },
+            {
+              "name": "reserved-main.webp",
+              "cluster": 4096,
+              "inodes": 2,
+              "zeroByteInodes": 1,
+              "directories": 1,
+              "logicalBytes": 183802,
+              "logicalBytesPerPath": 183802,
+              "clusterRoundedBytes": 184320,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 184320
+            },
+            {
+              "name": "encoded-main.webp",
+              "cluster": 4096,
+              "inodes": 2,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 252504,
+              "logicalBytesPerPath": 252504,
+              "clusterRoundedBytes": 253952,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 253952
+            },
+            {
+              "name": "reserved-thumb.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 1,
+              "directories": 1,
+              "logicalBytes": 252504,
+              "logicalBytesPerPath": 252504,
+              "clusterRoundedBytes": 253952,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 253952
+            },
+            {
+              "name": "encoded-thumb.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 318438,
+              "logicalBytesPerPath": 318438,
+              "clusterRoundedBytes": 323584,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 323584
+            },
+            {
+              "name": "published-main.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 318438,
+              "logicalBytesPerPath": 387140,
+              "clusterRoundedBytes": 323584,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 323584
+            },
+            {
+              "name": "published-thumb.webp",
+              "cluster": 4096,
+              "inodes": 3,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 318438,
+              "logicalBytesPerPath": 453074,
+              "clusterRoundedBytes": 323584,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 323584
+            },
+            {
+              "name": "request-cleaned",
+              "cluster": 4096,
+              "inodes": 2,
+              "zeroByteInodes": 0,
+              "directories": 0,
+              "logicalBytes": 134636,
+              "logicalBytesPerPath": 134636,
+              "clusterRoundedBytes": 139264,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 139264
+            }
+          ],
+          "files": [
+            {
+              "path": "canonical/1791990919327-5674a78b-30a2-4866-a4e0-26353903c386-thumb.webp",
+              "ino": "7036874418176940",
+              "nlink": 1,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "canonical/1791990919327-5674a78b-30a2-4866-a4e0-26353903c386.webp",
+              "ino": "3377699720938091",
+              "nlink": 1,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "1407374884387089",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "1688849861097744",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/raw/1791990919981-17c796e6-37c7-4bc9-ad1f-083616d7ab7c-thumb.webp",
+              "ino": "1970324837808397",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/raw/1791990919981-17c796e6-37c7-4bc9-ad1f-083616d7ab7c.webp",
+              "ino": "1688849861097740",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/sealed/main.webp",
+              "ino": "1688849861097744",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/sealed/thumb.webp",
+              "ino": "1407374884387089",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/work/input",
+              "ino": "4222124651493330",
+              "nlink": 1,
+              "bytes": 183802,
+              "blocks": null,
+              "sha256": "6a96e274e87366ff4a00809ae3ea5453c5cf70b0394418ff5f98a3acf19ae960"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/work/main.webp",
+              "ino": "1688849861097740",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/c84465c5-4ea1-4a24-89bf-edc32fa172f5/work/thumb.webp",
+              "ino": "1970324837808397",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            }
+          ],
+          "path": "d1-capability-product",
+          "peak": {
+            "checkpoint": "attempt-1-sealed",
+            "cluster": 4096,
+            "inodes": 5,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 453074,
+            "logicalBytesPerPath": 587710,
+            "clusterRoundedBytes": 462848,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 462848
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 5,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 453074,
+            "logicalBytesPerPath": 722346,
+            "clusterRoundedBytes": 462848,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 462848,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": null,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 0,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 0,
+              "logicalBytesPerPath": 0,
+              "clusterRoundedBytes": 0,
+              "posixAllocatedBytes": 0,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 0,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 453074,
+              "logicalBytesPerPath": 587710,
+              "clusterRoundedBytes": 462848,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 462848,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 453074,
+              "logicalBytesPerPath": 722346,
+              "clusterRoundedBytes": 462848,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 462848,
+              "databaseBytes": 5737952
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "1125899907676434",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "1688849861097745",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "ingress/input",
+              "ino": "4503599628203986",
+              "nlink": 1,
+              "bytes": 183802,
+              "blocks": null,
+              "sha256": "6a96e274e87366ff4a00809ae3ea5453c5cf70b0394418ff5f98a3acf19ae960"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/raw/1791990920669-c73c54b9-f4aa-4562-af12-8f9bad7611f2-thumb.webp",
+              "ino": "3659174698072334",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/raw/1791990920669-c73c54b9-f4aa-4562-af12-8f9bad7611f2.webp",
+              "ino": "2251799814519053",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/sealed/main.webp",
+              "ino": "1688849861097745",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/sealed/thumb.webp",
+              "ino": "1125899907676434",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/work/input",
+              "ino": "4222124651493615",
+              "nlink": 1,
+              "bytes": 183802,
+              "blocks": null,
+              "sha256": "6a96e274e87366ff4a00809ae3ea5453c5cf70b0394418ff5f98a3acf19ae960"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/work/main.webp",
+              "ino": "2251799814519053",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/65c08a45-d108-4356-bbc3-46d128c99ae7/work/thumb.webp",
+              "ino": "3659174698072334",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            }
+          ],
+          "path": "d1-capability-product+http-ingress",
+          "peak": {
+            "checkpoint": "attempt-1-sealed",
+            "cluster": 4096,
+            "inodes": 6,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 636876,
+            "logicalBytesPerPath": 771512,
+            "clusterRoundedBytes": 647168,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 647168
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 6,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 636876,
+            "logicalBytesPerPath": 906148,
+            "clusterRoundedBytes": 647168,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 647168,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": null,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 1,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 183802,
+              "logicalBytesPerPath": 183802,
+              "clusterRoundedBytes": 184320,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 184320,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 6,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 636876,
+              "logicalBytesPerPath": 771512,
+              "clusterRoundedBytes": 647168,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 647168,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 6,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 636876,
+              "logicalBytesPerPath": 906148,
+              "clusterRoundedBytes": 647168,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 647168,
+              "databaseBytes": 5737952
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "2251799814519056",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "2814749767940367",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/7b7bfba3-2b94-4ada-af7a-1c193399d6b6/raw/main.webp",
+              "ino": "5348024558335954",
+              "nlink": 1,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/7b7bfba3-2b94-4ada-af7a-1c193399d6b6/raw/thumb.webp",
+              "ino": "2251799814519052",
+              "nlink": 1,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/7b7bfba3-2b94-4ada-af7a-1c193399d6b6/sealed/main.webp",
+              "ino": "2814749767940367",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/7b7bfba3-2b94-4ada-af7a-1c193399d6b6/sealed/thumb.webp",
+              "ino": "2251799814519056",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            }
+          ],
+          "path": "d1-capability-deterministic",
+          "peak": {
+            "checkpoint": "attempt-1-sealed",
+            "cluster": 4096,
+            "inodes": 4,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 269272,
+            "logicalBytesPerPath": 269272,
+            "clusterRoundedBytes": 278528,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 278528
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 4,
+            "zeroByteInodes": 0,
+            "directories": 7,
+            "logicalBytes": 269272,
+            "logicalBytesPerPath": 403908,
+            "clusterRoundedBytes": 278528,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 278528,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": null,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 0,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 0,
+              "logicalBytesPerPath": 0,
+              "clusterRoundedBytes": 0,
+              "posixAllocatedBytes": 0,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 0,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 4,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 269272,
+              "logicalBytesPerPath": 269272,
+              "clusterRoundedBytes": 278528,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 278528,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 4,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 269272,
+              "logicalBytesPerPath": 403908,
+              "clusterRoundedBytes": 278528,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 278528,
+              "databaseBytes": 5737952
+            }
+          ]
+        },
+        {
+          "files": [
+            {
+              "path": "canonical/op-thumb.webp",
+              "ino": "1970324837808401",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "canonical/op.webp",
+              "ino": "2533274791229712",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/raw/1791990922074-34891a56-8653-4550-91dc-952b054cc010-thumb.webp",
+              "ino": "3096224744651021",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/raw/1791990922074-34891a56-8653-4550-91dc-952b054cc010.webp",
+              "ino": "2533274791229708",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/sealed/main.webp",
+              "ino": "2533274791229712",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/sealed/thumb.webp",
+              "ino": "1970324837808401",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/work/input",
+              "ino": "6192449488467922",
+              "nlink": 1,
+              "bytes": 183802,
+              "blocks": null,
+              "sha256": "6a96e274e87366ff4a00809ae3ea5453c5cf70b0394418ff5f98a3acf19ae960"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/work/main.webp",
+              "ino": "2533274791229708",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g1/eb8ef483-dbc0-4d6c-ad26-c2ab12f8eb49/work/thumb.webp",
+              "ino": "3096224744651021",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/raw/1791990922328-22da91f9-acaa-45c0-8a80-d01f671b8556-thumb.webp",
+              "ino": "844424930965783",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/raw/1791990922328-22da91f9-acaa-45c0-8a80-d01f671b8556.webp",
+              "ino": "844424930965782",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/sealed/main.webp",
+              "ino": "844424930965786",
+              "nlink": 1,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/sealed/thumb.webp",
+              "ino": "844424930965787",
+              "nlink": 1,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/work/input",
+              "ino": "5348024558336270",
+              "nlink": 1,
+              "bytes": 183802,
+              "blocks": null,
+              "sha256": "6a96e274e87366ff4a00809ae3ea5453c5cf70b0394418ff5f98a3acf19ae960"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/work/main.webp",
+              "ino": "844424930965782",
+              "nlink": 2,
+              "bytes": 68702,
+              "blocks": null,
+              "sha256": "bb649868dc8c1312d816f6a9cbdcfd28dfdbfe263c09aa3b8372968a55b2a7be"
+            },
+            {
+              "path": "private/op/g2/2c8e4e58-faac-4995-8221-880714af6cc9/work/thumb.webp",
+              "ino": "844424930965783",
+              "nlink": 2,
+              "bytes": 65934,
+              "blocks": null,
+              "sha256": "7f84f02a7b110b0ee7ecb8c8af26618a49298fda437880a6258879f80b4d9140"
+            }
+          ],
+          "path": "d1-capability-product+reclaim",
+          "peak": {
+            "checkpoint": "attempt-2-sealed",
+            "cluster": 4096,
+            "inodes": 10,
+            "zeroByteInodes": 0,
+            "directories": 12,
+            "logicalBytes": 906148,
+            "logicalBytesPerPath": 1310056,
+            "clusterRoundedBytes": 925696,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 925696
+          },
+          "final": {
+            "cluster": 4096,
+            "inodes": 10,
+            "zeroByteInodes": 0,
+            "directories": 12,
+            "logicalBytes": 906148,
+            "logicalBytesPerPath": 1310056,
+            "clusterRoundedBytes": 925696,
+            "posixAllocatedBytes": null,
+            "directoryAllocatedBytes": 0,
+            "conservativeBytes": 925696,
+            "databaseBytes": 5737952
+          },
+          "secondAttemptGrowthBytes": 462848,
+          "checkpoints": [
+            {
+              "name": "start",
+              "cluster": 4096,
+              "inodes": 0,
+              "zeroByteInodes": 0,
+              "directories": 1,
+              "logicalBytes": 0,
+              "logicalBytesPerPath": 0,
+              "clusterRoundedBytes": 0,
+              "posixAllocatedBytes": 0,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 0,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-sealed",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 453074,
+              "logicalBytesPerPath": 587710,
+              "clusterRoundedBytes": 462848,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 462848,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-1-published",
+              "cluster": 4096,
+              "inodes": 5,
+              "zeroByteInodes": 0,
+              "directories": 7,
+              "logicalBytes": 453074,
+              "logicalBytesPerPath": 722346,
+              "clusterRoundedBytes": 462848,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 462848,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-2-sealed",
+              "cluster": 4096,
+              "inodes": 10,
+              "zeroByteInodes": 0,
+              "directories": 12,
+              "logicalBytes": 906148,
+              "logicalBytesPerPath": 1310056,
+              "clusterRoundedBytes": 925696,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 925696,
+              "databaseBytes": 5737952
+            },
+            {
+              "name": "attempt-2-published",
+              "cluster": 4096,
+              "inodes": 10,
+              "zeroByteInodes": 0,
+              "directories": 12,
+              "logicalBytes": 906148,
+              "logicalBytesPerPath": 1310056,
+              "clusterRoundedBytes": 925696,
+              "posixAllocatedBytes": null,
+              "directoryAllocatedBytes": 0,
+              "conservativeBytes": 925696,
+              "databaseBytes": 5737952
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
