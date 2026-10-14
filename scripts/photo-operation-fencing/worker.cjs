@@ -1,8 +1,18 @@
 const fs=require('node:fs'),path=require('node:path');const {connect,then}=require('./protocol.cjs');
+const api=require('node:module').createRequire(path.resolve(__dirname,'../../apps/api/package.json'));
 const Module=require('node:module');const resolve=Module._resolveFilename;Module._resolveFilename=function(id,...rest){return id==='@noctella/shared'?path.resolve(__dirname,'../../packages/shared/dist/index.js'):resolve.call(this,id,...rest);};
 const [root,driver,schema,mode]=process.argv.slice(2);
 const checkpoint=phase=>{const record={phase,driver,mode,sourceSha:process.env.NOCTELLA_PROBE_SOURCE_SHA||'local'};fs.writeFileSync(path.join(root,'checkpoint.json'),JSON.stringify(record,null,2));fs.writeSync(1,JSON.stringify(record)+'\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);};
-(async()=>{const p=await connect(driver,root,schema);
+(async()=>{
+ if(mode.startsWith('deterministic-')){
+  require('./protocol.cjs').rootGuard(root);process.env.PRODUCT_PHOTO_DIR=path.join(root,'deterministic');process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED='true';
+  const main=path.join(process.env.PRODUCT_PHOTO_DIR,'synthetic-product-synthetic-photo.webp');const thumb=main.replace('.webp','-thumb.webp');
+  const old=mode==='deterministic-old';const read=fs.promises.readFile;fs.promises.readFile=async function(file,...args){try{return await read.call(this,file,...args);}catch(error){if(old&&file===main&&error.code==='ENOENT'){fs.writeSync(1,JSON.stringify({phase:'actual-missing-file-preflight',sourceSha:process.env.NOCTELLA_PROBE_SOURCE_SHA||'local'})+'\n');const until=Date.now()+20000;while(!fs.existsSync(path.join(root,'resume-old'))&&Date.now()<until)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);if(!fs.existsSync(path.join(root,'resume-old')))throw Error('resume timeout');}throw error;}};
+  const bytes=await api('sharp')({create:{width:32,height:24,channels:3,background:old?'#ff0000':'#0000ff'}}).png().toBuffer();
+  let errorName=null;try{await require('../../apps/api/src/services/photoStorage.ts').writeDeterministicProductPhoto({buffer:bytes,mimetype:'image/png',size:bytes.length,mainStorageKey:path.basename(main),thumbnailStorageKey:path.basename(thumb)});}catch(error){errorName=error.name;}
+  fs.writeFileSync(path.join(root,old?'old-result.json':'new-result.json'),JSON.stringify({errorName,mainSha256:require('node:crypto').createHash('sha256').update(fs.readFileSync(main)).digest('hex'),thumbSha256:require('node:crypto').createHash('sha256').update(fs.readFileSync(thumb)).digest('hex')}));return;
+ }
+ const p=await connect(driver,root,schema);
  if(mode==='lock-race'){
  if(driver==='sqlite')p.connection.pragma('busy_timeout = 200');else await p.connection.query("SET lock_timeout='200ms'");
  process.send({ready:true});process.once('message',async()=>{try{const token=await p.reclaim('lock',1,'boot-b','claim-b',300,100);fs.writeFileSync(path.join(root,'lock-result.json'),JSON.stringify({token}));}catch(error){fs.writeFileSync(path.join(root,'lock-result.json'),JSON.stringify({blocked:true,code:error.code}));}finally{await p.close();process.disconnect();}});return;
