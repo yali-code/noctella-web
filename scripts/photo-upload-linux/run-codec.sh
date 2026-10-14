@@ -25,6 +25,7 @@ for mode in 0 1; do
   for file in memory.max memory.swap.max memory.current memory.peak memory.events; do cat "/sys/fs/cgroup$cg/$file" > "$root/$label/after-$file.txt"; done
   docker cp "$name:/opt/codec-configure.log" "$root/$label/configure.txt"
   docker cp "$name:/opt/codec-compiler.txt" "$root/$label/compiler.txt"
+  docker cp "$name:/opt/codec-provenance.txt" "$root/$label/provenance.txt"
   docker rm --force "$name"
 done
 wide compare
