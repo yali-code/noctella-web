@@ -1,3 +1,4 @@
+import { imageAdmissionEnabled, imageProcessingAdmission, PhotoUploadError } from "./photoUploadAdmission";
 import type { StagedProductPhotoInput } from "./stagedProductPhotoStorage";
 import { randomUUID } from "node:crypto";
 import { AiProductIntakeStatus, type AiIntakePhoto } from "@noctella/shared";
@@ -44,6 +45,9 @@ function repositoryFor(db: DbClient): AiIntakePhotoRepository {
  * deleted before the error propagates. No queue, no outbox, mirroring the
  * try/catch shape already established by services/products.ts's
  * uploadProductPhoto, but fully independent of it.
+ * With disk staging enabled, persistence errors instead retain the new source
+ * and close shared image admission: an error cannot establish rollback after
+ * a lost commit acknowledgement. Recovery must inspect authoritative DB state.
  */
 export async function uploadIntakePhoto(
   db: DbClient,
@@ -84,6 +88,11 @@ async function uploadPhotoWithStorage(
     });
     return toIntakePhoto(row);
   } catch (err) {
+    // Commit acknowledgement may be lost after the row became durable.
+    if (imageAdmissionEnabled()) {
+      imageProcessingAdmission.close();
+      throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "AI photo persistence requires recovery");
+    }
     await storage.deleteIntakePhoto(stored.storageKey);
     throw err;
   }
