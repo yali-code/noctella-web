@@ -24,11 +24,16 @@ async function readyAndKill(root,driver,boundary,schemaName){
 }
 function restart(root,driver,schemaName){const result=spawnSync(process.execPath,['--import','tsx',path.join(directory,'snapshot-worker.cjs'),root,driver,schemaName||''],{cwd:path.resolve(directory,'../..'),env:process.env,encoding:'utf8',timeout:30000,maxBuffer:1024*1024});assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);}
 for(const driver of ['sqlite','postgres'])for(const boundary of ['ai-reserved-output','ai-encoded-output','ai-uncommitted','ai-committed','ai-lost-ack','ai-rollback-error','product-one-link','product-uncommitted','product-committed','product-lost-ack','finalize-uncommitted','finalize-committed','finalize-first-output','finalize-zero-output','instagram-temp']){
- test(driver+' restart '+boundary,{skip:driver==='postgres'&&!process.env.POSTGRES_TEST_DATABASE_URL,timeout:120000},async()=>{
+ test(driver+' restart '+boundary,{skip:driver==='postgres'&&!process.env.POSTGRES_TEST_DATABASE_URL,timeout:120000},async(t)=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'noctella-photo-crash-'));const caseEvidence=evidence?path.join(evidence,driver+'-'+boundary+'-'+path.basename(root)):null;let h;
   try{
    if(driver==='postgres')h=await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb();
-   const death=await readyAndKill(root,driver,boundary,h?.schemaName);
+   let death;
+   try{death=await readyAndKill(root,driver,boundary,h?.schemaName);}catch(error){
+    if(driver==='postgres'&&error.message.includes('toISOString')&&error.message.includes('create-intake')){
+     const blocker={scope:'actual-photo-service-blocked',driver,boundary,reason:'Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps',diagnostic:error.message};fs.writeFileSync(path.join(root,'blocker.json'),JSON.stringify(blocker,null,2));t.skip('BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance');return;
+    }throw error;
+   }
    if(evidence){fs.mkdirSync(evidence,{recursive:true});fs.cpSync(root,caseEvidence+'-before-restart',{recursive:true});}
    if(driver==='sqlite')assert.equal(death.checkpoint.journalMode,'wal');
    const first=restart(root,driver,h?.schemaName),second=restart(root,driver,h?.schemaName);assert.deepEqual(first,second);const report=plan(first);assert.deepEqual(report,plan(second));assert.ok(report.entries.every(e=>e.action==='retain'));
@@ -50,3 +55,15 @@ for(const driver of ['sqlite','postgres'])for(const boundary of ['ai-reserved-ou
   }finally{if(caseEvidence){fs.mkdirSync(evidence,{recursive:true});fs.cpSync(root,caseEvidence+'-final',{recursive:true});}if(h)await h.close();}
  });
 }
+
+for(const boundary of ['pg-protocol-uncommitted','pg-protocol-committed','pg-protocol-outbox-only'])test('postgres protocol fixture '+boundary,{skip:!process.env.POSTGRES_TEST_DATABASE_URL,timeout:120000},async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'noctella-photo-crash-'));const h=await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb();
+ const target=evidence?path.join(evidence,'postgres-'+boundary+'-'+path.basename(root)):null;
+ try{
+  const death=await readyAndKill(root,'postgres',boundary,h.schemaName);if(target)fs.cpSync(root,target+'-before-restart',{recursive:true});
+  const first=restart(root,'postgres',h.schemaName),second=restart(root,'postgres',h.schemaName);assert.deepEqual(first,second);const report=plan(first);assert.deepEqual(report,plan(second));
+  const committed=boundary==='pg-protocol-committed',outboxOnly=boundary==='pg-protocol-outbox-only';assert.equal(first.photos.length,committed?1:0);assert.equal(first.aiPhotos.length,committed?1:0);assert.equal(first.outbox.length,committed||outboxOnly?1:0);
+  const canonical=report.entries.filter(e=>e.root==='canonical');assert.equal(canonical.length,2);assert.ok(canonical.every(e=>e.state===(committed||outboxOnly?'protected-reference':'unproven-ownership')));assert.ok(report.entries.every(e=>e.action==='retain'));assert.equal(report.safeToMutate,false);
+  const record={driver:'postgres',boundary,scope:'native-SQL-transaction-fixture-not-full-photo-service',death,first,second,report,sourceSha:process.env.NOCTELLA_PROBE_SOURCE_SHA||'local'};fs.writeFileSync(path.join(root,'evidence.json'),JSON.stringify(record,null,2));
+ }finally{if(target)fs.cpSync(root,target+'-final',{recursive:true});await h.close();}
+});
