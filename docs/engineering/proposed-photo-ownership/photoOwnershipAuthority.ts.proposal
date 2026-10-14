@@ -1,0 +1,109 @@
+/**
+ * Production ownership authority over the registered photo-operation tables (schema.sql /
+ * postgres-migrations/0040). Implements the #406 storage-capability authority contract with:
+ * - database time for every lease decision (callers' clocks are ignored);
+ * - ON CONFLICT DO NOTHING claims; reclaim only after lease expiry, CAS on the expected
+ *   generation; a reused nonce aborts the transaction (UNIQUE(operation_id, nonce));
+ * - fenced work and its seal/binding reads in the SAME transaction (synchronous on SQLite,
+ *   AsyncLocalStorage-bound transaction on PostgreSQL).
+ * Used only by the fenced AI finalization writer when PHOTO_OWNERSHIP_FENCING_ENABLED=true.
+ */
+import { AsyncLocalStorage } from "node:async_hooks";
+import { sql, type SQL } from "drizzle-orm";
+import type { DbClient } from "../db/client";
+import type { DevelopmentPhotoAuthority, PhotoOwnerToken, PhotoSeal } from "./developmentPhotoStorageCapability";
+
+export type OwnershipDriver = "sqlite" | "postgres";
+export interface PhotoOperationIntent { kind: "ai_finalize" | "product_upload"; subjectType: string; subjectId: string; targetPhotoId: string; mainKey: string; thumbKey: string; inputSha256: string }
+type Row = Record<string, unknown>;
+
+const fail = (code: string): never => { throw new Error(code); };
+const int = (value: unknown): number => {
+  const n = typeof value === "bigint" ? Number(value) : typeof value === "string" && /^-?\d+$/.test(value) ? Number(value) : value;
+  if (typeof n !== "number" || !Number.isSafeInteger(n) || String(n) !== String(value)) fail("PHOTO_BIGINT_OUT_OF_RANGE");
+  return n as number;
+};
+
+export function dbNowMs(driver: OwnershipDriver): SQL {
+  return driver === "postgres" ? sql.raw("(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint") : sql.raw("CAST(unixepoch('subsec') * 1000 AS INTEGER)");
+}
+
+/** Runs a statement on a drizzle transaction/database handle and returns its rows on either engine. */
+export function rows(handle: any, driver: OwnershipDriver, statement: SQL): Row[] | Promise<Row[]> {
+  if (driver === "sqlite") return handle.all(statement) as Row[];
+  return (handle.execute(statement) as Promise<{ rows: Row[] }>).then((r) => r.rows);
+}
+const then = <T, U>(value: T | Promise<T>, next: (v: T) => U | Promise<U>): U | Promise<U> => (value instanceof Promise ? value.then(next) : next(value));
+
+export function createPhotoOwnershipAuthority(db: DbClient, driver: OwnershipDriver, intentFor: (operationId: string) => PhotoOperationIntent): DevelopmentPhotoAuthority {
+  const now = dbNowMs(driver);
+  const lock = driver === "postgres" ? sql.raw(" FOR UPDATE") : sql.raw("");
+  let sqliteTx: any = null;
+  const pgTx = new AsyncLocalStorage<any>();
+  const handle = () => (driver === "sqlite" ? (sqliteTx ?? db) : (pgTx.getStore() ?? db));
+  const q = (statement: SQL) => rows(handle(), driver, statement);
+  const transaction = <T>(work: (tx: any) => T | Promise<T>): T | Promise<T> => {
+    if (driver === "sqlite") {
+      return (db as any).transaction((tx: any) => {
+        const previous = sqliteTx; sqliteTx = tx;
+        try { const result = work(tx); if (result instanceof Promise) fail("PHOTO_ASYNC_SQLITE_AUTHORITY_FORBIDDEN"); return result; } finally { sqliteTx = previous; }
+      }) as T;
+    }
+    return (db as any).transaction((tx: any) => pgTx.run(tx, () => work(tx))) as Promise<T>;
+  };
+  const token = (row: Row): PhotoOwnerToken => ({ id: String(row.id), generation: int(row.generation), owner: String(row.owner), nonce: String(row.nonce) });
+
+  return {
+    execution: driver === "sqlite" ? "synchronous" : "asynchronous",
+    assertRoots: (id, identity) => then(q(sql`INSERT INTO photo_storage_roots(id, identity, created_ms) VALUES (${id}, ${identity}, ${now}) ON CONFLICT DO NOTHING RETURNING id`),
+      () => then(q(sql`SELECT identity FROM photo_storage_roots WHERE id = ${id}`), (r) => r.length === 1 && r[0].identity === identity)),
+    create: (id, owner, nonce, _now, ttl) => {
+      const i = intentFor(id);
+      return transaction(() => then(q(sql`INSERT INTO photo_operations(id, kind, subject_type, subject_id, target_photo_id, main_key, thumb_key, input_sha256, generation, owner, nonce, state, lease_until_ms, created_ms, updated_ms)
+        VALUES (${id}, ${i.kind}, ${i.subjectType}, ${i.subjectId}, ${i.targetPhotoId}, ${i.mainKey}, ${i.thumbKey}, ${i.inputSha256}, 1, ${owner}, ${nonce}, 'preparing', ${now} + ${ttl}, ${now}, ${now})
+        ON CONFLICT DO NOTHING RETURNING *`), (r) => (r.length
+        ? then(q(sql`INSERT INTO photo_operation_generations(operation_id, generation, owner, nonce, state, created_ms, updated_ms) VALUES (${id}, 1, ${owner}, ${nonce}, 'active', ${now}, ${now}) RETURNING operation_id`), () => token(r[0]))
+        : null)));
+    },
+    reclaim: (id, expected, owner, nonce, _now, ttl) => transaction(() => then(q(sql`UPDATE photo_operations SET generation = generation + 1, owner = ${owner}, nonce = ${nonce}, state = 'preparing', seal_id = NULL, lease_until_ms = ${now} + ${ttl}, updated_ms = ${now}
+        WHERE id = ${id} AND generation = ${expected} AND lease_until_ms <= ${now} AND state IN ('preparing', 'sealed') RETURNING *`), (r) => (r.length
+      ? then(q(sql`UPDATE photo_operation_generations SET state = 'superseded', updated_ms = ${now} WHERE operation_id = ${id} AND generation = ${expected} RETURNING operation_id`),
+        () => then(q(sql`INSERT INTO photo_operation_generations(operation_id, generation, owner, nonce, state, created_ms, updated_ms) VALUES (${id}, ${expected + 1}, ${owner}, ${nonce}, 'active', ${now}, ${now}) RETURNING operation_id`), () => token(r[0])))
+      : null))),
+    /** Fence at every protected boundary: exact generation/owner/nonce, live DB-time lease, preparing|sealed. */
+    fenced: (t, _now, work) => transaction(() => then(q(sql`SELECT id, generation, owner, nonce, state, CASE WHEN lease_until_ms > ${now} THEN 1 ELSE 0 END AS live FROM photo_operations WHERE id = ${t.id}${lock}`), (r) => {
+      const row = r[0];
+      if (!row || int(row.generation) !== t.generation || row.owner !== t.owner || row.nonce !== t.nonce || Number(row.live) !== 1 || !["preparing", "sealed"].includes(String(row.state))) fail("STALE_FENCE");
+      return work();
+    })),
+    binding: (id) => then(q(sql`SELECT main_key, thumb_key, input_sha256 FROM photo_operations WHERE id = ${id}`), (r) => (r.length === 1 ? { main: String(r[0].main_key), thumbnail: String(r[0].thumb_key), inputHash: String(r[0].input_sha256) } : fail("BINDING_REQUIRED"))),
+    saveSeal: (s: PhotoSeal) => then(q(sql`INSERT INTO photo_operation_artifacts(id, operation_id, generation, relative_path, main_sha256, thumb_sha256, main_bytes, thumb_bytes, main_dev, main_ino, thumb_dev, thumb_ino, created_ms)
+        VALUES (${s.id}, ${s.operation}, ${s.generation}, ${s.relative.split(/[\\/]/).join("/")}, ${s.mainHash}, ${s.thumbHash}, ${s.mainSize}, ${s.thumbSize}, ${s.mainDev}, ${s.mainIno}, ${s.thumbDev}, ${s.thumbIno}, ${now}) RETURNING id`),
+      () => then(q(sql`UPDATE photo_operations SET state = 'sealed', seal_id = ${s.id}, updated_ms = ${now} WHERE id = ${s.operation} AND generation = ${s.generation} RETURNING id`), (r) => { if (r.length !== 1) fail("STALE_FENCE"); })),
+    loadSeal: (id, operation, generation) => then(q(sql`SELECT * FROM photo_operation_artifacts WHERE id = ${id} AND operation_id = ${operation} AND generation = ${generation}`), (r) => (r.length ? {
+      id: String(r[0].id), operation: String(r[0].operation_id), generation: int(r[0].generation), relative: String(r[0].relative_path),
+      mainHash: String(r[0].main_sha256), thumbHash: String(r[0].thumb_sha256), mainSize: int(r[0].main_bytes), thumbSize: int(r[0].thumb_bytes),
+      mainDev: String(r[0].main_dev), mainIno: String(r[0].main_ino), thumbDev: String(r[0].thumb_dev), thumbIno: String(r[0].thumb_ino),
+    } : null)),
+  };
+}
+
+/** Reads one operation's current state (outside fenced work). */
+export function readPhotoOperation(db: DbClient, driver: OwnershipDriver, id: string): Row | null | Promise<Row | null> {
+  return then(rows(db, driver, sql`SELECT * FROM photo_operations WHERE id = ${id}`), (r) => r[0] ?? null);
+}
+
+/**
+ * Commits a sealed operation inside the caller's finalization transaction (same handle that inserted
+ * the photo row and its promote outbox event). Zero matching rows means the fence was lost: the
+ * caller's whole transaction must roll back, retaining published bytes for recovery.
+ */
+export function commitPhotoOperationInTransaction(tx: any, driver: OwnershipDriver, proof: { operationId: string; generation: number; owner: string; nonce: string; sealId: string; photoId: string; eventId: string }): void | Promise<void> {
+  const now = dbNowMs(driver);
+  return then(rows(tx, driver, sql`UPDATE photo_operations SET state = 'committed', committed_photo_id = ${proof.photoId}, committed_event_id = ${proof.eventId}, updated_ms = ${now}
+      WHERE id = ${proof.operationId} AND generation = ${proof.generation} AND owner = ${proof.owner} AND nonce = ${proof.nonce} AND state = 'sealed' AND seal_id = ${proof.sealId}
+      AND target_photo_id = ${proof.photoId} AND lease_until_ms > ${now} RETURNING id`), (r) => {
+    if (r.length !== 1) fail("PHOTO_OPERATION_FENCE_LOST");
+    return then(rows(tx, driver, sql`UPDATE photo_operation_generations SET state = 'committed', updated_ms = ${now} WHERE operation_id = ${proof.operationId} AND generation = ${proof.generation} RETURNING operation_id`), () => undefined);
+  });
+}
