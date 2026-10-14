@@ -5,6 +5,7 @@ import { createAiIntakePhotoRepository } from "../repositories/ai-intake-photo/f
 import { aiIntakePhotoStagingRoot } from "./aiIntakePhotoStorage";
 import { productPhotoStaticRoot } from "./photoStorage";
 import { deleteManagedFile, walkManagedDirectory } from "./managedFileDeletion";
+import { refuseUnadoptedPhotoWriter } from "./photoOwnershipFencing";
 import {
   emptyDisabledCleanupResult,
   runAiIntakeCleanupUseCase,
@@ -93,7 +94,8 @@ function repositoryFor(db: DbClient) {
   };
 }
 
-function buildDefaultDeps(db: DbClient): AiIntakeCleanupUseCaseDeps {
+/** Exported for the fencing-switch regression only; routes and schedulers use it via runAiIntakeCleanupFor*. */
+export function buildDefaultDeps(db: DbClient): AiIntakeCleanupUseCaseDeps {
   const { cleanup, photos } = repositoryFor(db);
   return {
     repository: cleanup,
@@ -104,7 +106,8 @@ function buildDefaultDeps(db: DbClient): AiIntakeCleanupUseCaseDeps {
     walkPrivateRoot: (options) => walkManagedDirectory(aiIntakePhotoStagingRoot, options),
     walkCanonicalRoot: (options) => walkManagedDirectory(productPhotoStaticRoot, options),
     deletePrivateFile: (key) => deleteManagedFile(aiIntakePhotoStagingRoot, key),
-    deleteCanonicalFile: (key) => deleteManagedFile(productPhotoStaticRoot, key),
+    // W6: with ownership fencing ON, canonical deletion is refused (counted as a failure; nothing deleted).
+    deleteCanonicalFile: async (key) => { refuseUnadoptedPhotoWriter("W6_AI_CLEANUP_CANONICAL_DELETE"); return deleteManagedFile(productPhotoStaticRoot, key); },
   };
 }
 

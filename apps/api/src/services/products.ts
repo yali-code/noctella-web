@@ -1,5 +1,11 @@
 import { stagedProductPhotoStorage, type StagedProductPhotoInput, type StagedProductPhotoStorage } from "./stagedProductPhotoStorage";
 import { abortedError, PhotoUploadError } from "./photoUploadAdmission";
+import { photoOwnershipFencingEnabled } from "./photoOwnershipFencing";
+
+/** W1/W2 (and with them W10 rollback deletion) are not adopted: with fencing ON they refuse before any write. */
+function refuseUnfencedProductUpload() {
+  if (photoOwnershipFencingEnabled()) throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "Photo uploads are paused while photo ownership fencing is enabled");
+}
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
@@ -457,12 +463,14 @@ export async function uploadProductPhoto(
   altText?: string,
   storage: PhotoStorage = photoStorage,
 ): Promise<ProductPhoto> {
+  refuseUnfencedProductUpload();
   await getProductById(db, productId);
   const stored = await storage.saveProductPhoto(file);
   return persistUploadedProductPhoto(db, productId, stored, altText, storage);
 }
 
 export async function uploadStagedProductPhoto(db: DbClient, productId: string, file: StagedProductPhotoInput, altText?: string, storage: StagedProductPhotoStorage = stagedProductPhotoStorage): Promise<ProductPhoto> {
+  refuseUnfencedProductUpload();
   await getProductById(db, productId);
   const stored = await storage.saveStagedProductPhoto(file);
   if (file.signal.aborted) { await storage.deleteProductPhoto(stored); throw abortedError(); }

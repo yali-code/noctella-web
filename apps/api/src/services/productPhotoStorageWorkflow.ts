@@ -7,6 +7,7 @@ import type { UnitOfWork } from "./unitOfWork";
 import { OutboxEventType, type OutboxEvent, type OutboxHandler } from "./outbox";
 import { ProductPhotoProcessingStatus } from "./productPhotoOutboxWorkflow";
 import { createProductWriteRepositoryBundleForDb } from "../repositories/product-write/factory";
+import { refuseUnadoptedPhotoWriter } from "./photoOwnershipFencing";
 
 export interface ProductPhotoStorageRoots { tempRoot: string; permanentRoot: string; publicBase?: string }
 export class UnsafeStoragePathError extends Error { permanent = true; code = "UNSAFE_STORAGE_PATH"; }
@@ -71,6 +72,7 @@ export class ProductPhotoPromotionHandler implements OutboxHandler {
         await productWrite.photos.updateProcessingState(photoId, { processingStatus: ProductPhotoProcessingStatus.Ready, processingErrorCode: null, processingUpdatedAt: new Date().toISOString() });
         return;
       }
+      refuseUnadoptedPhotoWriter("W7_DISTINCT_ROOT_PROMOTION"); // copy/unlink across roots is not adopted under fencing
       await copyIdempotent(safeJoin(this.roots.tempRoot, storageKey), safeJoin(this.roots.permanentRoot, storageKey));
       await copyIdempotent(safeJoin(this.roots.tempRoot, thumbKey), safeJoin(this.roots.permanentRoot, thumbKey));
       await productWrite.photos.updateStorageMetadata(photoId, { url: `${this.roots.publicBase ?? "/images/product-photos"}/${storageKey}`, thumbnailUrl: `${this.roots.publicBase ?? "/images/product-photos"}/${thumbKey}`, storageKey, thumbnailStorageKey: thumbKey });
@@ -80,6 +82,6 @@ export class ProductPhotoPromotionHandler implements OutboxHandler {
     });
   }
 }
-export class ProductPhotoDeleteHandler implements OutboxHandler { eventType = OutboxEventType.ProductPhotoDeleteRequested; constructor(private readonly roots: ProductPhotoStorageRoots) {} async handle(event: OutboxEvent) { const p:any=event.payload; for (const key of [p.storageKey,p.thumbnailStorageKey]) if (typeof key === "string") await unlinkIdempotent(safeJoin(this.roots.permanentRoot,key)); if (typeof p.url === "string" && isExternal(p.url)) return; } }
-export class ProductPhotoCleanupTempHandler implements OutboxHandler { eventType = OutboxEventType.ProductPhotoCleanupTempRequested; constructor(private readonly roots: ProductPhotoStorageRoots) {} async handle(event: OutboxEvent) { const p:any=event.payload; for (const key of [p.storageKey,p.thumbnailStorageKey]) if (typeof key === "string") await unlinkIdempotent(safeJoin(this.roots.tempRoot,key)); } }
+export class ProductPhotoDeleteHandler implements OutboxHandler { eventType = OutboxEventType.ProductPhotoDeleteRequested; constructor(private readonly roots: ProductPhotoStorageRoots) {} async handle(event: OutboxEvent) { refuseUnadoptedPhotoWriter("W8_CANONICAL_DELETE"); const p:any=event.payload; for (const key of [p.storageKey,p.thumbnailStorageKey]) if (typeof key === "string") await unlinkIdempotent(safeJoin(this.roots.permanentRoot,key)); if (typeof p.url === "string" && isExternal(p.url)) return; } }
+export class ProductPhotoCleanupTempHandler implements OutboxHandler { eventType = OutboxEventType.ProductPhotoCleanupTempRequested; constructor(private readonly roots: ProductPhotoStorageRoots) {} async handle(event: OutboxEvent) { refuseUnadoptedPhotoWriter("W9_TEMP_CLEANUP"); const p:any=event.payload; for (const key of [p.storageKey,p.thumbnailStorageKey]) if (typeof key === "string") await unlinkIdempotent(safeJoin(this.roots.tempRoot,key)); } }
 export const productPhotoStorageSafety = { safeJoin, isExternal };
