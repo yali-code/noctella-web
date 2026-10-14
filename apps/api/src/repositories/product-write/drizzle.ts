@@ -1,3 +1,4 @@
+import { photoTimestampValues, photoTimestampFields, photoOutboxTimestampFields } from "../photoTimestamps";
 import { and, asc, eq, inArray, like } from "drizzle-orm";
 import * as sqliteSchema from "../../db/schema.sqlite";
 import * as postgresSchema from "../../db/schema.postgres";
@@ -229,8 +230,8 @@ export function createProductPhotoWithPromotionOutboxInTransaction(
   const outboxTable = table(schema, "outboxEvents");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v === undefined ? null : v]));
   return then(
-    run(db.insert(photosTable).values(normalize(input.values)), execution),
-    () => then(run(db.insert(outboxTable).values(input.outboxEvent), execution), () => ({ id: String(input.values.id) })),
+    run(db.insert(photosTable).values(photoTimestampValues(normalize(input.values), photoTimestampFields, photosTable.createdAt.dataType === "date")), execution),
+    () => then(run(db.insert(outboxTable).values(photoTimestampValues(input.outboxEvent, photoOutboxTimestampFields, outboxTable.createdAt.dataType === "date")), execution), () => ({ id: String(input.values.id) })),
   );
 }
 
@@ -270,6 +271,7 @@ export function findProductPhotosByIdsInTransaction(
 export function createDrizzleProductWriteRepositories(db: any, schema: typeof sqliteSchema | typeof postgresSchema, dialect: "sqlite" | "postgres", execution: Execution = "asynchronous"): any {
   const products = table(schema, "products"), productErpMetadata = table(schema, "productErpMetadata"), categories = table(schema, "categories"), collections = table(schema, "collections"), productPhotos = table(schema, "productPhotos");
   const normalize = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).map(([k,v]) => [k, v === undefined ? null : v]));
+  const photoValues = (values: Record<string, unknown>) => photoTimestampValues(values, photoTimestampFields, dialect === "postgres");
   const productTimestamp = (value: unknown) => dialect === "postgres" && typeof value === "string" ? new Date(value) : value;
   const normalizeProductValues = (values: Record<string, unknown>) => normalize({
     ...values,
@@ -344,14 +346,14 @@ export function createDrizzleProductWriteRepositories(db: any, schema: typeof sq
       async getVersionForUpdate(id) { return (await first(db.select({ updatedAt: collections.updatedAt }).from(collections).where(eq(collections.id, id))))?.updatedAt ?? null; },
     },
     photos: {
-      createMetadata({ values }) { const q = db.insert(productPhotos).values(normalize(values)); if (typeof q?.run === "function") q.run(); else return Promise.resolve(q).then(() => ({ id: String(values.id) })); return Promise.resolve({ id: String(values.id) }); },
-      updateAltText({ productId, photoId, altText }) { const q = db.update(productPhotos).set({ altText, updatedAt: new Date().toISOString() }).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q?.run === "function") q.run(); return Promise.resolve(); },
-      setPrimary({ productId, photoId }) { const now = new Date().toISOString(); const q1 = db.update(productPhotos).set({ isPrimary: dialect === "postgres" ? 0 : false, updatedAt: now }).where(eq(productPhotos.productId, productId)); if (typeof q1?.run === "function") q1.run(); const q2 = db.update(productPhotos).set({ isPrimary: dialect === "postgres" ? 1 : true, updatedAt: now }).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q2?.run === "function") q2.run(); return Promise.resolve(); },
-      reorder({ productId, photoIds }) { const now = new Date().toISOString(); for (const [sortOrder, photoId] of photoIds.entries()) { const q = db.update(productPhotos).set({ sortOrder, updatedAt: now }).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q?.run === "function") q.run(); } return Promise.resolve(); },
+      createMetadata({ values }) { const q = db.insert(productPhotos).values(photoValues(normalize(values))); if (typeof q?.run === "function") q.run(); else return Promise.resolve(q).then(() => ({ id: String(values.id) })); return Promise.resolve({ id: String(values.id) }); },
+      updateAltText({ productId, photoId, altText }) { const q = db.update(productPhotos).set(photoValues({ altText, updatedAt: new Date().toISOString() })).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q?.run === "function") q.run(); return Promise.resolve(); },
+      setPrimary({ productId, photoId }) { const now = new Date().toISOString(); const q1 = db.update(productPhotos).set(photoValues({ isPrimary: dialect === "postgres" ? 0 : false, updatedAt: now })).where(eq(productPhotos.productId, productId)); if (typeof q1?.run === "function") q1.run(); const q2 = db.update(productPhotos).set(photoValues({ isPrimary: dialect === "postgres" ? 1 : true, updatedAt: now })).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q2?.run === "function") q2.run(); return Promise.resolve(); },
+      reorder({ productId, photoIds }) { const now = new Date().toISOString(); for (const [sortOrder, photoId] of photoIds.entries()) { const q = db.update(productPhotos).set(photoValues({ sortOrder, updatedAt: now })).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q?.run === "function") q.run(); } return Promise.resolve(); },
       deleteMetadata({ productId, photoId }) { const q = db.delete(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))); if (typeof q?.run === "function") q.run(); return Promise.resolve(); },
       async promoteNextPrimary(productId) { const list = await this.listForUpdate(productId); if (!list.length) return; const primary = list.find((p: any) => bool(p.isPrimary)) ?? list[0]; await this.setPrimary({ productId, photoId: String(primary.id) }); },
-      async updateProcessingState(photoId, state) { await run(db.update(productPhotos).set({ ...state, updatedAt: state.processingUpdatedAt }).where(eq(productPhotos.id, photoId))); },
-      async updateStorageMetadata(photoId, metadata) { await run(db.update(productPhotos).set({ ...metadata, updatedAt: new Date().toISOString() }).where(eq(productPhotos.id, photoId))); },
+      async updateProcessingState(photoId, state) { await run(db.update(productPhotos).set(photoValues({ ...state, updatedAt: state.processingUpdatedAt })).where(eq(productPhotos.id, photoId))); },
+      async updateStorageMetadata(photoId, metadata) { await run(db.update(productPhotos).set(photoValues({ ...metadata, updatedAt: new Date().toISOString() })).where(eq(productPhotos.id, photoId))); },
       async getForUpdate(productId, photoId) { return (await first(db.select().from(productPhotos).where(and(eq(productPhotos.id, photoId), eq(productPhotos.productId, productId))))) ?? null; },
       async listForUpdate(productId) { return rows(db.select().from(productPhotos).where(eq(productPhotos.productId, productId)).orderBy(asc(productPhotos.sortOrder))); },
     },

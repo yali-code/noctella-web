@@ -28,12 +28,7 @@ for(const driver of ['sqlite','postgres'])for(const boundary of ['ai-reserved-ou
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'noctella-photo-crash-'));const caseEvidence=evidence?path.join(evidence,driver+'-'+boundary+'-'+path.basename(root)):null;let h;
   try{
    if(driver==='postgres')h=await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb();
-   let death;
-   try{death=await readyAndKill(root,driver,boundary,h?.schemaName);}catch(error){
-    if(driver==='postgres'&&error.message.includes('toISOString')&&error.message.includes('create-intake')){
-     const blocker={scope:'actual-photo-service-blocked',driver,boundary,reason:'Baseline PostgreSQL intake creation passes ISO strings to Date-mode timestamps',diagnostic:error.message};fs.writeFileSync(path.join(root,'blocker.json'),JSON.stringify(blocker,null,2));t.skip('BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance');return;
-    }throw error;
-   }
+   const death=await readyAndKill(root,driver,boundary,h?.schemaName);
    if(evidence){fs.mkdirSync(evidence,{recursive:true});fs.cpSync(root,caseEvidence+'-before-restart',{recursive:true});}
    if(driver==='sqlite')assert.equal(death.checkpoint.journalMode,'wal');
    const first=restart(root,driver,h?.schemaName),second=restart(root,driver,h?.schemaName);assert.deepEqual(first,second);const report=plan(first);assert.deepEqual(report,plan(second));assert.ok(report.entries.every(e=>e.action==='retain'));

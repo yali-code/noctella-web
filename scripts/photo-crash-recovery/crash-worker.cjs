@@ -22,7 +22,7 @@ let stage='connect';let details={};const checkpoint=phase=>{const record={phase,
   if(boundary==='pg-ai-persistence-error'){
    await connection.query("INSERT INTO ai_product_intakes (id,created_by_admin_user_id) VALUES ('protocol-intake','synthetic-admin')");
    try{await service('aiIntakePhotos').uploadStagedIntakePhoto(db,'protocol-intake',staged,'synthetic.png','synthetic-admin');}catch(error){const gate=service('photoUploadAdmission');if(error.code!=='PHOTO_STORAGE_UNAVAILABLE'||!gate.imageProcessingAdmission.snapshot().closed)throw error;details={scope:'actual-postgres-AI-persistence-error-handler',code:error.code,admission:gate.imageProcessingAdmission.snapshot()};checkpoint('actual-ai-rejected-source-retained');}
-   throw Error('Unexpected PostgreSQL service success; revisit baseline compatibility blocker');
+   throw Error('Expected injected PostgreSQL transaction failure');
   }
   const privatePhoto=await new (service('aiIntakePhotoStorage').LocalAiIntakePhotoStorage)(path.join(root,'intake')).saveStagedIntakePhoto(staged);
   const stored=await new (service('stagedProductPhotoStorage').LocalStagedProductPhotoStorage)(canonical).saveStagedProductPhoto(staged);
