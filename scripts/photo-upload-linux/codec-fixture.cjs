@@ -13,7 +13,8 @@ async function main() {
   const fixture = fixtures.find(f => f.name === 'jpeg-near-limit');
   const input = '/fixtures/' + require('node:path').basename(fixture.file);
   if (await hash(input) !== '2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7') throw Error('Fixture changed');
-  const info = await processor(input, { failOn: 'error' }).rotate().raw().toFile('/codec/input.rgb');
+  const { data, info } = await processor(input, { failOn: 'error' }).rotate().raw().toBuffer({ resolveWithObject: true });
+  await fs.writeFile('/codec/input.rgb', data, { flag: 'wx' });
   if (info.width !== 6000 || info.height !== 4000 || info.channels !== 3 || info.size !== 72000000) throw Error('RGB diagnostic recipe changed');
   await processor(input, { failOn: 'error' }).rotate().webp({ quality: 86 }).toFile('/codec/reference.webp');
   await fs.writeFile('/codec/recipe.json', JSON.stringify({ fixture, inputSha: await hash(input), raw: info, rawSha: await hash('/codec/input.rgb'), referenceSha: await hash('/codec/reference.webp'), versions: processor.versions, concurrency: processor.concurrency(), cache: processor.cache(), scope: 'Codec-only diagnostic; not full API acceptance' }, null, 2));
