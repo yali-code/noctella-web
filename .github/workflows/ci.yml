@@ -73,7 +73,8 @@ jobs:
           TMPDIR="$MOUNT" node --import tsx scripts/photo-disk-budget/measure.cjs --quick --out "$EVIDENCE/measure-ext4-loop-quick.json"
           TMPDIR="$MOUNT" NOCTELLA_DISK_BUDGET_ENOSPC=1 node --import tsx --test scripts/photo-disk-budget/budget.test.cjs 2>&1 | tee "$EVIDENCE/test-output.txt"
           df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-after.txt"
-          find "$MOUNT" -xdev -type f -printf '%i %n %s %b %p\n' | sort > "$EVIDENCE/loop-inventory.txt"
+          # Read-only inventory as root: mkfs-created lost+found is root-owned 0700, so an unprivileged find fails.
+          sudo find "$MOUNT" -xdev \( -type f -o -type d \) -printf '%y %i %n %s %b %p\n' | sort -k6 > "$EVIDENCE/loop-inventory.txt"
           sudo umount "$MOUNT"
           node --import tsx scripts/photo-disk-budget/measure.cjs --out "$EVIDENCE/measure-runner-full.json"
 
