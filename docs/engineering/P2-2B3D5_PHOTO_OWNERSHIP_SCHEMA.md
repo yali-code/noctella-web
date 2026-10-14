@@ -58,7 +58,7 @@ Existing `product_photos`, `outbox_events`, IDs, keys, URLs and payload shapes a
 
 | Requirement | Test | SQLite | PostgreSQL |
 | --- | --- | --- | --- |
-| 1 Parity | Every case below runs per engine | PASS | CI |
+| 1 Parity | Every case below runs per engine. BIGINT columns are decoded exactly at the adapter boundary (node-postgres int8 strings, better-sqlite3 numbers), failing closed on unsafe values | PASS | CI |
 | 2 Atomic ownership/photo transition | Injected failure after the photo and outbox inserts rolls back everything; state stays `sealed`; retry commits once | PASS | CI |
 | 3 Concurrent claim | SQLite: a held `BEGIN IMMEDIATE` makes a second connection fail `SQLITE_BUSY`, then exactly one claim wins. PostgreSQL: 4 concurrent claims yield 1 token. Key and subject uniqueness enforced | PASS | CI |
 | 4 ABA / stale tokens | No reclaim during the lease; CAS on the expected generation; old token's seal and finalize → `STALE_FENCE`; nonce reuse aborts; superseded seal not current → `SEAL_NOT_CURRENT` | PASS | CI |

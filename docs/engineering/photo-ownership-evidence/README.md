@@ -10,7 +10,7 @@ NOCTELLA_OWNERSHIP_EVIDENCE_DIR=out node --import tsx --test scripts/photo-owner
 
 | Suite / check | Tests | Passed | Failed | Skipped |
 | --- | --- | --- | --- | --- |
-| `photo-ownership-schema/ownership.test.cjs` (new) | 15 | 8 | 0 | 7 (PostgreSQL; CI only) |
+| `photo-ownership-schema/ownership.test.cjs` (new) | 16 | 9 | 0 | 7 (PostgreSQL; CI only) |
 | Writer census guard (#410) | 3 | 3 | 0 | 0 |
 | Storage capability (#406) | 48 | 25 | 0 | 23 |
 | Operation fencing (#404) | 35 | 18 | 0 | 17 |
@@ -27,3 +27,14 @@ The first local run of the new suite had 4 harness failures, kept in this README
 All four were fixed in the test harness only; the contract was unchanged.
 
 **Skipped tests** need PostgreSQL, Linux SIGKILL, ext4 or Windows symlink privilege. **Not run locally:** the API, Admin and Storefront vitest suites and the build, because application source is unchanged; CI runs them. Dependencies came through local `node_modules` junctions (identical lockfile; not committed).
+
+## CI fix (PR #411, run 38614710139)
+
+The PostgreSQL case `lease-gated reclaim … (ABA)` failed with `''2'' !== 2`. node-postgres returns `BIGINT` (int8) as a string, and the adapter's `read()` returned raw rows. Fencing was not affected: it already compared through numeric casts, so a stale token was still rejected.
+
+The fix is at the adapter boundary:
+- `read()`, `token()` and the fence and seal checks now use a strict decoder (`int`). It accepts an exact safe integer as a number, a string or a bigint, and otherwise throws `PHOTO_BIGINT_OUT_OF_RANGE`. It never rounds.
+- A driver-independent decoder test was added.
+- The SIGKILL test now asserts `generation === 1` without a cast.
+
+No assertion was weakened.

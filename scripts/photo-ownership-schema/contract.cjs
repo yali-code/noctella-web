@@ -72,13 +72,23 @@ function applyScript(engine, sql, { failAfter = false } = {}) {
   })();
 }
 
-const token = (row) => Object.freeze({ id: row.id, generation: Number(row.generation), owner: row.owner, nonce: row.nonce });
+/**
+ * BIGINT decoder for the repository boundary. node-postgres returns int8 as a string (better-sqlite3
+ * returns a number); both must decode to the same exact safe integer or fail closed - never round.
+ */
+const int = (value) => {
+  const n = typeof value === 'bigint' ? Number(value) : typeof value === 'string' && /^-?\d+$/.test(value) ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isSafeInteger(n) || String(n) !== String(value)) fail('PHOTO_BIGINT_OUT_OF_RANGE');
+  return n;
+};
+const decode = (row) => (row ? { ...row, generation: int(row.generation), lease_until_ms: int(row.lease_until_ms), created_ms: int(row.created_ms), updated_ms: int(row.updated_ms) } : null);
+const token = (row) => Object.freeze({ id: row.id, generation: int(row.generation), owner: row.owner, nonce: row.nonce });
 
 function contract(engine) {
   const lock = engine.driver === 'postgres' ? ' FOR UPDATE' : '';
   const readOp = (q, id) => then(q(`SELECT * FROM photo_operations WHERE id = ?${lock}`, [id]), (r) => r[0] ?? null);
   const assertFence = (row, t, now, states) => {
-    if (!row || Number(row.generation) !== t.generation || row.owner !== t.owner || row.nonce !== t.nonce || Number(row.lease_until_ms) <= now || !states.includes(row.state)) fail('STALE_FENCE');
+    if (!row || int(row.generation) !== t.generation || row.owner !== t.owner || row.nonce !== t.nonce || int(row.lease_until_ms) <= now || !states.includes(row.state)) fail('STALE_FENCE');
   };
   return {
     claim(i) {
@@ -99,7 +109,7 @@ function contract(engine) {
     seal(t, now, a) {
       return engine.transaction((q) => then(readOp(q, t.id), (row) => {
         assertFence(row, t, now, ['preparing']);
-        if (Number(a.generation) !== t.generation) fail('SEAL_GENERATION_MISMATCH');
+        if (int(a.generation) !== t.generation) fail('SEAL_GENERATION_MISMATCH');
         return then(q('INSERT INTO photo_operation_artifacts(id,operation_id,generation,relative_path,main_sha256,thumb_sha256,main_bytes,thumb_bytes,main_dev,main_ino,thumb_dev,thumb_ino,created_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id',
           [a.id, t.id, t.generation, a.relativePath, a.mainSha256, a.thumbSha256, a.mainBytes, a.thumbBytes, a.mainDev, a.mainIno, a.thumbDev, a.thumbIno, now]),
         () => then(q("UPDATE photo_operations SET state = 'sealed', seal_id = ?, updated_ms = ? WHERE id = ? RETURNING id", [a.id, now, t.id]), () => a.id));
@@ -140,7 +150,7 @@ function contract(engine) {
         });
       }));
     },
-    read: (id) => then(engine.q('SELECT * FROM photo_operations WHERE id = ?', [id]), (r) => r[0] ?? null),
+    read: (id) => then(engine.q('SELECT * FROM photo_operations WHERE id = ?', [id]), (r) => decode(r[0] ?? null)),
     /** Read-only reference source for #409 classification: canonical keys owned by any operation state. */
     references: () => then(engine.q('SELECT id, state, main_key, thumb_key FROM photo_operations'), (rows) => rows.flatMap((r) => [[r.main_key, `photo_operations.${r.state}:${r.id}`], [r.thumb_key, `photo_operations.${r.state}:${r.id}`]])),
     /** Bytes of recorded seals that are not the committed publication (superseded or pending): retained, review-only. */
@@ -148,4 +158,4 @@ function contract(engine) {
   };
 }
 
-module.exports = { UP, DOWN, LATEST_PG, sqliteEngine, postgresEngine, applyScript, contract, guardRoot };
+module.exports = { UP, DOWN, LATEST_PG, sqliteEngine, postgresEngine, applyScript, contract, guardRoot, int, decode };

@@ -10,7 +10,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 Object.assign(process.env, { NODE_ENV: 'test', PRODUCT_PHOTO_DISK_STAGING_ENABLED: 'true' });
-const { UP, DOWN, LATEST_PG, sqliteEngine, postgresEngine, applyScript, contract } = require('./contract.cjs');
+const { UP, DOWN, LATEST_PG, sqliteEngine, postgresEngine, applyScript, contract, int, decode } = require('./contract.cjs');
 const { ensureSchema } = require('../../apps/api/src/db/migrate.ts');
 const { runDevelopmentPhotoRecovery, collectSqlitePhotoReferences, collectPostgresPhotoReferences } = require('../../apps/api/src/services/developmentPhotoRecovery.ts');
 const { DevelopmentPhotoDiskBudget, PHOTO_DISK_PROFILES } = require('../../apps/api/src/services/developmentPhotoDiskBudget.ts');
@@ -37,6 +37,15 @@ const finalizeInput = (sealId, eventId = 'evt-1') => ({ sealId, productId: 'prod
 const count = async (e, table) => Number((await e.q(`SELECT COUNT(*) AS n FROM ${table}`))[0].n);
 const columns = async (e, table) => (e.driver === 'sqlite' ? e.db.prepare(`PRAGMA table_info(${table})`).all().map((r) => `${r.name}:${r.type}:${r.notnull}:${r.dflt_value}`) : (await e.q('SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position', [table])).map((r) => `${r.column_name}:${r.data_type}:${r.is_nullable}:${r.column_default}`));
 const hasTable = async (e, table) => (e.driver === 'sqlite' ? e.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").all(table).length > 0 : (await e.q('SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?', [table])).length > 0);
+
+test('BIGINT boundary decoding is exact for both drivers (int8 strings, numbers, bigint) and fails closed', () => {
+  // node-postgres returns int8 as a string; better-sqlite3 returns a number.
+  for (const value of ['2', 2, 2n, '9007199254740991', '-5']) assert.equal(int(value), Number(value));
+  for (const value of ['9007199254740993', '2.5', '01', '', ' 2', null, undefined, 'abc', 2.5]) assert.throws(() => int(value), /PHOTO_BIGINT_OUT_OF_RANGE/, String(value));
+  const row = decode({ id: 'op', generation: '2', lease_until_ms: '2200', created_ms: '100', updated_ms: '1200', owner: 'w2' });
+  assert.deepEqual([row.generation, row.lease_until_ms, row.created_ms, row.updated_ms], [2, 2200, 100, 1200]);
+  assert.equal(decode(null), null);
+});
 
 for (const driver of ['sqlite', 'postgres']) {
   const opts = { skip: driver === 'postgres' && pgSkip, timeout: 120_000 };
@@ -171,7 +180,7 @@ test('sqlite: SIGKILL between canonical publication and the finalize transaction
     // Restart: fresh connection and contract.
     x.engine = sqliteEngine(path.join(x.root, 'app.sqlite')); x.c = contract(x.engine);
     const row = await x.c.read(intent().id);
-    assert.deepEqual([row.state, Number(row.generation)], ['sealed', 1]);
+    assert.deepEqual([row.state, row.generation], ['sealed', 1]);
     assert.equal(await count(x.engine, 'product_photos'), 0, 'the killed process never committed');
     assert.equal(await x.c.reclaim(row.id, 1, 'w2', 'n2', 500, TTL), null, 'no reclaim before lease expiry');
     const t2 = await x.c.reclaim(row.id, 1, 'w2', 'n2', 2000, TTL);
