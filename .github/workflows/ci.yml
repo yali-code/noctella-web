@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1, feat/photo-storage-writer-integration-p2-2b3d2, feat/photo-recovery-reconciliation-p2-2b3d3, feat/photo-writer-fencing-adoption-p2-2b3d4, feat/photo-ownership-schema-p2-2b3d5, feat/photo-legacy-writer-gates-p2-2b3d6]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/photo-crash-recovery-p2-2b3, fix/photo-postgres-timestamps-p2-2b3b, feat/photo-operation-fencing-p2-2b3c, feat/photo-storage-capabilities-p2-2b3d1, feat/photo-storage-writer-integration-p2-2b3d2, feat/photo-recovery-reconciliation-p2-2b3d3, feat/photo-writer-fencing-adoption-p2-2b3d4, feat/photo-ownership-schema-p2-2b3d5, feat/photo-legacy-writer-gates-p2-2b3d6, feat/photo-storage-final-readiness]
   push:
     branches: [main]
 
