@@ -169,7 +169,7 @@ The order is mandatory. A later step must not be enabled while an earlier bypass
 | Conservative per-attempt accounting | Done for all four profiles; B1's 42-MiB constant shown to under-count |
 | Real ENOSPC on a real filesystem | Implemented as a CI step (64-MiB ext4 loop mount). **Not run:** the stacked PR was not opened from this machine, so no CI run exists. Local Windows cannot mount a small filesystem without elevation, and Docker/WSL are unavailable |
 | Linux `st_blocks` allocation | Same CI step. **Not run** |
-| Cross-process ledger, SIGKILL in record and lock | Passed locally on Windows (6 processes contending, 3 admitted; retained records and locks) |
+| Cross-process ledger, SIGKILL in record and lock | Passed locally on Windows: logical race (6 processes, 3 admitted), physical race against real `statfs`, and retained records and locks |
 | PostgreSQL parity | The ledger is filesystem-only, so engine-independent. Integration-level parity (token transaction + reservation) was **not implemented or tested**. No PostgreSQL is available locally |
 | Private retention / GC under budget | **BLOCKER.** Retain-only capability plus a finite budget means permanent admission exhaustion. GC needs #396's reference census |
 | Unprotected writers 1–14 | **BLOCKER.** Includes canonical-deleting outbox handlers and AI cleanup, plus Instagram temporary files in the canonical root |
@@ -182,7 +182,7 @@ Local Windows results:
 
 | Check | Result |
 | --- | --- |
-| New ledger tests | 10 passed, 2 skipped (Windows symlink privilege; Linux-only real ENOSPC) |
+| New ledger tests | 11 passed, 2 skipped (Windows symlink privilege; Linux-only real ENOSPC) |
 | Inherited storage, fencing and crash suites | 25/23, 18/17, 18/19 (passed/skipped); 0 failed |
 | PostgreSQL harness | 17 passed, 34 skipped (no PostgreSQL) |
 | Typecheck, lint, build | PASS |

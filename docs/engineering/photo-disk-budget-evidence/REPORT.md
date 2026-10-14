@@ -64,7 +64,7 @@ Inode proof (from the run-2 listings, D1 product):
 
 That gives 5 payload inodes. Per-path counting would over-report: for the RGBA case it gives 20.92 MiB against 17.20 MiB per inode.
 
-## Ledger tests (local Windows): 12 tests, 10 passed, 0 failed, 2 skipped
+## Ledger tests (local Windows): 13 tests, 11 passed, 0 failed, 2 skipped
 
 | Test | Result |
 | --- | --- |
@@ -75,7 +75,8 @@ That gives 5 payload inodes. Per-path counting would over-report: for the RGBA c
 | Malformed or tampered records retained and fail closed | PASS |
 | `close()` persists across instances; no reopen | PASS |
 | Constructor refuses non-development environments and non-disposable roots | PASS |
-| Cross-process race: 6 processes contend for a 3-reservation budget; exactly 3 admitted, 3 `PHOTO_DISK_BUDGET_EXHAUSTED` | PASS |
+| Cross-process race, logical budget: 6 processes contend for a 3-reservation budget with ample physical space; exactly 3 admitted, 3 `PHOTO_DISK_BUDGET_EXHAUSTED` | PASS |
+| Cross-process race, physical: 6 processes, unlimited logical budget, real `statfs`; admissions × reservation ≤ free space, every rejection `PHOTO_DISK_FREE_SPACE_FLOOR`, one durable record per admission | PASS (on the 64-MiB CI loop mount this admits exactly 1) |
 | SIGKILL while holding a reservation: record retained and still counted | PASS |
 | SIGKILL inside the ledger lock: lock retained; later callers get `PHOTO_DISK_BUDGET_BUSY` | PASS |
 | Symlink in accounted root → `PHOTO_DISK_INVENTORY_UNSAFE` | SKIPPED (Windows symlink privilege); runs in CI |

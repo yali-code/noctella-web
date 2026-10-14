@@ -176,11 +176,14 @@ function startWorker(mode, options) {
   return { child, events, next, exited, stderr: () => stderr };
 }
 
-test('cross-process race: concurrent writers never over-commit the shared budget', { timeout: 180_000 }, async () => {
+test('cross-process race: concurrent writers never over-commit the shared logical budget', { timeout: 180_000 }, async () => {
   const box = sandbox();
   const b1 = attemptReservation(PHOTO_DISK_PROFILES.b1StagedHttp, 4096).bytes;
   const capacity = 3;
-  const options = { budget: { budgetRoot: box.budgetRoot, accountedRoots: [box.accounted], budgetBytes: capacity * b1, freeSpaceFloorBytes: 0, lockWaitMs: 30_000 }, profile: 'b1StagedHttp', startAt: Date.now() + 8000, exit: true };
+  // Ample physical space (plain-data snapshot) so only the logical budget can be exhausted;
+  // physical free-space exhaustion is covered by the next test against the real filesystem.
+  const space = { blockBytes: 4096, freeBytes: 1024 * 1024 * MiB, freeInodes: null };
+  const options = { budget: { budgetRoot: box.budgetRoot, accountedRoots: [box.accounted], budgetBytes: capacity * b1, freeSpaceFloorBytes: 0, lockWaitMs: 30_000 }, space, profile: 'b1StagedHttp', startAt: Date.now() + 8000, exit: true };
   const workers = Array.from({ length: 6 }, (_, i) => startWorker('reserve-and-hold', { ...options, label: `w${i}` }));
   const outcomes = await Promise.all(workers.map((w) => w.next(() => true, 120_000)));
   await Promise.all(workers.map((w) => w.exited));
@@ -193,6 +196,25 @@ test('cross-process race: concurrent writers never over-commit the shared budget
   const snapshot = budgetFor(box).snapshot();
   assert.ok(snapshot.reservedBytes <= capacity * b1);
   record('cross-process-race', { capacity, outcomes, snapshot });
+});
+
+test('cross-process race: real statfs free space is never over-committed', { timeout: 180_000 }, async () => {
+  const box = sandbox();
+  const before = readFilesystemSpace(box.root);
+  const need = attemptReservation(PHOTO_DISK_PROFILES.b1StagedHttp, before.blockBytes).bytes;
+  // Unlimited logical budget: only physical free space (outstanding reservations subtracted) can reject.
+  const options = { budget: { budgetRoot: box.budgetRoot, accountedRoots: [box.accounted], budgetBytes: Number.MAX_SAFE_INTEGER, freeSpaceFloorBytes: 0, lockWaitMs: 30_000 }, profile: 'b1StagedHttp', startAt: Date.now() + 8000, exit: true };
+  const workers = Array.from({ length: 6 }, (_, i) => startWorker('reserve-and-hold', { ...options, label: `p${i}` }));
+  const outcomes = await Promise.all(workers.map((w) => w.next(() => true, 120_000)));
+  await Promise.all(workers.map((w) => w.exited));
+  const reserved = outcomes.filter((o) => o.event === 'reserved');
+  const rejected = outcomes.filter((o) => o.event === 'rejected');
+  // Free space only shrinks after `before` (records, tsx cache), so admissions are bounded by it.
+  assert.ok(reserved.length * need <= before.freeBytes, JSON.stringify({ before, need, outcomes }));
+  if (before.freeBytes >= need + 8 * MiB) assert.ok(reserved.length >= 1, JSON.stringify(outcomes));
+  assert.ok(rejected.every((o) => o.code === 'PHOTO_DISK_FREE_SPACE_FLOOR'), JSON.stringify(rejected));
+  assert.equal(records(box).length, reserved.length, 'every admitted reservation is durably recorded; rejections write nothing');
+  record('cross-process-physical-race', { before, need, outcomes });
 });
 
 test('SIGKILL while holding a reservation retains its record and keeps counting it', { timeout: 120_000 }, async () => {

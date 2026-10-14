@@ -10,7 +10,8 @@ const say = (event) => process.stdout.write(JSON.stringify(event) + '\n');
 const hold = () => setInterval(() => undefined, 1000);
 
 if (mode === 'reserve-and-hold') {
-  const budget = new DevelopmentPhotoDiskBudget(options.budget);
+  // Optional plain-data free-space snapshot: isolates logical-budget races from the real filesystem.
+  const budget = new DevelopmentPhotoDiskBudget(options.space ? { ...options.budget, space: () => options.space } : options.budget);
   // Start together so the exclusive ledger section is genuinely contended.
   while (Date.now() < options.startAt) { /* spin */ }
   try {
