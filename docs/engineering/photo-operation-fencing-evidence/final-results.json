@@ -1,0 +1,1983 @@
+{
+  "source": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e",
+  "ci": 575,
+  "run": 38559372096,
+  "disposableExperimentStatus": "PASS",
+  "runtimeFencingStatus": "BLOCKED",
+  "experiments": {
+    "passed": 35,
+    "failed": 0,
+    "skipped": 0,
+    "sqlite": 18,
+    "postgres": 17,
+    "positive": 30,
+    "baselineCounterexamples": 5
+  },
+  "parentCrashHarness": {
+    "passed": 37,
+    "failed": 0,
+    "skipped": 0,
+    "sqliteActual": 15,
+    "postgresActual": 15
+  },
+  "postgresIntegrations": {
+    "passed": 51,
+    "failed": 0,
+    "skipped": 0
+  },
+  "api": {
+    "passed": 6106,
+    "skipped": 34
+  },
+  "admin": {
+    "passed": 925
+  },
+  "storefront": {
+    "passed": 376
+  },
+  "kills": [
+    {
+      "driver": "postgres",
+      "name": "kill-committed",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "domain-and-journal-after-commit",
+        "driver": "postgres",
+        "mode": "committed",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-intent",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "intent-before-file",
+        "driver": "postgres",
+        "mode": "intent",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-materialized",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "materialized-before-prepared",
+        "driver": "postgres",
+        "mode": "materialized",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-prepared",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "prepared-before-domain",
+        "driver": "postgres",
+        "mode": "prepared",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-reserved",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "zero-byte-reserved",
+        "driver": "postgres",
+        "mode": "reserved",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-uncommitted",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "domain-and-journal-before-commit",
+        "driver": "postgres",
+        "mode": "uncommitted",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-committed",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "domain-and-journal-after-commit",
+        "driver": "sqlite",
+        "mode": "committed",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-intent",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "intent-before-file",
+        "driver": "sqlite",
+        "mode": "intent",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-materialized",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "materialized-before-prepared",
+        "driver": "sqlite",
+        "mode": "materialized",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-prepared",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "prepared-before-domain",
+        "driver": "sqlite",
+        "mode": "prepared",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-reserved",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "zero-byte-reserved",
+        "driver": "sqlite",
+        "mode": "reserved",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-uncommitted",
+      "death": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": {
+        "phase": "domain-and-journal-before-commit",
+        "driver": "sqlite",
+        "mode": "uncommitted",
+        "sourceSha": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e"
+      }
+    }
+  ],
+  "counterexamples": [
+    {
+      "driver": "postgres",
+      "name": "counterexample-deterministic-overwrite",
+      "conclusion": "Actual separate-process gated finalization overwrote a newer main after missing-file preflight, then conflicted on its thumbnail. Journal/preflight alone does not revoke old writers.",
+      "before": {
+        "errorName": null,
+        "mainSha256": "c37a1afa4af7ab1493db2ceff215f9487e1e4772b48b421d2c0446dc91ef38a1",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      },
+      "after": {
+        "errorName": "AiIntakePhotoFinalizationDestinationConflictError",
+        "mainSha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      }
+    },
+    {
+      "driver": "postgres",
+      "name": "counterexample-unfenced-compensation",
+      "conclusion": "A DB journal/preflight alone does not fence existing storage APIs. This intentional destructive counterexample is restricted to two explicitly created synthetic files.",
+      "before": [
+        {
+          "key": "operations/op/g2/output-thumb.webp",
+          "size": 17,
+          "sha256": "292527ba35b111399c6f5b9f147a97334843b223421118a260cfe00df76673b4"
+        },
+        {
+          "key": "operations/op/g2/output.webp",
+          "size": 16,
+          "sha256": "dea13f1dcd599d79047da8394ec988f0eda7f2c60349998266f31a15460c8de8"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "counterexample-async-sqlite",
+      "conclusion": "Rejecting a Promise rolls back DB work but cannot revoke asynchronous filesystem/native work. Future sealed publication must be synchronous on SQLite and all long work must use immutable generation paths."
+    },
+    {
+      "driver": "sqlite",
+      "name": "counterexample-deterministic-overwrite",
+      "conclusion": "Actual separate-process gated finalization overwrote a newer main after missing-file preflight, then conflicted on its thumbnail. Journal/preflight alone does not revoke old writers.",
+      "before": {
+        "errorName": null,
+        "mainSha256": "c37a1afa4af7ab1493db2ceff215f9487e1e4772b48b421d2c0446dc91ef38a1",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      },
+      "after": {
+        "errorName": "AiIntakePhotoFinalizationDestinationConflictError",
+        "mainSha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      }
+    },
+    {
+      "driver": "sqlite",
+      "name": "counterexample-unfenced-compensation",
+      "conclusion": "A DB journal/preflight alone does not fence existing storage APIs. This intentional destructive counterexample is restricted to two explicitly created synthetic files.",
+      "before": [
+        {
+          "key": "operations/op/g2/output-thumb.webp",
+          "size": 17,
+          "sha256": "292527ba35b111399c6f5b9f147a97334843b223421118a260cfe00df76673b4"
+        },
+        {
+          "key": "operations/op/g2/output.webp",
+          "size": 16,
+          "sha256": "dea13f1dcd599d79047da8394ec988f0eda7f2c60349998266f31a15460c8de8"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "driver": "postgres",
+      "name": "abort-shutdown-and-zero-byte-retention",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "review",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "102",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "review",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "102"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "operations/op/g1/output.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "atomic-domain-rollback-and-lost-ack",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "committed",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "103",
+          "photo_id": "photo",
+          "event_id": "event"
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "committed",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "103"
+        }
+      ],
+      "photos": [
+        {
+          "id": "photo",
+          "filename": "photo.webp"
+        }
+      ],
+      "outbox": [
+        {
+          "id": "event",
+          "event_type": "product_photo.promote_requested",
+          "aggregate_id": "photo",
+          "payload": {
+            "photoId": "photo"
+          },
+          "status": "Pending"
+        }
+      ],
+      "files": []
+    },
+    {
+      "driver": "postgres",
+      "name": "concurrent-claimers",
+      "operations": [
+        {
+          "id": "race",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "2",
+          "owner": "a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": "1200",
+          "created_ms": "100",
+          "updated_ms": "200",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "race",
+          "generation": "1",
+          "owner": "original",
+          "nonce": "initial",
+          "state": "superseded",
+          "input_ref": "operations/race/g1/input",
+          "output_ref": "operations/race/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "200"
+        },
+        {
+          "operation_id": "race",
+          "generation": "2",
+          "owner": "a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/race/g2/input",
+          "output_ref": "operations/race/g2/output.webp",
+          "lease_until": "1200",
+          "created_ms": "200",
+          "updated_ms": "200"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "postgres",
+      "name": "counterexample-deterministic-overwrite",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "2",
+          "owner": "new",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "lease_until": "300",
+          "created_ms": "100",
+          "updated_ms": "200",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "old",
+          "nonce": "old-claim",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "200"
+        },
+        {
+          "operation_id": "op",
+          "generation": "2",
+          "owner": "new",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": "300",
+          "created_ms": "200",
+          "updated_ms": "200"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo-thumb.webp",
+          "size": 82,
+          "sha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+        },
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo.webp",
+          "size": 82,
+          "sha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98"
+        },
+        {
+          "key": "new-result.json",
+          "size": 179,
+          "sha256": "86d1a942601c971835684aa981cacad622182a0ea99059dd0b6b86431fe770c3"
+        },
+        {
+          "key": "old-result.json",
+          "size": 226,
+          "sha256": "19aa5f523707f2162ff8237a05f1545a1beed66c8bd46bb83e841655757871fd"
+        },
+        {
+          "key": "resume-old",
+          "size": 6,
+          "sha256": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "counterexample-unfenced-compensation",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "2",
+          "owner": "new-boot",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "lease_until": "300",
+          "created_ms": "100",
+          "updated_ms": "200",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "old-boot",
+          "nonce": "old-claim",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "200"
+        },
+        {
+          "operation_id": "op",
+          "generation": "2",
+          "owner": "new-boot",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": "300",
+          "created_ms": "200",
+          "updated_ms": "200"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "postgres",
+      "name": "db-outage",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "a",
+          "nonce": "n",
+          "state": "receiving",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "100",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "a",
+          "nonce": "n",
+          "state": "receiving",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "100"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "operations/op/g1/output.webp",
+          "size": 6,
+          "sha256": "6b428ace0262db5de1acac5d5e225a117674ede63c6631800103512289d791e6"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "intent-idempotency-and-history",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "receiving",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "100",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "receiving",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "100"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-committed",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "committed",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "102",
+          "photo_id": "kill-photo",
+          "event_id": "kill-event"
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "committed",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "102"
+        }
+      ],
+      "photos": [
+        {
+          "id": "kill-photo",
+          "filename": "kill.webp"
+        }
+      ],
+      "outbox": [
+        {
+          "id": "kill-event",
+          "event_type": "product_photo.promote_requested",
+          "aggregate_id": "kill-photo",
+          "payload": {
+            "photoId": "kill-photo",
+            "storageKey": "kill.webp"
+          },
+          "status": "Pending"
+        }
+      ],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 154,
+          "sha256": "093b9a8557d319a07b0f4955860243042f53d11f1f3af18f4e3f2a09e0430203"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-intent",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "100",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "100"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 138,
+          "sha256": "d502319bb197a12a98d894125bc1e1cfb31c0d63f8af5e0d5332afd79725a2bf"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-materialized",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "100",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "100"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 154,
+          "sha256": "f3da757cc5a8ca31aec6dc42dd47e8c134ab17e2eec7b36128af73bd6bc6f127"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-prepared",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "101",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "101"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 144,
+          "sha256": "3f804d2bcd0ea3f2ef39b913ff2c77aeb86621143c0effc6f67dcb54e05017b3"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-reserved",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "100",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "100"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 140,
+          "sha256": "2365c16f9dfa7b2122cfdd5a4e6ee878c37dd86a03cd0d529fe5dfd03ca7253c"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "kill-uncommitted",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "101",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": "1100",
+          "created_ms": "100",
+          "updated_ms": "101"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 157,
+          "sha256": "0358e28694197cef73d2cb5e3af306d390a53556156eb2beec41b457a5d90d64"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "lease-expiry-renewal-and-aba",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "3",
+          "owner": "boot-a",
+          "nonce": "nonce-c",
+          "state": "receiving",
+          "lease_until": "450",
+          "created_ms": "100",
+          "updated_ms": "350",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "250",
+          "created_ms": "100",
+          "updated_ms": "250"
+        },
+        {
+          "operation_id": "op",
+          "generation": "2",
+          "owner": "boot-b",
+          "nonce": "nonce-b",
+          "state": "superseded",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": "350",
+          "created_ms": "250",
+          "updated_ms": "350"
+        },
+        {
+          "operation_id": "op",
+          "generation": "3",
+          "owner": "boot-a",
+          "nonce": "nonce-c",
+          "state": "receiving",
+          "input_ref": "operations/op/g3/input",
+          "output_ref": "operations/op/g3/output.webp",
+          "lease_until": "450",
+          "created_ms": "350",
+          "updated_ms": "350"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "postgres",
+      "name": "lock-critical-section",
+      "operations": [
+        {
+          "id": "lock",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "2",
+          "owner": "boot-b",
+          "nonce": "claim-b",
+          "state": "receiving",
+          "lease_until": "400",
+          "created_ms": "100",
+          "updated_ms": "300",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "lock",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "superseded",
+          "input_ref": "operations/lock/g1/input",
+          "output_ref": "operations/lock/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "300"
+        },
+        {
+          "operation_id": "lock",
+          "generation": "2",
+          "owner": "boot-b",
+          "nonce": "claim-b",
+          "state": "receiving",
+          "input_ref": "operations/lock/g2/input",
+          "output_ref": "operations/lock/g2/output.webp",
+          "lease_until": "400",
+          "created_ms": "300",
+          "updated_ms": "300"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "lock-result.json",
+          "size": 31,
+          "sha256": "6deb84b2fe512e687f4bb1599fa1f138cef60930103c8e4dd6943124ce686b66"
+        },
+        {
+          "key": "operations/lock/g1/output.webp",
+          "size": 18,
+          "sha256": "d625faeb0b8e9911756c5a2e227fe231836f835821eabd176ce3533eb9f1f6d7"
+        }
+      ]
+    },
+    {
+      "driver": "postgres",
+      "name": "outbox-only-historical-reference",
+      "operations": [],
+      "generations": [],
+      "photos": [],
+      "outbox": [
+        {
+          "id": "historical",
+          "event_type": "product_photo.delete_requested",
+          "aggregate_id": "absent-photo",
+          "payload": {
+            "storageKey": "historical.webp"
+          },
+          "status": "DeadLetter"
+        }
+      ],
+      "files": []
+    },
+    {
+      "driver": "postgres",
+      "name": "preflight-race-and-generation-namespaces",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": "2",
+          "owner": "boot-b",
+          "nonce": "nonce-b",
+          "state": "receiving",
+          "lease_until": "300",
+          "created_ms": "100",
+          "updated_ms": "200",
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": "1",
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": "200",
+          "created_ms": "100",
+          "updated_ms": "200"
+        },
+        {
+          "operation_id": "op",
+          "generation": "2",
+          "owner": "boot-b",
+          "nonce": "nonce-b",
+          "state": "receiving",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": "300",
+          "created_ms": "200",
+          "updated_ms": "200"
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "operations/op/g1/output.webp",
+          "size": 26,
+          "sha256": "0dee6821ac4f73580083bb071490061066b363decd73209c7e4987e4b07e61f3"
+        },
+        {
+          "key": "operations/op/g2/output.webp",
+          "size": 14,
+          "sha256": "11904388d50080a3e003c0d4b77537c95b0be5327febbeeccc31520f8d9b670a"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "abort-shutdown-and-zero-byte-retention",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "review",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 102,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "review",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 102
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "operations/op/g1/output.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "atomic-domain-rollback-and-lost-ack",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "committed",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 103,
+          "photo_id": "photo",
+          "event_id": "event"
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "committed",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 103
+        }
+      ],
+      "photos": [
+        {
+          "id": "photo",
+          "filename": "photo.webp"
+        }
+      ],
+      "outbox": [
+        {
+          "id": "event",
+          "event_type": "product_photo.promote_requested",
+          "aggregate_id": "photo",
+          "payload": "{\"photoId\":\"photo\"}",
+          "status": "Pending"
+        }
+      ],
+      "files": []
+    },
+    {
+      "driver": "sqlite",
+      "name": "concurrent-claimers",
+      "operations": [
+        {
+          "id": "race",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 2,
+          "owner": "a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": 1200,
+          "created_ms": 100,
+          "updated_ms": 200,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "race",
+          "generation": 1,
+          "owner": "original",
+          "nonce": "initial",
+          "state": "superseded",
+          "input_ref": "operations/race/g1/input",
+          "output_ref": "operations/race/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 200
+        },
+        {
+          "operation_id": "race",
+          "generation": 2,
+          "owner": "a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/race/g2/input",
+          "output_ref": "operations/race/g2/output.webp",
+          "lease_until": 1200,
+          "created_ms": 200,
+          "updated_ms": 200
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "sqlite",
+      "name": "counterexample-async-sqlite",
+      "operations": [],
+      "generations": [],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "shared-output.webp",
+          "size": 20,
+          "sha256": "bc733e056c72d646df9cfc389063987a668c93fd943663a4b244edf5ff9546ae"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "counterexample-deterministic-overwrite",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 2,
+          "owner": "new",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "lease_until": 300,
+          "created_ms": 100,
+          "updated_ms": 200,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "old",
+          "nonce": "old-claim",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 200
+        },
+        {
+          "operation_id": "op",
+          "generation": 2,
+          "owner": "new",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": 300,
+          "created_ms": 200,
+          "updated_ms": 200
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo-thumb.webp",
+          "size": 82,
+          "sha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+        },
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo.webp",
+          "size": 82,
+          "sha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98"
+        },
+        {
+          "key": "new-result.json",
+          "size": 179,
+          "sha256": "86d1a942601c971835684aa981cacad622182a0ea99059dd0b6b86431fe770c3"
+        },
+        {
+          "key": "old-result.json",
+          "size": 226,
+          "sha256": "19aa5f523707f2162ff8237a05f1545a1beed66c8bd46bb83e841655757871fd"
+        },
+        {
+          "key": "resume-old",
+          "size": 6,
+          "sha256": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "counterexample-unfenced-compensation",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 2,
+          "owner": "new-boot",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "lease_until": 300,
+          "created_ms": 100,
+          "updated_ms": 200,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "old-boot",
+          "nonce": "old-claim",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 200
+        },
+        {
+          "operation_id": "op",
+          "generation": 2,
+          "owner": "new-boot",
+          "nonce": "new-claim",
+          "state": "receiving",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": 300,
+          "created_ms": 200,
+          "updated_ms": 200
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "sqlite",
+      "name": "db-outage",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "a",
+          "nonce": "n",
+          "state": "receiving",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 100,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "a",
+          "nonce": "n",
+          "state": "receiving",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 100
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "operations/op/g1/output.webp",
+          "size": 6,
+          "sha256": "6b428ace0262db5de1acac5d5e225a117674ede63c6631800103512289d791e6"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "intent-idempotency-and-history",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "receiving",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 100,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "receiving",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 100
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-committed",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "committed",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 102,
+          "photo_id": "kill-photo",
+          "event_id": "kill-event"
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "committed",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 102
+        }
+      ],
+      "photos": [
+        {
+          "id": "kill-photo",
+          "filename": "kill.webp"
+        }
+      ],
+      "outbox": [
+        {
+          "id": "kill-event",
+          "event_type": "product_photo.promote_requested",
+          "aggregate_id": "kill-photo",
+          "payload": "{\"photoId\":\"kill-photo\",\"storageKey\":\"kill.webp\"}",
+          "status": "Pending"
+        }
+      ],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 152,
+          "sha256": "8b386b039a9c2ef10b4a1d0c946a34a71e56d83f7cace9632b413e664d9c0cd3"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-intent",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 100,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 100
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 136,
+          "sha256": "73b8d29cae865164881cc1ae425402957306a6268385e30b3b2075908a365c19"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-materialized",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 100,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 100
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 152,
+          "sha256": "ebc831dda0f1833895a466c57bf1dbfcadd0a077abb8931380e9dda2489c4654"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-prepared",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 101,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 101
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 142,
+          "sha256": "f612c9e54ed6e04ab13487db6ef700c1fe25b86c0872157fce87c6a148833b73"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-reserved",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 100,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "receiving",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 100
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 138,
+          "sha256": "41f7556bdeb39334ff052d1a8c52857a8b76136708c551f682217d3e7c1152c9"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "kill-uncommitted",
+      "operations": [
+        {
+          "id": "kill",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 101,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "kill",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "prepared",
+          "input_ref": "operations/kill/g1/input",
+          "output_ref": "operations/kill/g1/output.webp",
+          "lease_until": 1100,
+          "created_ms": 100,
+          "updated_ms": 101
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "checkpoint.json",
+          "size": 155,
+          "sha256": "4ae81601f0ae1d56e27e3f604595ed7baaf99a96e39350c40d96a84a8da43afa"
+        },
+        {
+          "key": "operations/kill/g1/output.webp",
+          "size": 24,
+          "sha256": "b447dee4b3b3c385ca669275ff28c901674d933614c4c7736cdd860dba7a3f81"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "lease-expiry-renewal-and-aba",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 3,
+          "owner": "boot-a",
+          "nonce": "nonce-c",
+          "state": "receiving",
+          "lease_until": 450,
+          "created_ms": 100,
+          "updated_ms": 350,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 250,
+          "created_ms": 100,
+          "updated_ms": 250
+        },
+        {
+          "operation_id": "op",
+          "generation": 2,
+          "owner": "boot-b",
+          "nonce": "nonce-b",
+          "state": "superseded",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": 350,
+          "created_ms": 250,
+          "updated_ms": 350
+        },
+        {
+          "operation_id": "op",
+          "generation": 3,
+          "owner": "boot-a",
+          "nonce": "nonce-c",
+          "state": "receiving",
+          "input_ref": "operations/op/g3/input",
+          "output_ref": "operations/op/g3/output.webp",
+          "lease_until": 450,
+          "created_ms": 350,
+          "updated_ms": 350
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": []
+    },
+    {
+      "driver": "sqlite",
+      "name": "lock-critical-section",
+      "operations": [
+        {
+          "id": "lock",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 2,
+          "owner": "boot-b",
+          "nonce": "claim-b",
+          "state": "receiving",
+          "lease_until": 400,
+          "created_ms": 100,
+          "updated_ms": 300,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "lock",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "claim-a",
+          "state": "superseded",
+          "input_ref": "operations/lock/g1/input",
+          "output_ref": "operations/lock/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 300
+        },
+        {
+          "operation_id": "lock",
+          "generation": 2,
+          "owner": "boot-b",
+          "nonce": "claim-b",
+          "state": "receiving",
+          "input_ref": "operations/lock/g2/input",
+          "output_ref": "operations/lock/g2/output.webp",
+          "lease_until": 400,
+          "created_ms": 300,
+          "updated_ms": 300
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "lock-result.json",
+          "size": 37,
+          "sha256": "0b400a367d1e764e0f183835a2a4ec6bc48948b82d0604dfafe6f86729091f7d"
+        },
+        {
+          "key": "operations/lock/g1/output.webp",
+          "size": 18,
+          "sha256": "d625faeb0b8e9911756c5a2e227fe231836f835821eabd176ce3533eb9f1f6d7"
+        }
+      ]
+    },
+    {
+      "driver": "sqlite",
+      "name": "outbox-only-historical-reference",
+      "operations": [],
+      "generations": [],
+      "photos": [],
+      "outbox": [
+        {
+          "id": "historical",
+          "event_type": "product_photo.delete_requested",
+          "aggregate_id": "absent-photo",
+          "payload": "{\"storageKey\":\"historical.webp\"}",
+          "status": "DeadLetter"
+        }
+      ],
+      "files": []
+    },
+    {
+      "driver": "sqlite",
+      "name": "preflight-race-and-generation-namespaces",
+      "operations": [
+        {
+          "id": "op",
+          "kind": "synthetic-photo",
+          "entity_id": "synthetic-product",
+          "generation": 2,
+          "owner": "boot-b",
+          "nonce": "nonce-b",
+          "state": "receiving",
+          "lease_until": 300,
+          "created_ms": 100,
+          "updated_ms": 200,
+          "photo_id": null,
+          "event_id": null
+        }
+      ],
+      "generations": [
+        {
+          "operation_id": "op",
+          "generation": 1,
+          "owner": "boot-a",
+          "nonce": "nonce-a",
+          "state": "superseded",
+          "input_ref": "operations/op/g1/input",
+          "output_ref": "operations/op/g1/output.webp",
+          "lease_until": 200,
+          "created_ms": 100,
+          "updated_ms": 200
+        },
+        {
+          "operation_id": "op",
+          "generation": 2,
+          "owner": "boot-b",
+          "nonce": "nonce-b",
+          "state": "receiving",
+          "input_ref": "operations/op/g2/input",
+          "output_ref": "operations/op/g2/output.webp",
+          "lease_until": 300,
+          "created_ms": 200,
+          "updated_ms": 200
+        }
+      ],
+      "photos": [],
+      "outbox": [],
+      "files": [
+        {
+          "key": "operations/op/g1/output.webp",
+          "size": 26,
+          "sha256": "0dee6821ac4f73580083bb071490061066b363decd73209c7e4987e4b07e61f3"
+        },
+        {
+          "key": "operations/op/g2/output.webp",
+          "size": 14,
+          "sha256": "11904388d50080a3e003c0d4b77537c95b0be5327febbeeccc31520f8d9b670a"
+        }
+      ]
+    }
+  ]
+}

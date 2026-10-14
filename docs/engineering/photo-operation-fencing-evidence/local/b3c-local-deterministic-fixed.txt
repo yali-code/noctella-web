@@ -1,0 +1,10 @@
+✔ sqlite COUNTEREXAMPLE actual deterministic preflight overwrites newer result (1837.9737ms)
+﹣ postgres COUNTEREXAMPLE actual deterministic preflight overwrites newer result (0.635ms) # SKIP
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 2293.0142
