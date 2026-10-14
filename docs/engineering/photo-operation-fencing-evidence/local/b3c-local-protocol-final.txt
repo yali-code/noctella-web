@@ -1,0 +1,41 @@
+✔ sqlite intent-idempotency-and-history (354.0687ms)
+✔ sqlite lease-expiry-renewal-and-aba (343.3469ms)
+✔ sqlite preflight-race-and-generation-namespaces (363.779ms)
+✔ sqlite atomic-domain-rollback-and-lost-ack (361.4216ms)
+✔ sqlite abort-shutdown-and-zero-byte-retention (323.2264ms)
+✔ sqlite outbox-only-historical-reference (372.8337ms)
+✔ sqlite independent concurrent claimers (853.0077ms)
+✔ sqlite SIGKILL restart intent (710.047ms)
+✔ sqlite SIGKILL restart reserved (655.1031ms)
+✔ sqlite SIGKILL restart materialized (657.7179ms)
+✔ sqlite SIGKILL restart prepared (642.0997ms)
+✔ sqlite SIGKILL restart uncommitted (615.7111ms)
+✔ sqlite SIGKILL restart committed (655.1371ms)
+✔ sqlite database outage fails before file callback (350.2822ms)
+﹣ postgres intent-idempotency-and-history (0.1855ms) # SKIP
+﹣ postgres lease-expiry-renewal-and-aba (0.1164ms) # SKIP
+﹣ postgres preflight-race-and-generation-namespaces (0.101ms) # SKIP
+﹣ postgres atomic-domain-rollback-and-lost-ack (0.0894ms) # SKIP
+﹣ postgres abort-shutdown-and-zero-byte-retention (0.0879ms) # SKIP
+﹣ postgres outbox-only-historical-reference (0.0981ms) # SKIP
+﹣ postgres independent concurrent claimers (0.0854ms) # SKIP
+﹣ postgres SIGKILL restart intent (0.0929ms) # SKIP
+﹣ postgres SIGKILL restart reserved (0.0982ms) # SKIP
+﹣ postgres SIGKILL restart materialized (0.0859ms) # SKIP
+﹣ postgres SIGKILL restart prepared (0.086ms) # SKIP
+﹣ postgres SIGKILL restart uncommitted (0.0878ms) # SKIP
+﹣ postgres SIGKILL restart committed (0.0843ms) # SKIP
+﹣ postgres database outage fails before file callback (0.0835ms) # SKIP
+✔ sqlite database lock prevents reclaim during sealed publication (1009.1876ms)
+✔ sqlite COUNTEREXAMPLE existing compensation ignores newer journal generation (801.5031ms)
+﹣ postgres database lock prevents reclaim during sealed publication (0.454ms) # SKIP
+﹣ postgres COUNTEREXAMPLE existing compensation ignores newer journal generation (0.1805ms) # SKIP
+✔ SQLite COUNTEREXAMPLE rejecting an async transaction callback does not cancel it (1068.1283ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 16
+ℹ todo 0
+ℹ duration_ms 10673.8272

@@ -1,0 +1,44 @@
+{
+  "source": "5d5ddfa01f3e8d45b4685167d2836c7ccdef6b8e",
+  "parent": "a4c3ea7602884934c2e1feda190506a8bac2133b",
+  "prototypeOnly": true,
+  "unchangedTrees": [
+    {
+      "path": "apps",
+      "parent": "7fe51b6277e584eed48d2f2179a461d4b1800b02",
+      "source": "7fe51b6277e584eed48d2f2179a461d4b1800b02"
+    },
+    {
+      "path": "packages",
+      "parent": "ef6f3a8a3e8726e4aaa955c9dd8495675d29b115",
+      "source": "ef6f3a8a3e8726e4aaa955c9dd8495675d29b115"
+    },
+    {
+      "path": "scripts/photo-crash-recovery",
+      "parent": "b843977d9ee9da6d177cf5ebfe93cc89988fbca3",
+      "source": "b843977d9ee9da6d177cf5ebfe93cc89988fbca3"
+    }
+  ],
+  "files": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "sha256": "bd5288e5d870e1558b2ce27a9b59acdc1ca4665ea90344575aa9e75e6ba34de4"
+    },
+    {
+      "file": "docs/engineering/P2-2B3C_PHOTO_OPERATION_FENCING.md",
+      "sha256": "0f99c8378f0d13c00d3948cd411f4eeb62f04ac1d56733560ff0753ec301774e"
+    },
+    {
+      "file": "scripts/photo-operation-fencing/fencing.test.cjs",
+      "sha256": "aa3921e14f35ac829c1b65726e0248dccd1d5cc8acc8d9f0254c05014f282309"
+    },
+    {
+      "file": "scripts/photo-operation-fencing/protocol.cjs",
+      "sha256": "73ead329ff92604299501f9bad22dd6c97a5a13cd7b64209a2d54227e7f8e8c8"
+    },
+    {
+      "file": "scripts/photo-operation-fencing/worker.cjs",
+      "sha256": "f5952ee318997234714dbf887f5d78983704df33cb02ff09962caa9e9c7f96de"
+    }
+  ]
+}

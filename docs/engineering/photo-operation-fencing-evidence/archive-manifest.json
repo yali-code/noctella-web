@@ -1,0 +1,27 @@
+[
+  {
+    "name": "ci574-crash.zip",
+    "bytes": 4016869,
+    "sha256": "7b33c04a5f2b937dbe5375d15721a6e3f20fd3cdeb92a4df023b59581971b324"
+  },
+  {
+    "name": "ci574-ownership.zip",
+    "bytes": 4134606,
+    "sha256": "81407fe5796a2c4dc7658c29c6d523714ca6d06e5503444f476b794407a32158"
+  },
+  {
+    "name": "ci575-crash.zip",
+    "bytes": 4017367,
+    "sha256": "9541b19d265b7ab62f40b038331782af0ac89f59d113b7ad784c67c1e45b04c1"
+  },
+  {
+    "name": "ci575-ownership.zip",
+    "bytes": 4499534,
+    "sha256": "82ffc66407f3dd7e31d1e65765f825725909a41a3eb81fcfd463d7792abd7cc7"
+  },
+  {
+    "name": "local-experiments.zip",
+    "bytes": 16560144,
+    "sha256": "86db392db6f3b6ef5a2de0677bc4e7e953b4987fea7a73e9aa5003e2767b1ea1"
+  }
+]
