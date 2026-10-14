@@ -1,0 +1,121 @@
+[
+  {
+    "bytes": 3762113,
+    "file": "local-corrected.zip",
+    "entries": 356,
+    "validJsonEntries": 39,
+    "sha256": "9efc49fc3d2c77c8f70e11452b0111c142d1af466ed34ea4672668fde555cf89"
+  },
+  {
+    "bytes": 5695672,
+    "file": "local-expanded.zip",
+    "entries": 446,
+    "validJsonEntries": 47,
+    "sha256": "aff4be5984cfa9f5ba80c243aed047d54e85b725f8a706e15be9e9d29752cf30"
+  },
+  {
+    "bytes": 7862051,
+    "file": "local-final.zip",
+    "entries": 558,
+    "validJsonEntries": 56,
+    "sha256": "2460e03f3d985a5255440521335c0c9aabae8fcbaab5bbc48fc04c865514b456"
+  },
+  {
+    "bytes": 3030331,
+    "file": "local-initial.zip",
+    "entries": 296,
+    "validJsonEntries": 36,
+    "sha256": "e4d552e57948f512d44ea25af9becf385378810911df6c0fdee02c9dde7cef8c"
+  },
+  {
+    "bytes": 7863145,
+    "file": "local-marker-token.zip",
+    "entries": 558,
+    "validJsonEntries": 56,
+    "sha256": "c9cfff485fedc0196e28ebd0071be52b7f29ea7a8e6c481493a1668aae469877"
+  },
+  {
+    "bytes": 8338856,
+    "file": "local-opaque-final.zip",
+    "entries": 570,
+    "validJsonEntries": 58,
+    "sha256": "3d71345521240b1db20c51e991a2904307099d14a80726d6d02a9be6d9bc26b8"
+  },
+  {
+    "bytes": 7375942,
+    "file": "local-root-guard.zip",
+    "entries": 530,
+    "validJsonEntries": 54,
+    "sha256": "5e98c7f7316635294153aef718633eedb4ed0d5be6f6380ab98a55421337b795"
+  },
+  {
+    "bytes": 9315466,
+    "file": "local-sealed-final.zip",
+    "entries": 682,
+    "validJsonEntries": 62,
+    "sha256": "46886ed150a11b88ddaf8c1d97d8a5580b12be63ab4ac0252eeec1f524e98209"
+  },
+  {
+    "bytes": 4016954,
+    "file": "photo-crash-recovery-38576491928.zip",
+    "entries": 565,
+    "validJsonEntries": 162,
+    "sha256": "f9a9b90cd908d5735d731767a5e497c6b0c8d88ea49329c46ae3957324ac99e7"
+  },
+  {
+    "bytes": 4016464,
+    "file": "photo-crash-recovery-38577643331.zip",
+    "entries": 565,
+    "validJsonEntries": 162,
+    "sha256": "8843e39dfef9292715f09f2acdc6044271394fe2453cda01f2f7c2ace1aff513"
+  },
+  {
+    "bytes": 4017225,
+    "file": "photo-crash-recovery-38579084392.zip",
+    "entries": 565,
+    "validJsonEntries": 162,
+    "sha256": "adbb27884d1c618bc478de727e8cbe5ff5184ee5f745f0156a55c1b3671199e3"
+  },
+  {
+    "bytes": 4499334,
+    "file": "photo-operation-fencing-38576491928.zip",
+    "entries": 269,
+    "validJsonEntries": 106,
+    "sha256": "cff2208aadf32835c6a0642004fda9604c87111a1eb1115e27b2f860f968fd78"
+  },
+  {
+    "bytes": 4499446,
+    "file": "photo-operation-fencing-38577643331.zip",
+    "entries": 269,
+    "validJsonEntries": 106,
+    "sha256": "cab00e4f28d01b0c9cb0adf01dc991138da9574ffa7adcf9e06b7276970fb443"
+  },
+  {
+    "bytes": 4499272,
+    "file": "photo-operation-fencing-38579084392.zip",
+    "entries": 269,
+    "validJsonEntries": 106,
+    "sha256": "7260ba32d4e9af37081a2e2ece6efc27742d3c49fdfb98a6b2f5d8a154542d15"
+  },
+  {
+    "bytes": 6106131,
+    "file": "photo-storage-capability-38576491928.zip",
+    "entries": 833,
+    "validJsonEntries": 109,
+    "sha256": "1edcf0ffe7550572c8ffe30763b5aa1fc0ace79a3426f2609d2564af32e7d035"
+  },
+  {
+    "bytes": 6487296,
+    "file": "photo-storage-capability-38577643331.zip",
+    "entries": 883,
+    "validJsonEntries": 113,
+    "sha256": "4e123a457f7afd970f22b1a594f438b3eadaf86743d5a22269bc1d603f363988"
+  },
+  {
+    "bytes": 7645520,
+    "file": "photo-storage-capability-38579084392.zip",
+    "entries": 1087,
+    "validJsonEntries": 123,
+    "sha256": "b7802d895541d2f9077ca2ff22f70f12e47ba2640790ca4e07ade42075f49225"
+  }
+]

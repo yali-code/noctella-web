@@ -1,0 +1,378 @@
+[
+  {
+    "entry": "postgres-counterexample-deterministic-overwrite-noctella-photo-fence-IOA0HF/evidence.json",
+    "evidence": {
+      "driver": "postgres",
+      "name": "counterexample-deterministic-overwrite",
+      "sourceSha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1",
+      "scope": "disposable-design-prototype-not-runtime-fencing",
+      "database": {
+        "operations": [
+          {
+            "id": "op",
+            "kind": "synthetic-photo",
+            "entity_id": "synthetic-product",
+            "generation": "2",
+            "owner": "new",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "lease_until": "300",
+            "created_ms": "100",
+            "updated_ms": "200",
+            "photo_id": null,
+            "event_id": null
+          }
+        ],
+        "generations": [
+          {
+            "operation_id": "op",
+            "generation": "1",
+            "owner": "old",
+            "nonce": "old-claim",
+            "state": "superseded",
+            "input_ref": "operations/op/g1/input",
+            "output_ref": "operations/op/g1/output.webp",
+            "lease_until": "200",
+            "created_ms": "100",
+            "updated_ms": "200"
+          },
+          {
+            "operation_id": "op",
+            "generation": "2",
+            "owner": "new",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "input_ref": "operations/op/g2/input",
+            "output_ref": "operations/op/g2/output.webp",
+            "lease_until": "300",
+            "created_ms": "200",
+            "updated_ms": "200"
+          }
+        ],
+        "photos": [],
+        "outbox": []
+      },
+      "files": [
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo-thumb.webp",
+          "size": 82,
+          "sha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+        },
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo.webp",
+          "size": 82,
+          "sha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98"
+        },
+        {
+          "key": "new-result.json",
+          "size": 179,
+          "sha256": "86d1a942601c971835684aa981cacad622182a0ea99059dd0b6b86431fe770c3"
+        },
+        {
+          "key": "old-result.json",
+          "size": 226,
+          "sha256": "19aa5f523707f2162ff8237a05f1545a1beed66c8bd46bb83e841655757871fd"
+        },
+        {
+          "key": "resume-old",
+          "size": 6,
+          "sha256": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616"
+        }
+      ],
+      "counterexample": true,
+      "before": {
+        "errorName": null,
+        "mainSha256": "c37a1afa4af7ab1493db2ceff215f9487e1e4772b48b421d2c0446dc91ef38a1",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      },
+      "after": {
+        "errorName": "AiIntakePhotoFinalizationDestinationConflictError",
+        "mainSha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      },
+      "conclusion": "Actual separate-process gated finalization overwrote a newer main after missing-file preflight, then conflicted on its thumbnail. Journal/preflight alone does not revoke old writers."
+    }
+  },
+  {
+    "entry": "postgres-counterexample-unfenced-compensation-noctella-photo-fence-tgTObB/evidence.json",
+    "evidence": {
+      "driver": "postgres",
+      "name": "counterexample-unfenced-compensation",
+      "sourceSha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1",
+      "scope": "disposable-design-prototype-not-runtime-fencing",
+      "database": {
+        "operations": [
+          {
+            "id": "op",
+            "kind": "synthetic-photo",
+            "entity_id": "synthetic-product",
+            "generation": "2",
+            "owner": "new-boot",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "lease_until": "300",
+            "created_ms": "100",
+            "updated_ms": "200",
+            "photo_id": null,
+            "event_id": null
+          }
+        ],
+        "generations": [
+          {
+            "operation_id": "op",
+            "generation": "1",
+            "owner": "old-boot",
+            "nonce": "old-claim",
+            "state": "superseded",
+            "input_ref": "operations/op/g1/input",
+            "output_ref": "operations/op/g1/output.webp",
+            "lease_until": "200",
+            "created_ms": "100",
+            "updated_ms": "200"
+          },
+          {
+            "operation_id": "op",
+            "generation": "2",
+            "owner": "new-boot",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "input_ref": "operations/op/g2/input",
+            "output_ref": "operations/op/g2/output.webp",
+            "lease_until": "300",
+            "created_ms": "200",
+            "updated_ms": "200"
+          }
+        ],
+        "photos": [],
+        "outbox": []
+      },
+      "files": [],
+      "counterexample": true,
+      "old": {
+        "id": "op",
+        "generation": 1,
+        "owner": "old-boot",
+        "nonce": "old-claim"
+      },
+      "current": {
+        "id": "op",
+        "generation": 2,
+        "owner": "new-boot",
+        "nonce": "new-claim"
+      },
+      "before": [
+        {
+          "key": "operations/op/g2/output-thumb.webp",
+          "size": 17,
+          "sha256": "292527ba35b111399c6f5b9f147a97334843b223421118a260cfe00df76673b4"
+        },
+        {
+          "key": "operations/op/g2/output.webp",
+          "size": 16,
+          "sha256": "dea13f1dcd599d79047da8394ec988f0eda7f2c60349998266f31a15460c8de8"
+        }
+      ],
+      "conclusion": "A DB journal/preflight alone does not fence existing storage APIs. This intentional destructive counterexample is restricted to two explicitly created synthetic files."
+    }
+  },
+  {
+    "entry": "sqlite-counterexample-async-sqlite-noctella-photo-fence-mGRUX0/evidence.json",
+    "evidence": {
+      "driver": "sqlite",
+      "name": "counterexample-async-sqlite",
+      "sourceSha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1",
+      "scope": "disposable-design-prototype-not-runtime-fencing",
+      "database": {
+        "operations": [],
+        "generations": [],
+        "photos": [],
+        "outbox": []
+      },
+      "files": [
+        {
+          "key": "shared-output.webp",
+          "size": 20,
+          "sha256": "bc733e056c72d646df9cfc389063987a668c93fd943663a4b244edf5ff9546ae"
+        }
+      ],
+      "counterexample": true,
+      "conclusion": "Rejecting a Promise rolls back DB work but cannot revoke asynchronous filesystem/native work. Future sealed publication must be synchronous on SQLite and all long work must use immutable generation paths."
+    }
+  },
+  {
+    "entry": "sqlite-counterexample-deterministic-overwrite-noctella-photo-fence-Pp3MOw/evidence.json",
+    "evidence": {
+      "driver": "sqlite",
+      "name": "counterexample-deterministic-overwrite",
+      "sourceSha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1",
+      "scope": "disposable-design-prototype-not-runtime-fencing",
+      "database": {
+        "operations": [
+          {
+            "id": "op",
+            "kind": "synthetic-photo",
+            "entity_id": "synthetic-product",
+            "generation": 2,
+            "owner": "new",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "lease_until": 300,
+            "created_ms": 100,
+            "updated_ms": 200,
+            "photo_id": null,
+            "event_id": null
+          }
+        ],
+        "generations": [
+          {
+            "operation_id": "op",
+            "generation": 1,
+            "owner": "old",
+            "nonce": "old-claim",
+            "state": "superseded",
+            "input_ref": "operations/op/g1/input",
+            "output_ref": "operations/op/g1/output.webp",
+            "lease_until": 200,
+            "created_ms": 100,
+            "updated_ms": 200
+          },
+          {
+            "operation_id": "op",
+            "generation": 2,
+            "owner": "new",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "input_ref": "operations/op/g2/input",
+            "output_ref": "operations/op/g2/output.webp",
+            "lease_until": 300,
+            "created_ms": 200,
+            "updated_ms": 200
+          }
+        ],
+        "photos": [],
+        "outbox": []
+      },
+      "files": [
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo-thumb.webp",
+          "size": 82,
+          "sha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+        },
+        {
+          "key": "deterministic/synthetic-product-synthetic-photo.webp",
+          "size": 82,
+          "sha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98"
+        },
+        {
+          "key": "new-result.json",
+          "size": 179,
+          "sha256": "86d1a942601c971835684aa981cacad622182a0ea99059dd0b6b86431fe770c3"
+        },
+        {
+          "key": "old-result.json",
+          "size": 226,
+          "sha256": "19aa5f523707f2162ff8237a05f1545a1beed66c8bd46bb83e841655757871fd"
+        },
+        {
+          "key": "resume-old",
+          "size": 6,
+          "sha256": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616"
+        }
+      ],
+      "counterexample": true,
+      "before": {
+        "errorName": null,
+        "mainSha256": "c37a1afa4af7ab1493db2ceff215f9487e1e4772b48b421d2c0446dc91ef38a1",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      },
+      "after": {
+        "errorName": "AiIntakePhotoFinalizationDestinationConflictError",
+        "mainSha256": "9cf1b446f452a28580ab11961337f9309eb5b22bdf4dc831ed104f9913c27c98",
+        "thumbSha256": "9ed0eb2836c5a172939b1340eb8d1b5db32e6c9869528f0b8e19f55f304b2894"
+      },
+      "conclusion": "Actual separate-process gated finalization overwrote a newer main after missing-file preflight, then conflicted on its thumbnail. Journal/preflight alone does not revoke old writers."
+    }
+  },
+  {
+    "entry": "sqlite-counterexample-unfenced-compensation-noctella-photo-fence-nB1KUW/evidence.json",
+    "evidence": {
+      "driver": "sqlite",
+      "name": "counterexample-unfenced-compensation",
+      "sourceSha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1",
+      "scope": "disposable-design-prototype-not-runtime-fencing",
+      "database": {
+        "operations": [
+          {
+            "id": "op",
+            "kind": "synthetic-photo",
+            "entity_id": "synthetic-product",
+            "generation": 2,
+            "owner": "new-boot",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "lease_until": 300,
+            "created_ms": 100,
+            "updated_ms": 200,
+            "photo_id": null,
+            "event_id": null
+          }
+        ],
+        "generations": [
+          {
+            "operation_id": "op",
+            "generation": 1,
+            "owner": "old-boot",
+            "nonce": "old-claim",
+            "state": "superseded",
+            "input_ref": "operations/op/g1/input",
+            "output_ref": "operations/op/g1/output.webp",
+            "lease_until": 200,
+            "created_ms": 100,
+            "updated_ms": 200
+          },
+          {
+            "operation_id": "op",
+            "generation": 2,
+            "owner": "new-boot",
+            "nonce": "new-claim",
+            "state": "receiving",
+            "input_ref": "operations/op/g2/input",
+            "output_ref": "operations/op/g2/output.webp",
+            "lease_until": 300,
+            "created_ms": 200,
+            "updated_ms": 200
+          }
+        ],
+        "photos": [],
+        "outbox": []
+      },
+      "files": [],
+      "counterexample": true,
+      "old": {
+        "id": "op",
+        "generation": 1,
+        "owner": "old-boot",
+        "nonce": "old-claim"
+      },
+      "current": {
+        "id": "op",
+        "generation": 2,
+        "owner": "new-boot",
+        "nonce": "new-claim"
+      },
+      "before": [
+        {
+          "key": "operations/op/g2/output-thumb.webp",
+          "size": 17,
+          "sha256": "292527ba35b111399c6f5b9f147a97334843b223421118a260cfe00df76673b4"
+        },
+        {
+          "key": "operations/op/g2/output.webp",
+          "size": 16,
+          "sha256": "dea13f1dcd599d79047da8394ec988f0eda7f2c60349998266f31a15460c8de8"
+        }
+      ],
+      "conclusion": "A DB journal/preflight alone does not fence existing storage APIs. This intentional destructive counterexample is restricted to two explicitly created synthetic files."
+    }
+  }
+]

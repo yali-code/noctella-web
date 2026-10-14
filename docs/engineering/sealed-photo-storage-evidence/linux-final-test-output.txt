@@ -1,0 +1,250 @@
+TAP version 13
+# Subtest: sqlite product-private-seal-and-stale-compensation
+ok 1 - sqlite product-private-seal-and-stale-compensation
+  ---
+  duration_ms: 185.934401
+  ...
+# Subtest: sqlite deterministic-stale-writer-and-immutable-source
+ok 2 - sqlite deterministic-stale-writer-and-immutable-source
+  ---
+  duration_ms: 124.550949
+  ...
+# Subtest: sqlite sealed-inode-detaches-native-writer-and-idempotency
+ok 3 - sqlite sealed-inode-detaches-native-writer-and-idempotency
+  ---
+  duration_ms: 110.12809
+  ...
+# Subtest: sqlite no-overwrite-foreign-output-and-zero-byte
+ok 4 - sqlite no-overwrite-foreign-output-and-zero-byte
+  ---
+  duration_ms: 107.588161
+  ...
+# Subtest: sqlite lease-aba-and-database-outage
+ok 5 - sqlite lease-aba-and-database-outage
+  ---
+  duration_ms: 112.362698
+  ...
+# Subtest: sqlite marker-aba-never-removes-replacement
+ok 6 - sqlite marker-aba-never-removes-replacement
+  ---
+  duration_ms: 114.813876
+  ...
+# Subtest: sqlite SIGKILL intent
+ok 7 - sqlite SIGKILL intent
+  ---
+  duration_ms: 356.042986
+  ...
+# Subtest: sqlite SIGKILL raw
+ok 8 - sqlite SIGKILL raw
+  ---
+  duration_ms: 365.196831
+  ...
+# Subtest: sqlite SIGKILL seal
+ok 9 - sqlite SIGKILL seal
+  ---
+  duration_ms: 411.800152
+  ...
+# Subtest: sqlite SIGKILL registered
+ok 10 - sqlite SIGKILL registered
+  ---
+  duration_ms: 380.23229
+  ...
+# Subtest: sqlite SIGKILL first-link
+ok 11 - sqlite SIGKILL first-link
+  ---
+  duration_ms: 406.586653
+  ...
+# Subtest: sqlite SIGKILL published
+ok 12 - sqlite SIGKILL published
+  ---
+  duration_ms: 400.605889
+  ...
+# Subtest: postgres product-private-seal-and-stale-compensation
+ok 13 - postgres product-private-seal-and-stale-compensation
+  ---
+  duration_ms: 641.289309
+  ...
+# Subtest: postgres deterministic-stale-writer-and-immutable-source
+ok 14 - postgres deterministic-stale-writer-and-immutable-source
+  ---
+  duration_ms: 423.07775
+  ...
+# Subtest: postgres sealed-inode-detaches-native-writer-and-idempotency
+ok 15 - postgres sealed-inode-detaches-native-writer-and-idempotency
+  ---
+  duration_ms: 446.785384
+  ...
+# Subtest: postgres no-overwrite-foreign-output-and-zero-byte
+ok 16 - postgres no-overwrite-foreign-output-and-zero-byte
+  ---
+  duration_ms: 439.609388
+  ...
+# Subtest: postgres lease-aba-and-database-outage
+ok 17 - postgres lease-aba-and-database-outage
+  ---
+  duration_ms: 431.927054
+  ...
+# Subtest: postgres marker-aba-never-removes-replacement
+ok 18 - postgres marker-aba-never-removes-replacement
+  ---
+  duration_ms: 418.655148
+  ...
+# Subtest: postgres SIGKILL intent
+ok 19 - postgres SIGKILL intent
+  ---
+  duration_ms: 812.349879
+  ...
+# Subtest: postgres SIGKILL raw
+ok 20 - postgres SIGKILL raw
+  ---
+  duration_ms: 884.561116
+  ...
+# Subtest: postgres SIGKILL seal
+ok 21 - postgres SIGKILL seal
+  ---
+  duration_ms: 930.257898
+  ...
+# Subtest: postgres SIGKILL registered
+ok 22 - postgres SIGKILL registered
+  ---
+  duration_ms: 896.001169
+  ...
+# Subtest: postgres SIGKILL first-link
+ok 23 - postgres SIGKILL first-link
+  ---
+  duration_ms: 856.400139
+  ...
+# Subtest: postgres SIGKILL published
+ok 24 - postgres SIGKILL published
+  ---
+  duration_ms: 959.171142
+  ...
+# Subtest: actual SQLite rejected callback cannot escape into protected publication
+ok 25 - actual SQLite rejected callback cannot escape into protected publication
+  ---
+  duration_ms: 188.800509
+  ...
+# Subtest: feature OFF refuses disposable capability before filesystem mutation
+ok 26 - feature OFF refuses disposable capability before filesystem mutation
+  ---
+  duration_ms: 88.504142
+  ...
+# Subtest: sqlite independent publication workers
+ok 27 - sqlite independent publication workers
+  ---
+  duration_ms: 503.857044
+  ...
+# Subtest: postgres independent publication workers
+ok 28 - postgres independent publication workers
+  ---
+  duration_ms: 990.258549
+  ...
+# Subtest: SQLite asynchronous authority continuation is revoked before later filesystem action
+ok 29 - SQLite asynchronous authority continuation is revoked before later filesystem action
+  ---
+  duration_ms: 108.595758
+  ...
+# Subtest: ENOSPC marker failure remains review-required without inferring abandonment
+ok 30 - ENOSPC marker failure remains review-required without inferring abandonment
+  ---
+  duration_ms: 97.506433
+  ...
+# Subtest: PostgreSQL connection loss cannot release the filesystem publication fence early
+ok 31 - PostgreSQL connection loss cannot release the filesystem publication fence early
+  ---
+  duration_ms: 921.974937
+  ...
+# Subtest: sqlite caller mutation and sealed inode replacement cannot retarget publication
+ok 32 - sqlite caller mutation and sealed inode replacement cannot retarget publication
+  ---
+  duration_ms: 107.272349
+  ...
+# Subtest: postgres caller mutation and sealed inode replacement cannot retarget publication
+ok 33 - postgres caller mutation and sealed inode replacement cannot retarget publication
+  ---
+  duration_ms: 431.674368
+  ...
+# Subtest: sqlite marker cleanup failure retains an ambiguous acknowledged claim
+ok 34 - sqlite marker cleanup failure retains an ambiguous acknowledged claim
+  ---
+  duration_ms: 94.784259
+  ...
+# Subtest: sqlite historical outbox and ambiguous acknowledgement preserve published bytes
+ok 35 - sqlite historical outbox and ambiguous acknowledgement preserve published bytes
+  ---
+  duration_ms: 111.337583
+  ...
+# Subtest: sqlite canonical symlinks are refused without touching their target
+ok 36 - sqlite canonical symlinks are refused without touching their target
+  ---
+  duration_ms: 111.713418
+  ...
+# Subtest: postgres marker cleanup failure retains an ambiguous acknowledged claim
+ok 37 - postgres marker cleanup failure retains an ambiguous acknowledged claim
+  ---
+  duration_ms: 414.717297
+  ...
+# Subtest: postgres historical outbox and ambiguous acknowledgement preserve published bytes
+ok 38 - postgres historical outbox and ambiguous acknowledgement preserve published bytes
+  ---
+  duration_ms: 416.537863
+  ...
+# Subtest: postgres canonical symlinks are refused without touching their target
+ok 39 - postgres canonical symlinks are refused without touching their target
+  ---
+  duration_ms: 410.180141
+  ...
+# Subtest: sqlite storage root rename cannot reset a durable mutation namespace
+ok 40 - sqlite storage root rename cannot reset a durable mutation namespace
+  ---
+  duration_ms: 112.17192
+  ...
+# Subtest: postgres storage root rename cannot reset a durable mutation namespace
+ok 41 - postgres storage root rename cannot reset a durable mutation namespace
+  ---
+  duration_ms: 452.761513
+  ...
+# Subtest: sqlite marker nonce replacement on the same inode is retained
+ok 42 - sqlite marker nonce replacement on the same inode is retained
+  ---
+  duration_ms: 111.781234
+  ...
+# Subtest: postgres marker nonce replacement on the same inode is retained
+ok 43 - postgres marker nonce replacement on the same inode is retained
+  ---
+  duration_ms: 441.034871
+  ...
+# Subtest: private deterministic producer refuses arbitrary paths and forged permits
+ok 44 - private deterministic producer refuses arbitrary paths and forged permits
+  ---
+  duration_ms: 93.915344
+  ...
+# Subtest: sqlite real product/deterministic producers preserve jpeg compatibility
+ok 45 - sqlite real product/deterministic producers preserve jpeg compatibility
+  ---
+  duration_ms: 138.371137
+  ...
+# Subtest: sqlite real product/deterministic producers preserve webp compatibility
+ok 46 - sqlite real product/deterministic producers preserve webp compatibility
+  ---
+  duration_ms: 135.539153
+  ...
+# Subtest: postgres real product/deterministic producers preserve jpeg compatibility
+ok 47 - postgres real product/deterministic producers preserve jpeg compatibility
+  ---
+  duration_ms: 462.268584
+  ...
+# Subtest: postgres real product/deterministic producers preserve webp compatibility
+ok 48 - postgres real product/deterministic producers preserve webp compatibility
+  ---
+  duration_ms: 474.39209
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19043.331389

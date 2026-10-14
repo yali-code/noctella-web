@@ -1,0 +1,16 @@
+const fs=require('node:fs'),path=require('node:path');const {open,api,photoFileProof}=require('./fixture.cjs');const [root,driver,schema,inputHash,mode,artifact]=process.argv.slice(2);
+const checkpoint=phase=>{const data={phase,sourceSha:process.env.NOCTELLA_PROBE_SOURCE_SHA||'local'};fs.writeFileSync(path.join(root,'checkpoint.json'),JSON.stringify(data));fs.writeSync(1,JSON.stringify(data)+'\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);};
+(async()=>{const f=await open(driver,root,schema,inputHash);if(driver==='postgres')f.p.connection.on('error',()=>{});const token=f.p.token(await f.p.read('op'));
+ if(mode==='publish-race'){process.send({ready:true});process.once('message',async()=>{let result;try{result=await f.cap.publish(token,101,artifact);}catch(error){result={error:error.message};}process.send({result});await f.p.close();process.disconnect();});return;}
+ if(mode==='db-loss'){
+  const pid=(await f.p.q('SELECT pg_backend_pid() AS pid'))[0].pid;await f.p.connection.query("SET application_name='noctella405-"+schema+"'");
+  const original=fs.linkSync;let once=false;fs.linkSync=function(source,destination){if(!once&&path.dirname(destination)===path.join(root,'canonical')){once=true;const cp={phase:'validated-before-syscall',pid,application:'noctella405-'+schema};fs.writeFileSync(path.join(root,'checkpoint.json'),JSON.stringify(cp));fs.writeSync(1,JSON.stringify(cp)+'\n');const until=Date.now()+20000;while(!fs.existsSync(path.join(root,'resume'))&&Date.now()<until)Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10);if(!fs.existsSync(path.join(root,'resume')))throw Error('RESUME_TIMEOUT');}return original(source,destination);};
+  let error=null;try{await f.cap.publish(token,101,artifact);}catch(e){error=e.message;}fs.writeFileSync(path.join(root,'db-loss-result.json'),JSON.stringify({error,canonical:fs.readdirSync(path.join(root,'canonical')).map(k=>({key:k,...photoFileProof(path.join(root,'canonical',k))}))}));try{await f.p.close();}catch{}return;
+ }
+ if(mode==='intent')checkpoint('intent-before-files');
+ const write=fs.writeFileSync,copy=fs.copyFileSync,link=fs.linkSync;
+ fs.writeFileSync=function(file,...args){const result=write.call(this,file,...args);if(mode==='raw'&&path.basename(file)==='input')checkpoint('private-input-before-encode');return result;};
+ fs.copyFileSync=function(source,dest,...args){const result=copy.call(this,source,dest,...args);if(mode==='seal'&&path.basename(dest)==='thumb.webp'&&path.basename(path.dirname(dest))==='sealed')checkpoint('sealed-before-registry-commit');return result;};
+ let first=true;fs.linkSync=function(source,dest){const result=link.call(this,source,dest);if(mode==='first-link'&&first&&path.dirname(dest)===path.join(root,'canonical')){first=false;checkpoint('first-canonical-link');}return result;};
+ const bytes=await api('sharp')({create:{width:32,height:24,channels:3,background:'#ff0000'}}).png().toBuffer();const id=await f.cap.prepareProduct(token,101,bytes);if(mode==='registered')checkpoint('registered-seal-before-publication');await f.cap.publish(token,102,id);checkpoint('publication-returned');
+})().catch(error=>{fs.writeSync(2,JSON.stringify({name:error.name,code:error.code,message:error.message})+'\n');process.exit(2);});
