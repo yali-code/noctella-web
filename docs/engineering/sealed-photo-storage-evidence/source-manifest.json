@@ -1,0 +1,68 @@
+{
+  "source": "0c18d9813299fbc56838fdc40764a538fac9a8c8",
+  "base": "23932ce4df5281561f7a14325905f3c597ce15de",
+  "files": [
+    {
+      "file": "apps/api/src/services/developmentPhotoStorageCapability.ts",
+      "blob": "efd8d340c00830bb7dab8300500187076757f657",
+      "sha256": "66a91611b35d81dd03e22467cdaabb721e71e12374d70bd005d2f594ccd9f3ee"
+    },
+    {
+      "file": "apps/api/src/services/photoStorage.ts",
+      "blob": "c79963303ddda55fa6bc813a70613e3e2e0291b5",
+      "sha256": "de1a9135ace8b86e7fbb28af5a6021cad5f4d24167d21243266d193753ae2591"
+    },
+    {
+      "file": "scripts/photo-storage-capability/fixture.cjs",
+      "blob": "f8fa6cf883ac498308a6ff4bb0fea230338e1d4a",
+      "sha256": "d04f8aca0cf4e8ad562105784ddccb7d341854328b2e5d68687281f6563761b2"
+    },
+    {
+      "file": "scripts/photo-storage-capability/worker.cjs",
+      "blob": "d2b0408c3fc652ac592a6fbeabf0abe02a424304",
+      "sha256": "7a78e39d732809e1e0abae08f6ebb1ee47141cee10c9d3488bb0f2b80402eaee"
+    },
+    {
+      "file": "scripts/photo-storage-capability/storage.test.cjs",
+      "blob": "8769abb8d44490e227d6d05bf17928a542259004",
+      "sha256": "634b748272cd034ee6ab868feb483d5c66967e390e03dceccb378498871c537c"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "blob": "22c3198b3bd29ae62642eb3875531deaee61b086",
+      "sha256": "f0d6552dc9ce25f43f80b56578c396e14c6140219fb4a73bf4a0c381c31013bc"
+    }
+  ],
+  "unchanged": [
+    {
+      "file": "packages",
+      "base": "ef6f3a8a3e8726e4aaa955c9dd8495675d29b115",
+      "source": "ef6f3a8a3e8726e4aaa955c9dd8495675d29b115"
+    },
+    {
+      "file": "apps/api/src/db",
+      "base": "8041b2d361fdfd59f7bdc850a210e0409608c271",
+      "source": "8041b2d361fdfd59f7bdc850a210e0409608c271"
+    },
+    {
+      "file": "apps/api/src/routes",
+      "base": "af06d7dbe4f865204784daf4cfe16b81eb2e84a4",
+      "source": "af06d7dbe4f865204784daf4cfe16b81eb2e84a4"
+    },
+    {
+      "file": "apps/api/src/repositories",
+      "base": "000ae3917b07c4a1254f235aa09461864dac432d",
+      "source": "000ae3917b07c4a1254f235aa09461864dac432d"
+    },
+    {
+      "file": "scripts/photo-operation-fencing",
+      "base": "df6e9b59c6bd72a92737e9463f28ab44d8c2122d",
+      "source": "df6e9b59c6bd72a92737e9463f28ab44d8c2122d"
+    },
+    {
+      "file": "scripts/photo-crash-recovery",
+      "base": "b843977d9ee9da6d177cf5ebfe93cc89988fbca3",
+      "source": "b843977d9ee9da6d177cf5ebfe93cc89988fbca3"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+✔ sqlite product-private-seal-and-stale-compensation (752.445ms)
+✖ sqlite deterministic-stale-writer-and-immutable-source (416.5409ms)
+✔ sqlite sealed-inode-detaches-native-writer-and-idempotency (643.9963ms)
+✖ sqlite no-overwrite-foreign-output-and-zero-byte (404.2994ms)
+✔ sqlite lease-aba-and-database-outage (624.1019ms)
+✔ sqlite marker-aba-never-removes-replacement (515.9107ms)
+✔ sqlite SIGKILL intent (1205.1209ms)
+✔ sqlite SIGKILL raw (1232.2494ms)
+✔ sqlite SIGKILL seal (1144.0247ms)
+✔ sqlite SIGKILL registered (1150.4829ms)
+✔ sqlite SIGKILL first-link (1051.3161ms)
+✔ sqlite SIGKILL published (1029.6265ms)
+﹣ postgres product-private-seal-and-stale-compensation (1.0134ms) # SKIP
+﹣ postgres deterministic-stale-writer-and-immutable-source (0.2041ms) # SKIP
+﹣ postgres sealed-inode-detaches-native-writer-and-idempotency (0.1387ms) # SKIP
+﹣ postgres no-overwrite-foreign-output-and-zero-byte (0.1463ms) # SKIP
+﹣ postgres lease-aba-and-database-outage (0.1466ms) # SKIP
+﹣ postgres marker-aba-never-removes-replacement (0.1238ms) # SKIP
+﹣ postgres SIGKILL intent (0.1031ms) # SKIP
+﹣ postgres SIGKILL raw (0.098ms) # SKIP
+﹣ postgres SIGKILL seal (0.1046ms) # SKIP
+﹣ postgres SIGKILL registered (0.1079ms) # SKIP
+﹣ postgres SIGKILL first-link (0.1063ms) # SKIP
+﹣ postgres SIGKILL published (0.1094ms) # SKIP
+✖ actual SQLite rejected callback cannot escape into protected publication (417.3062ms)
+✔ feature OFF refuses disposable capability before filesystem mutation (375.9798ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 11
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 12
+ℹ todo 0
+ℹ duration_ms 11996.3811
+
+✖ failing tests:
+
+test at scripts\photo-storage-capability\storage.test.cjs:12:46
+✖ sqlite deterministic-stale-writer-and-immutable-source (416.5409ms)
+  TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received function 
+      at Hash.update (node:internal/crypto/hash:144:11)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:89:131)
+      at chain (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:25:124)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:89:38)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:77:26)
+      at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:76:24)
+      at C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-storage-capability\fixture.cjs:8:80
+      at C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-operation-fencing\protocol.cjs:42:10
+      at then (C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-operation-fencing\protocol.cjs:4:68) {
+    code: 'ERR_INVALID_ARG_TYPE'
+  }
+
+test at scripts\photo-storage-capability\storage.test.cjs:12:46
+✖ sqlite no-overwrite-foreign-output-and-zero-byte (404.2994ms)
+  TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received function 
+      at Hash.update (node:internal/crypto/hash:144:11)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:89:131)
+      at chain (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:25:124)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:89:38)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:77:26)
+      at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:76:24)
+      at C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-storage-capability\fixture.cjs:8:80
+      at C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-operation-fencing\protocol.cjs:42:10
+      at then (C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-operation-fencing\protocol.cjs:4:68) {
+    code: 'ERR_INVALID_ARG_TYPE'
+  }
+
+test at scripts\photo-storage-capability\storage.test.cjs:15:1
+✖ actual SQLite rejected callback cannot escape into protected publication (417.3062ms)
+  TypeError [ERR_INVALID_ARG_TYPE]: The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received function 
+      at Hash.update (node:internal/crypto/hash:144:11)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:89:131)
+      at chain (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:25:124)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:89:38)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:77:26)
+      at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+      at <anonymous> (C:\Users\Admin\noctella-web-p2-2b3d1\apps\api\src\services\developmentPhotoStorageCapability.ts:76:24)
+      at C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-storage-capability\fixture.cjs:8:80
+      at C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-operation-fencing\protocol.cjs:42:10
+      at then (C:\Users\Admin\noctella-web-p2-2b3d1\scripts\photo-operation-fencing\protocol.cjs:4:68) {
+    code: 'ERR_INVALID_ARG_TYPE'
+  }

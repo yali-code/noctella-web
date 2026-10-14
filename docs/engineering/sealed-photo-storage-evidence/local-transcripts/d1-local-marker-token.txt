@@ -1,0 +1,51 @@
+✔ sqlite product-private-seal-and-stale-compensation (1057.5052ms)
+✔ sqlite deterministic-stale-writer-and-immutable-source (668.3872ms)
+✔ sqlite sealed-inode-detaches-native-writer-and-idempotency (461.793ms)
+✔ sqlite no-overwrite-foreign-output-and-zero-byte (517.5012ms)
+✔ sqlite lease-aba-and-database-outage (562.7182ms)
+✔ sqlite marker-aba-never-removes-replacement (581.9307ms)
+✔ sqlite SIGKILL intent (1078.1382ms)
+✔ sqlite SIGKILL raw (1099.6987ms)
+✔ sqlite SIGKILL seal (967.6335ms)
+✔ sqlite SIGKILL registered (1011.6911ms)
+✔ sqlite SIGKILL first-link (1199.8727ms)
+✔ sqlite SIGKILL published (1352.1894ms)
+﹣ postgres product-private-seal-and-stale-compensation (3.3548ms) # SKIP
+﹣ postgres deterministic-stale-writer-and-immutable-source (0.2226ms) # SKIP
+﹣ postgres sealed-inode-detaches-native-writer-and-idempotency (0.1559ms) # SKIP
+﹣ postgres no-overwrite-foreign-output-and-zero-byte (0.1604ms) # SKIP
+﹣ postgres lease-aba-and-database-outage (0.148ms) # SKIP
+﹣ postgres marker-aba-never-removes-replacement (0.1432ms) # SKIP
+﹣ postgres SIGKILL intent (0.1454ms) # SKIP
+﹣ postgres SIGKILL raw (0.1467ms) # SKIP
+﹣ postgres SIGKILL seal (0.2148ms) # SKIP
+﹣ postgres SIGKILL registered (0.2259ms) # SKIP
+﹣ postgres SIGKILL first-link (0.1938ms) # SKIP
+﹣ postgres SIGKILL published (0.2428ms) # SKIP
+✔ actual SQLite rejected callback cannot escape into protected publication (1411.5114ms)
+✔ feature OFF refuses disposable capability before filesystem mutation (408.0808ms)
+✔ sqlite independent publication workers (1249.6825ms)
+﹣ postgres independent publication workers (0.7078ms) # SKIP
+✔ SQLite asynchronous authority continuation is revoked before later filesystem action (662.9923ms)
+✔ ENOSPC marker failure remains review-required without inferring abandonment (405.6436ms)
+﹣ PostgreSQL connection loss cannot release the filesystem publication fence early (0.4168ms) # SKIP
+✔ sqlite caller mutation and sealed inode replacement cannot retarget publication (521.8483ms)
+﹣ postgres caller mutation and sealed inode replacement cannot retarget publication (0.3586ms) # SKIP
+✔ sqlite marker cleanup failure retains an ambiguous acknowledged claim (493.839ms)
+✔ sqlite historical outbox and ambiguous acknowledgement preserve published bytes (583.6032ms)
+﹣ sqlite canonical symlinks are refused without touching their target (425.324ms) # Windows symlink privilege unavailable; Linux acceptance must execute
+﹣ postgres marker cleanup failure retains an ambiguous acknowledged claim (0.3661ms) # SKIP
+﹣ postgres historical outbox and ambiguous acknowledgement preserve published bytes (0.2008ms) # SKIP
+﹣ postgres canonical symlinks are refused without touching their target (0.1245ms) # SKIP
+✔ sqlite storage root rename cannot reset a durable mutation namespace (627.8895ms)
+﹣ postgres storage root rename cannot reset a durable mutation namespace (0.3577ms) # SKIP
+✔ sqlite marker nonce replacement on the same inode is retained (713.8635ms)
+﹣ postgres marker nonce replacement on the same inode is retained (0.3013ms) # SKIP
+ℹ tests 43
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 21
+ℹ todo 0
+ℹ duration_ms 19526.0555

@@ -1,0 +1,269 @@
+{
+  "artifacts": [
+    {
+      "id": 11900878181,
+      "name": "photo-crash-recovery-38576491928",
+      "size_in_bytes": 4016954,
+      "expired": false,
+      "created_at": "2026-10-14T14:13:23Z",
+      "expires_at": "2026-10-28T14:13:21Z",
+      "updated_at": "2026-10-14T14:13:23Z",
+      "digest": "sha256:f9a9b90cd908d5735d731767a5e497c6b0c8d88ea49329c46ae3957324ac99e7",
+      "workflow_run": {
+        "id": 38576491928,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "5947254ee97a2bd9fd089b89df1a9856bb37ebfb"
+      }
+    },
+    {
+      "id": 11900843080,
+      "name": "photo-storage-capability-38576491928",
+      "size_in_bytes": 6106131,
+      "expired": false,
+      "created_at": "2026-10-14T14:13:29Z",
+      "expires_at": "2026-10-28T14:13:26Z",
+      "updated_at": "2026-10-14T14:13:29Z",
+      "digest": "sha256:1edcf0ffe7550572c8ffe30763b5aa1fc0ace79a3426f2609d2564af32e7d035",
+      "workflow_run": {
+        "id": 38576491928,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "5947254ee97a2bd9fd089b89df1a9856bb37ebfb"
+      }
+    },
+    {
+      "id": 11900543837,
+      "name": "photo-operation-fencing-38576491928",
+      "size_in_bytes": 4499334,
+      "expired": false,
+      "created_at": "2026-10-14T14:13:25Z",
+      "expires_at": "2026-10-28T14:13:23Z",
+      "updated_at": "2026-10-14T14:13:25Z",
+      "digest": "sha256:cff2208aadf32835c6a0642004fda9604c87111a1eb1115e27b2f860f968fd78",
+      "workflow_run": {
+        "id": 38576491928,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "5947254ee97a2bd9fd089b89df1a9856bb37ebfb"
+      }
+    },
+    {
+      "id": 11902633082,
+      "name": "photo-operation-fencing-38577643331",
+      "size_in_bytes": 4499446,
+      "expired": false,
+      "created_at": "2026-10-14T14:20:22Z",
+      "expires_at": "2026-10-28T14:20:19Z",
+      "updated_at": "2026-10-14T14:20:22Z",
+      "digest": "sha256:cab00e4f28d01b0c9cb0adf01dc991138da9574ffa7adcf9e06b7276970fb443",
+      "workflow_run": {
+        "id": 38577643331,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1"
+      }
+    },
+    {
+      "id": 11902148261,
+      "name": "photo-crash-recovery-38577643331",
+      "size_in_bytes": 4016464,
+      "expired": false,
+      "created_at": "2026-10-14T14:20:19Z",
+      "expires_at": "2026-10-28T14:20:17Z",
+      "updated_at": "2026-10-14T14:20:19Z",
+      "digest": "sha256:8843e39dfef9292715f09f2acdc6044271394fe2453cda01f2f7c2ace1aff513",
+      "workflow_run": {
+        "id": 38577643331,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1"
+      }
+    },
+    {
+      "id": 11901683485,
+      "name": "photo-storage-capability-38577643331",
+      "size_in_bytes": 6487296,
+      "expired": false,
+      "created_at": "2026-10-14T14:20:26Z",
+      "expires_at": "2026-10-28T14:20:23Z",
+      "updated_at": "2026-10-14T14:20:26Z",
+      "digest": "sha256:4e123a457f7afd970f22b1a594f438b3eadaf86743d5a22269bc1d603f363988",
+      "workflow_run": {
+        "id": 38577643331,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "3b1d8cdbb0242f457d0e1445fd9195a368329db1"
+      }
+    },
+    {
+      "id": 11904180340,
+      "name": "photo-crash-recovery-38579084392",
+      "size_in_bytes": 4017225,
+      "expired": false,
+      "created_at": "2026-10-14T14:31:35Z",
+      "expires_at": "2026-10-28T14:31:33Z",
+      "updated_at": "2026-10-14T14:31:35Z",
+      "digest": "sha256:adbb27884d1c618bc478de727e8cbe5ff5184ee5f745f0156a55c1b3671199e3",
+      "workflow_run": {
+        "id": 38579084392,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "0c18d9813299fbc56838fdc40764a538fac9a8c8"
+      }
+    },
+    {
+      "id": 11904125377,
+      "name": "photo-storage-capability-38579084392",
+      "size_in_bytes": 7645520,
+      "expired": false,
+      "created_at": "2026-10-14T14:31:41Z",
+      "expires_at": "2026-10-28T14:31:38Z",
+      "updated_at": "2026-10-14T14:31:41Z",
+      "digest": "sha256:b7802d895541d2f9077ca2ff22f70f12e47ba2640790ca4e07ade42075f49225",
+      "workflow_run": {
+        "id": 38579084392,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "0c18d9813299fbc56838fdc40764a538fac9a8c8"
+      }
+    },
+    {
+      "id": 11903990427,
+      "name": "photo-operation-fencing-38579084392",
+      "size_in_bytes": 4499272,
+      "expired": false,
+      "created_at": "2026-10-14T14:31:37Z",
+      "expires_at": "2026-10-28T14:31:35Z",
+      "updated_at": "2026-10-14T14:31:37Z",
+      "digest": "sha256:7260ba32d4e9af37081a2e2ece6efc27742d3c49fdfb98a6b2f5d8a154542d15",
+      "workflow_run": {
+        "id": 38579084392,
+        "repository_id": 1294870656,
+        "head_repository_id": 1294870656,
+        "head_branch": "feat/photo-storage-capabilities-p2-2b3d1",
+        "head_sha": "0c18d9813299fbc56838fdc40764a538fac9a8c8"
+      }
+    }
+  ],
+  "parentHeads": [
+    {
+      "pr": 404,
+      "head": "feat/photo-operation-fencing-p2-2b3c",
+      "sha": "23932ce4df5281561f7a14325905f3c597ce15de",
+      "merged": false
+    },
+    {
+      "pr": 402,
+      "head": "fix/photo-postgres-timestamps-p2-2b3b",
+      "sha": "a4c3ea7602884934c2e1feda190506a8bac2133b",
+      "merged": false
+    },
+    {
+      "pr": 398,
+      "head": "feat/photo-crash-recovery-p2-2b3",
+      "sha": "f89d3a1d430948c0ed165da7fcd624251bbdb46d",
+      "merged": false
+    },
+    {
+      "pr": 392,
+      "head": "feat/ai-intake-memory-p2-2b2b",
+      "sha": "6eca0afcda2ee5a96126818234b4429f5ae9ecfd",
+      "merged": false
+    }
+  ],
+  "runs": [
+    {
+      "run": 577,
+      "id": 38576491928,
+      "source": "5947254ee97a2bd9fd089b89df1a9856bb37ebfb",
+      "conclusion": "success",
+      "observedResults": [
+        "2026-10-14T14:01:52.1397202Z # tests 41",
+        "2026-10-14T14:01:52.1398090Z # pass 41",
+        "2026-10-14T14:01:52.1398958Z # fail 0",
+        "2026-10-14T14:01:52.1402888Z # skipped 0",
+        "2026-10-14T14:02:07.1343531Z # tests 35",
+        "2026-10-14T14:02:07.1344105Z # pass 35",
+        "2026-10-14T14:02:07.1344370Z # fail 0",
+        "2026-10-14T14:02:07.1349658Z # skipped 0",
+        "2026-10-14T14:03:06.8433943Z # tests 37",
+        "2026-10-14T14:03:06.8434773Z # pass 37",
+        "2026-10-14T14:03:06.8449971Z # fail 0",
+        "2026-10-14T14:03:06.8450730Z # skipped 0",
+        "2026-10-14T14:04:51.9545144Z  Test Files  130 passed (130)",
+        "2026-10-14T14:04:51.9550547Z       Tests  925 passed (925)",
+        "2026-10-14T14:11:20.8205647Z  Test Files  276 passed | 4 skipped (280)",
+        "2026-10-14T14:11:20.8241216Z       Tests  6106 passed | 34 skipped (6140)",
+        "2026-10-14T14:11:36.0273582Z  Test Files  36 passed (36)",
+        "2026-10-14T14:11:36.0275877Z       Tests  376 passed (376)",
+        "2026-10-14T14:11:52.8851896Z  Test Files  7 passed (7)",
+        "2026-10-14T14:11:52.8852857Z       Tests  51 passed (51)"
+      ]
+    },
+    {
+      "run": 578,
+      "id": 38577643331,
+      "source": "3b1d8cdbb0242f457d0e1445fd9195a368329db1",
+      "conclusion": "success",
+      "observedResults": [
+        "2026-10-14T14:09:42.9659051Z # tests 43",
+        "2026-10-14T14:09:42.9659678Z # pass 43",
+        "2026-10-14T14:09:42.9659997Z # fail 0",
+        "2026-10-14T14:09:42.9660663Z # skipped 0",
+        "2026-10-14T14:09:56.1366894Z # tests 35",
+        "2026-10-14T14:09:56.1374295Z # pass 35",
+        "2026-10-14T14:09:56.1374517Z # fail 0",
+        "2026-10-14T14:09:56.1374926Z # skipped 0",
+        "2026-10-14T14:10:50.4007052Z # tests 37",
+        "2026-10-14T14:10:50.4007766Z # pass 37",
+        "2026-10-14T14:10:50.4013371Z # fail 0",
+        "2026-10-14T14:10:50.4014042Z # skipped 0",
+        "2026-10-14T14:12:27.5700400Z  Test Files  130 passed (130)",
+        "2026-10-14T14:12:27.5704997Z       Tests  925 passed (925)",
+        "2026-10-14T14:18:26.3758205Z  Test Files  276 passed | 4 skipped (280)",
+        "2026-10-14T14:18:26.3800410Z       Tests  6106 passed | 34 skipped (6140)",
+        "2026-10-14T14:18:40.1755062Z  Test Files  36 passed (36)",
+        "2026-10-14T14:18:40.1757297Z       Tests  376 passed (376)",
+        "2026-10-14T14:18:54.8146301Z  Test Files  7 passed (7)",
+        "2026-10-14T14:18:54.8147253Z       Tests  51 passed (51)"
+      ]
+    },
+    {
+      "run": 579,
+      "id": 38579084392,
+      "source": "0c18d9813299fbc56838fdc40764a538fac9a8c8",
+      "conclusion": "success",
+      "observedResults": [
+        "2026-10-14T14:19:41.2180028Z # tests 48",
+        "2026-10-14T14:19:41.2185942Z # pass 48",
+        "2026-10-14T14:19:41.2186684Z # fail 0",
+        "2026-10-14T14:19:41.2188269Z # skipped 0",
+        "2026-10-14T14:19:57.1005345Z # tests 35",
+        "2026-10-14T14:19:57.1006118Z # pass 35",
+        "2026-10-14T14:19:57.1006804Z # fail 0",
+        "2026-10-14T14:19:57.1007926Z # skipped 0",
+        "2026-10-14T14:20:59.2656221Z # tests 37",
+        "2026-10-14T14:20:59.2657241Z # pass 37",
+        "2026-10-14T14:20:59.2657736Z # fail 0",
+        "2026-10-14T14:20:59.2658744Z # skipped 0",
+        "2026-10-14T14:22:47.7973067Z  Test Files  130 passed (130)",
+        "2026-10-14T14:22:47.7978985Z       Tests  925 passed (925)",
+        "2026-10-14T14:29:27.1509838Z  Test Files  276 passed | 4 skipped (280)",
+        "2026-10-14T14:29:27.1572573Z       Tests  6106 passed | 34 skipped (6140)",
+        "2026-10-14T14:29:42.8778679Z  Test Files  36 passed (36)",
+        "2026-10-14T14:29:42.8781069Z       Tests  376 passed (376)",
+        "2026-10-14T14:30:00.7540349Z  Test Files  7 passed (7)",
+        "2026-10-14T14:30:00.7541443Z       Tests  51 passed (51)"
+      ]
+    }
+  ]
+}
