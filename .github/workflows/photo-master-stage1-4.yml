@@ -314,6 +314,7 @@ jobs:
       - ext4-disk-budget-enospc
       - linux-512m-24mp-combined
       - w3-candidate-integration-gate
+      - w2-live-adoption-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
