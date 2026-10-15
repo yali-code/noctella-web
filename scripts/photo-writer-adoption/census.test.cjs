@@ -14,7 +14,7 @@ const EXPECTED = {
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
   'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
   'services/photoStorage.ts': { mutation: 4, writers: ['W1', 'W4', 'W10'] },
-  'services/aiIntakePhotoStorage.ts': { mutation: 3, writers: ['W3', 'W5'] },
+  'services/aiIntakePhotoStorage.ts': { mutation: 11, handle: 1, writers: ['W3', 'W5', 'W3 original-source (#390, flag OFF by default: private partial create/copy/chmod/link/unlink/rm and directory fsync only)'] },
   'services/managedFileDeletion.ts': { mutation: 1, writers: ['W5', 'W6'] },
   'services/productPhotoStorageWorkflow.ts': { mutation: 2, writers: ['W7', 'W8', 'W9'] },
   'integrations/instagram/mediaPreparation.ts': { mutation: 3, writers: ['W11'] },
@@ -90,7 +90,7 @@ test('staging and fencing switches have no default-true fallback', () => {
     for (const line of text.split(/\r?\n/)) {
       // Isolated offline resource probes (src/scripts) may set the flag only together with NODE_ENV "test" on the same line.
       if (rel(file).startsWith('scripts/') && /NODE_ENV\s*:\s*["']test["']/.test(line)) continue;
-      if (/(PRODUCT_PHOTO_DISK_STAGING_ENABLED|PHOTO_OWNERSHIP_FENCING_ENABLED)\s*(\?\?|\|\|)\s*["']true|(PRODUCT_PHOTO_DISK_STAGING_ENABLED|PHOTO_OWNERSHIP_FENCING_ENABLED)["']?\s*[:=]\s*["']true/.test(line)) hits.push(`${rel(file)}: ${line.trim()}`);
+      if (/(PRODUCT_PHOTO_DISK_STAGING_ENABLED|PHOTO_OWNERSHIP_FENCING_ENABLED|AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED)\s*(\?\?|\|\|)\s*["']true|(PRODUCT_PHOTO_DISK_STAGING_ENABLED|PHOTO_OWNERSHIP_FENCING_ENABLED|AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED)["']?\s*[:=]\s*["']true/.test(line)) hits.push(`${rel(file)}: ${line.trim()}`);
     }
   }
   assert.deepEqual(hits, []);
