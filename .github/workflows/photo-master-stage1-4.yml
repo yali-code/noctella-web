@@ -157,3 +157,47 @@ jobs:
       - run: npm ci
       - run: npm run build -w packages/shared
       - run: npm exec -w apps/api -- vitest run
+  ext4-disk-budget-enospc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - name: Disposable ext4 loop budget + ENOSPC acceptance
+        shell: bash
+        env:
+          NOCTELLA_DISK_BUDGET_EVIDENCE_DIR: ${{ runner.temp }}/photo-disk-budget-evidence
+        run: |
+          set -euo pipefail
+          EVIDENCE="$NOCTELLA_DISK_BUDGET_EVIDENCE_DIR"
+          mkdir -p "$EVIDENCE"
+          IMAGE="${{ runner.temp }}/photo-disk-budget.img"
+          MOUNT="${{ runner.temp }}/noctella-photo-budget-mount"
+          dd if=/dev/zero of="$IMAGE" bs=1M count=64 status=none
+          mkfs.ext4 -q -F -m 0 -N 4096 "$IMAGE"
+          sudo mkdir -p "$MOUNT"
+          sudo mount -o loop "$IMAGE" "$MOUNT"
+          trap 'sudo umount "$MOUNT" || true' EXIT
+          sudo chown "$(id -u):$(id -g)" "$MOUNT"
+          df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-before.txt"
+          TMPDIR="$MOUNT" node --import tsx scripts/photo-disk-budget/measure.cjs --quick --out "$EVIDENCE/measure-ext4-loop-quick.json"
+          TMPDIR="$MOUNT" NOCTELLA_DISK_BUDGET_ENOSPC=1 node --import tsx --test scripts/photo-disk-budget/budget.test.cjs 2>&1 | tee "$EVIDENCE/test-output.txt"
+          df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-after.txt"
+          sudo find "$MOUNT" -xdev \( -type f -o -type d \) -printf '%y %i %n %s %b %p\n' | sort -k6 > "$EVIDENCE/loop-inventory.txt"
+          sudo umount "$MOUNT"
+          trap - EXIT
+          node --import tsx scripts/photo-disk-budget/measure.cjs --out "$EVIDENCE/measure-runner-full.json"
+      - name: Upload non-sensitive budget evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-master-ext4-budget
+          path: ${{ runner.temp }}/photo-disk-budget-evidence
+          retention-days: 7
