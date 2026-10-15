@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess, diagnosticEnvArgs, compareParity } from "./policy.mjs";
+import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess, diagnosticEnvArgs, compareParity, isVanishedEntryError } from "./policy.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
 const fixtureRoot = path.resolve(process.argv[3] ?? "");
@@ -13,19 +13,26 @@ const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", tim
 const write = (file, value) => fsp.writeFile(file, JSON.stringify(value, null, 2) + "\n");
 const record = { schemaVersion: 1, sourceSha: SOURCE_SHA, harnessSha: process.env.HARNESS_SHA ?? "unknown", runUrl: process.env.RUN_URL ?? "local", startedAt: new Date().toISOString(), scope: "gated real product HTTP route; synthetic SQLite and in-process streaming client; not final API acceptance", cases: [] };
 
-async function usage(root) {
-  let logical = 0, allocated = 0, files = 0;
-  for (const entry of await fsp.readdir(root, { withFileTypes: true })) {
+// The live sampler walks /work while the workload creates and removes files; an entry listed by readdir can be gone
+// before lstat/readdir reaches it. Only that ENOENT race is tolerated, and it is counted; every other error still fails.
+async function usage(root, nested = false) {
+  let logical = 0, allocated = 0, files = 0, vanished = 0;
+  let entries;
+  try { entries = await fsp.readdir(root, { withFileTypes: true }); }
+  catch (error) { if (nested && isVanishedEntryError(error)) return { logical, allocated, files, vanished: 1 }; throw error; }
+  for (const entry of entries) {
     const target = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      const child = await usage(target); logical += child.logical; allocated += child.allocated; files += child.files;
+      const child = await usage(target, true); logical += child.logical; allocated += child.allocated; files += child.files; vanished += child.vanished;
     } else {
-      const s = await fsp.lstat(target);
+      let s;
+      try { s = await fsp.lstat(target); }
+      catch (error) { if (isVanishedEntryError(error)) { vanished++; continue; } throw error; }
       if (s.isSymbolicLink()) throw Error("Unexpected symlink in disposable work directory");
       logical += s.size; allocated += s.blocks * 512; files++;
     }
   }
-  return { logical, allocated, files };
+  return { logical, allocated, files, vanished };
 }
 async function inventory(root, dir = root, result = []) {
   for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
@@ -89,6 +96,7 @@ async function run() {
         item.observedProcessHwm = Math.max(item.observedProcessHwm, ...procs.map(p => p.hwm));
         item.observedGroupRss = Math.max(item.observedGroupRss, procs.reduce((sum, p) => sum + p.rss, 0));
         item.lastSample = memory;
+        item.observerVanishedEntries = (item.observerVanishedEntries ?? 0) + disk.vanished;
         item.diskPeak.logical = Math.max(item.diskPeak.logical, disk.logical);
         item.diskPeak.allocated = Math.max(item.diskPeak.allocated, disk.allocated);
         item.diskPeak.files = Math.max(item.diskPeak.files, disk.files);

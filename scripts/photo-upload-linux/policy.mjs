@@ -135,6 +135,9 @@ export function compareParity(cases) {
   return { ok: Object.values(groups).every(g => g.reference && g.results.every(r => r.status === "MATCH" || r.status === "EXPECTED_CHANGE")), groups };
 }
 
+/** Observer race only: a work-directory entry removed between listing and inspection (never permission, I/O or symlink errors). */
+export const isVanishedEntryError = (error) => error?.code === "ENOENT";
+
 export const COMBINED_INPUT_SHA='2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7';
 export function validateCombinedMode(scenario,environment,fixture,actualSha){
  if(scenario.path!=='combined')return {role:'other-profile'};

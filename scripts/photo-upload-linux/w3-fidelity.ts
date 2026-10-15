@@ -109,13 +109,15 @@ export async function runFidelity() {
         } else if (kind === "main") cmp.vsReference = { skipped: "reference dimensions differ", reference: [reference.info.width, reference.info.height] };
         entry[kind] = cmp;
       }
-      entry.privacy = {
-        A_stagedServedByAdminRoute: scanMarkers(fs.readFileSync(A.stagedPath), MARKERS), B_stagedRaw: scanMarkers(fs.readFileSync(B.stagedPath), MARKERS),
-        B_preview: { markers: scanMarkers(fs.readFileSync(B.preview), MARKERS), ...pick(await sharp(B.preview).metadata()) },
-        note: "Live AiIntakePhotoReader (W4 and future AI providers) returns raw staged bytes: under B that is the original with EXIF/GPS unless a provider-safe reader (previewOriginalSource) is used.",
-      };
-      entry.legacy = { A_keyMatchesLiveCleanup: isPrivateStagedFilename(A.stagedKey), B_keyMatchesLiveCleanup: isPrivateStagedFilename(B.stagedKey), B_keyMatchesExperiment: experiment.ORIGINAL_SOURCE_KEY_RE.test(B.stagedKey) };
-    }
+    } else entry.comparison = { skipped: "A or B did not complete W3+W4", A: A.rejected || A.crashed ? (A.message ?? A.stderr ?? "crashed") : "completed", B: B.rejected || B.crashed ? (B.message ?? B.stderr ?? "crashed") : "completed" };
+    // Privacy and naming are recorded for each workflow independently, so one side's rejection never hides the other.
+    entry.privacy = {
+      A_stagedServedByAdminRoute: A.stagedPath ? scanMarkers(fs.readFileSync(A.stagedPath), MARKERS) : null,
+      B_stagedRaw: B.stagedPath ? scanMarkers(fs.readFileSync(B.stagedPath), MARKERS) : null,
+      B_preview: B.preview && fs.existsSync(B.preview) ? { markers: scanMarkers(fs.readFileSync(B.preview), MARKERS), ...pick(await sharp(B.preview).metadata()) } : null,
+      note: "Live AiIntakePhotoReader (W4 and future AI providers) returns raw staged bytes: under B that is the original with EXIF/GPS unless a provider-safe reader (previewOriginalSource) is used.",
+    };
+    entry.legacy = { A_keyMatchesLiveCleanup: A.stagedKey ? isPrivateStagedFilename(A.stagedKey) : null, B_keyMatchesLiveCleanup: B.stagedKey ? isPrivateStagedFilename(B.stagedKey) : null, B_keyMatchesExperiment: B.stagedKey ? experiment.ORIGINAL_SOURCE_KEY_RE.test(B.stagedKey) : null };
     report.cases.push(entry);
   }
 
