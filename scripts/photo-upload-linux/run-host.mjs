@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess, allocatorEnvArgs } from "./policy.mjs";
+import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess, diagnosticEnvArgs, compareParity } from "./policy.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
 const fixtureRoot = path.resolve(process.argv[3] ?? "");
@@ -107,7 +107,7 @@ async function run() {
         samplingJob = sample().catch(error => { item.samplingError = String(error); }).finally(() => { sampling = false; });
       }, 50);
       item.exitCode = await new Promise((resolve) => {
-        const diagnosticEnv = scenario.allocatorExperiment ? allocatorEnvArgs(scenario.allocatorExperiment) : scenario.mmapPolicy ? ["--env", "MALLOC_MMAP_THRESHOLD_=131072", "--env", "MALLOC_TRIM_THRESHOLD_=131072"] : scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
+        const diagnosticEnv = scenario.allocatorExperiment || scenario.libvipsVariant ? diagnosticEnvArgs(scenario) : scenario.mmapPolicy ? ["--env", "MALLOC_MMAP_THRESHOLD_=131072", "--env", "MALLOC_TRIM_THRESHOLD_=131072"] : scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
         const child = spawn("docker", ["exec", ...diagnosticEnv, name, "node", "--import", "tsx", "scripts/photo-upload-linux/agent.ts", "run"], { stdio: ["ignore", "pipe", "pipe"] });
         let log = "";
         child.stdout.on("data", chunk => { log = (log + chunk.toString()).slice(-64000); });
@@ -122,6 +122,7 @@ async function run() {
       item.dockerState = JSON.parse(docker("inspect", name))[0].State;
       item.oomKilled = item.dockerState.OOMKilled;
       item.result = JSON.parse(await fsp.readFile(path.join(evidence, "result.json"), "utf8").catch(() => "null"));
+      item.outputDigests = JSON.parse(await fsp.readFile(path.join(evidence, "output-sha256.json"), "utf8").catch(() => "null"))?.sortedDigests ?? null;
       item.finalDisk = await usage(work);
       item.finalInventory = await inventory(work);
       item.diskPeak.logical = Math.max(item.diskPeak.logical, item.finalDisk.logical);
@@ -149,7 +150,9 @@ async function run() {
   await fsp.rmdir(tempRoot);
   record.finishedAt = new Date().toISOString();
   record.expectedCases = selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").length;
-  record.status = record.cases.length === record.expectedCases && record.cases.every(c => c.assessment.status === "PASS") ? "PASS" : "FAIL";
+  // #390: a parity reference only supplies output digests; byte parity is required for every case in its group.
+  record.parity = compareParity(record.cases.map(c => ({ name: c.scenario.name, parityGroup: c.scenario.parityGroup, parityReference: !!c.scenario.parityReference, digests: c.outputDigests })));
+  record.status = record.cases.length === record.expectedCases && record.parity.ok && record.cases.filter(c => !c.scenario.parityReference).every(c => c.assessment.status === "PASS") ? "PASS" : "FAIL";
   await write(path.join(output, "summary.json"), record);
   const size = await usage(output);
   if (size.logical > 16 * 1024 * 1024) throw Error("Evidence exceeds 16-MiB artifact budget");

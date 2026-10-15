@@ -1,0 +1,30 @@
+--- a/libvips/foreign/webpsave.c
++++ b/libvips/foreign/webpsave.c
+@@ -324,6 +324,13 @@
+ 	if (vips_foreign_save_webp_write_webp_image(webp, webp->frame_bytes, &pic))
+ 		return -1;
+ 
++	/* Noctella #390 experiment: WebPPictureImportRGB(A) copied the frame
++	 * into pic-owned YUVA/ARGB planes and a single image has exactly one
++	 * frame, so release the full-resolution RGB(A) copy before WebPEncode.
++	 */
++	if (webp->mode == VIPS_FOREIGN_SAVE_WEBP_MODE_SINGLE)
++		VIPS_FREE(webp->frame_bytes);
++
+ 	/* Animated write
+ 	 */
+ 	if (webp->mode == VIPS_FOREIGN_SAVE_WEBP_MODE_ANIM) {
+@@ -367,6 +374,13 @@
+ 	/* Write the new pixels into the frame.
+ 	 */
+ 	for (int i = 0; i < area->height; i++) {
++		/* Never write into a released single-image frame.
++		 */
++		if (!webp->frame_bytes) {
++			vips_error("webpsave", "%s", _("frame already released"));
++			return -1;
++		}
++
+ 		memcpy(webp->frame_bytes +
+ 				area->width * webp->write_y * save->ready->Bands,
+ 			VIPS_REGION_ADDR(region, 0, area->top + i),

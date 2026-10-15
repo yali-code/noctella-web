@@ -10,7 +10,7 @@ import { createRequire } from "node:module";
 const sharp = createRequire(new URL("../../apps/api/package.json", import.meta.url))("sharp");
 const { runCombinedScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/sharedImageResourceProbe.js");
 const { runScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/photoUploadResourceProbe.js");
-import { FIXTURES, selectedScenarios, parseEvents, validateLimits, validateCombinedMode, ALLOCATOR_EXPERIMENTS } from "./policy.mjs";
+import { FIXTURES, selectedScenarios, parseEvents, validateLimits, validateCombinedMode, ALLOCATOR_EXPERIMENTS, LIBVIPS_VARIANTS } from "./policy.mjs";
 
 async function cgroup() {
   const value = async (name: string) => (await fs.readFile("/sys/fs/cgroup/" + name, "utf8")).trim();
@@ -50,7 +50,11 @@ async function main() {
     const expected=config.scenario.allocatorExperiment?ALLOCATOR_EXPERIMENTS[config.scenario.allocatorExperiment as keyof typeof ALLOCATOR_EXPERIMENTS]?.library:null;
     if(config.scenario.allocatorExperiment&&expected===undefined)throw Error("Unknown allocator experiment");
     if(expected&&!mapped.some(file=>path.basename(file).includes(expected)))throw Error("Requested allocator is not loaded: "+expected);
-    await fs.writeFile("/evidence/measurement-mode.json",JSON.stringify({...mode,loadedAllocatorLibraries:mapped},null,2));
+    // #390: exactly one libvips is mapped, and it is the requested build (the unchanged npm binary unless a diagnostic variant is named).
+    const libvips=[...new Set((await fs.readFile("/proc/self/maps","utf8")).split("\n").map(line=>line.split(/\s+/)[5]).filter((file?:string)=>!!file&&path.basename(file).startsWith("libvips-cpp")))];
+    const variant=LIBVIPS_VARIANTS[(config.scenario.libvipsVariant??"prebuilt") as keyof typeof LIBVIPS_VARIANTS];
+    if(!variant||libvips.length!==1||!libvips[0].endsWith(variant.mapped))throw Error("Unexpected libvips mapping: "+JSON.stringify(libvips));
+    await fs.writeFile("/evidence/measurement-mode.json",JSON.stringify({...mode,loadedAllocatorLibraries:mapped,loadedLibvips:libvips[0],libvipsVersion:sharp.versions.vips},null,2));
   }
   const result = config.scenario.path === "combined" ? await runCombinedScenario(config) : await runScenario(config);
   await fs.writeFile("/evidence/result.json", JSON.stringify(result, null, 2));

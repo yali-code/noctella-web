@@ -79,14 +79,47 @@ export const ALLOCATOR_EXPERIMENTS = {
 };
 export const allocatorEnvArgs = (name) => Object.entries(ALLOCATOR_EXPERIMENTS[name]?.env ?? {}).flatMap(([key, value]) => ["--env", key + "=" + value]);
 
+/** #390 DIAGNOSTIC libvips builds: "prebuilt" is the unchanged npm binary; the others are injected by SONAME preload. */
+export const LIBVIPS_VARIANTS = {
+  prebuilt: { mapped: "/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.8.17.3", preload: null },
+  unmodified: { mapped: "/opt/vips-variants/unmodified/libvips-cpp.so.8.17.3", preload: "/opt/vips-variants/unmodified/libvips-cpp.so.8.17.3" },
+  patched: { mapped: "/opt/vips-variants/patched/libvips-cpp.so.8.17.3", preload: "/opt/vips-variants/patched/libvips-cpp.so.8.17.3" },
+};
+export function diagnosticEnvArgs(scenario) {
+  const env = { ...(ALLOCATOR_EXPERIMENTS[scenario.allocatorExperiment]?.env ?? {}) };
+  const preload = LIBVIPS_VARIANTS[scenario.libvipsVariant]?.preload;
+  if (preload) env.LD_PRELOAD = env.LD_PRELOAD ? preload + ":" + env.LD_PRELOAD : preload;
+  return Object.entries(env).flatMap(([key, value]) => ["--env", key + "=" + value]);
+}
+const rgbFreeCase = (name, libvipsVariant, allocatorExperiment, extra = {}) => ({ name: "linux-rgbfree-" + name + "-24mp", description: "DIAGNOSTIC ONLY (#390): unchanged 24MP mixed workload with libvips " + libvipsVariant + (allocatorExperiment ? " + " + allocatorExperiment : " + default glibc") + "; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, libvipsVariant, ...(allocatorExperiment ? { allocatorExperiment } : {}), parityGroup: "rgbfree", acceptanceRole: "diagnostic-only", ...extra });
+const RGBFREE_REFERENCE = () => rgbFreeCase("reference-prebuilt-arena1", "prebuilt", "glibc-arena1-mmap", { parityReference: true });
+
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap", "native-allocators"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap", "native-allocators", "native-rgbfree", "native-rgbfree-trials", "native-rgbfree-alloc-trials"].includes(profile)) throw Error("Unknown bounded resource profile");
+  // Isolated native measurement first (default glibc), allocator combination only afterwards.
+  if (profile === "native-rgbfree") return [RGBFREE_REFERENCE(), rgbFreeCase("unmodified", "unmodified"), rgbFreeCase("patched", "patched"), rgbFreeCase("unmodified-arena1", "unmodified", "glibc-arena1-mmap"), rgbFreeCase("patched-arena1", "patched", "glibc-arena1-mmap")];
+  if (profile === "native-rgbfree-trials" || profile === "native-rgbfree-alloc-trials") return [RGBFREE_REFERENCE(), ...[1, 2, 3].map(trial => rgbFreeCase((profile === "native-rgbfree-trials" ? "patched" : "patched-arena1") + "-t" + trial, "patched", profile === "native-rgbfree-trials" ? undefined : "glibc-arena1-mmap", { trial }))];
   if (profile === "native-allocators") return Object.keys(ALLOCATOR_EXPERIMENTS).map(allocatorExperiment => ({ name: "linux-alloc-" + allocatorExperiment + "-24mp", description: "DIAGNOSTIC ONLY (#390): unchanged 24MP mixed workload under an allocator override; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, allocatorExperiment, acceptanceRole: "diagnostic-only" }));
   if (profile === "native-worker" || profile === "native-mmap") return [{ name: "linux-"+profile+"-24mp", description: "DIAGNOSTIC ONLY: unchanged mixed workload with isolated AI recipe or glibc mmap policy; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, recipeWorker: profile === "native-worker", mmapPolicy: profile === "native-mmap", acceptanceRole: "diagnostic-only" }];
   if (profile === "native-profile") return [{ name: "linux-native-profile-24mp", description: "DIAGNOSTIC ONLY: glibc large allocation stacks and lifetimes; instrumentation is not acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, nativeTrace: true, acceptanceRole: "diagnostic-only" }];
   if (profile === "combined-reference") return [{ name: "linux-combined-reference-12mp", description: "DIAGNOSTIC ONLY: complete mixed workflow on a 12MP reference; cannot replace failed 24MP acceptance", fixtures: ["jpeg-typical-landscape"], ops: 8, concurrency: 3, path: "combined", trial: 1, acceptanceRole: "diagnostic-only" }];
   if (profile === "combined") return [1, 2, 3].map(trial => ({ name: "linux-combined-t" + trial, description: "Combined gated product, AI upload/finalization and Instagram synthetic workflows", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial }));
   return scenarios(includeStress).filter(s => profile === "full" || (profile === "c4" ? s.concurrency === 4 : s.name === "linux-webp-c4"));
+}
+
+/** Byte parity per group against its reference: MATCH, MISMATCH (exact digest differences) or MISSING (no outputs, e.g. OOM). */
+export function compareParity(cases) {
+  const groups = {};
+  for (const group of new Set(cases.filter(c => c.parityGroup).map(c => c.parityGroup))) {
+    const members = cases.filter(c => c.parityGroup === group);
+    const reference = members.find(c => c.parityReference && Array.isArray(c.digests));
+    groups[group] = { reference: reference?.name ?? null, results: members.filter(c => !c.parityReference).map(c => {
+      if (!reference || !Array.isArray(c.digests)) return { name: c.name, status: "MISSING" };
+      const same = c.digests.length === reference.digests.length && c.digests.every((d, i) => d === reference.digests[i]);
+      return same ? { name: c.name, status: "MATCH" } : { name: c.name, status: "MISMATCH", onlyInReference: reference.digests.filter(d => !c.digests.includes(d)), onlyInCase: c.digests.filter(d => !reference.digests.includes(d)) };
+    }) };
+  }
+  return { ok: Object.values(groups).every(g => g.reference && g.results.every(r => r.status === "MATCH")), groups };
 }
 
 export const COMBINED_INPUT_SHA='2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7';
@@ -97,6 +130,6 @@ export function validateCombinedMode(scenario,environment,fixture,actualSha){
  }
  const role=scenario.acceptanceRole==='diagnostic-only'?'diagnostic-only':'acceptance';
  const allocator=Object.fromEntries(Object.entries(environment).filter(([name,value])=>value&&(name.startsWith('MALLOC_')||name.startsWith('MIMALLOC_')||name==='LD_PRELOAD'||name==='NOCTELLA_NATIVE_TRACE')));
- if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||scenario.allocatorExperiment||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
- return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocatorExperiment:scenario.allocatorExperiment??null,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
+ if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||scenario.allocatorExperiment||scenario.libvipsVariant||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
+ return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocatorExperiment:scenario.allocatorExperiment??null,libvipsVariant:scenario.libvipsVariant??null,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
 }

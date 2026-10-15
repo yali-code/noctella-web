@@ -5,14 +5,14 @@ on:
       profile:
         description: Bounded full suite or retry only the four concurrent-overload cases
         type: choice
-        options: [full, c4, webp-c4, combined, combined-reference, native-profile, native-worker, native-mmap, native-allocators]
+        options: [full, c4, webp-c4, combined, combined-reference, native-profile, native-worker, native-mmap, native-allocators, native-rgbfree, native-rgbfree-trials, native-rgbfree-alloc-trials]
         default: full
       include_stress:
         description: Include the last bounded 144-MP stress case
         type: boolean
         default: true
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/ai-native-memory-p2-2b2c, feat/ai-codec-memory-p2-2b2d]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/ai-native-memory-p2-2b2c, feat/ai-codec-memory-p2-2b2d, exp/w3-allocator-memory-390]
     types: [opened, synchronize, reopened, edited]
     paths:
       - scripts/photo-upload-linux/**
@@ -45,10 +45,10 @@ jobs:
        startsWith(github.event.pull_request.title, '[run-upload-512m]') &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 180
     env:
       INCLUDE_STRESS: ${{ github.event_name == 'workflow_dispatch' && inputs.include_stress == false && 'false' || 'true' }}
-      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] native-allocators-only') && 'native-allocators' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-worker-only') && 'native-worker' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-mmap-only') && 'native-mmap' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-profile-only') && 'native-profile' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-reference-only') && 'combined-reference' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-only') && 'combined' || startsWith(github.event.pull_request.title, '[run-upload-512m] webp-c4-only') && 'webp-c4' || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
+      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-only') && 'native-rgbfree' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-trials-only') && 'native-rgbfree-trials' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-alloc-trials-only') && 'native-rgbfree-alloc-trials' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-allocators-only') && 'native-allocators' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-worker-only') && 'native-worker' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-mmap-only') && 'native-mmap' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-profile-only') && 'native-profile' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-reference-only') && 'combined-reference' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-only') && 'combined' || startsWith(github.event.pull_request.title, '[run-upload-512m] webp-c4-only') && 'webp-c4' || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
       HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -69,6 +69,17 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20.20.0'
+      - name: Restore pinned libvips variants (native-rgbfree only)
+        if: startsWith(env.CASE_PROFILE, 'native-rgbfree')
+        id: vips-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vips-variants
+          key: vips-variants-v1-${{ hashFiles('scripts/photo-upload-linux/build-libvips-variants.sh', 'scripts/photo-upload-linux/vips-rgb-free.patch', 'scripts/photo-upload-linux/vips-variant-check.c') }}
+      - name: Build pinned libvips variants and run native memory checks (native-rgbfree only)
+        if: startsWith(env.CASE_PROFILE, 'native-rgbfree') && steps.vips-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 120
+        run: bash scripts/photo-upload-linux/build-libvips-variants.sh "$RUNNER_TEMP/vips-variants"
       - name: Prepare disposable source-only context and provenance
         shell: bash
         run: |
@@ -83,6 +94,12 @@ jobs:
           mkdir -p "$ctx/apps/api/src/scripts/photoMemoryBenchmark"
           cp benchmark-source/apps/api/src/scripts/photoMemoryBenchmark/{fixtures,scenarios}.ts "$ctx/apps/api/src/scripts/photoMemoryBenchmark/"
           cp scripts/photo-upload-linux/* "$ctx/scripts/photo-upload-linux/"
+          mkdir -p "$ctx/vips-variants"
+          if [ -d "$RUNNER_TEMP/vips-variants/patched" ]; then
+            cp -r "$RUNNER_TEMP/vips-variants"/{unmodified,patched} "$ctx/vips-variants/"
+            mkdir -p "$RUNNER_TEMP/photo-evidence/vips-variants"
+            cp -r "$RUNNER_TEMP/vips-variants"/{provenance.txt,variants.sh,check} "$RUNNER_TEMP/photo-evidence/vips-variants/"
+          fi
           sha256sum benchmark-source/apps/api/src/scripts/photoMemoryBenchmark/*.ts > "$RUNNER_TEMP/photo-evidence/source-sha256.txt"
           docker info > "$RUNNER_TEMP/photo-evidence/docker-info.txt"
 
