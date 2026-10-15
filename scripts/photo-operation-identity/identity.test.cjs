@@ -2,14 +2,25 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {classify} = require('./identity.cjs');
-const base = {tenantId:'org1',actorId:'admin1',productId:'photo1',kind:'W2',token:'repeatable-123456',sha256:'a'.repeat(64),altText:'Back view'};
-test('first intent is new and exact retry matches',()=>{
+const base = Object.freeze({tenantId:'org1',actorId:'admin1',productId:'photo1',kind:'W2_PRODUCT_PHOTO_UPLOAD',token:'repeatable-123456',sha256:'a'.repeat(64),altText:'Back view'});
+test('new and identical intent only',()=> {
   assert.equal(classify(null,base),'NEW');
   assert.equal(classify(base,{...base}),'SAME_INTENT');
 });
-for (const field of Object.keys(base)) {
-  test('changed '+field+' must conflict',()=>assert.equal(classify(base,{...base,[field]:'different'}),'CONFLICT'));
+const changed = {tenantId:'org2',actorId:'admin2',productId:'photo2',token:'other-repeatable-1234',sha256:'b'.repeat(64),altText:'Front view'};
+for(const [field,value] of Object.entries(changed)) {
+  test('reject changed '+field,()=>assert.equal(classify(base,{...base,[field]:value}),'CONFLICT'));
 }
-test('missing scope is invalid',()=>assert.equal(classify(null,{...base,tenantId:''}),'INVALID'));
-test('missing incoming intent invalid',()=>assert.equal(classify(null,null),'INVALID'));
-test('unknown stored identity is a conflict',()=>assert.equal(classify({},base),'CONFLICT'));
+test('invalid new intent never admitted',()=> {
+  const invalid=[null,[],{}, {...base,tenantId:'../outside'}, {...base,actorId:''}, {...base,kind:'W4'}, {...base,token:'short'}, {...base,token:'x'.repeat(129)}, {...base,sha256:'A'.repeat(64)}, {...base,sha256:'a'.repeat(63)}, {...base,altText:null}, {...base,altText:'x'.repeat(501)}];
+  for(const value of invalid) assert.equal(classify(null,value),'INVALID');
+});
+test('invalid persisted state conservatively conflicts',()=> {
+  assert.equal(classify({},base),'CONFLICT');
+  assert.equal(classify({...base,sha256:'invalid'},base),'CONFLICT');
+});
+test('no mutation or result data exposure',()=> {
+  const requested={...base};const copy={...requested};
+  assert.equal(classify(base,requested),'SAME_INTENT');
+  assert.deepEqual(requested,copy);
+});
