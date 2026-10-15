@@ -20,16 +20,19 @@ curl -sSfL --retry 3 -o "$sl/vips-8.17.3.tar.xz" https://github.com/libvips/libv
 echo "$VIPS_SHA256  $sl/vips-8.17.3.tar.xz" | sha256sum -c -
 cp "$here/vips-rgb-free.patch" "$sl/"
 
-# Build-tool-only fix: `cargo install cargo-c --locked` now resolves openssl-sys 0.9.117, which supports
-# OpenSSL >= 1.1.0 only, but the pinned Amazon Linux 2 image provides openssl-devel 1.0.2k. Use the distro's
-# own openssl11-devel (1.1.1, conflicts with openssl-devel) for that one install. cargo-c only drives the
-# librsvg build; no image-processing library links system OpenSSL, and TLS verification is unchanged.
+# Build-tool-only fix: unpinned "cargo install cargo-c --locked" now selects cargo-c releases whose
+# lockfiles need OpenSSL >= 1.1.0 (openssl-sys 0.9.117) or >= 3 (curl-sys 0.4.91), while the pinned
+# Amazon Linux 2 image provides openssl-devel 1.0.2k. Pin cargo-c to 0.10.16+cargo-0.91.0, the latest
+# release when sharp-libvips 1.2.4 was published (2025-11-01T11:15Z; 0.10.17 followed on 2025-11-02).
+# Its --locked graph (openssl-sys 0.9.109, curl-sys 0.4.83+curl-8.15.0) supports OpenSSL 1.0.2, so the
+# upstream package set is unchanged. Cargo verifies the crate checksum from the registry index.
+CARGO_C_VERSION=0.10.16 # crate 0.10.16+cargo-0.91.0 (the only 0.10.16 release)
+CARGO_C_CRATE_SHA256=17d431789b050b0fcf678455dfd5ceb7e5b45cd806140f8fe03b16b995d6cbff
 dockerfile="$sl/platforms/linux-x64/Dockerfile"
 cp "$dockerfile" "$work/Dockerfile.upstream"
-[ "$(grep -cxF '    openssl-devel \' "$dockerfile")" = 1 ] && [ "$(grep -cxF '  cargo install cargo-c --locked && \' "$dockerfile")" = 1 ] || { echo "Toolchain anchors changed"; exit 1; }
-CARGO_C_LINE='  OPENSSL_INCLUDE_DIR="$(rpm -ql openssl11-devel | sed -n '"'"'s#/openssl/opensslv.h$##p'"'"')" OPENSSL_LIB_DIR="$(rpm -ql openssl11-devel | sed -n '"'"'s#/libssl.so$##p'"'"')" cargo install cargo-c --locked && \' \
-  awk '$0 == "    openssl-devel \\" { print "    openssl11-devel \\"; next } $0 == "  cargo install cargo-c --locked && \\" { print ENVIRON["CARGO_C_LINE"]; next } { print }' "$work/Dockerfile.upstream" > "$dockerfile"
-[ "$(diff "$work/Dockerfile.upstream" "$dockerfile" | grep -c '^>')" = 2 ] || { echo "Toolchain fix not applied"; exit 1; }
+[ "$(grep -cxF '  cargo install cargo-c --locked && \' "$dockerfile")" = 1 ] || { echo "Toolchain anchor changed"; exit 1; }
+awk -v v="$CARGO_C_VERSION" '$0 == "  cargo install cargo-c --locked && \\" { print "  cargo install cargo-c --version =" v " --locked && \\"; next } { print }' "$work/Dockerfile.upstream" > "$dockerfile"
+[ "$(diff "$work/Dockerfile.upstream" "$dockerfile" | grep -c '^>')" = 1 ] || { echo "Toolchain fix not applied"; exit 1; }
 
 # Split the pinned recipe: dependencies are built once, the libvips section twice.
 posix="$sl/build/posix.sh"
@@ -66,9 +69,9 @@ cp -r "$sl/out/unmodified" "$sl/out/patched" "$out/"
   echo "patch sha256 $(sha256sum "$here/vips-rgb-free.patch" | cut -d' ' -f1)"
   echo "variants.sh sha256 $(sha256sum "$sl/variants.sh" | cut -d' ' -f1)"
   echo "build image base $(docker image inspect --format '{{json .RepoDigests}}' amazonlinux:2)"
-  echo "toolchain Dockerfile change (build tools only):"
+  echo "toolchain Dockerfile change (build tools only): cargo-c $CARGO_C_VERSION crate sha256 $CARGO_C_CRATE_SHA256"
   diff "$work/Dockerfile.upstream" "$dockerfile" || true
-  docker run --rm vips-dev-linux-x64 bash -c 'cc --version | head -1; rustc --version; meson --version; cargo cinstall --version; rpm -q openssl11-devel openssl11-libs'
+  docker run --rm vips-dev-linux-x64 bash -c 'cc --version | head -1; rustc --version; meson --version; cargo cinstall --version; rpm -q openssl-devel'
   cat "$sl/versions.properties"
   sha256sum "$out"/unmodified/* "$out"/patched/*
 } > "$out/provenance.txt"
