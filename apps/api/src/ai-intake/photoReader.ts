@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { aiIntakePhotoStagingRoot } from "../services/aiIntakePhotoStorage";
 import { BadRequestError, NotFoundError } from "../services/errors";
+import { readStagedPhotoForExposure } from "../services/aiIntakeStagedExposure";
 import type { AiIntakePhotoReader, AiIntakePhotoStorageKeyResolver } from "./types";
 
 function assertNonEmptyReferenceId(referenceId: string): void {
@@ -54,19 +55,53 @@ export class LocalAiIntakePhotoReader implements AiIntakePhotoReader {
     this.#root = root;
   }
 
+  /** Private source bytes for W4 finalization only - never for routes or AI providers (see LocalAiIntakePhotoPreviewReader). */
   async read(referenceId: string): Promise<Buffer> {
-    assertNonEmptyReferenceId(referenceId);
-
-    const storageKey = await this.#resolver.resolve(referenceId);
-    if (!storageKey) throw new NotFoundError("Staged photo not found");
-    assertSafeStorageKey(storageKey);
-
-    const rootResolved = path.resolve(this.#root);
-    const resolved = path.resolve(this.#root, storageKey);
-    if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
-      throw new BadRequestError("Invalid staged photo reference");
-    }
-
-    return readFile(resolved);
+    return readFile((await resolveStagedPhotoFile(this.#resolver, this.#root, referenceId)).file);
   }
+}
+
+/**
+ * #390 Stage 1: the AI-provider reader. Same intake-scoped resolution and containment as LocalAiIntakePhotoReader,
+ * but bytes go through readStagedPhotoForExposure: legacy staged WebP is returned unchanged, an original-source
+ * upload only as a metadata-free bounded preview, so raw EXIF/GPS/serial data never reaches a provider.
+ */
+export class LocalAiIntakePhotoPreviewReader implements AiIntakePhotoReader {
+  #root: string;
+  #resolver: AiIntakePhotoStorageKeyResolver;
+
+  constructor(resolver: AiIntakePhotoStorageKeyResolver, root: string = aiIntakePhotoStagingRoot) {
+    this.#resolver = resolver;
+    this.#root = root;
+  }
+
+  async read(referenceId: string): Promise<Buffer> {
+    const { file, storageKey } = await resolveStagedPhotoFile(this.#resolver, this.#root, referenceId);
+    return readStagedPhotoForExposure(file, storageKey);
+  }
+}
+
+/** Resolver-scoped, contained, lstat-verified regular file; symlinks and non-files are refused, a missing file is NotFound. */
+async function resolveStagedPhotoFile(resolver: AiIntakePhotoStorageKeyResolver, root: string, referenceId: string) {
+  assertNonEmptyReferenceId(referenceId);
+
+  const storageKey = await resolver.resolve(referenceId);
+  if (!storageKey) throw new NotFoundError("Staged photo not found");
+  assertSafeStorageKey(storageKey);
+
+  const rootResolved = path.resolve(root);
+  const resolved = path.resolve(root, storageKey);
+  if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
+    throw new BadRequestError("Invalid staged photo reference");
+  }
+
+  let info;
+  try {
+    info = await lstat(resolved);
+  } catch (err) {
+    if ((err as { code?: string })?.code === "ENOENT") throw new NotFoundError("Staged photo file not found");
+    throw new Error("Staged AI intake photo could not be read");
+  }
+  if (info.isSymbolicLink() || !info.isFile()) throw new BadRequestError("Invalid staged photo reference");
+  return { file: resolved, storageKey };
 }
