@@ -3,6 +3,7 @@ import type {
   AiIntakeRetentionCleanupRequest,
 } from "../../repositories/ai-intake-cleanup/types";
 import type { ManagedDirectoryWalkResult, ManagedFileDisposition } from "../../services/managedFileDeletion";
+import { isOriginalSourceStagedKey, isStagedPartialFilename } from "../../services/aiIntakeStagedKey";
 
 /**
  * Sprint 96: the single canonical UUID shape used for every server-generated
@@ -15,9 +16,14 @@ const PRIVATE_STAGED_FILENAME_RE = new RegExp(`^${UUID}\\.webp$`);
 const CANONICAL_MAIN_RE = new RegExp(`^(${UUID})-(${UUID})\\.webp$`);
 const CANONICAL_THUMB_RE = new RegExp(`^(${UUID})-(${UUID})-thumb\\.webp$`);
 
-/** Exactly matches LocalAiIntakePhotoStorage.saveIntakePhoto's own generated key shape (`${randomUUID()}.webp`) - nothing else. */
+/**
+ * Exactly matches LocalAiIntakePhotoStorage.saveIntakePhoto's own generated key shape (`${randomUUID()}.webp`), plus the
+ * #390 original-source generation (`${uuid}.orig.(jpg|png|webp)`) and its unpublished `.${uuid}.partial` files - nothing
+ * else. Recognition only makes a file a candidate: the sweep still requires no owning row, the age/watermark grace and
+ * a regular file before deleting.
+ */
 export function isPrivateStagedFilename(filename: string): boolean {
-  return PRIVATE_STAGED_FILENAME_RE.test(filename);
+  return PRIVATE_STAGED_FILENAME_RE.test(filename) || isOriginalSourceStagedKey(filename) || isStagedPartialFilename(filename);
 }
 
 export interface ParsedCanonicalFilename {

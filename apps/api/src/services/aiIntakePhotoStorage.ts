@@ -1,12 +1,13 @@
 import { imageAdmissionEnabled, PhotoUploadError, runImageOperation } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, open, rm, lstat, realpath } from "node:fs/promises";
+import { mkdir, open, rm, lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { BadRequestError, NotFoundError } from "./errors";
 import { abortedError } from "./photoUploadAdmission";
 import type { StagedProductPhotoInput } from "./stagedProductPhotoStorage";
 import { deleteManagedFile, statManagedFile } from "./managedFileDeletion";
+import { readStagedPhotoForExposure } from "./aiIntakeStagedExposure";
 
 /**
  * Sprint 91: a dedicated, minimal storage implementation for AiIntakePhoto -
@@ -158,7 +159,8 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
       // Fixed, non-sensitive message - never includes the disposition-derived path or key.
       throw new Error("Staged AI intake photo could not be read");
     }
-    return readFile(info.path!);
+    // #390: exposure-safe bytes - legacy staged WebP unchanged; an original-source upload only as a metadata-free preview.
+    return readStagedPhotoForExposure(info.path!, storageKey);
   }
 }
 
