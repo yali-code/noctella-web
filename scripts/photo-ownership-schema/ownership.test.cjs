@@ -23,7 +23,18 @@ async function env(driver, { up = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'noctella-photo-fence-'));
   let engine, h;
   try {
-    if (driver === 'sqlite') { engine = sqliteEngine(path.join(root, 'app.sqlite')); ensureSchema(engine.db); }
+    if (driver === 'sqlite') {
+      engine = sqliteEngine(path.join(root, 'app.sqlite')); ensureSchema(engine.db);
+      if (!up) {
+        // Since 0040 is registered, application startup (ensureSchema) creates the ownership tables.
+        // The migration-under-test baseline is the pre-ownership schema: prove they were created
+        // empty by startup, then remove exactly those four tables (PostgreSQL stops at 0038 instead).
+        for (const t of ['photo_operation_artifacts', 'photo_operation_generations', 'photo_operations', 'photo_storage_roots']) {
+          if (Number(engine.db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n) !== 0) throw new Error(`startup table ${t} not empty`);
+          engine.db.exec(`DROP TABLE ${t}`);
+        }
+      }
+    }
     else { h = await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb(LATEST_PG); engine = postgresEngine(h.pool); }
     if (up) await applyScript(engine, UP);
     await engine.q('INSERT INTO products(id,sku,title,slug,type,status) VALUES(?,?,?,?,?,?) RETURNING id', ['prod-1', 'SKU-1', 'Synthetic', 'synthetic-1', 'unique_item', 'draft']);
@@ -47,11 +58,21 @@ test('BIGINT boundary decoding is exact for both drivers (int8 strings, numbers,
   assert.equal(decode(null), null);
 });
 
+test('registered SQLite schema.sql block and PostgreSQL 0040 are identical to the reviewed DDL', () => {
+  const norm = (sql) => sql.replace(/\r\n/g, '\n').replace(/--[^\n]*\n/g, '').replace(/\s+/g, ' ').trim();
+  const schema = fs.readFileSync(path.resolve(__dirname, '../../apps/api/src/db/schema.sql'), 'utf8');
+  const registered = norm(schema.slice(schema.indexOf('-- Photo-operation ownership')));
+  const pg = norm(fs.readFileSync(path.resolve(__dirname, '../../apps/api/src/db/postgres-migrations/0040_photo_operation_ownership.sql'), 'utf8'));
+  assert.equal(registered, norm(UP));
+  assert.equal(pg, norm(UP));
+});
+
 for (const driver of ['sqlite', 'postgres']) {
   const opts = { skip: driver === 'postgres' && pgSkip, timeout: 120_000 };
   const withEnv = (fn, o) => async () => { const x = await env(driver, o); try { await fn(x); } finally { await x.close(); } };
 
   test(`${driver}: proposed DDL is additive, idempotent, atomic on failure and reversible`, opts, withEnv(async ({ engine }) => {
+    assert.equal(await hasTable(engine, 'photo_operations'), false, 'baseline is the pre-ownership schema');
     const before = { photos: await columns(engine, 'product_photos'), outbox: await columns(engine, 'outbox_events') };
     await assert.rejects(async () => (applyScript(engine, UP, { failAfter: true })));
     assert.equal(await hasTable(engine, 'photo_operations'), false, 'a failed migration leaves no partial schema');
