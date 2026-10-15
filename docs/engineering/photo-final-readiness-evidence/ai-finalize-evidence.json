@@ -1,0 +1,31 @@
+[
+  {
+    "driver": "sqlite",
+    "name": "e2e",
+    "canonical": {
+      "ino": "5348024558340343",
+      "size": 86,
+      "sha256": "eafd9c4c1f204c0ac92485103e81bedf2d34c919ccaaf9e20337dbd051f95ff1"
+    },
+    "retained": {
+      "REFERENCED": 341,
+      "CURRENT_GENERATION_RETAINED": 170
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "crash-reclaim",
+    "retained": {
+      "REFERENCED": 314,
+      "UNREFERENCED_CANDIDATE": 164,
+      "CURRENT_GENERATION_RETAINED": 164,
+      "SEALED_RECORD_RETAINED": 164
+    }
+  },
+  {
+    "driver": "sqlite",
+    "name": "budget-accumulation",
+    "reservation": 67145728,
+    "retainedAfterOne": 45056
+  }
+]

@@ -1,0 +1,24 @@
+✔ BIGINT boundary decoding is exact for both drivers (int8 strings, numbers, bigint) and fails closed (8.3361ms)
+✔ sqlite: proposed DDL is additive, idempotent, atomic on failure and reversible (447.8746ms)
+✔ sqlite: atomic finalize, idempotent retry after a lost acknowledgement, rollback on failure (365.9957ms)
+✔ sqlite: concurrent claims and binding uniqueness admit exactly one owner (629.4484ms)
+✔ sqlite: lease-gated reclaim, stale tokens and nonce reuse (ABA) are rejected (379.2141ms)
+✔ sqlite: historical/outbox-only references and a deleted committed photo force review, never re-creation (375.1681ms)
+✔ sqlite: mixed-version legacy writer row moves the operation to review without duplicates (280.9119ms)
+✔ sqlite: pending publication is classified as referenced; ENOSPC keeps the operation sealed and closes the budget (413.8216ms)
+﹣ postgres: proposed DDL is additive, idempotent, atomic on failure and reversible (0.5491ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: atomic finalize, idempotent retry after a lost acknowledgement, rollback on failure (0.7074ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: concurrent claims and binding uniqueness admit exactly one owner (0.4282ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: lease-gated reclaim, stale tokens and nonce reuse (ABA) are rejected (0.6979ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: historical/outbox-only references and a deleted committed photo force review, never re-creation (0.2656ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: mixed-version legacy writer row moves the operation to review without duplicates (0.1997ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: pending publication is classified as referenced; ENOSPC keeps the operation sealed and closes the budget (1.1556ms) # POSTGRES_TEST_DATABASE_URL not configured
+✔ sqlite: SIGKILL between canonical publication and the finalize transaction, then restart (758.0464ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 7
+ℹ todo 0
+ℹ duration_ms 4120.4784

@@ -1,0 +1,14 @@
+census=0 ℹ tests 3 ℹ pass 3 ℹ fail 0 ℹ skipped 0 
+photo-final-readiness-ai-finalize exit=0 ℹ tests 8 ℹ pass 4 ℹ fail 0 ℹ skipped 4 
+photo-legacy-gate-gate exit=0 ℹ tests 12 ℹ pass 11 ℹ fail 0 ℹ skipped 1 
+photo-ownership-schema-ownership exit=0 ℹ tests 16 ℹ pass 9 ℹ fail 0 ℹ skipped 7 
+photo-storage-capability-storage exit=0 ℹ tests 48 ℹ pass 25 ℹ fail 0 ℹ skipped 23 
+photo-operation-fencing-fencing exit=0 ℹ tests 35 ℹ pass 18 ℹ fail 0 ℹ skipped 17 
+photo-crash-recovery-recovery exit=0 ℹ tests 37 ℹ pass 18 ℹ fail 0 ℹ skipped 19 
+photo-disk-budget-budget exit=0 ℹ tests 13 ℹ pass 11 ℹ fail 0 ℹ skipped 2 
+photo-recovery-reconciliation-recovery exit=0 ℹ tests 19 ℹ pass 10 ℹ fail 0 ℹ skipped 9 
+typecheck=0
+lint=0
+api-vitest=0
+ Test Files  276 passed | 4 skipped (280)
+      Tests  6106 passed | 34 skipped (6140)

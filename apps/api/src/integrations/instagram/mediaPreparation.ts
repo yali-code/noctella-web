@@ -8,6 +8,7 @@ import { productPhotoStaticPath, productPhotoStaticRoot, PRODUCT_PHOTO_MAX_BYTES
 import { productPhotoStorageSafety } from "../../services/productPhotoStorageWorkflow";
 import { validateInstagramMediaUrl } from "../../config/instagramConfig";
 import { InstagramClientError } from "./types";
+import { photoOwnershipFencingEnabled } from "../../services/photoOwnershipFencing";
 
 const inFlight = new Map<string, Promise<void>>();
 export const INSTAGRAM_IMAGE_RECIPE = "instagram-v1";
@@ -112,6 +113,8 @@ async function prepareInstagramImageAssetUnadmitted(
   root: string = productPhotoStaticRoot,
   recipeId: InstagramImageRecipe = INSTAGRAM_IMAGE_RECIPE,
 ): Promise<PreparedInstagramImage> {
+  // W11: derivatives and temporaries live in the canonical root; with ownership fencing ON they are not adopted.
+  if (photoOwnershipFencingEnabled()) throw new InstagramClientError("processing", true);
   try {
     if (typeof recipeId !== "string" || !Object.prototype.hasOwnProperty.call(imageRecipes, recipeId)) throw invalid();
     const recipe = imageRecipes[recipeId];

@@ -53,6 +53,8 @@ export interface PhotoReferenceSnapshot {
   seals: Set<string>;
   /** Optional reference sources absent from this engine/schema (recorded, never silently assumed empty). */
   missingOptional: string[];
+  /** Ownership operations in 'review' state (proposed schema): always require operator review. */
+  reviewOperations?: string[];
 }
 
 export interface PhotoRecoveryRoots {
@@ -76,6 +78,7 @@ export interface PhotoRecoveryReport {
   cleanup: "BLOCKED_NOT_AUTHORIZED";
   artifacts: ClassifiedArtifact[];
   missingReferenced: { name: string; sources: string[] }[];
+  reviewOperations: string[];
   retainedBytesByClass: Partial<Record<ArtifactClass, number>>;
 }
 
@@ -99,7 +102,7 @@ export function assertDevelopmentRecovery(paths: string[]): void {
 
 interface Rows { q(sql: string): Promise<Record<string, unknown>[]> | Record<string, unknown>[] }
 const REQUIRED = ["product_photos", "outbox_events", "ai_intake_photos"];
-const OPTIONAL = ["categories", "collections", "order_items", "media_plan_items", "probe_photo_operations", "probe_photo_seals"];
+const OPTIONAL = ["categories", "collections", "order_items", "media_plan_items", "probe_photo_operations", "probe_photo_seals", "photo_operations", "photo_operation_artifacts"];
 
 async function buildSnapshot(engine: "sqlite" | "postgres", tables: Set<string>, rows: Rows): Promise<PhotoReferenceSnapshot> {
   for (const table of REQUIRED) if (!tables.has(table)) fail(`PHOTO_REFERENCE_SOURCE_MISSING:${table}`);
@@ -119,6 +122,16 @@ async function buildSnapshot(engine: "sqlite" | "postgres", tables: Set<string>,
   if (tables.has("order_items")) for (const r of await rows.q("SELECT id, product_image_url FROM order_items")) add(snapshot.canonical, r.product_image_url, `order_items.product_image_url:${r.id}`);
   if (tables.has("media_plan_items")) for (const r of await rows.q("SELECT id, reel_asset_path FROM media_plan_items")) add(snapshot.media, typeof r.reel_asset_path === "string" ? path.basename(r.reel_asset_path) : null, `media_plan_items.reel_asset_path:${r.id}`);
   if (tables.has("probe_photo_operations")) for (const r of await rows.q("SELECT id, generation FROM probe_photo_operations")) snapshot.operations.set(String(r.id), Number(r.generation));
+  // Proposed P2-2B3D5 ownership schema (when present): every operation state keeps its canonical keys referenced.
+  if (tables.has("photo_operations")) for (const r of await rows.q("SELECT id, state, generation, main_key, thumb_key FROM photo_operations")) {
+    const generation = Number(r.generation);
+    if (!Number.isSafeInteger(generation) || generation < 1) fail(`PHOTO_OPERATION_GENERATION_INVALID:${r.id}`);
+    snapshot.operations.set(String(r.id), generation);
+    if (r.state === "review") (snapshot.reviewOperations ??= []).push(String(r.id));
+    add(snapshot.canonical, r.main_key, `photo_operations.${r.state}:${r.id}`);
+    add(snapshot.canonical, r.thumb_key, `photo_operations.${r.state}:${r.id}`);
+  }
+  if (tables.has("photo_operation_artifacts")) for (const r of await rows.q("SELECT relative_path FROM photo_operation_artifacts")) snapshot.seals.add(String(r.relative_path).split(/[\\/]/).join("/"));
   if (tables.has("probe_photo_seals")) for (const r of await rows.q("SELECT payload FROM probe_photo_seals")) {
     const relative = JSON.parse(String(r.payload)).relative;
     if (typeof relative === "string") snapshot.seals.add(relative.split(path.sep).join("/"));
@@ -237,8 +250,8 @@ export async function runDevelopmentPhotoRecovery(options: RecoveryOptions): Pro
     counted.add(`${a.dev}:${a.ino}`);
     retainedBytesByClass[a.class] = (retainedBytesByClass[a.class] ?? 0) + a.size;
   }
-  const reviewRequired = Boolean(snapshotError) || missingReferenced.length > 0 || artifacts.some((a) => REVIEW_CLASSES.has(a.class));
-  const report: PhotoRecoveryReport = { id: randomUUID(), generatedAt: new Date().toISOString(), engine: snapshot?.engine ?? null, snapshotError, missingOptional: snapshot?.missingOptional ?? [], reviewRequired, cleanup: "BLOCKED_NOT_AUTHORIZED", artifacts, missingReferenced, retainedBytesByClass };
+  const reviewRequired = Boolean(snapshotError) || missingReferenced.length > 0 || (snapshot?.reviewOperations?.length ?? 0) > 0 || artifacts.some((a) => REVIEW_CLASSES.has(a.class));
+  const report: PhotoRecoveryReport = { id: randomUUID(), generatedAt: new Date().toISOString(), engine: snapshot?.engine ?? null, snapshotError, missingOptional: snapshot?.missingOptional ?? [], reviewRequired, cleanup: "BLOCKED_NOT_AUTHORIZED", artifacts, missingReferenced, reviewOperations: snapshot?.reviewOperations ?? [], retainedBytesByClass };
   fs.mkdirSync(options.reviewDir, { recursive: true, mode: 0o700 });
   const recordPath = path.join(options.reviewDir, `recovery-${report.id}.json`);
   const fd = fs.openSync(recordPath, "wx", 0o600);
