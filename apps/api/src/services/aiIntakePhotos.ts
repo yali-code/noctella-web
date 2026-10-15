@@ -78,9 +78,10 @@ async function uploadPhotoWithStorage(
   }
 
   const stored = await save();
+  const id = randomUUID();
   try {
     const row = await createAiIntakePhotoLockedUseCase(repositoryFor(db), {
-      id: randomUUID(),
+      id,
       intakeId,
       storageKey: stored.storageKey,
       originalFilename,
@@ -93,8 +94,18 @@ async function uploadPhotoWithStorage(
       imageProcessingAdmission.close();
       throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "AI photo persistence requires recovery");
     }
-    await storage.deleteIntakePhoto(stored.storageKey);
-    throw err;
+    // Legacy path: never delete bytes a committed row may reference (same rule as W1/W10 in services/products.ts).
+    // Re-read authoritatively: committed -> keep the file and return the photo; provably absent on SQLite (local,
+    // synchronous commit) -> the existing compensation; anything else (PostgreSQL acknowledgement loss, unreadable
+    // database) -> keep the file (the orphan sweep reclaims it only if it stays unowned) and fail closed.
+    let committed: AiIntakePhotoRecord | null | undefined;
+    try { committed = await repositoryFor(db).findByIdAndIntake(intakeId, id); } catch { committed = undefined; }
+    if (committed) return toIntakePhoto(committed);
+    if (committed === null && ((process.env.DATABASE_DRIVER as string) || "sqlite") === "sqlite") {
+      await storage.deleteIntakePhoto(stored.storageKey);
+      throw err;
+    }
+    throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "AI photo persistence requires recovery");
   }
 }
 
