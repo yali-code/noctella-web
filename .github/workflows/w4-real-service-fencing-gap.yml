@@ -1,9 +1,11 @@
 name: W4 real-service fencing gap (disposable proof)
 on:
   pull_request:
-    branches: [feat/photo-storage-production-completion]
+    branches: [test/w4-real-service-fencing-gap-424]
     paths:
       - scripts/photo-w4-fencing-gap/**
+      - apps/api/src/use-cases/ai-intake-photo-finalize/useCases.ts
+      - apps/api/src/services/photoOwnershipFencing.ts
       - .github/workflows/w4-real-service-fencing-gap.yml
 permissions:
   contents: read
