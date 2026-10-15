@@ -28,3 +28,18 @@ export function parseStagedKey(key: string): StagedKeyGeneration | null {
 
 export const isOriginalSourceStagedKey = (key: string) => ORIGINAL_STAGED_KEY_RE.test(key);
 export const isStagedPartialFilename = (name: string) => STAGED_PARTIAL_RE.test(name);
+
+const ORIGINAL_EXTENSIONS = { "image/jpeg": { ext: "jpg", format: "jpeg" }, "image/png": { ext: "png", format: "png" }, "image/webp": { ext: "webp", format: "webp" } } as const;
+export type OriginalSourceMimeType = keyof typeof ORIGINAL_EXTENSIONS;
+
+/** Original-source key for a verified upload format (`${uuid}.orig.(jpg|png|webp)`), or null for any other MIME type. */
+export function originalSourceKeyParts(mimetype: string): { ext: string; format: "jpeg" | "png" | "webp" } | null {
+  return Object.prototype.hasOwnProperty.call(ORIGINAL_EXTENSIONS, mimetype) ? ORIGINAL_EXTENSIONS[mimetype as OriginalSourceMimeType] : null;
+}
+
+/** MIME type of a staged source for W4: the verified original format, or image/webp (unchanged) for every other key. */
+export function stagedSourceMimeType(key: string): OriginalSourceMimeType {
+  const parsed = parseStagedKey(key);
+  if (parsed?.generation !== "original") return "image/webp";
+  return parsed.format === "jpeg" ? "image/jpeg" : parsed.format === "png" ? "image/png" : "image/webp";
+}

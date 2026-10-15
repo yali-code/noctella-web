@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { stagedSourceMimeType } from "../../services/aiIntakeStagedKey";
 import { AiProductIntakeStatus, ProductStatus } from "@noctella/shared";
 import {
   AiIntakePhotoFinalizationNoStagedPhotosError,
@@ -104,7 +105,8 @@ export async function buildAiIntakePhotoFinalizationManifest(
     const thumbnailStorageKey = `${productId}-${staged.id}-thumb.webp`;
     const written = await deps.writeDeterministicPhoto({
       buffer: bytes,
-      mimetype: "image/webp",
+      // Verified staged format: image/webp for every legacy key (unchanged), the original format for #390 original-source keys.
+      mimetype: stagedSourceMimeType(staged.storageKey),
       size: bytes.length,
       mainStorageKey,
       thumbnailStorageKey,
