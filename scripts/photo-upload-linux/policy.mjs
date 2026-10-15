@@ -68,8 +68,20 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
   return { status: "PASS", reason: "HTTP smoke target satisfied; not final full-API acceptance", delta };
 }
 
+/** #390 DIAGNOSTIC allocator experiments: exact environment passed to the measured process; never acceptance. */
+export const ALLOCATOR_EXPERIMENTS = {
+  "glibc-mmap": { library: null, env: { MALLOC_MMAP_THRESHOLD_: "131072", MALLOC_TRIM_THRESHOLD_: "131072" } },
+  "glibc-arena1-mmap": { library: null, env: { MALLOC_ARENA_MAX: "1", MALLOC_MMAP_THRESHOLD_: "131072", MALLOC_TRIM_THRESHOLD_: "131072" } },
+  "jemalloc": { library: "jemalloc", env: { LD_PRELOAD: "/opt/alloc/libjemalloc.so" } },
+  "jemalloc-decay0": { library: "jemalloc", env: { LD_PRELOAD: "/opt/alloc/libjemalloc.so", MALLOC_CONF: "dirty_decay_ms:0,muzzy_decay_ms:0,narenas:2" } },
+  "mimalloc": { library: "mimalloc", env: { LD_PRELOAD: "/opt/alloc/libmimalloc.so" } },
+  "mimalloc-purge0": { library: "mimalloc", env: { LD_PRELOAD: "/opt/alloc/libmimalloc.so", MIMALLOC_PURGE_DELAY: "0", MIMALLOC_ARENA_EAGER_COMMIT: "0" } },
+};
+export const allocatorEnvArgs = (name) => Object.entries(ALLOCATOR_EXPERIMENTS[name]?.env ?? {}).flatMap(([key, value]) => ["--env", key + "=" + value]);
+
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap", "native-allocators"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (profile === "native-allocators") return Object.keys(ALLOCATOR_EXPERIMENTS).map(allocatorExperiment => ({ name: "linux-alloc-" + allocatorExperiment + "-24mp", description: "DIAGNOSTIC ONLY (#390): unchanged 24MP mixed workload under an allocator override; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, allocatorExperiment, acceptanceRole: "diagnostic-only" }));
   if (profile === "native-worker" || profile === "native-mmap") return [{ name: "linux-"+profile+"-24mp", description: "DIAGNOSTIC ONLY: unchanged mixed workload with isolated AI recipe or glibc mmap policy; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, recipeWorker: profile === "native-worker", mmapPolicy: profile === "native-mmap", acceptanceRole: "diagnostic-only" }];
   if (profile === "native-profile") return [{ name: "linux-native-profile-24mp", description: "DIAGNOSTIC ONLY: glibc large allocation stacks and lifetimes; instrumentation is not acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, nativeTrace: true, acceptanceRole: "diagnostic-only" }];
   if (profile === "combined-reference") return [{ name: "linux-combined-reference-12mp", description: "DIAGNOSTIC ONLY: complete mixed workflow on a 12MP reference; cannot replace failed 24MP acceptance", fixtures: ["jpeg-typical-landscape"], ops: 8, concurrency: 3, path: "combined", trial: 1, acceptanceRole: "diagnostic-only" }];
@@ -84,7 +96,7 @@ export function validateCombinedMode(scenario,environment,fixture,actualSha){
   if(scenario.acceptanceRole!=='diagnostic-only')throw Error('Original combined workload changed');
  }
  const role=scenario.acceptanceRole==='diagnostic-only'?'diagnostic-only':'acceptance';
- const allocator=Object.fromEntries(Object.entries(environment).filter(([name,value])=>value&&(name.startsWith('MALLOC_')||name==='LD_PRELOAD'||name==='NOCTELLA_NATIVE_TRACE')));
- if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
- return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
+ const allocator=Object.fromEntries(Object.entries(environment).filter(([name,value])=>value&&(name.startsWith('MALLOC_')||name.startsWith('MIMALLOC_')||name==='LD_PRELOAD'||name==='NOCTELLA_NATIVE_TRACE')));
+ if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||scenario.allocatorExperiment||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
+ return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocatorExperiment:scenario.allocatorExperiment??null,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
 }
