@@ -207,16 +207,21 @@ jobs:
       fail-fast: false
       matrix:
         candidate:
-          - name: reference-pr422
+          - name: reference-pr422-original-source
             sha: b7285a52fa98e46d869101717c2ed6a14a88f705
-          - name: current-pr432
+            profile: combined-original-source
+          - name: reference-pr422-legacy-combined
+            sha: b7285a52fa98e46d869101717c2ed6a14a88f705
+            profile: combined
+          - name: current-pr432-legacy-combined
             sha: b760a77d20b45c24c33dc48cd4aec0ac64823633
+            profile: combined
     # 3 x 24-MP mixed-workflow trials, each in a disposable 512-MiB no-swap cgroup.
     # This is synthetic HTTP/resource evidence, not production API or release acceptance.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      CASE_PROFILE: combined
+      CASE_PROFILE: ${{ matrix.candidate.profile }}
       INCLUDE_STRESS: 'false'
       HARNESS_SHA: ${{ matrix.candidate.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
