@@ -12,6 +12,7 @@ import {
   NotFoundError,
 } from "../../services/errors";
 import { OutboxEventStatus, OutboxEventType } from "../../services/outbox";
+import { refuseUnadoptedPhotoWriter } from "../../services/photoOwnershipFencing";
 import type { DeterministicProductPhotoInput, DeterministicProductPhotoResult } from "../../services/photoStorage";
 import type {
   AiIntakePhotoFinalizeTransactionCapability,
@@ -79,6 +80,8 @@ export async function buildAiIntakePhotoFinalizationManifest(
   productId: string,
   primaryIntakePhotoId: string | undefined,
 ): Promise<AiIntakePhotoFinalizationManifestEntry[]> {
+  // W4 is not generation-adopted. Refuse before even reading staged bytes or touching canonical storage.
+  refuseUnadoptedPhotoWriter("W4_AI_FINALIZE");
   if (stagedPhotos.length === 0) throw new AiIntakePhotoFinalizationNoStagedPhotosError();
 
   let primaryId = primaryIntakePhotoId;
@@ -199,6 +202,8 @@ export async function finalizeAiIntakePhotosUseCase(
     if (intake.status !== AiProductIntakeStatus.Applied) {
       throw new AiIntakePhotoFinalizationNotAppliedError();
     }
+    // A caller-supplied manifest cannot bypass the W4 write gate to create DB photo/outbox rows.
+    refuseUnadoptedPhotoWriter("W4_AI_FINALIZE");
     if (!intake.resultProductId) {
       throw new AiIntakePhotoFinalizationResultStateInvalidError("This intake is Applied but has no result Product recorded.");
     }

@@ -12,8 +12,7 @@
  *   W8 canonical delete / W9 temp cleanup outbox events: permanent refusal -> dead-lettered for
  *      operator review, nothing deleted
  *   W11 Instagram derivatives/temporaries in the canonical root: retryable refusal
- * W4 AI deterministic finalization is NOT fenced in the real service (wiring needs owner authorization);
- * it keeps writing unfenced with the switch ON, so the switch is not a complete emergency stop.
+ * W4 AI deterministic finalization is NOT generation-adopted; with the switch ON,\n * manifest preparation and Applied finalization now fail closed without canonical mutation.
  * Turning the flag ON requires the operator runbook (old instances stopped, outbox drained).
  */
 
@@ -31,7 +30,7 @@ export function photoOwnershipFencingConfig(env: NodeJS.ProcessEnv = process.env
 }
 export const photoOwnershipFencingEnabled = (env: NodeJS.ProcessEnv = process.env): boolean => photoOwnershipFencingConfig(env).enabled;
 
-export type UnadoptedPhotoWriter = "W1_LEGACY_UPLOAD" | "W2_STAGED_UPLOAD" | "W6_AI_CLEANUP_CANONICAL_DELETE" | "W7_DISTINCT_ROOT_PROMOTION" | "W8_CANONICAL_DELETE" | "W9_TEMP_CLEANUP" | "W11_INSTAGRAM_DERIVATIVE";
+export type UnadoptedPhotoWriter = "W1_LEGACY_UPLOAD" | "W2_STAGED_UPLOAD" | "W4_AI_FINALIZE" | "W6_AI_CLEANUP_CANONICAL_DELETE" | "W7_DISTINCT_ROOT_PROMOTION" | "W8_CANONICAL_DELETE" | "W9_TEMP_CLEANUP" | "W11_INSTAGRAM_DERIVATIVE";
 
 /** Permanent (outbox dead-letters it with this code; nothing is retried into a deletion). */
 export class PhotoFencingRefusedError extends Error {
