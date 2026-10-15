@@ -56,14 +56,17 @@ test('feature OFF: the gate refuses construction without the development flag or
   assert.throws(() => new DevelopmentLegacyWriterGate(path.join(os.homedir(), 'gate')), /PHOTO_DISPOSABLE_LEGACY_GATE_REQUIRED/);
 });
 
-test('baseline (ungated, current code): legacy delete, temp cleanup and AI cleanup remove canonical bytes', async () => {
+test('baseline (ungated): W8/W9 handlers now refuse without authoritative proof; the raw AI-cleanup delete primitive still deletes', async () => {
   for (const k of ['base-del', 'base-tmp']) { put(`${k}.webp`, k); put(`${k}-thumb.webp`, k); }
   put('base-ai.webp', 'ai');
-  await new ProductPhotoDeleteHandler(roots).handle(event('product_photo.delete_requested', 'base-del'));
-  await new ProductPhotoCleanupTempHandler(roots).handle(event('product_photo.cleanup_temp_requested', 'base-tmp'));
+  // Safety remediation: no reference checker -> no deletion; temp root == canonical root -> no deletion.
+  await assert.rejects(() => new ProductPhotoDeleteHandler(roots).handle(event('product_photo.delete_requested', 'base-del')), (e) => e.code === 'PHOTO_DELETE_REFERENCE_UNKNOWN' && e.permanent === true);
+  await assert.rejects(() => new ProductPhotoCleanupTempHandler(roots).handle(event('product_photo.cleanup_temp_requested', 'base-tmp')), (e) => e.code === 'PHOTO_TEMP_ROOT_IS_CANONICAL');
+  assert.deepEqual(['base-del.webp', 'base-del-thumb.webp', 'base-tmp.webp', 'base-tmp-thumb.webp'].filter((n) => fs.existsSync(path.join(canonical, n))), ['base-del.webp', 'base-del-thumb.webp', 'base-tmp.webp', 'base-tmp-thumb.webp'], 'W8/W9 preserve canonical bytes');
+  // Still-unsafe baseline (synthetic file): the raw managed-file delete used by W6 deletes when called ungated.
   assert.equal(await deleteManagedFile(canonical, 'base-ai.webp'), 'regular_file');
-  assert.deepEqual(['base-del.webp', 'base-tmp.webp', 'base-ai.webp'].filter((n) => fs.existsSync(path.join(canonical, n))), [], 'unsafe baseline reproduced (synthetic files)');
-  evidence.push({ name: 'ungated-baseline', deleted: ['base-del', 'base-tmp', 'base-ai'] });
+  assert.equal(fs.existsSync(path.join(canonical, 'base-ai.webp')), false, 'W6 primitive baseline reproduced');
+  evidence.push({ name: 'ungated-baseline', preserved: ['base-del', 'base-tmp'], deleted: ['base-ai'] });
 });
 
 test('in-flight legacy upload during shutdown: checkpoint denies new mutation, closure waits for the lease', async () => {

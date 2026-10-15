@@ -7,6 +7,7 @@ import {
   ProductPhotoCleanupTempHandler,
   ProductPhotoDeleteHandler,
   ProductPhotoPromotionHandler,
+  type CanonicalKeyReferenceCheck,
   type ProductPhotoStorageRoots,
 } from "./productPhotoStorageWorkflow";
 import { PostgresUnitOfWork, type UnitOfWork } from "./unitOfWork";
@@ -39,6 +40,25 @@ function unitOfWorkForPromotion(db: DbClient, driver: ProductPhotoOutboxDriver):
  * permanentRoot are therefore deliberately the same directory; ProductPhotoPromotionHandler
  * detects that and only verifies the files exist before marking Ready, never copying/deleting.
  */
+/**
+ * Authoritative canonical-key reference check for W8: any product_photos URL/key/filename or any
+ * photo-operation binding (every state) keeps the key. Errors propagate (retried, never "unreferenced").
+ */
+function canonicalKeyReferenceCheck(db: DbClient, isPostgres: boolean, publicBase: string): CanonicalKeyReferenceCheck {
+  const client = (db as unknown as { $client: any }).$client;
+  return async (key) => {
+    const url = `${publicBase}/${key}`;
+    const photoSql = "SELECT 1 FROM product_photos WHERE storage_key = ? OR thumbnail_storage_key = ? OR filename = ? OR url = ? OR thumbnail_url = ? LIMIT 1";
+    const operationSql = "SELECT 1 FROM photo_operations WHERE main_key = ? OR thumb_key = ? LIMIT 1";
+    const query = async (text: string, args: string[]): Promise<unknown[]> => {
+      if (isPostgres) { let i = 0; return (await client.query(text.replace(/\?/g, () => `$${++i}`), args)).rows; }
+      return client.prepare(text).all(...args);
+    };
+    if ((await query(photoSql, [key, key, key, url, url])).length > 0) return true;
+    return (await query(operationSql, [key, key])).length > 0;
+  };
+}
+
 function defaultRoots(): ProductPhotoStorageRoots {
   return { tempRoot: productPhotoStaticRoot, permanentRoot: productPhotoStaticRoot, publicBase: productPhotoStaticPath };
 }
@@ -54,7 +74,7 @@ export function createProductPhotoOutboxDispatcher(
     : new SqliteOutboxRepository((db as unknown as { $client: ConstructorParameters<typeof SqliteOutboxRepository>[0] }).$client);
   const dispatcher = new OutboxDispatcher(repo);
   dispatcher.registerHandler(new ProductPhotoPromotionHandler(unitOfWorkForPromotion(db, driver), roots));
-  dispatcher.registerHandler(new ProductPhotoDeleteHandler(roots));
+  dispatcher.registerHandler(new ProductPhotoDeleteHandler(roots, canonicalKeyReferenceCheck(db, isPostgres, roots.publicBase ?? productPhotoStaticPath)));
   dispatcher.registerHandler(new ProductPhotoCleanupTempHandler(roots));
   return dispatcher;
 }

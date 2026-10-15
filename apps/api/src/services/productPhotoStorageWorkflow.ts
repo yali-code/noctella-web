@@ -82,6 +82,42 @@ export class ProductPhotoPromotionHandler implements OutboxHandler {
     });
   }
 }
-export class ProductPhotoDeleteHandler implements OutboxHandler { eventType = OutboxEventType.ProductPhotoDeleteRequested; constructor(private readonly roots: ProductPhotoStorageRoots) {} async handle(event: OutboxEvent) { refuseUnadoptedPhotoWriter("W8_CANONICAL_DELETE"); const p:any=event.payload; for (const key of [p.storageKey,p.thumbnailStorageKey]) if (typeof key === "string") await unlinkIdempotent(safeJoin(this.roots.permanentRoot,key)); if (typeof p.url === "string" && isExternal(p.url)) return; } }
-export class ProductPhotoCleanupTempHandler implements OutboxHandler { eventType = OutboxEventType.ProductPhotoCleanupTempRequested; constructor(private readonly roots: ProductPhotoStorageRoots) {} async handle(event: OutboxEvent) { refuseUnadoptedPhotoWriter("W9_TEMP_CLEANUP"); const p:any=event.payload; for (const key of [p.storageKey,p.thumbnailStorageKey]) if (typeof key === "string") await unlinkIdempotent(safeJoin(this.roots.tempRoot,key)); } }
+/** Permanent outcomes are dead-lettered for operator review; the event is never acknowledged as performed. */
+export class PhotoDeletionNotPerformedError extends Error { permanent = true; constructor(readonly code: "PHOTO_DELETE_KEYS_ABSENT" | "PHOTO_DELETE_REFERENCE_UNKNOWN" | "PHOTO_DELETE_KEY_REFERENCED" | "PHOTO_TEMP_ROOT_IS_CANONICAL") { super(`Photo file deletion was not performed (${code})`); } }
+/** Authoritative check: is this canonical key still referenced by any photo row or ownership operation? */
+export type CanonicalKeyReferenceCheck = (key: string) => Promise<boolean>;
+/**
+ * W8. The production emitter (deleteProductPhoto) sends only { photoId, productId }; such events are
+ * kept for operator review instead of being acknowledged as a deletion that never happened. Keyed
+ * (historical/synthetic) events delete only keys an authoritative check proves unreferenced; an
+ * unknown reference state never deletes (a failing check is retried, a missing checker refuses).
+ */
+export class ProductPhotoDeleteHandler implements OutboxHandler {
+  eventType = OutboxEventType.ProductPhotoDeleteRequested;
+  constructor(private readonly roots: ProductPhotoStorageRoots, private readonly isReferenced?: CanonicalKeyReferenceCheck) {}
+  async handle(event: OutboxEvent) {
+    refuseUnadoptedPhotoWriter("W8_CANONICAL_DELETE");
+    const p: any = event.payload;
+    const keys = [p.storageKey, p.thumbnailStorageKey].filter((key): key is string => typeof key === "string");
+    if (keys.length === 0) {
+      if (typeof p.url === "string" && isExternal(p.url)) return; // external media: nothing local exists
+      throw new PhotoDeletionNotPerformedError("PHOTO_DELETE_KEYS_ABSENT");
+    }
+    if (!this.isReferenced) throw new PhotoDeletionNotPerformedError("PHOTO_DELETE_REFERENCE_UNKNOWN");
+    for (const key of keys) { safeJoin(this.roots.permanentRoot, key); if (await this.isReferenced(key)) throw new PhotoDeletionNotPerformedError("PHOTO_DELETE_KEY_REFERENCED"); }
+    for (const key of keys) await unlinkIdempotent(safeJoin(this.roots.permanentRoot, key));
+  }
+}
+/** W9. Never deletes in the canonical root (production temp root == canonical root). */
+export class ProductPhotoCleanupTempHandler implements OutboxHandler {
+  eventType = OutboxEventType.ProductPhotoCleanupTempRequested;
+  constructor(private readonly roots: ProductPhotoStorageRoots) {}
+  async handle(event: OutboxEvent) {
+    refuseUnadoptedPhotoWriter("W9_TEMP_CLEANUP");
+    const p: any = event.payload;
+    const keys = [p.storageKey, p.thumbnailStorageKey].filter((key): key is string => typeof key === "string");
+    if (keys.length > 0 && path.resolve(this.roots.tempRoot) === path.resolve(this.roots.permanentRoot)) throw new PhotoDeletionNotPerformedError("PHOTO_TEMP_ROOT_IS_CANONICAL");
+    for (const key of keys) await unlinkIdempotent(safeJoin(this.roots.tempRoot, key));
+  }
+}
 export const productPhotoStorageSafety = { safeJoin, isExternal };

@@ -1,5 +1,14 @@
 # Photo storage safety: release readiness (#390, #396, #403, #407)
 
+> **Superseded statements (2026-10-15, branch `feat/photo-storage-production-completion`):**
+> - The ownership tables are now **registered**: SQLite `schema.sql`, created by `ensureSchema` at startup, so a default-OFF deploy still changes the SQLite schema; and PostgreSQL `0040_photo_operation_ownership.sql`.
+> - The Etsy `0039` ordering must be resolved before deployment.
+> - Real W4 AI finalization **remains unfenced**: production wiring was refused by the automated safety review pending owner authorization.
+> - `PHOTO_OWNERSHIP_FENCING_ENABLED` is **not** a complete emergency stop.
+> - W1/W10, W8 and W9 carry always-on safety corrections.
+>
+> See `PHOTO_STORAGE_RELEASE_RUNBOOK.md`. Statements below that call the schema "proposed" or "not registered" describe the #413 state.
+
 **Verdict: PARTIALLY READY (development and CI evidence only). NOT production-ready.**
 
 - **Branch:** `feat/photo-storage-final-readiness`, stacked on #412 (`feat/photo-legacy-writer-gates-p2-2b3d6`) at exactly `44e0df2726f02aabdb7ed7e8230c47d0a6e23036`.

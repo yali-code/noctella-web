@@ -1,71 +1,66 @@
 'use strict';
-// P2-2B3D4 (#407/#396): filesystem-mutation census guard for the 14-writer adoption matrix.
-// Fails when a mutation call site is added, moved or removed anywhere in apps/api/src, so the
-// readiness matrix in docs/engineering/P2-2B3D4_WRITER_ADOPTION.md cannot silently go stale, and
-// when application code imports a development-only photo capability.
+// P2-2B3D4 (#407/#396), hardened: filesystem and child-process mutation census for the 14-writer
+// adoption matrix (docs/engineering/P2-2B3D4_WRITER_ADOPTION.md and the release readiness docs).
+// Counts per file and category, including fs-qualified/imported cp/rmdir/truncate, object-style open
+// flags, FileHandle writes, child-process launches and application scripts under src/scripts.
 // Run: node --test scripts/photo-writer-adoption/census.test.cjs   (no dependencies)
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const path = require('node:path');
+const { census, scanText, sources, rel } = require('./scan.cjs');
 
-const SRC = path.resolve(__dirname, '../../apps/api/src');
-// fs mutation APIs (string helpers named `truncate` exist in non-fs code; fs.truncate is unused).
-const MUTATION = /\b(writeFileSync|writeFile|appendFileSync|appendFile|copyFileSync|copyFile|cpSync|renameSync|rename|unlinkSync|unlink|rmSync|rm|rmdirSync|linkSync|link|symlinkSync|symlink|createWriteStream|mkdtempSync|mkdtemp|toFile|chmodSync|chmod)\s*\(/g;
-const OPEN_FOR_WRITE = /\bopen(Sync)?\([^)\n]*["'](w|wx|w\+|a|a\+|r\+)["']/g;
-
-/** file -> expected call-site count and the matrix writer IDs (see the adoption document). */
+/** file -> expected counts per category, and what the file is in the writer matrix. */
 const EXPECTED = {
-  'routes/productPhotoUpload.ts': { sites: 2, writers: ['W2'] },
-  'services/stagedProductPhotoStorage.ts': { sites: 4, writers: ['W2', 'W10'] },
-  'services/photoStorage.ts': { sites: 4, writers: ['W1', 'W4', 'W10'] },
-  'services/aiIntakePhotoStorage.ts': { sites: 3, writers: ['W3', 'W5'] },
-  'services/managedFileDeletion.ts': { sites: 1, writers: ['W5', 'W6'] },
-  'services/productPhotoStorageWorkflow.ts': { sites: 2, writers: ['W7', 'W8', 'W9'] },
-  'integrations/instagram/mediaPreparation.ts': { sites: 3, writers: ['W11'] },
-  'integrations/media/reelRenderer.ts': { sites: 3, writers: ['W12'] },
-  'use-cases/product-photo-backup/useCases.ts': { sites: 5, writers: ['W13'] },
-  'repositories/product-photo-backup/s3Compatible.ts': { sites: 2, writers: ['W13'] },
-  'use-cases/database-backup/useCases.ts': { sites: 7, writers: ['W14'] },
-  'repositories/database-backup/s3Compatible.ts': { sites: 2, writers: ['W14'] },
-  'services/developmentPhotoStorageCapability.ts': { sites: 6, writers: ['DEV'] },
-  'services/developmentPhotoDiskBudget.ts': { sites: 4, writers: ['DEV'] },
-  'services/developmentPhotoRecovery.ts': { sites: 1, writers: ['DEV'] },
-  // P2-2B3D6: gate epochs/lease markers/lock only (bookkeeping, never media).
-  'services/developmentLegacyWriterGate.ts': { sites: 4, writers: ['DEV'] },
+  'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
+  'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
+  'services/photoStorage.ts': { mutation: 4, writers: ['W1', 'W4', 'W10'] },
+  'services/aiIntakePhotoStorage.ts': { mutation: 3, writers: ['W3', 'W5'] },
+  'services/managedFileDeletion.ts': { mutation: 1, writers: ['W5', 'W6'] },
+  'services/productPhotoStorageWorkflow.ts': { mutation: 2, writers: ['W7', 'W8', 'W9'] },
+  'integrations/instagram/mediaPreparation.ts': { mutation: 3, writers: ['W11'] },
+  'integrations/media/reelRenderer.ts': { mutation: 3, child: 1, writers: ['W12 (FFmpeg subprocess writes the partial MP4)'] },
+  'use-cases/product-photo-backup/useCases.ts': { mutation: 5, writers: ['W13'] },
+  'repositories/product-photo-backup/s3Compatible.ts': { mutation: 2, handle: 1, writers: ['W13 (FileHandle download write)'] },
+  'use-cases/database-backup/useCases.ts': { mutation: 7, writers: ['W14'] },
+  'repositories/database-backup/s3Compatible.ts': { mutation: 2, handle: 1, writers: ['W14 (FileHandle download write)'] },
+  'services/developmentPhotoStorageCapability.ts': { mutation: 6, writers: ['DEV'] },
+  'services/developmentPhotoDiskBudget.ts': { mutation: 4, writers: ['DEV'] },
+  'services/developmentPhotoRecovery.ts': { mutation: 1, writers: ['DEV'] },
+  'services/developmentLegacyWriterGate.ts': { mutation: 4, writers: ['DEV (gate bookkeeping, never media)'] },
+  'scripts/inventoryRepositoryAudit.ts': { mutation: 3, writers: ['NON_MEDIA (audit fixtures in os.tmpdir)'] },
+  'scripts/refundUseCaseAudit.ts': { mutation: 3, writers: ['NON_MEDIA (audit fixtures in os.tmpdir)'] },
+  'scripts/sharedImageResourceProbe.ts': { mutation: 3, writers: ['NON_MEDIA (container resource probe evidence)'] },
 };
 const DEV_MODULES = ['developmentPhotoStorageCapability', 'developmentPhotoDiskBudget', 'developmentPhotoRecovery', 'developmentLegacyWriterGate'];
 
-function sources() {
-  const files = [];
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) { if (entry.name !== 'scripts') walk(file); continue; }
-      if (file.endsWith('.ts')) files.push(file);
-    }
-  };
-  walk(SRC);
-  return files;
-}
-const rel = (file) => path.relative(SRC, file).split(path.sep).join('/');
-const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+test('scanner detects the hardened mutation forms (self-test)', () => {
+  const sample = (code) => scanText(code);
+  assert.equal(sample('import fs from "node:fs"; fs.cp(a, b); fs.rmdirSync(d); fs.truncateSync(f);').mutation, 3);
+  assert.equal(sample('import { cp, truncate } from "node:fs/promises"; await cp(a, b); await truncate(f);').mutation, 2);
+  assert.equal(sample('const truncate = (s) => s.slice(0, 3); truncate(title);').mutation, 0, 'string helpers are not fs writes');
+  assert.equal(sample('import fs from "node:fs"; fs.openSync(f, { flags: "wx" });').mutation, 1);
+  assert.equal(sample('import { open } from "node:fs/promises"; const h = await open(f, "r"); await h.write(b);').handle, 1);
+  assert.equal(sample('import { execFile } from "node:child_process"; execFile("ffmpeg", args);').child, 1);
+  assert.equal(sample('res.write(x);').handle, 0, 'stream writes outside fs-opening files are not counted');
+});
 
-test('every filesystem mutation call site in apps/api/src is in the 14-writer matrix', () => {
-  const actual = {};
-  for (const file of sources()) {
-    const text = stripComments(fs.readFileSync(file, 'utf8'));
-    const sites = (text.match(MUTATION) ?? []).length + (text.match(OPEN_FOR_WRITE) ?? []).length;
-    if (sites) actual[rel(file)] = sites;
+test('every filesystem / FileHandle / child-process mutation site in apps/api/src is in the writer matrix', () => {
+  const actual = census();
+  const problems = [];
+  for (const [file, counts] of Object.entries(actual)) {
+    const expected = EXPECTED[file];
+    if (!expected) { problems.push(`NEW ${file} ${JSON.stringify(counts)}: classify it in the writer matrix (W#, DEV or NON_MEDIA) before adding it to EXPECTED`); continue; }
+    for (const category of ['mutation', 'handle', 'child']) {
+      if ((expected[category] ?? 0) !== counts[category]) problems.push(`CHANGED ${file} ${category}: expected ${expected[category] ?? 0}, found ${counts[category]} (${expected.writers.join(', ')}): review the change against the matrix, then update the count`);
+    }
   }
-  const expected = Object.fromEntries(Object.entries(EXPECTED).map(([file, value]) => [file, value.sites]));
-  assert.deepEqual(actual, expected, 'A media/filesystem writer changed: update the adoption matrix before changing this census.');
+  for (const file of Object.keys(EXPECTED)) if (!actual[file]) problems.push(`REMOVED ${file}: its mutation sites are gone; update the matrix and EXPECTED`);
+  assert.deepEqual(problems, []);
 });
 
 /**
  * #406's explicit private-root producer is the single permitted reference: a type-only import
  * (erased at compile time) and one lazy require that runs only after the NODE_ENV/flag guard.
- * Anything else referencing a development module from application code fails the census.
  */
 function allowPrivateRootProducer(text) {
   const lines = text.split(/\r?\n/);
@@ -88,12 +83,15 @@ test('development-only photo capabilities are not imported by application code',
   assert.deepEqual(offenders, []);
 });
 
-test('PRODUCT_PHOTO_DISK_STAGING_ENABLED stays disabled unless explicitly "true"', () => {
+test('staging and fencing switches have no default-true fallback', () => {
   const hits = [];
   for (const file of sources()) {
     const text = fs.readFileSync(file, 'utf8');
-    // A default-true fallback or assignment (comparisons such as === "true" are fine).
-    for (const line of text.split(/\r?\n/)) if (/PRODUCT_PHOTO_DISK_STAGING_ENABLED\s*(\?\?|\|\|)\s*["']true|PRODUCT_PHOTO_DISK_STAGING_ENABLED["']?\s*[:=]\s*["']true/.test(line)) hits.push(`${rel(file)}: ${line.trim()}`);
+    for (const line of text.split(/\r?\n/)) {
+      // Isolated offline resource probes (src/scripts) may set the flag only together with NODE_ENV "test" on the same line.
+      if (rel(file).startsWith('scripts/') && /NODE_ENV\s*:\s*["']test["']/.test(line)) continue;
+      if (/(PRODUCT_PHOTO_DISK_STAGING_ENABLED|PHOTO_OWNERSHIP_FENCING_ENABLED)\s*(\?\?|\|\|)\s*["']true|(PRODUCT_PHOTO_DISK_STAGING_ENABLED|PHOTO_OWNERSHIP_FENCING_ENABLED)["']?\s*[:=]\s*["']true/.test(line)) hits.push(`${rel(file)}: ${line.trim()}`);
+    }
   }
-  assert.deepEqual(hits, [], 'no default-true fallback for the staging flag');
+  assert.deepEqual(hits, []);
 });

@@ -11,7 +11,9 @@ import * as schema from "../src/db/schema";
 import { productPhotos, products } from "../src/db/schema";
 import { OutboxEventType } from "../src/services/outbox";
 import { ProductPhotoCleanupTempHandler, ProductPhotoDeleteHandler, ProductPhotoPromotionHandler } from "../src/services/productPhotoStorageWorkflow";
-import { OWNERSHIP_ROLLBACK_BLOCKERS_SQL, PhotoFencingRefusedError, ownershipRollbackBlockers, photoOwnershipFencingEnabled } from "../src/services/photoOwnershipFencing";
+import { createProductPhotoOutboxDispatcher } from "../src/services/productPhotoOutboxDispatcher";
+import { SqliteOutboxRepository } from "../src/services/outboxRepository";
+import { OWNERSHIP_ROLLBACK_BLOCKERS_SQL, PhotoFencingRefusedError, ownershipRollbackBlockers, photoOwnershipFencingConfig, photoOwnershipFencingEnabled } from "../src/services/photoOwnershipFencing";
 import { uploadProductPhoto, uploadStagedProductPhoto } from "../src/services/products";
 import { prepareInstagramImageAsset } from "../src/integrations/instagram/mediaPreparation";
 import { buildDefaultDeps } from "../src/services/aiIntakeCleanup";
@@ -89,9 +91,11 @@ describe.skipIf(!postgresTestConfigured)("ownership migration 0040 (PostgreSQL)"
 });
 
 describe("PHOTO_OWNERSHIP_FENCING_ENABLED fail-closed refusals", () => {
-  it("is OFF unless exactly 'true'", () => {
-    for (const value of [undefined, "", "1", "TRUE", "yes", "true "]) expect(photoOwnershipFencingEnabled({ PHOTO_OWNERSHIP_FENCING_ENABLED: value } as NodeJS.ProcessEnv)).toBe(false);
-    expect(photoOwnershipFencingEnabled({ PHOTO_OWNERSHIP_FENCING_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(true);
+  it("is OFF only for unset, empty or 'false'; invalid values are reported and fail closed (ON)", () => {
+    for (const value of [undefined, "", "false"]) expect(photoOwnershipFencingConfig({ PHOTO_OWNERSHIP_FENCING_ENABLED: value } as NodeJS.ProcessEnv)).toMatchObject({ enabled: false, valid: true });
+    expect(photoOwnershipFencingConfig({ PHOTO_OWNERSHIP_FENCING_ENABLED: "true" } as NodeJS.ProcessEnv)).toMatchObject({ enabled: true, valid: true });
+    for (const value of ["1", "TRUE", "yes", "true ", "False"]) expect(photoOwnershipFencingConfig({ PHOTO_OWNERSHIP_FENCING_ENABLED: value } as NodeJS.ProcessEnv)).toMatchObject({ enabled: true, valid: false });
+    expect(photoOwnershipFencingEnabled({} as NodeJS.ProcessEnv)).toBe(false);
   });
 
   it("W1/W2 (and W10): uploads refuse with 503 before any storage write", async () => {
@@ -119,11 +123,36 @@ describe("PHOTO_OWNERSHIP_FENCING_ENABLED fail-closed refusals", () => {
     expect(fs.readdirSync(root).sort()).toEqual(["a-thumb.webp", "a.webp"]);
   });
 
-  it("W8/W9 still delete when the switch is OFF (unchanged behavior)", async () => {
+  it("W8 with the switch OFF: keyless production events are not falsely acknowledged; keyed deletes need an authoritative unreferenced check", async () => {
     const roots = { tempRoot: root, permanentRoot: root };
     for (const f of ["a.webp", "a-thumb.webp"]) fs.writeFileSync(path.join(root, f), f);
-    await new ProductPhotoDeleteHandler(roots).handle({ id: "e", eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: "ph", payload: { storageKey: "a.webp", thumbnailStorageKey: "a-thumb.webp" } } as never);
+    const keyed = { id: "e", eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: "ph", payload: { storageKey: "a.webp", thumbnailStorageKey: "a-thumb.webp" } };
+    // The real emitter (deleteProductPhoto) sends only photoId/productId.
+    await expect(new ProductPhotoDeleteHandler(roots, async () => false).handle({ ...keyed, payload: { photoId: "ph", productId: "p1" } } as never)).rejects.toMatchObject({ code: "PHOTO_DELETE_KEYS_ABSENT", permanent: true });
+    await expect(new ProductPhotoDeleteHandler(roots).handle(keyed as never)).rejects.toMatchObject({ code: "PHOTO_DELETE_REFERENCE_UNKNOWN" });
+    await expect(new ProductPhotoDeleteHandler(roots, async (key) => key === "a-thumb.webp").handle(keyed as never)).rejects.toMatchObject({ code: "PHOTO_DELETE_KEY_REFERENCED" });
+    await expect(new ProductPhotoDeleteHandler(roots, async () => { throw new Error("db down"); }).handle(keyed as never)).rejects.toThrow("db down");
+    expect(fs.readdirSync(root).sort()).toEqual(["a-thumb.webp", "a.webp"]);
+    await new ProductPhotoDeleteHandler(roots, async () => false).handle(keyed as never);
     expect(fs.readdirSync(root)).toEqual([]);
+  });
+
+  it("W8 dispatcher wiring: a stale delete event for a key a newer photo row references is dead-lettered, not executed", async () => {
+    const sqlite = new Database(":memory:"); ensureSchema(sqlite); const db = drizzle(sqlite, { schema });
+    await db.insert(products).values(product);
+    await db.insert(productPhotos).values({ id: "newer", productId: "p1", url: "/images/product-photos/k.webp", thumbnailUrl: "/images/product-photos/k-thumb.webp", filename: "k.webp", mimeType: "image/webp", sizeBytes: 1, width: 1, height: 1, processingStatus: "Ready", storageKey: "k.webp", thumbnailStorageKey: "k-thumb.webp", createdAt: "2026-01-01", updatedAt: "2026-01-01" } as never);
+    for (const f of ["k.webp", "k-thumb.webp"]) fs.writeFileSync(path.join(root, f), f);
+    const outbox = new SqliteOutboxRepository(sqlite);
+    await outbox.create({ id: "stale-delete", eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", idempotencyKey: "stale", payload: { photoId: "old", storageKey: "k.webp", thumbnailStorageKey: "k-thumb.webp" }, maxAttempts: 3, availableAt: "2026-01-01" } as never);
+    await createProductPhotoOutboxDispatcher(db as never, "sqlite", { tempRoot: root, permanentRoot: root }).dispatchDueEvents("w", 5);
+    expect((await outbox.getById("stale-delete"))?.lastErrorCode).toBe("PHOTO_DELETE_KEY_REFERENCED");
+    expect(fs.readdirSync(root).sort()).toEqual(["k-thumb.webp", "k.webp"]);
+  });
+
+  it("W9 never deletes in the canonical root", async () => {
+    fs.writeFileSync(path.join(root, "t.webp"), "t");
+    await expect(new ProductPhotoCleanupTempHandler({ tempRoot: root, permanentRoot: root }).handle({ id: "e", eventType: OutboxEventType.ProductPhotoCleanupTempRequested, aggregateType: "ProductPhoto", payload: { storageKey: "t.webp" } } as never)).rejects.toMatchObject({ code: "PHOTO_TEMP_ROOT_IS_CANONICAL" });
+    expect(fs.readdirSync(root)).toEqual(["t.webp"]);
   });
 
   it("W7: distinct-root promotion refuses without copying or unlinking", async () => {
