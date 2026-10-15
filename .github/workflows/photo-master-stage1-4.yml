@@ -1,0 +1,307 @@
+name: Photo Master CI — Stage 1–4 evidence
+on:
+  pull_request:
+    branches: [fix/w4-fail-closed-real-boundary-424]
+    paths:
+      - .github/workflows/photo-master-stage1-4.yml
+      - apps/api/**
+      - scripts/photo-*/**
+permissions:
+  contents: read
+concurrency:
+  group: photo-master-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  w4-and-typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: npm run typecheck -w apps/api
+      - run: node --import tsx --test scripts/photo-w4-fencing-gap/real-w4.test.cjs
+      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts
+  fenced-storage-and-crash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_photo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_photo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_photo_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: node --import tsx --test scripts/photo-storage-capability/storage.test.cjs
+      - run: node --import tsx --test scripts/photo-final-readiness/ai-finalize.test.cjs
+      - run: node --import tsx --test scripts/photo-crash-recovery/recovery.test.cjs
+  schema-and-writer-census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_schema_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_schema_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_schema_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: node --test scripts/photo-writer-adoption/census.test.cjs
+      - run: node --import tsx --test scripts/photo-ownership-schema/ownership.test.cjs
+      - run: node --import tsx --test scripts/photo-recovery-reconciliation/recovery.test.cjs
+  w2-independent-stack-proof:
+    # Evidence from a separately pinned Draft branch; NOT a joint W2/W4 integration test.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_w2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_w2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_w2_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b517c048809d3043070941e876de2ef107abb8db
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: node --test scripts/photo-operation-identity/identity.test.cjs scripts/photo-operation-identity/durable-probe.test.cjs scripts/photo-operation-identity/durable-postgres.test.cjs
+  api-full-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_api_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_api_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_api_test
+      # The full suite includes a mocked lost-COMMIT test that selects DATABASE_DRIVER=postgres.
+      # Its runtime read factory requires DATABASE_URL as well as the disposable harness URL.
+      DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_api_test
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: npm exec -w apps/api -- vitest run
+  ext4-disk-budget-enospc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - name: Disposable ext4 loop budget + ENOSPC acceptance
+        shell: bash
+        env:
+          NOCTELLA_DISK_BUDGET_EVIDENCE_DIR: ${{ runner.temp }}/photo-disk-budget-evidence
+        run: |
+          set -euo pipefail
+          EVIDENCE="$NOCTELLA_DISK_BUDGET_EVIDENCE_DIR"
+          mkdir -p "$EVIDENCE"
+          IMAGE="${{ runner.temp }}/photo-disk-budget.img"
+          MOUNT="${{ runner.temp }}/noctella-photo-budget-mount"
+          dd if=/dev/zero of="$IMAGE" bs=1M count=64 status=none
+          mkfs.ext4 -q -F -m 0 -N 4096 "$IMAGE"
+          sudo mkdir -p "$MOUNT"
+          sudo mount -o loop "$IMAGE" "$MOUNT"
+          trap 'sudo umount "$MOUNT" || true' EXIT
+          sudo chown "$(id -u):$(id -g)" "$MOUNT"
+          df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-before.txt"
+          TMPDIR="$MOUNT" node --import tsx scripts/photo-disk-budget/measure.cjs --quick --out "$EVIDENCE/measure-ext4-loop-quick.json"
+          TMPDIR="$MOUNT" NOCTELLA_DISK_BUDGET_ENOSPC=1 node --import tsx --test scripts/photo-disk-budget/budget.test.cjs 2>&1 | tee "$EVIDENCE/test-output.txt"
+          df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-after.txt"
+          sudo find "$MOUNT" -xdev \( -type f -o -type d \) -printf '%y %i %n %s %b %p\n' | sort -k6 > "$EVIDENCE/loop-inventory.txt"
+          sudo umount "$MOUNT"
+          trap - EXIT
+          node --import tsx scripts/photo-disk-budget/measure.cjs --out "$EVIDENCE/measure-runner-full.json"
+      - name: Upload non-sensitive budget evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-master-ext4-budget
+          path: ${{ runner.temp }}/photo-disk-budget-evidence
+          retention-days: 7
+  linux-512m-24mp-combined:
+    name: linux-512m-24mp-combined / ${{ matrix.candidate.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate:
+          - name: reference-pr422-original-source
+            sha: b7285a52fa98e46d869101717c2ed6a14a88f705
+            profile: combined-original-source
+          - name: reference-pr422-legacy-combined
+            sha: b7285a52fa98e46d869101717c2ed6a14a88f705
+            profile: combined
+          - name: current-pr432-legacy-combined
+            sha: b760a77d20b45c24c33dc48cd4aec0ac64823633
+            profile: combined
+    # 3 x 24-MP mixed-workflow trials, each in a disposable 512-MiB no-swap cgroup.
+    # This is synthetic HTTP/resource evidence, not production API or release acceptance.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CASE_PROFILE: ${{ matrix.candidate.profile }}
+      INCLUDE_STRESS: 'false'
+      HARNESS_SHA: ${{ matrix.candidate.sha }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.candidate.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 7c6ab55237e996fef041c60bb06f45b7d0fc2061
+          path: benchmark-source
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /apps/api/src/scripts/photoMemoryBenchmark/
+            /apps/api/src/services/photoStorage.ts
+            /apps/api/src/services/errors.ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.0'
+      - name: Prepare disposable source-only context
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctx="$RUNNER_TEMP/photo-context"
+          mkdir -p "$ctx/apps/api" "$ctx/packages/shared" "$ctx/scripts/photo-upload-linux" "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures" "$RUNNER_TEMP/photo-generator/tmp"
+          cp package.json package-lock.json "$ctx/"
+          cp apps/api/{package.json,tsconfig.json} "$ctx/apps/api/"
+          cp -r apps/api/{src,scripts} "$ctx/apps/api/"
+          cp packages/shared/{package.json,tsconfig.json} "$ctx/packages/shared/"
+          cp -r packages/shared/src "$ctx/packages/shared/"
+          mkdir -p "$ctx/apps/api/src/scripts/photoMemoryBenchmark"
+          cp benchmark-source/apps/api/src/scripts/photoMemoryBenchmark/{fixtures,scenarios}.ts "$ctx/apps/api/src/scripts/photoMemoryBenchmark/"
+          cp scripts/photo-upload-linux/* "$ctx/scripts/photo-upload-linux/"
+          sha256sum benchmark-source/apps/api/src/scripts/photoMemoryBenchmark/*.ts > "$RUNNER_TEMP/photo-evidence/source-sha256.txt"
+          docker info > "$RUNNER_TEMP/photo-evidence/docker-info.txt"
+      - name: Build bounded candidate
+        timeout-minutes: 10
+        run: docker build -f scripts/photo-upload-linux/Dockerfile -t noctella-photo-upload:isolated "$RUNNER_TEMP/photo-context"
+      - name: Generate synthetic near-limit fixture outside measured cgroups
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          timeout --kill-after=10s 420s docker run --name "noctella-photo-generator-$GITHUB_RUN_ID" --rm --env "CASE_PROFILE=$CASE_PROFILE" --network none --memory 2g --memory-swap 2g --cpus 2 --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges --read-only --user "$(id -u):$(id -g)" --mount "type=bind,src=$RUNNER_TEMP/photo-fixtures,dst=/fixtures" --mount "type=bind,src=$RUNNER_TEMP/photo-generator,dst=/work" noctella-photo-upload:isolated node --import tsx scripts/photo-upload-linux/agent.ts generate
+          cp "$RUNNER_TEMP/photo-fixtures/fixtures.json" "$RUNNER_TEMP/photo-evidence/fixtures.json"
+      - name: Measure all three constrained 24-MP trials
+        id: measure
+        continue-on-error: true
+        timeout-minutes: 20
+        run: node scripts/photo-upload-linux/run-host.mjs "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures"
+      - name: Capture and stop interrupted disposable containers
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/photo-evidence"
+          for id in $(docker ps -aq --filter 'name=^/noctella-photo-'); do
+            docker inspect "$id" > "$RUNNER_TEMP/photo-evidence/interrupted-$id.json" || true
+            docker rm --force "$id" || true
+          done
+      - name: Preserve memory evidence even on failure or timeout
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-master-512m-24mp-${{ matrix.candidate.name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/photo-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Enforce three-trial result (upload alone is never acceptance)
+        if: always()
+        env:
+          MEASUREMENT_OUTCOME: ${{ steps.measure.outcome }}
+        run: test "$MEASUREMENT_OUTCOME" = success
+  w3-candidate-integration-gate:
+    # Do not count a pinned PR #422 passing fixture as a candidate W3 adoption.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require actual W3 flag, writer, key recipe and candidate memory scenario
+        run: node scripts/photo-w4-fencing-gap/w3-integration-gate.cjs
