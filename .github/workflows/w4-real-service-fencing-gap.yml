@@ -1,4 +1,4 @@
-name: W4 real-service fencing gap (disposable proof)
+name: W4 real-service fail-closed regression
 on:
   pull_request:
     branches: [test/w4-real-service-fencing-gap-424]
@@ -12,7 +12,7 @@ permissions:
 jobs:
   gap-proof:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,4 +23,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w packages/shared
+      - run: npm run typecheck -w apps/api
       - run: node --import tsx --test scripts/photo-w4-fencing-gap/real-w4.test.cjs
+      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts
