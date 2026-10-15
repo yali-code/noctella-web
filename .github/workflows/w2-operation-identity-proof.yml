@@ -1,0 +1,21 @@
+name: W2 operation identity contract proof
+on:
+  pull_request:
+    branches: [test/w2-operation-identity-proof-424]
+    paths:
+      - scripts/photo-operation-identity/**
+      - .github/workflows/w2-operation-identity-proof.yml
+permissions:
+  contents: read
+jobs:
+  pure-contract-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test scripts/photo-operation-identity/identity.test.cjs
