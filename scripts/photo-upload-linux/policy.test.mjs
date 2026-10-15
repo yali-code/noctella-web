@@ -69,3 +69,15 @@ test("smaller reference is explicitly diagnostic and never replaces combined acc
   assert.equal(reference[0].fixtures[0],"jpeg-typical-landscape");
   assert.equal(selectedScenarios(true,"combined").length,3);
 });
+test("#390 integrated original-source acceptance keeps the unchanged 24MP workload and three fresh trials", async () => {
+  const { selectedScenarios } = await import("./policy.mjs");
+  const integrated = selectedScenarios(true, "combined-original-source"), combined = selectedScenarios(true, "combined");
+  assert.equal(integrated.length, 3);
+  assert.deepEqual(integrated.map(s => s.trial), [1, 2, 3]);
+  for (const [i, s] of integrated.entries()) {
+    assert.equal(s.aiIntakeOriginalSource, true);
+    for (const key of ["fixtures", "ops", "concurrency", "path"]) assert.deepEqual(s[key], combined[i][key]);
+    assert.equal(s.acceptanceRole, undefined);
+  }
+  assert.ok(combined.every(s => !s.aiIntakeOriginalSource));
+});
