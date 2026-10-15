@@ -1,7 +1,7 @@
 name: W2 operation identity contract proof
 on:
   pull_request:
-    branches: [test/w2-operation-identity-proof-424]
+    branches: [test/w2-operation-identity-proof-424, test/w2-operation-identity-validation-424]
     paths:
       - scripts/photo-operation-identity/**
       - .github/workflows/w2-operation-identity-proof.yml
@@ -18,4 +18,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: node --test scripts/photo-operation-identity/identity.test.cjs
+      - run: npm ci
+      - run: node --test scripts/photo-operation-identity/identity.test.cjs scripts/photo-operation-identity/durable-probe.test.cjs
