@@ -7,6 +7,9 @@ import path from "node:path";
 export async function runCombinedScenario(config: any) {
   if (process.platform !== "linux" || process.env.PRODUCT_PHOTO_DIR !== "/work/photos" || process.env.TMPDIR !== "/work/tmp") throw Error("Disposable Linux environment required");
   Object.assign(process.env, { NODE_ENV:"test", DATABASE_DRIVER:"sqlite", DATABASE_URL:"/work/api.sqlite", PRODUCT_PHOTO_DISK_STAGING_ENABLED:"true", AI_INTAKE_PHOTO_DIR:"/work/intake", MARKETPLACE_CREDENTIAL_ENCRYPTION_KEY:Buffer.alloc(32,4).toString("base64"), MARKETPLACE_OAUTH_STATE_SECRET:"synthetic-state", ADMIN_APP_ORIGIN:"http://localhost:3001", STOREFRONT_APP_ORIGIN:"http://localhost:3000", SCHEDULER_AUTH_TOKEN:"synthetic-scheduler" });
+  // #390 integrated acceptance: the real flagged original-source W3 writer (NODE_ENV "test" above), not a runtime adapter.
+  if(config.scenario.aiIntakeOriginalSource)process.env.AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED="true";
+  else delete process.env.AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED;
   const { AdminRole, ProductType, ProductStatus, AiProductIntakeStatus }=await import("@noctella/shared");
   const app=(await import("../app")).default;
   const {db,dbRuntime}=await import("../db/client");
@@ -109,6 +112,17 @@ export async function runCombinedScenario(config: any) {
     if(results[1].body.photos[0].id!==staged.body.id)throw Error("Deterministic photo identity changed");
     if(await digest("/work/intake/"+staged.body.storageKey)!==sourceHash)throw Error("AI source changed");
     const rows=await db.select().from(productPhotos),events=await db.select().from(outboxEvents),aiRows=await db.select().from(aiIntakePhotos);
+    if(config.scenario.aiIntakeOriginalSource){
+      // The staged source is the upload itself, and W4 must equal the product-upload derivatives of the same bytes.
+      const uploaded=createHash("sha256");for await(const chunk of createReadStream(input))uploaded.update(chunk);
+      if(!/.orig.jpg$/.test(staged.body.storageKey)||uploaded.digest("hex")!==sourceHash)throw Error("Original-source staging did not preserve the upload");
+      const file=(url:string)=>"/work/photos/"+path.basename(url);
+      const w4=rows.find(r=>r.productId===aiProduct.id),uploads=rows.filter(r=>r.productId===targetProduct.id);
+      if(!w4||uploads.length!==2)throw Error("Unexpected product photo rows");
+      const w4Main=await digest(file(w4.url)),w4Thumb=await digest(file(w4.thumbnailUrl));
+      for(const upload of uploads)if(await digest(file(upload.url))!==w4Main||await digest(file(upload.thumbnailUrl))!==w4Thumb)throw Error("W4 output differs from the product-upload derivatives of the same source");
+      trace("original-source.parity",{stagedKeySuffix:".orig.jpg",w4Main,w4Thumb});
+    }
     const privateFiles=await fs.readdir("/work/intake"),photoFiles=await fs.readdir("/work/photos");
     const tmpDirFiles=[...await fs.readdir("/work/tmp"),...await fs.readdir("/work/.product-photo-upload-staging"),...await fs.readdir("/work/.ai-intake-upload-ingress")];
     if(rows.length!==4||events.length!==4||aiRows.length!==2||privateFiles.length!==2||nativePeak!==1||nativeActive!==0||nativeCalls<20||imageProcessingAdmission.snapshot().held!==0)throw Error("Combined integrity/admission mismatch");
