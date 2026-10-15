@@ -295,3 +295,13 @@ jobs:
         env:
           MEASUREMENT_OUTCOME: ${{ steps.measure.outcome }}
         run: test "$MEASUREMENT_OUTCOME" = success
+  w3-candidate-integration-gate:
+    # Do not count a pinned PR #422 passing fixture as a candidate W3 adoption.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require actual W3 flag, writer, key recipe and candidate memory scenario
+        run: node scripts/photo-w4-fencing-gap/w3-integration-gate.cjs
