@@ -1,7 +1,7 @@
 name: W2 operation identity contract proof
 on:
   pull_request:
-    branches: [test/w2-operation-identity-proof-424, test/w2-operation-identity-validation-424]
+    branches: [test/w2-operation-identity-proof-424, test/w2-operation-identity-validation-424, test/w2-durable-sqlite-idempotency-424]
     paths:
       - scripts/photo-operation-identity/**
       - .github/workflows/w2-operation-identity-proof.yml
@@ -10,7 +10,23 @@ permissions:
 jobs:
   pure-contract-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_w2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_w2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_w2_test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,4 +35,4 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - run: node --test scripts/photo-operation-identity/identity.test.cjs scripts/photo-operation-identity/durable-probe.test.cjs
+      - run: node --test scripts/photo-operation-identity/identity.test.cjs scripts/photo-operation-identity/durable-probe.test.cjs scripts/photo-operation-identity/durable-postgres.test.cjs
