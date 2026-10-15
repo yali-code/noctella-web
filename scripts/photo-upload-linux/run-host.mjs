@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
 import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
+import { usage } from "./disk-usage.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
 const fixtureRoot = path.resolve(process.argv[3] ?? "");
@@ -13,33 +14,6 @@ const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", tim
 const write = (file, value) => fsp.writeFile(file, JSON.stringify(value, null, 2) + "\n");
 const record = { schemaVersion: 1, sourceSha: SOURCE_SHA, harnessSha: process.env.HARNESS_SHA ?? "unknown", runUrl: process.env.RUN_URL ?? "local", startedAt: new Date().toISOString(), scope: "gated real product HTTP route; synthetic SQLite and in-process streaming client; not final API acceptance", cases: [] };
 
-async function usage(root) {
-  let logical = 0, allocated = 0, files = 0;
-  // SQLite may unlink -shm/-wal files between readdir and lstat.
-  // Ignore only ENOENT races in the disposable observer; retain all other failures.
-  let entries;
-  try { entries = await fsp.readdir(root, { withFileTypes: true }); }
-  catch (error) {
-    if (error.code === "ENOENT") return { logical, allocated, files };
-    throw error;
-  }
-  for (const entry of entries) {
-    const target = path.join(root, entry.name);
-    if (entry.isDirectory()) {
-      const child = await usage(target); logical += child.logical; allocated += child.allocated; files += child.files;
-    } else {
-      let s;
-      try { s = await fsp.lstat(target); }
-      catch (error) {
-        if (error.code === "ENOENT") continue;
-        throw error;
-      }
-      if (s.isSymbolicLink()) throw Error("Unexpected symlink in disposable work directory");
-      logical += s.size; allocated += s.blocks * 512; files++;
-    }
-  }
-  return { logical, allocated, files };
-}
 async function cgroup(root) {
   const value = async (name) => (await fsp.readFile(path.join(root, name), "utf8")).trim();
   return { max: Number(await value("memory.max")), swapMax: Number(await value("memory.swap.max")), current: Number(await value("memory.current")), peak: Number(await value("memory.peak")), events: parseEvents(await value("memory.events")) };
