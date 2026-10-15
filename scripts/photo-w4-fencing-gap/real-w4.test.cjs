@@ -5,6 +5,7 @@ const assert=require('node:assert/strict');
 const {buildAiIntakePhotoFinalizationManifest}=require('../../apps/api/src/use-cases/ai-intake-photo-finalize/useCases.ts');
 const {photoOwnershipFencingEnabled}=require('../../apps/api/src/services/photoOwnershipFencing.ts');
 const {finalizeAiIntakePhotosUseCase}=require('../../apps/api/src/use-cases/ai-intake-photo-finalize/useCases.ts');
+const {AiProductIntakeStatus}=require('@noctella/shared');
 
 test('W4 ON refuses before reading bytes or invoking canonical writer',async()=>{
   const prior=process.env.PHOTO_OWNERSHIP_FENCING_ENABLED;
@@ -41,6 +42,25 @@ test('W4 OFF retains legacy manifest generation without changing file behavior',
     },[{id:'staged-test',storageKey:'private-test.webp'}],'product-test',undefined);
     assert.equal(writes,1);assert.equal(result.length,1);assert.equal(result[0].productPhotoId,'staged-test');
   } finally {
+    if(prior===undefined)delete process.env.PHOTO_OWNERSHIP_FENCING_ENABLED;
+    else process.env.PHOTO_OWNERSHIP_FENCING_ENABLED=prior;
+  }
+});
+
+test('W4 ON refuses Applied transaction before touching product/photo/outbox adapters',async()=>{
+  const prior=process.env.PHOTO_OWNERSHIP_FENCING_ENABLED;
+  try{
+    process.env.PHOTO_OWNERSHIP_FENCING_ENABLED='true';
+    let touched=0;
+    const cap={runWithLockedIntake:async(_id,cb)=>cb({
+      intake:{status:AiProductIntakeStatus.Applied,resultProductId:'product-test'},
+      lockProduct:()=>{touched++;throw Error('MUST_NOT_TOUCH');}
+    })};
+    await assert.rejects(finalizeAiIntakePhotosUseCase(cap,{
+      intakeId:'intake-test',actorId:'actor-test',manifest:[]
+    }),{code:'PHOTO_FENCING_WRITER_NOT_ADOPTED',writer:'W4_AI_FINALIZE'});
+    assert.equal(touched,0);
+  }finally{
     if(prior===undefined)delete process.env.PHOTO_OWNERSHIP_FENCING_ENABLED;
     else process.env.PHOTO_OWNERSHIP_FENCING_ENABLED=prior;
   }
