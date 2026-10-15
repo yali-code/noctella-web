@@ -10,6 +10,7 @@ import { PhotoUploadAdmission, PhotoUploadError, abortedError, productPhotoAdmis
 import { productPhotoStaticRoot, PRODUCT_PHOTO_MAX_BYTES, PRODUCT_PHOTO_MIME_TYPES } from "../services/photoStorage";
 import type { StagedProductPhotoInput } from "../services/stagedProductPhotoStorage";
 import { handleRouteError } from "./errorHandler";
+import { photoOwnershipFencingEnabled } from "../services/photoOwnershipFencing";
 
 const RESERVATION = 42 * 1024 * 1024;
 const STAGING_BUDGET = 128 * 1024 * 1024;
@@ -110,6 +111,9 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
       req.once("aborted", interrupted);
       res.once("close", closed);
       try {
+        // Stage 5: even private multipart staging is refused before admission/DB/body while W2 is unadopted.
+        // No durable operation token or generation ownership is yet checked by this route.
+        if (photoOwnershipFencingEnabled()) throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "W2 photo upload requires durable ownership adoption");
         lease = admission.reserve(); // Before DB, body parsing, directory creation or request buffering.
         await options.assertProduct(String(req.params.id));
         await initialize();
