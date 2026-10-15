@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
+import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess, allocatorEnvArgs } from "./policy.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
 const fixtureRoot = path.resolve(process.argv[3] ?? "");
@@ -107,7 +107,7 @@ async function run() {
         samplingJob = sample().catch(error => { item.samplingError = String(error); }).finally(() => { sampling = false; });
       }, 50);
       item.exitCode = await new Promise((resolve) => {
-        const diagnosticEnv = scenario.mmapPolicy ? ["--env", "MALLOC_MMAP_THRESHOLD_=131072", "--env", "MALLOC_TRIM_THRESHOLD_=131072"] : scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
+        const diagnosticEnv = scenario.allocatorExperiment ? allocatorEnvArgs(scenario.allocatorExperiment) : scenario.mmapPolicy ? ["--env", "MALLOC_MMAP_THRESHOLD_=131072", "--env", "MALLOC_TRIM_THRESHOLD_=131072"] : scenario.nativeTrace ? ["--env", "LD_PRELOAD=/app/scripts/photo-upload-linux/native-alloc.so", "--env", "NOCTELLA_NATIVE_TRACE=synthetic-only"] : [];
         const child = spawn("docker", ["exec", ...diagnosticEnv, name, "node", "--import", "tsx", "scripts/photo-upload-linux/agent.ts", "run"], { stdio: ["ignore", "pipe", "pipe"] });
         let log = "";
         child.stdout.on("data", chunk => { log = (log + chunk.toString()).slice(-64000); });

@@ -1,5 +1,7 @@
 FROM node:20.20.0-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ cmake && rm -rf /var/lib/apt/lists/*
+# #390 DIAGNOSTIC allocators only (selected per scenario via LD_PRELOAD; acceptance rejects these overrides).
+RUN apt-get update && apt-get install -y --no-install-recommends libjemalloc2 libmimalloc2.0 && rm -rf /var/lib/apt/lists/* && mkdir /opt/alloc && ln -s "$(ls /usr/lib/*/libjemalloc.so.2 | head -1)" /opt/alloc/libjemalloc.so && ln -s "$(ls /usr/lib/*/libmimalloc.so.2* | head -1)" /opt/alloc/libmimalloc.so && dpkg-query -W libjemalloc2 libmimalloc2.0 > /opt/alloc/provenance.txt && sha256sum "$(readlink -f /opt/alloc/libjemalloc.so)" "$(readlink -f /opt/alloc/libmimalloc.so)" >> /opt/alloc/provenance.txt && for lib in jemalloc mimalloc; do LD_PRELOAD=/opt/alloc/lib$lib.so node -e "const m=require('fs').readFileSync('/proc/self/maps','utf8');if(!m.includes('$lib'))process.exit(1);Buffer.alloc(64<<20).fill(1)"; done
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
