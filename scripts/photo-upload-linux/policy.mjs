@@ -69,8 +69,10 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
 }
 
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4", "webp-c4", "combined", "combined-reference"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "combined-original-source"].includes(profile)) throw Error("Unknown bounded resource profile");
   if (profile === "combined-reference") return [{ name: "linux-combined-reference-12mp", description: "DIAGNOSTIC ONLY: complete mixed workflow on a 12MP reference; cannot replace failed 24MP acceptance", fixtures: ["jpeg-typical-landscape"], ops: 8, concurrency: 3, path: "combined", trial: 1, acceptanceRole: "diagnostic-only" }];
+  // #390 integrated acceptance: unchanged 24MP workload, real AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED writer, three fresh trials.
+  if (profile === "combined-original-source") return [1, 2, 3].map(trial => ({ name: "linux-combined-original-source-t" + trial, description: "Combined workflows with the integrated original-source W3 writer (flag ON, NODE_ENV test)", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial, aiIntakeOriginalSource: true }));
   if (profile === "combined") return [1, 2, 3].map(trial => ({ name: "linux-combined-t" + trial, description: "Combined gated product, AI upload/finalization and Instagram synthetic workflows", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial }));
   return scenarios(includeStress).filter(s => profile === "full" || (profile === "c4" ? s.concurrency === 4 : s.name === "linux-webp-c4"));
 }
