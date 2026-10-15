@@ -151,7 +151,7 @@ async function run() {
   record.finishedAt = new Date().toISOString();
   record.expectedCases = selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").length;
   // #390: a parity reference only supplies output digests; byte parity is required for every case in its group.
-  record.parity = compareParity(record.cases.map(c => ({ name: c.scenario.name, parityGroup: c.scenario.parityGroup, parityReference: !!c.scenario.parityReference, digests: c.outputDigests })));
+  record.parity = compareParity(record.cases.map(c => ({ name: c.scenario.name, parityGroup: c.scenario.parityGroup, parityReference: !!c.scenario.parityReference, parityAllowedChanges: c.scenario.parityAllowedChanges, digests: c.outputDigests })));
   record.status = record.cases.length === record.expectedCases && record.parity.ok && record.cases.filter(c => !c.scenario.parityReference).every(c => c.assessment.status === "PASS") ? "PASS" : "FAIL";
   await write(path.join(output, "summary.json"), record);
   const size = await usage(output);
