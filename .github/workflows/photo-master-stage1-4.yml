@@ -1,0 +1,125 @@
+name: Photo Master CI — Stage 1–4 evidence
+on:
+  pull_request:
+    branches: [fix/w4-fail-closed-real-boundary-424]
+    paths:
+      - .github/workflows/photo-master-stage1-4.yml
+      - apps/api/**
+      - scripts/photo-*/**
+permissions:
+  contents: read
+concurrency:
+  group: photo-master-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  w4-and-typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: npm run typecheck -w apps/api
+      - run: node --import tsx --test scripts/photo-w4-fencing-gap/real-w4.test.cjs
+      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts
+  fenced-storage-and-crash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_photo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_photo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_photo_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: node --import tsx --test scripts/photo-storage-capability/storage.test.cjs
+      - run: node --import tsx --test scripts/photo-final-readiness/ai-finalize.test.cjs
+      - run: node --import tsx --test scripts/photo-crash-recovery/recovery.test.cjs
+  schema-and-writer-census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_schema_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_schema_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_schema_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: node --test scripts/photo-writer-adoption/census.test.cjs
+      - run: node --import tsx --test scripts/photo-ownership-schema/ownership.test.cjs
+      - run: node --import tsx --test scripts/photo-recovery-reconciliation/recovery.test.cjs
+  w2-independent-stack-proof:
+    # Evidence from a separately pinned Draft branch; NOT a joint W2/W4 integration test.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_w2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_w2_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_w2_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b517c048809d3043070941e876de2ef107abb8db
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: node --test scripts/photo-operation-identity/identity.test.cjs scripts/photo-operation-identity/durable-probe.test.cjs scripts/photo-operation-identity/durable-postgres.test.cjs
