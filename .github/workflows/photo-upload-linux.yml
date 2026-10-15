@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/photo-storage-production-completion, feat/w3-safe-staged-readers, feat/w3-original-source-writer]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/photo-storage-production-completion, feat/w3-safe-staged-readers, feat/w3-original-source-writer, feat/w3-original-source-acceptance]
     types: [opened, synchronize, reopened, edited]
     paths:
       - scripts/photo-upload-linux/**
