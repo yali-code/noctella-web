@@ -16,7 +16,7 @@ function guardedUrl() {
   let url;
   try { url=new URL(raw); } catch { throw Error('INVALID_TEST_DB_URL'); }
   const db=decodeURIComponent(url.pathname.slice(1));
-  if (!/^postgres(?:ql)?:$/.test(url.protocol)||!/(^|[-_])(test|disposable)([-_]|$)/i.test(db)||/(^|[-_])(prod|production|stage|staging)([-_]|$)/i.test(db)) throw Error('DISPOSABLE_TEST_DB_REQUIRED');
+  if (!/^postgres(?:ql)?:$/.test(url.protocol)||!['127.0.0.1','localhost','::1','[::1]'].includes(url.hostname)||!/(^|[-_])(test|disposable)([-_]|$)/i.test(db)||/(^|[-_])(prod|production|stage|staging)([-_]|$)/i.test(db)) throw Error('DISPOSABLE_TEST_DB_REQUIRED');
   return raw;
 }
 test('isolated PostgreSQL claims, generation CAS, atomic binding and lost acknowledgement', {skip:!raw}, async()=>{
@@ -68,6 +68,24 @@ test('isolated PostgreSQL claims, generation CAS, atomic binding and lost acknow
       await client2.query('ROLLBACK');
     } finally {client2.release();}
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM '+q+'.outbox')).rows[0].n,1);
+
+    // A later failed outbox write must undo earlier photo INSERT and preserve receiving state.
+    const retryIntent={...intent,token:'failed-outbox-123456'};
+    await pool.query('INSERT INTO '+q+'.ops(token,intent,generation,state) VALUES($1,$2,1,$3)',[retryIntent.token,JSON.stringify(retryIntent),'receiving']);
+    const breaker=await pool.connect();
+    try {
+      await breaker.query('BEGIN');
+      await breaker.query('INSERT INTO '+q+'.photos(id,token) VALUES($1,$2)',['photo2',retryIntent.token]);
+      await assert.rejects(
+        breaker.query('INSERT INTO '+q+'.outbox(id,photo_id) VALUES($1,$2)',['event1','photo2']),
+        {code:'23505'}
+      );
+      await breaker.query('ROLLBACK');
+    } finally {breaker.release();}
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM '+q+'.photos WHERE id=$1',['photo2'])).rows[0].n,0);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM '+q+'.outbox')).rows[0].n,1);
+    const pending=await pool.query('SELECT state,photo_id,outbox_id FROM '+q+'.ops WHERE token=$1',[retryIntent.token]);
+    assert.deepEqual([pending.rows[0].state,pending.rows[0].photo_id,pending.rows[0].outbox_id],['receiving',null,null]);
   } finally {
     if(created) await pool.query('DROP SCHEMA '+q+' CASCADE');
     await pool.end();
