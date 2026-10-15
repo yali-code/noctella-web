@@ -17,6 +17,39 @@ Applies to `feat/photo-storage-production-completion`. Every step marked **[AUTH
 
 **Consequence:** turning the flag ON today pauses product uploads, Instagram preparation and canonical deletion without adding any fenced writer. It is an emergency stop for destructive paths, not a feature activation.
 
+## Evidence levels (as of `feat/photo-storage-production-completion`)
+
+| Level | What exists |
+| --- | --- |
+| 1. Development-only implementation | #406 capability, #408 disk budget, #409 recovery classifier, #412 legacy gate: all refuse to construct outside test/development and disposable roots |
+| 2. Real-service integration on disposable databases | Real code paths: ownership tables via `ensureSchema`/0040; switch refusals W1/W2/W6/W7/W8/W9/W11; always-on corrections W1/W10 (lost commit), W8 (no false acknowledgement, reference-checked keyed deletes), W9 (canonical root). **W4 fencing: disposable harness only.** Production wiring was denied by the automated safety review three times (production roots for the capability; the ownership commit inside the real finalization transaction). The original implementation is preserved; no partial writer exists |
+| 3. CI acceptance | Earlier stack PRs passed CI. This branch's CI result must be read from PR #414 (not observed here). #390 combined 24-MP acceptance has **never passed** |
+| 4. Staging acceptance | Not performed |
+| 5. Production activation | Not authorized; blocked by W4, #390 and the platform verification below |
+
+**Older binaries.** Any build before this branch can still:
+- overwrite canonical files (W1 `writeFile`, W4 idempotent write);
+- delete canonical files: W6 AI cleanup, W10 legacy compensation after an ambiguous commit, and W8/W9 for keyed events;
+- acknowledge delete events falsely.
+
+None of these binaries read `PHOTO_OWNERSHIP_FENCING_ENABLED`. They must be fully stopped before any deploy relies on the new behaviour.
+
+**Render draining guarantee required.**
+- The old instance must stop before the new one starts: no overlapping instances for a disk-attached service, and no background worker or cron service with access to `PRODUCT_PHOTO_DIR`.
+- Confirm this in the service settings and the deploy event log. Without that confirmation, the gate in §4 stays BLOCKED.
+
+**Migrations.**
+- `origin/main` ends at PostgreSQL `0038`; the Etsy branches carry `0039_etsy_listing_form_parity.sql`; this branch adds `0040_photo_operation_ownership.sql`.
+- Merge Etsy `0039` first, or renumber `0040` if `main` advances past it. Never renumber an applied file.
+- **SQLite:** the four tables are created by `ensureSchema` at startup, so **every deploy of this code is a schema migration, even with both photo switches OFF**. Take the backups in §1 first.
+
+**#390 acceptance command.** Requires repository access; this machine cannot dispatch it. Run the combined profile:
+```
+gh workflow run "Photo upload Linux 512 MiB" --ref feat/photo-storage-production-completion -f profile=combined
+```
+- **Pass:** cgroup peak ≤ 384 MiB, no OOM or kill events, all 8 operations complete with integrity checks, no output-pixel change.
+- **Current status:** the last measured trials (#397) OOM at 512 MiB. No unapproved `low_memory` codec or limit increase is used.
+
 ## 1. Backups and restore verification [AUTH for production]
 
 - Take a DB backup: `npm run db:backup -w apps/api`.
