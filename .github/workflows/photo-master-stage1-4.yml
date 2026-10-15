@@ -1,7 +1,7 @@
 name: Photo Master CI — Stage 1–4 evidence
 on:
   pull_request:
-    branches: [fix/w4-fail-closed-real-boundary-424]
+    branches: [ci/photo-master-stage1-4-424]
     paths:
       - .github/workflows/photo-master-stage1-4.yml
       - apps/api/**
@@ -27,7 +27,7 @@ jobs:
       - run: npm run build -w packages/shared
       - run: npm run typecheck -w apps/api
       - run: node --import tsx --test scripts/photo-w4-fencing-gap/real-w4.test.cjs
-      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts
+      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts tests/aiIntakeOriginalSourceStaging.test.ts
   fenced-storage-and-crash:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -210,14 +210,9 @@ jobs:
           - name: reference-pr422-original-source
             sha: b7285a52fa98e46d869101717c2ed6a14a88f705
             profile: combined-original-source
-          - name: reference-pr422-legacy-combined
-            sha: b7285a52fa98e46d869101717c2ed6a14a88f705
-            profile: combined
-          - name: current-pr432-legacy-combined
-            sha: b760a77d20b45c24c33dc48cd4aec0ac64823633
-            profile: combined
-    # 3 x 24-MP mixed-workflow trials, each in a disposable 512-MiB no-swap cgroup.
-    # This is synthetic HTTP/resource evidence, not production API or release acceptance.
+          - name: integrated-candidate-original-source
+            sha: ${{ github.event.pull_request.head.sha }}
+            profile: combined-original-source
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
