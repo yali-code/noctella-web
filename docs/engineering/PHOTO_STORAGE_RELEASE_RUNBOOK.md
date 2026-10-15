@@ -43,10 +43,16 @@ None of these binaries read `PHOTO_OWNERSHIP_FENCING_ENABLED`. They must be full
 - Merge Etsy `0039` first, or renumber `0040` if `main` advances past it. Never renumber an applied file.
 - **SQLite:** the four tables are created by `ensureSchema` at startup, so **every deploy of this code is a schema migration, even with both photo switches OFF**. Take the backups in §1 first.
 
-**#390 acceptance command.** Requires repository access; this machine cannot dispatch it. Run the combined profile:
-```
-gh workflow run "Photo upload Linux 512 MiB" --ref feat/photo-storage-production-completion -f profile=combined
-```
+**#390 acceptance procedure.** Requires repository access.
+- `photo-upload-linux.yml` is **not on `main`**, so `workflow_dispatch` (`gh workflow run …`) is unavailable for this branch; GitHub dispatches only workflows on the default branch.
+- The supported trigger is the workflow's `pull_request` event. Its branch filter must include the PR's base (it currently lists `main`, `feat/photo-upload-bounded-memory-p2-2b1` and `feat/shared-image-admission-p2-2b2`).
+- A change under `scripts/photo-upload-linux/**` or to the workflow file must be in the PR.
+- The PR title must start with `[run-upload-512m] combined-only`.
+
+Steps:
+1. Add `feat/photo-storage-final-readiness` (the base of #414) to that `pull_request.branches` list. This CI-only change also satisfies the path filter.
+2. Retitle #414 to `[run-upload-512m] combined-only <title>`. The `edited` event starts the 24-MP combined profile: fresh 512-MiB, no-swap, network-none cgroup containers and three trials.
+3. Restore the title afterwards.
 - **Pass:** cgroup peak ≤ 384 MiB, no OOM or kill events, all 8 operations complete with integrity checks, no output-pixel change.
 - **Current status:** the last measured trials (#397) OOM at 512 MiB. No unapproved `low_memory` codec or limit increase is used.
 
