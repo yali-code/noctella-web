@@ -14,7 +14,7 @@ const EXPECTED = {
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
   'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
   'services/photoStorage.ts': { mutation: 4, writers: ['W1', 'W4', 'W10'] },
-  'services/aiIntakePhotoStorage.ts': { mutation: 3, writers: ['W3', 'W5'] },
+  'services/aiIntakePhotoStorage.ts': { mutation: 11, handle: 1, writers: ['W3', 'W5', 'W3 original-source (#390, flag OFF by default; private staging writes only)'] },
   'services/managedFileDeletion.ts': { mutation: 1, writers: ['W5', 'W6'] },
   'services/productPhotoStorageWorkflow.ts': { mutation: 2, writers: ['W7', 'W8', 'W9'] },
   'integrations/instagram/mediaPreparation.ts': { mutation: 3, writers: ['W11'] },
