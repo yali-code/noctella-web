@@ -5,14 +5,14 @@ on:
       profile:
         description: Bounded full suite or retry only the four concurrent-overload cases
         type: choice
-        options: [full, c4, webp-c4, combined, combined-reference, native-profile, native-worker, native-mmap, native-allocators, native-rgbfree, native-rgbfree-trials, native-rgbfree-alloc-trials]
+        options: [full, c4, webp-c4, combined, combined-reference, native-profile, native-worker, native-mmap, native-allocators, native-rgbfree, native-rgbfree-trials, native-rgbfree-alloc-trials, w3-original-source]
         default: full
       include_stress:
         description: Include the last bounded 144-MP stress case
         type: boolean
         default: true
   pull_request:
-    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/ai-native-memory-p2-2b2c, feat/ai-codec-memory-p2-2b2d, exp/w3-allocator-memory-390]
+    branches: [main, feat/photo-upload-bounded-memory-p2-2b1, feat/shared-image-admission-p2-2b2, feat/ai-intake-memory-p2-2b2b, feat/ai-native-memory-p2-2b2c, feat/ai-codec-memory-p2-2b2d, exp/w3-allocator-memory-390, exp/w3-libvips-rgb-free-390]
     types: [opened, synchronize, reopened, edited]
     paths:
       - scripts/photo-upload-linux/**
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20.20.0'
-      - run: node --test scripts/photo-upload-linux/policy.test.mjs scripts/photo-upload-linux/recipe-worker.test.cjs scripts/photo-upload-linux/analyze-native.test.mjs scripts/photo-upload-linux/codec-metrics.test.cjs
+      - run: node --test scripts/photo-upload-linux/policy.test.mjs scripts/photo-upload-linux/recipe-worker.test.cjs scripts/photo-upload-linux/analyze-native.test.mjs scripts/photo-upload-linux/codec-metrics.test.cjs scripts/photo-upload-linux/w3-fidelity-lib.test.mjs
 
   benchmark:
     needs: tooling-tests
@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 180
     env:
       INCLUDE_STRESS: ${{ github.event_name == 'workflow_dispatch' && inputs.include_stress == false && 'false' || 'true' }}
-      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-only') && 'native-rgbfree' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-trials-only') && 'native-rgbfree-trials' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-alloc-trials-only') && 'native-rgbfree-alloc-trials' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-allocators-only') && 'native-allocators' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-worker-only') && 'native-worker' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-mmap-only') && 'native-mmap' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-profile-only') && 'native-profile' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-reference-only') && 'combined-reference' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-only') && 'combined' || startsWith(github.event.pull_request.title, '[run-upload-512m] webp-c4-only') && 'webp-c4' || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
+      CASE_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || startsWith(github.event.pull_request.title, '[run-upload-512m] w3-original-source-only') && 'w3-original-source' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-only') && 'native-rgbfree' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-trials-only') && 'native-rgbfree-trials' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-rgbfree-alloc-trials-only') && 'native-rgbfree-alloc-trials' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-allocators-only') && 'native-allocators' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-worker-only') && 'native-worker' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-mmap-only') && 'native-mmap' || startsWith(github.event.pull_request.title, '[run-upload-512m] native-profile-only') && 'native-profile' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-reference-only') && 'combined-reference' || startsWith(github.event.pull_request.title, '[run-upload-512m] combined-only') && 'combined' || startsWith(github.event.pull_request.title, '[run-upload-512m] webp-c4-only') && 'webp-c4' || startsWith(github.event.pull_request.title, '[run-upload-512m] c4-only') && 'c4' || 'full' }}
       HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
@@ -117,6 +117,14 @@ jobs:
         continue-on-error: true
         timeout-minutes: 35
         run: node scripts/photo-upload-linux/run-host.mjs "$RUNNER_TEMP/photo-evidence" "$RUNNER_TEMP/photo-fixtures"
+      - name: W3 original-source fidelity comparison (experiment, not acceptance)
+        if: env.CASE_PROFILE == 'w3-original-source'
+        continue-on-error: true
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/photo-fidelity/tmp" "$RUNNER_TEMP/photo-evidence/fidelity"
+          timeout --kill-after=10s 840s docker run --name "noctella-photo-fidelity-$GITHUB_RUN_ID" --rm --network none --memory 2g --memory-swap 2g --cpus 2 --pids-limit 128 --cap-drop ALL --security-opt no-new-privileges --read-only --user "$(id -u):$(id -g)" --mount "type=bind,src=$RUNNER_TEMP/photo-fixtures,dst=/fixtures,readonly" --mount "type=bind,src=$RUNNER_TEMP/photo-fidelity,dst=/work" --mount "type=bind,src=$RUNNER_TEMP/photo-evidence/fidelity,dst=/evidence" noctella-photo-upload:isolated node --import tsx scripts/photo-upload-linux/agent.ts fidelity
       - name: Codec-only feasibility comparison (not API acceptance)
         if: env.CASE_PROFILE == 'combined'
         continue-on-error: true

@@ -10,7 +10,7 @@ import { createRequire } from "node:module";
 const sharp = createRequire(new URL("../../apps/api/package.json", import.meta.url))("sharp");
 const { runCombinedScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/sharedImageResourceProbe.js");
 const { runScenario } = createRequire(import.meta.url)("../../apps/api/dist/scripts/photoUploadResourceProbe.js");
-import { FIXTURES, selectedScenarios, parseEvents, validateLimits, validateCombinedMode, ALLOCATOR_EXPERIMENTS, LIBVIPS_VARIANTS } from "./policy.mjs";
+import { FIXTURES, selectedScenarios, parseEvents, validateLimits, validateCombinedMode, ALLOCATOR_EXPERIMENTS, LIBVIPS_VARIANTS, FIDELITY_FIXTURES } from "./policy.mjs";
 
 async function cgroup() {
   const value = async (name: string) => (await fs.readFile("/sys/fs/cgroup/" + name, "utf8")).trim();
@@ -24,9 +24,14 @@ async function main() {
   const mode = process.argv[2];
   if (mode === "generate") {
     const needed = new Set(selectedScenarios(true, process.env.CASE_PROFILE ?? "full").flatMap((s: { fixtures: string[] }) => s.fixtures));
+    if (process.env.CASE_PROFILE === "w3-original-source") for (const name of FIDELITY_FIXTURES) needed.add(name);
     const specs = PROFILES.full.fixtures.filter((spec) => FIXTURES.includes(spec.name) && needed.has(spec.name));
     const fixtures = await generateFixtures(specs, "/fixtures");
     await fs.writeFile("/fixtures/fixtures.json", JSON.stringify(fixtures, null, 2), { flag: "wx" });
+    return;
+  }
+  if (mode === "fidelity") { // #390 experiment: output/metadata/quality comparison, outside the measured 512-MiB cases
+    await (await import("./w3-fidelity")).runFidelity();
     return;
   }
   const limits = await cgroup();

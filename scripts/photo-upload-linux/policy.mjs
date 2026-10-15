@@ -93,9 +93,17 @@ export function diagnosticEnvArgs(scenario) {
 }
 const rgbFreeCase = (name, libvipsVariant, allocatorExperiment, extra = {}) => ({ name: "linux-rgbfree-" + name + "-24mp", description: "DIAGNOSTIC ONLY (#390): unchanged 24MP mixed workload with libvips " + libvipsVariant + (allocatorExperiment ? " + " + allocatorExperiment : " + default glibc") + "; not final acceptance", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, libvipsVariant, ...(allocatorExperiment ? { allocatorExperiment } : {}), parityGroup: "rgbfree", acceptanceRole: "diagnostic-only", ...extra });
 const RGBFREE_REFERENCE = () => rgbFreeCase("reference-prebuilt-arena1", "prebuilt", "glibc-arena1-mmap", { parityReference: true });
+/** #390 owner-authorized EXPERIMENT: original-source W3 staging; only the 2 staged sources and the W4 main+thumb may change. */
+export const W3_ORIGINAL_ALLOWED_CHANGES = { "/work/intake": 2, "/work/photos": 2 };
+export const FIDELITY_FIXTURES = ["jpeg-near-limit", "webp-near-limit", "png-near-limit", "jpeg-typical-landscape", "invalid-random-bytes", "png-stress-144mp"];
+const w3OriginalCases = () => [
+  { name: "linux-w3orig-reference-webp-first-arena1-24mp", description: "Parity reference only: live WebP-first W3 with prebuilt libvips + glibc arena1", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial: 1, libvipsVariant: "prebuilt", allocatorExperiment: "glibc-arena1-mmap", parityGroup: "w3orig", parityReference: true, acceptanceRole: "diagnostic-only" },
+  ...[1, 2, 3].map(trial => ({ name: "linux-w3orig-original-source-t" + trial + "-24mp", description: "EXPERIMENT (#390): unchanged 24MP mixed workload with original-source W3 staging; npm libvips, default glibc, no overrides", fixtures: ["jpeg-near-limit"], ops: 8, concurrency: 3, path: "combined", trial, w3Staging: "original-source", parityGroup: "w3orig", parityAllowedChanges: W3_ORIGINAL_ALLOWED_CHANGES, acceptanceRole: "diagnostic-only" })),
+];
 
 export function selectedScenarios(includeStress = true, profile = "full") {
-  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap", "native-allocators", "native-rgbfree", "native-rgbfree-trials", "native-rgbfree-alloc-trials"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (!["full", "c4", "webp-c4", "combined", "combined-reference", "native-profile", "native-worker", "native-mmap", "native-allocators", "native-rgbfree", "native-rgbfree-trials", "native-rgbfree-alloc-trials", "w3-original-source"].includes(profile)) throw Error("Unknown bounded resource profile");
+  if (profile === "w3-original-source") return w3OriginalCases();
   // Isolated native measurement first (default glibc), allocator combination only afterwards.
   if (profile === "native-rgbfree") return [RGBFREE_REFERENCE(), rgbFreeCase("unmodified", "unmodified"), rgbFreeCase("patched", "patched"), rgbFreeCase("unmodified-arena1", "unmodified", "glibc-arena1-mmap"), rgbFreeCase("patched-arena1", "patched", "glibc-arena1-mmap")];
   if (profile === "native-rgbfree-trials" || profile === "native-rgbfree-alloc-trials") return [RGBFREE_REFERENCE(), ...[1, 2, 3].map(trial => rgbFreeCase((profile === "native-rgbfree-trials" ? "patched" : "patched-arena1") + "-t" + trial, "patched", profile === "native-rgbfree-trials" ? undefined : "glibc-arena1-mmap", { trial }))];
@@ -116,11 +124,21 @@ export function compareParity(cases) {
     groups[group] = { reference: reference?.name ?? null, results: members.filter(c => !c.parityReference).map(c => {
       if (!reference || !Array.isArray(c.digests)) return { name: c.name, status: "MISSING" };
       const same = c.digests.length === reference.digests.length && c.digests.every((d, i) => d === reference.digests[i]);
-      return same ? { name: c.name, status: "MATCH" } : { name: c.name, status: "MISMATCH", onlyInReference: reference.digests.filter(d => !c.digests.includes(d)), onlyInCase: c.digests.filter(d => !reference.digests.includes(d)) };
+      if (same) return { name: c.name, status: "MATCH" };
+      // Multiset difference: identical outputs legitimately repeat (e.g. three product uploads), so counts matter, not membership.
+      const minus = (left, right) => { const remaining = new Map(); for (const d of right) remaining.set(d, (remaining.get(d) ?? 0) + 1); return left.filter(d => { const n = remaining.get(d) ?? 0; if (n > 0) { remaining.set(d, n - 1); return false; } return true; }); };
+      const onlyInReference = minus(reference.digests, c.digests), onlyInCase = minus(c.digests, reference.digests);
+      const perDir = list => JSON.stringify(Object.entries(list.reduce((m, d) => { const dir = d.slice(0, d.lastIndexOf(":")); m[dir] = (m[dir] ?? 0) + 1; return m; }, {})).sort());
+      // Declared experimental change: exactly the allowed number of changed files per directory on both sides, everything else identical.
+      const expected = c.parityAllowedChanges && c.digests.length === reference.digests.length && perDir(onlyInReference) === perDir(onlyInCase) && perDir(onlyInCase) === JSON.stringify(Object.entries(c.parityAllowedChanges).sort());
+      return { name: c.name, status: expected ? "EXPECTED_CHANGE" : "MISMATCH", onlyInReference, onlyInCase };
     }) };
   }
-  return { ok: Object.values(groups).every(g => g.reference && g.results.every(r => r.status === "MATCH")), groups };
+  return { ok: Object.values(groups).every(g => g.reference && g.results.every(r => r.status === "MATCH" || r.status === "EXPECTED_CHANGE")), groups };
 }
+
+/** Observer race only: a work-directory entry removed between listing and inspection (never permission, I/O or symlink errors). */
+export const isVanishedEntryError = (error) => error?.code === "ENOENT";
 
 export const COMBINED_INPUT_SHA='2f2f90eb7060b031815c5afc8503e2914b2e7eb398b29eabfd23330443c441c7';
 export function validateCombinedMode(scenario,environment,fixture,actualSha){
@@ -130,6 +148,6 @@ export function validateCombinedMode(scenario,environment,fixture,actualSha){
  }
  const role=scenario.acceptanceRole==='diagnostic-only'?'diagnostic-only':'acceptance';
  const allocator=Object.fromEntries(Object.entries(environment).filter(([name,value])=>value&&(name.startsWith('MALLOC_')||name.startsWith('MIMALLOC_')||name==='LD_PRELOAD'||name==='NOCTELLA_NATIVE_TRACE')));
- if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||scenario.allocatorExperiment||scenario.libvipsVariant||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
- return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocatorExperiment:scenario.allocatorExperiment??null,libvipsVariant:scenario.libvipsVariant??null,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
+ if(role==='acceptance'&&(scenario.nativeTrace||scenario.recipeWorker||scenario.mmapPolicy||scenario.allocatorExperiment||scenario.libvipsVariant||scenario.w3Staging||Object.keys(allocator).length))throw Error('Acceptance cannot use diagnostic overrides');
+ return {role,nativeTrace:!!scenario.nativeTrace,recipeWorker:!!scenario.recipeWorker,mmapPolicy:!!scenario.mmapPolicy,allocatorExperiment:scenario.allocatorExperiment??null,libvipsVariant:scenario.libvipsVariant??null,w3Staging:scenario.w3Staging??null,allocator,actualSha,dimensions:[fixture.width,fixture.height],inputBytes:fixture.sizeBytes,ops:scenario.ops,recipe:{autoOrient:true,webpQuality:86,resize:false}};
 }

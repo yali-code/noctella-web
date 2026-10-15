@@ -19,6 +19,16 @@ export async function runCombinedScenario(config: any) {
   const {imageProcessingAdmission}=await import("../services/photoUploadAdmission");
   const instagram=await import("../integrations/instagram/mediaPreparation");
   const sharp=(await import("sharp")).default;
+  // #390 EXPERIMENT ONLY: original-source W3 staging installed on this disposable process; production modules unchanged.
+  let restoreExperiment=()=>{};
+  if(config.scenario.w3Staging==="original-source"){
+    const experiment=await import("./experiments/originalSourceIntakeStaging");
+    const {aiIntakePhotoStorage}=await import("../services/aiIntakePhotoStorage");
+    const {runImageOperation,abortedError}=await import("../services/photoUploadAdmission");
+    const {BadRequestError}=await import("../services/errors");
+    restoreExperiment=experiment.installOriginalSourceStaging(aiIntakePhotoStorage as any,process.env.AI_INTAKE_PHOTO_DIR!,{run:runImageOperation,aborted:abortedError,rejected:()=>new BadRequestError("Staged intake photos must be valid JPEG, PNG, or WebP images")});
+  }
+  else if(config.scenario.w3Staging)throw Error("Unknown W3 staging experiment");
   const trace = (phase:string, details:Record<string,unknown>={}) => {
     const number=(name:string)=>Number(readFileSync("/sys/fs/cgroup/"+name,"utf8"));
     appendFileSync("/evidence/phases.ndjson",JSON.stringify({time:Date.now(),phase,...details,memory:process.memoryUsage(),cgroupCurrent:number("memory.current"),cgroupPeak:number("memory.peak"),events:readFileSync("/sys/fs/cgroup/memory.events","utf8"),stat:readFileSync("/sys/fs/cgroup/memory.stat","utf8"),cache:sharp.cache(),sharpCounters:sharp.counters(),sharpConcurrency:sharp.concurrency(),resourceUsage:process.resourceUsage(),admission:imageProcessingAdmission.snapshot(),allocatorPolicy:{mmapThreshold:process.env.MALLOC_MMAP_THRESHOLD_,trimThreshold:process.env.MALLOC_TRIM_THRESHOLD_}})+"\n");
@@ -97,6 +107,10 @@ export async function runCombinedScenario(config: any) {
     async function digest(file: string) { const hash=createHash("sha256"); for await(const chunk of createReadStream(file)) hash.update(chunk); return hash.digest("hex"); }
     const sourceHash=await digest("/work/intake/"+staged.body.storageKey);
     trace("source.digest",{sha256:sourceHash});
+    if(config.scenario.w3Staging==="original-source"){
+      const uploaded=createHash("sha256");for await(const chunk of createReadStream(input))uploaded.update(chunk);
+      if(uploaded.digest("hex")!==sourceHash||!/\.orig\.jpg$/.test(staged.body.storageKey))throw Error("Original-source staging did not preserve the uploaded bytes");
+    }
     const warmBeforeCombined={memory:process.memoryUsage(),cgroupCurrent:Number(await fs.readFile("/sys/fs/cgroup/memory.current","utf8"))};
     let prepared!: Awaited<ReturnType<typeof instagram.prepareInstagramImageAsset>>;
     await Promise.all([
@@ -123,5 +137,6 @@ export async function runCombinedScenario(config: any) {
     await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     await dbRuntime.shutdown();
     for(const[method,original]of originals)(sharp.prototype as any)[method]=original;
+    restoreExperiment();
   }
 }
