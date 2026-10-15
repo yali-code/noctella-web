@@ -125,7 +125,9 @@ export function compareParity(cases) {
       if (!reference || !Array.isArray(c.digests)) return { name: c.name, status: "MISSING" };
       const same = c.digests.length === reference.digests.length && c.digests.every((d, i) => d === reference.digests[i]);
       if (same) return { name: c.name, status: "MATCH" };
-      const onlyInReference = reference.digests.filter(d => !c.digests.includes(d)), onlyInCase = c.digests.filter(d => !reference.digests.includes(d));
+      // Multiset difference: identical outputs legitimately repeat (e.g. three product uploads), so counts matter, not membership.
+      const minus = (left, right) => { const remaining = new Map(); for (const d of right) remaining.set(d, (remaining.get(d) ?? 0) + 1); return left.filter(d => { const n = remaining.get(d) ?? 0; if (n > 0) { remaining.set(d, n - 1); return false; } return true; }); };
+      const onlyInReference = minus(reference.digests, c.digests), onlyInCase = minus(c.digests, reference.digests);
       const perDir = list => JSON.stringify(Object.entries(list.reduce((m, d) => { const dir = d.slice(0, d.lastIndexOf(":")); m[dir] = (m[dir] ?? 0) + 1; return m; }, {})).sort());
       // Declared experimental change: exactly the allowed number of changed files per directory on both sides, everything else identical.
       const expected = c.parityAllowedChanges && c.digests.length === reference.digests.length && perDir(onlyInReference) === perDir(onlyInCase) && perDir(onlyInCase) === JSON.stringify(Object.entries(c.parityAllowedChanges).sort());
