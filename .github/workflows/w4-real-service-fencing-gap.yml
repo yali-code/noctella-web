@@ -1,0 +1,24 @@
+name: W4 real-service fencing gap (disposable proof)
+on:
+  pull_request:
+    branches: [feat/photo-storage-production-completion]
+    paths:
+      - scripts/photo-w4-fencing-gap/**
+      - .github/workflows/w4-real-service-fencing-gap.yml
+permissions:
+  contents: read
+jobs:
+  gap-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: node --import tsx --test scripts/photo-w4-fencing-gap/real-w4.test.cjs
