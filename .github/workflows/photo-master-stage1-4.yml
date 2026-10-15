@@ -300,3 +300,25 @@ jobs:
           persist-credentials: false
       - name: Require actual W3 flag, writer, key recipe and candidate memory scenario
         run: node scripts/photo-w4-fencing-gap/w3-integration-gate.cjs
+
+  photo-master-acceptance:
+    # Single fail-closed required-check candidate: all independent evidence must pass.
+    # Keep this job as the branch-protection target when integrating future W2/W4 work.
+    if: always()
+    needs:
+      - w4-and-typecheck
+      - fenced-storage-and-crash
+      - schema-and-writer-census
+      - w2-independent-stack-proof
+      - api-full-regression
+      - ext4-disk-budget-enospc
+      - linux-512m-24mp-combined
+      - w3-candidate-integration-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every Master CI stage to pass (no skipped/cancelled gates)
+        env:
+          EVIDENCE: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const needs=JSON.parse(process.env.EVIDENCE); for (const [name,job] of Object.entries(needs)) { console.log(name+": "+job.result); if(job.result!=="success")process.exitCode=1 }'
