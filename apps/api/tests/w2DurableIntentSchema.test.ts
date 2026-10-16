@@ -148,3 +148,49 @@ it.skipIf(!postgresTestConfigured)("PostgreSQL W2 same-token concurrent conflict
     expect((await testDb.pool.query("SELECT COUNT(*) AS n FROM photo_w2_upload_intents")).rows[0].n).toBe("1");
   } finally { await testDb.close(); }
 }, 120_000);
+
+it("SQLite W2 concurrent connection contention fails closed and permits a later safe retry", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "noctella-w2-lock-"));
+  const location = path.join(dir, "w2.sqlite");
+  const first = new Database(location);
+  const second = new Database(location, { timeout: 0 });
+  const incoming: W2UploadIntent = {
+    kind: "W2_PRODUCT_PHOTO_UPLOAD", token: "lock_contention_0001",
+    tenantId: "tenant-1", actorId: "actor-1", productId: "product-1",
+    sha256: "c".repeat(64), altText: "Locked",
+  };
+  try {
+    first.pragma("foreign_keys = ON");
+    second.pragma("foreign_keys = ON");
+    ensureSchema(first);
+    first.exec("BEGIN IMMEDIATE");
+    try {
+      expect(() => claimSqliteW2UploadIntent(second, incoming, 100)).toThrow(/SQLITE_BUSY|database is locked/);
+      expect(first.prepare("SELECT COUNT(*) AS n FROM photo_w2_upload_intents").get()).toEqual({ n: 0 });
+    } finally { first.exec("ROLLBACK"); }
+    expect(claimSqliteW2UploadIntent(second, incoming, 101)).toBe("NEW");
+    expect(claimSqliteW2UploadIntent(first, incoming, 102)).toBe("SAME_INTENT");
+    expect(first.prepare("SELECT COUNT(*) AS n FROM photo_w2_upload_intents").get()).toEqual({ n: 1 });
+  } finally {
+    second.close();
+    first.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it.skipIf(!postgresTestConfigured)("PostgreSQL W2 rejects malformed time without touching an existing durable token", async () => {
+  const testDb = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+  const incoming: W2UploadIntent = {
+    kind: "W2_PRODUCT_PHOTO_UPLOAD", token: "invalid_time_token_0001",
+    tenantId: "tenant-1", actorId: "actor-1", productId: "product-1",
+    sha256: "a".repeat(64), altText: "Front",
+  };
+  try {
+    expect(await claimPostgresW2UploadIntent(testDb.pool, incoming, Number.MAX_SAFE_INTEGER + 1)).toBe("INVALID");
+    expect(await claimPostgresW2UploadIntent(testDb.pool, incoming, -1)).toBe("INVALID");
+    expect((await testDb.pool.query("SELECT COUNT(*) AS n FROM photo_w2_upload_intents")).rows[0].n).toBe("0");
+    expect(await claimPostgresW2UploadIntent(testDb.pool, incoming, 10)).toBe("NEW");
+    expect(await claimPostgresW2UploadIntent(testDb.pool, incoming, Number.NaN)).toBe("INVALID");
+    expect((await testDb.pool.query("SELECT created_ms FROM photo_w2_upload_intents WHERE token=$1", [incoming.token])).rows[0].created_ms).toBe("10");
+  } finally { await testDb.close(); }
+}, 120_000);
