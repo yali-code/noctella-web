@@ -109,7 +109,7 @@ describe("ProductPhotosPage — Sprint 112 multi-select upload", () => {
     await user.click(screen.getByRole("button", { name: "Upload photo" }));
 
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
-    expect(uploadSpy).toHaveBeenCalledWith("p1", expect.objectContaining({ name: "solo.jpg" }), "");
+    expect(uploadSpy).toHaveBeenCalledWith("p1", expect.objectContaining({ name: "solo.jpg" }), "", expect.any(String));
   });
 
   it("a failure in the middle of the batch does not prevent the later file from being attempted, and reports the failure", async () => {
@@ -128,7 +128,7 @@ describe("ProductPhotosPage — Sprint 112 multi-select upload", () => {
     await user.click(screen.getByRole("button", { name: /Upload 3 photos/ }));
 
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(3));
-    expect(uploadSpy).toHaveBeenNthCalledWith(3, "p1", expect.objectContaining({ name: "c.jpg" }), "");
+    expect(uploadSpy).toHaveBeenNthCalledWith(3, "p1", expect.objectContaining({ name: "c.jpg" }), "", expect.any(String));
     await screen.findByText(/Uploaded 2 of 3 photo.*Failed: bad\.jpg/);
   });
 
@@ -148,6 +148,64 @@ describe("ProductPhotosPage — Sprint 112 multi-select upload", () => {
     // selection resets - a second click cannot resend the same files.
     await waitFor(() => expect(screen.getByRole("button", { name: "Upload photo" })).toBeDisabled());
     expect(uploadSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ProductPhotosPage — #424 upload idempotency", () => {
+  async function selectAndUpload(user: ReturnType<typeof userEvent.setup>, files: File[], alt = "") {
+    await screen.findByText("Manage Photos — Original Title");
+    if (alt) await user.type(screen.getByPlaceholderText("Alt text"), alt);
+    await user.upload(document.querySelector("input[type=file]") as HTMLInputElement, files);
+    await user.click(screen.getByRole("button", { name: files.length > 1 ? new RegExp(`Upload ${files.length} photos`) : "Upload photo" }));
+  }
+
+  it("distinct files get distinct keys; a lost response is retried with the same key, the completed file is not resent", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiLib.api, "get").mockResolvedValue(baseProduct());
+    const uploadSpy = vi.spyOn(productPhotosLib.productPhotoApi, "upload")
+      .mockResolvedValueOnce({} as any)
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({} as any);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await selectAndUpload(user, [file("a.jpg"), file("lost.jpg")], "Front");
+    await screen.findByText(/Failed: lost.jpg. Submit again to retry/);
+    const [first, second] = uploadSpy.mock.calls.map((c) => c[3]) as [string, string];
+    expect(first).not.toBe(second);
+    expect(screen.getByPlaceholderText("Alt text")).toHaveValue("Front"); // kept: the key is bound to it
+    await user.click(screen.getByRole("button", { name: "Upload photo" }));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(3));
+    expect(uploadSpy.mock.calls[2]).toEqual(["p1", expect.objectContaining({ name: "lost.jpg" }), "Front", second]);
+    await screen.findByText("Uploaded 1 photo.");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Upload photo" })).toBeDisabled());
+  });
+
+  it("a definitive rejection releases the key: submitting again is a new logical upload", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiLib.api, "get").mockResolvedValue(baseProduct());
+    const uploadSpy = vi.spyOn(productPhotosLib.productPhotoApi, "upload")
+      .mockRejectedValueOnce(new apiLib.ApiError("Invalid image", 400, undefined, "PHOTO_UPLOAD_INVALID"))
+      .mockResolvedValueOnce({} as any);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await selectAndUpload(user, [file("bad.jpg")]);
+    await screen.findByText(/Failed: bad.jpg/);
+    await user.click(screen.getByRole("button", { name: "Upload photo" }));
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(2));
+    expect(uploadSpy.mock.calls[1][3]).not.toBe(uploadSpy.mock.calls[0][3]);
+  });
+
+  it("a double submit while uploading sends one request", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiLib.api, "get").mockResolvedValue(baseProduct());
+    const pending = deferred<any>();
+    const uploadSpy = vi.spyOn(productPhotosLib.productPhotoApi, "upload").mockReturnValue(pending.promise);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await selectAndUpload(user, [file("a.jpg")]);
+    const form = document.querySelector("form") as HTMLFormElement;
+    form.requestSubmit(); form.requestSubmit();
+    expect(uploadSpy).toHaveBeenCalledTimes(1);
+    pending.resolve({});
+    await screen.findByText("Uploaded 1 photo.");
+    expect(uploadSpy).toHaveBeenCalledTimes(1);
   });
 });
 
