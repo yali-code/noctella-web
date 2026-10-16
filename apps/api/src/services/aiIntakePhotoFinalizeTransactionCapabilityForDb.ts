@@ -10,6 +10,7 @@ import {
 import { finalizeIntakeWithExpectedStateInTransaction } from "../repositories/ai-product-intake/drizzle";
 import type { AiProductIntakeFinalizeInput, AiProductIntakeFinalizeResult } from "../repositories/ai-product-intake/types";
 import { lockProductRowInTransaction } from "./productPhotoMutationLockTransactionCapabilityForDb";
+import { commitDrizzlePhotoOperationFenced, type PhotoCommitFenceProof } from "./photoOperationCommitFence";
 
 export type AiIntakePhotoFinalizeTransactionDriver = "sqlite" | "postgres" | "supabase-postgres" | "test-memory";
 type Execution = "synchronous" | "asynchronous";
@@ -58,6 +59,12 @@ export interface AiIntakePhotoFinalizeTransactionContext {
   createProductPhoto(input: { values: Record<string, unknown>; outboxEvent: Record<string, unknown> }): Result<{ id: string }>;
   /** Guarded conditional UPDATE: id matches, status is Applied. */
   finalizeIntake(input: Omit<AiProductIntakeFinalizeInput, "id">): Result<AiProductIntakeFinalizeResult>;
+  /**
+   * FAZ A / #424: generation CAS of a sealed W4 photo operation in this same transaction (with the photo row, its
+   * promote outbox event and the intake finalization). Throws PHOTO_OPERATION_FENCE_LOST; the caller must let the
+   * whole transaction roll back.
+   */
+  commitPhotoOperation(proof: PhotoCommitFenceProof): Result<void>;
 }
 
 export interface AiIntakePhotoFinalizeTransactionCapability {
@@ -92,6 +99,7 @@ function buildContext(
     findExistingProductPhotosByIds: (ids) => findProductPhotosByIdsInTransaction(tx, schema, execution, ids),
     createProductPhoto: (input) => createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, input),
     finalizeIntake: (input) => finalizeIntakeWithExpectedStateInTransaction(tx, schema, execution, { id: intakeId, ...input }),
+    commitPhotoOperation: (proof) => commitDrizzlePhotoOperationFenced(tx, execution, proof),
   };
 }
 

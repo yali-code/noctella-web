@@ -13,7 +13,8 @@ import {
   NotFoundError,
 } from "../../services/errors";
 import { OutboxEventStatus, OutboxEventType } from "../../services/outbox";
-import { refuseUnadoptedPhotoWriter } from "../../services/photoOwnershipFencing";
+import { photoOwnershipFencingEnabled, refuseUnadoptedPhotoWriter } from "../../services/photoOwnershipFencing";
+import type { PhotoCommitFenceProof } from "../../services/photoOperationCommitFence";
 import type { DeterministicProductPhotoInput, DeterministicProductPhotoResult } from "../../services/photoStorage";
 import type {
   AiIntakePhotoFinalizeTransactionCapability,
@@ -53,6 +54,11 @@ export interface AiIntakePhotoFinalizationManifestEntry {
   height: number;
   sortOrder: number;
   isPrimary: boolean;
+  /**
+   * FAZ A / #424: proof of the sealed, published generation-fenced W4 operation for this photo (fencing ON only).
+   * Committed by the same transaction that inserts the photo row and its outbox event; never set when OFF.
+   */
+  fence?: Omit<PhotoCommitFenceProof, "eventId">;
 }
 
 export interface AiIntakePhotoFinalizationManifestDeps {
@@ -203,8 +209,11 @@ export async function finalizeAiIntakePhotosUseCase(
     if (intake.status !== AiProductIntakeStatus.Applied) {
       throw new AiIntakePhotoFinalizationNotAppliedError();
     }
-    // A caller-supplied manifest cannot bypass the W4 write gate to create DB photo/outbox rows.
-    refuseUnadoptedPhotoWriter("W4_AI_FINALIZE");
+    // A caller-supplied manifest cannot bypass the W4 write gate: with fencing ON every entry must carry the proof of
+    // its sealed generation-fenced operation (checked again by the in-transaction CAS); OFF never commits a fence.
+    const fencing = photoOwnershipFencingEnabled();
+    if (fencing && !(input.manifest?.length && input.manifest.every((entry) => entry.fence))) refuseUnadoptedPhotoWriter("W4_AI_FINALIZE");
+    if (!fencing && input.manifest?.some((entry) => entry.fence)) throw new AiIntakePhotoFinalizationStateInvalidError("Fenced photo operations require ownership fencing to be enabled.");
     if (!intake.resultProductId) {
       throw new AiIntakePhotoFinalizationResultStateInvalidError("This intake is Applied but has no result Product recorded.");
     }
@@ -235,8 +244,9 @@ export async function finalizeAiIntakePhotosUseCase(
 
             const now = new Date().toISOString();
             return chain(
-              chainSequence(manifest, (entry) =>
-                ctx.createProductPhoto({
+              chainSequence(manifest, (entry) => {
+                const eventId = randomUUID();
+                return chain(ctx.createProductPhoto({
                   values: {
                     id: entry.productPhotoId,
                     productId,
@@ -258,7 +268,7 @@ export async function finalizeAiIntakePhotosUseCase(
                     updatedAt: now,
                   },
                   outboxEvent: {
-                    id: randomUUID(),
+                    id: eventId,
                     eventType: OutboxEventType.ProductPhotoPromoteRequested,
                     aggregateType: "ProductPhoto",
                     aggregateId: entry.productPhotoId,
@@ -271,8 +281,8 @@ export async function finalizeAiIntakePhotosUseCase(
                     createdAt: now,
                     updatedAt: now,
                   },
-                }),
-              ),
+                }), () => (entry.fence ? ctx.commitPhotoOperation({ ...entry.fence, eventId }) : undefined));
+              }),
               () =>
                 chain(
                   ctx.finalizeIntake({ finalizedAt: now, finalizedByAdminUserId: input.actorId, updatedAt: now }),

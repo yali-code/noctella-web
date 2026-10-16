@@ -12,9 +12,11 @@ const { census, scanText, sources, rel } = require('./scan.cjs');
 /** file -> expected counts per category, and what the file is in the writer matrix. */
 const EXPECTED = {
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
-  'services/w2FencedProductPhotoOwner.ts': { mutation: 3, writers: ['W2 generation-fenced owner (FAZ A #424, PHOTO_OWNERSHIP_FENCING_ENABLED only): exclusive private generation dirs, no-overwrite canonical link, post-commit unlink of its own private names'] },
+  'services/w2FencedProductPhotoOwner.ts': { mutation: 2, writers: ['W2 generation-fenced owner (FAZ A #424, PHOTO_OWNERSHIP_FENCING_ENABLED only): post-commit unlink of its own private names'] },
+  'services/photoOperationAuthority.ts': { mutation: 1, writers: ['W2/W4 shared generation-fenced authority (FAZ A #424, fencing ON only): exclusive private generation dirs, no-overwrite canonical link with post-link verification'] },
+  'services/aiIntakePhotoFinalization.ts': { mutation: 1, writers: ['W4 generation-fenced finalization (FAZ A #424, fencing ON only): post-commit unlink of its generations private names'] },
   'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
-  'services/photoStorage.ts': { mutation: 4, writers: ['W1', 'W4', 'W10'] },
+  'services/photoStorage.ts': { mutation: 6, writers: ['W1', 'W4', 'W10', 'W4 fenced prepare (FAZ A #424): exclusive wx writes into a generation-private directory only'] },
   'services/aiIntakePhotoStorage.ts': { mutation: 11, handle: 1, writers: ['W3', 'W5', 'W3 original-source (#390, flag OFF by default; private staging writes only)'] },
   'services/managedFileDeletion.ts': { mutation: 1, writers: ['W5', 'W6'] },
   'services/productPhotoStorageWorkflow.ts': { mutation: 2, writers: ['W7', 'W8', 'W9'] },
