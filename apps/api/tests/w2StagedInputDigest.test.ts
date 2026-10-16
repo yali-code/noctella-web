@@ -36,3 +36,11 @@ it("rejects aborted reads and symlink inputs", async () => {
   await symlink(target, input.path);
   await expect(digestW2StagedInput(input, 100)).rejects.toThrow("W2_DIGEST_UNSAFE_INPUT");
 });
+
+it("rejects non-file inputs before opening the reader", async () => {
+  const { input, dir } = await fixture(Buffer.from("photo"));
+  await rm(input.path);
+  await import("node:fs/promises").then(fs => fs.mkdir(input.path));
+  await expect(digestW2StagedInput(input, 100)).rejects.toThrow("W2_DIGEST_UNSAFE_INPUT");
+  expect(dir).toBeTruthy();
+});
