@@ -50,7 +50,9 @@ export function parseProcStatus(text) {
   return { rss: value("VmRSS"), hwm: value("VmHWM"), name: text.match(/^Name:\s+(.+)$/m)?.[1] ?? "unknown" };
 }
 
-export function assess({ before, after, result, exitCode, timedOut, diskStopped, oomKilled, cleanup }) {
+export function assess({ scenario, before, after, result, exitCode, timedOut, diskStopped, oomKilled, cleanup }) {
+  // FAZ A: a fencing-ON case is BLOCKED while W11 is unadopted, whatever its other evidence says (never PASS).
+  if ((scenario ?? result?.scenario)?.photoOwnershipFencing && FENCING_ON_ACCEPTANCE.blocked) return { status: "BLOCKED", reason: FENCING_ON_ACCEPTANCE.reason };
   if (!before || !after) return { status: "INCONCLUSIVE", reason: "Missing before/after cgroup evidence" };
   if ([before, after].some(s => s.max !== HARD_BYTES || s.swapMax !== 0 || !Number.isFinite(s.peak))) return { status: "INCONCLUSIVE", reason: "Limits changed or unavailable" };
   const delta = Object.fromEntries(Object.keys(after.events).map((key) => [key, after.events[key] - (before.events[key] ?? 0)]));
@@ -65,6 +67,10 @@ export function assess({ before, after, result, exitCode, timedOut, diskStopped,
     return { status: "FAIL", reason: "Cleanup/output-count mismatch", delta };
   }
   if (after.peak > TARGET_BYTES) return { status: "FAIL", reason: "Exceeded proposed 384-MiB cgroup peak target", delta };
+  if ((scenario ?? result.scenario)?.photoOwnershipFencing) {
+    const fencing = validateFencingOnEvidence(result.fencingOperations);
+    if (!fencing.ok) return { status: "FAIL", reason: "Fencing-ON operation evidence mismatch: " + fencing.problems.join("; "), delta };
+  }
   return { status: "PASS", reason: "HTTP smoke target satisfied; not final full-API acceptance", delta };
 }
 
@@ -90,3 +96,30 @@ export const FENCING_ON_ACCEPTANCE = Object.freeze({
   reason: "W11 Instagram preparation is not adopted: proposed 0042 photo_derivative_operations schema awaits owner approval; instagram.prepare refuses with PHOTO_OWNERSHIP_FENCING_ENABLED=true",
 });
 export const fencingOnBlocked = (scenarios) => scenarios.some((s) => s.photoOwnershipFencing) && FENCING_ON_ACCEPTANCE.blocked;
+
+/** Exact committed-operation contract of the unchanged fencing-ON 8-operation workload (3 W2 uploads, 1 W4 photo, 1 W11 derivative). */
+export const FENCING_ON_OPERATION_CONTRACT = Object.freeze({ product_upload: 3, ai_finalize: 1, instagram_derivative: 1 });
+
+/**
+ * Validates the probe's fencing-ON operation evidence: { operations: [{ kind, state }] from photo_operations,
+ * derivativeOperations: [{ state }] from the W11 table, or null when that table does not exist }.
+ * Every operation must be committed (anything preparing/sealed/review means lost ownership or unfinished work), the
+ * counts must match the contract exactly, and W11 evidence must be absent unless W11 is adopted.
+ */
+export function validateFencingOnEvidence(evidence, { w11Adopted = !FENCING_ON_ACCEPTANCE.blocked } = {}) {
+  if (!evidence || !Array.isArray(evidence.operations)) return { ok: false, problems: ["missing fencing-ON operation evidence"] };
+  const problems = [];
+  if (!w11Adopted && evidence.derivativeOperations != null) problems.push("W11 derivative evidence present although W11 is not adopted");
+  if (w11Adopted && !Array.isArray(evidence.derivativeOperations)) problems.push("W11 derivative evidence missing");
+  const operations = [...evidence.operations, ...(evidence.derivativeOperations ?? []).map((o) => ({ kind: "instagram_derivative", state: o.state }))];
+  for (const o of operations) {
+    if (!Object.prototype.hasOwnProperty.call(FENCING_ON_OPERATION_CONTRACT, o.kind)) problems.push("unexpected operation kind " + o.kind);
+    if (o.state !== "committed") problems.push(o.kind + " operation is " + o.state + " (ownership lost or work unfinished)");
+  }
+  const expected = { ...FENCING_ON_OPERATION_CONTRACT, instagram_derivative: w11Adopted ? 1 : 0 };
+  for (const [kind, count] of Object.entries(expected)) {
+    const found = operations.filter((o) => o.kind === kind && o.state === "committed").length;
+    if (found !== count) problems.push(kind + ": expected " + count + " committed, found " + found);
+  }
+  return { ok: problems.length === 0, problems };
+}
