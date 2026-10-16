@@ -360,6 +360,8 @@ jobs:
         run: node scripts/photo-operation-identity/live-adoption-gate.cjs
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
         run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts
+      - name: Prove BLOCKED fencing-ON profile needs no Docker image
+        run: node --test scripts/photo-upload-linux/fencing-blocked.test.mjs
       - name: Fencing-ON 24MP acceptance readiness (dry run; must report BLOCKED, never fencing-OFF data)
         shell: bash
         run: |
