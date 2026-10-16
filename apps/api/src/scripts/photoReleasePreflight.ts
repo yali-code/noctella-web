@@ -1,0 +1,71 @@
+/**
+ * FAZ A #424 package G: READ-ONLY photo release preflight for a staging candidate. It inspects configuration, the
+ * PostgreSQL migration inventory and storage roots; it never creates, writes or deletes anything and never connects
+ * to a database. Usage: `npm run photos:release-preflight -w apps/api` (JSON; exit 1 on any FAIL).
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { photoOwnershipFencingConfig } from "../services/photoOwnershipFencing";
+import { aiIntakeOriginalSourceStagingConfig } from "../services/aiIntakeOriginalSourceStaging";
+
+export type PreflightStatus = "PASS" | "WARN" | "FAIL" | "MANUAL";
+export interface PreflightCheck { id: string; status: PreflightStatus; detail: string }
+export const PREFLIGHT_MIN_FREE_BYTES = 1024 * 1024 * 1024;
+
+export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; migrationsDir?: string; canonicalRoot?: string; statfs?: (dir: string) => { bavail: number; bsize: number } } = {}) {
+  const env = options.env ?? process.env;
+  const migrationsDir = options.migrationsDir ?? path.resolve(__dirname, "../db/postgres-migrations");
+  const canonicalRoot = path.resolve(options.canonicalRoot ?? env.PRODUCT_PHOTO_DIR ?? path.resolve(process.cwd(), "uploads/product-photos"));
+  const checks: PreflightCheck[] = [];
+  const add = (id: string, status: PreflightStatus, detail: string) => checks.push({ id, status, detail });
+
+  // Flags: invalid values must be visible before any deploy.
+  const fencing = photoOwnershipFencingConfig(env);
+  add("flag.fencing", fencing.valid ? "PASS" : "FAIL", fencing.valid ? `PHOTO_OWNERSHIP_FENCING_ENABLED is ${fencing.enabled ? "ON" : "OFF"}` : `invalid PHOTO_OWNERSHIP_FENCING_ENABLED value (treated as ON): ${JSON.stringify(fencing.raw)}`);
+  const original = aiIntakeOriginalSourceStagingConfig(env);
+  add("flag.w3-original-source", original.valid ? (original.requested && !original.activatable ? "WARN" : "PASS") : "FAIL",
+    !original.valid ? "invalid AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED value" : original.requested && !original.activatable ? "requested but not activatable outside test/development (owner retention decision pending)" : `original-source staging ${original.enabled ? "ON" : "OFF"}`);
+
+  // Migration inventory (no ledger: numbers must be unique; gaps and the W11 proposal are surfaced explicitly).
+  const files = fs.readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort();
+  const numbers = files.map((file) => file.slice(0, 4));
+  const duplicates = [...new Set(numbers.filter((n, i) => numbers.indexOf(n) !== i))];
+  add("migrations.unique-numbers", duplicates.length ? "FAIL" : "PASS", duplicates.length ? `duplicate migration numbers: ${duplicates.join(", ")}` : `${files.length} uniquely numbered migrations`);
+  for (const required of ["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql"])
+    add(`migrations.${required.slice(0, 4)}`, files.includes(required) ? "PASS" : "FAIL", files.includes(required) ? `${required} present` : `${required} missing`);
+  const max = Math.max(...numbers.map(Number));
+  const gaps = Array.from({ length: max }, (_, i) => String(i + 1).padStart(4, "0")).filter((n) => !numbers.includes(n));
+  add("migrations.gaps", gaps.length ? "WARN" : "PASS", gaps.length ? `numbers not present on this candidate: ${gaps.join(", ")} (0039 is the unmerged Etsy migration; resolve order on main)` : "no gaps");
+  const w11 = files.filter((file) => file.startsWith("0042"));
+  add("migrations.0042-w11", w11.length === 0 ? "PASS" : w11.length === 1 && w11[0] === "0042_photo_derivative_operations.sql" ? "WARN" : "FAIL",
+    w11.length === 0 ? "W11 0042 not registered (proposal only; owner approval pending)" : w11.length === 1 && w11[0] === "0042_photo_derivative_operations.sql" ? "W11 0042 registered: requires recorded owner approval" : `unexpected 0042 migration(s): ${w11.join(", ")}`);
+
+  // Storage roots: link() publication requires one filesystem; nothing is created here.
+  const parent = path.dirname(canonicalRoot);
+  const device = (dir: string) => { try { return fs.statSync(dir).dev; } catch { return undefined; } };
+  const parentDevice = device(parent);
+  add("storage.canonical-root", device(canonicalRoot) !== undefined ? "PASS" : "WARN", device(canonicalRoot) !== undefined ? `canonical root exists: ${canonicalRoot}` : `canonical root does not exist yet: ${canonicalRoot}`);
+  for (const [id, dir] of [["storage.private-operations", path.join(parent, ".product-photo-operations")], ["storage.upload-staging", path.join(parent, ".product-photo-upload-staging")]] as const) {
+    const dev = device(dir);
+    if (dev === undefined) add(id, parentDevice === undefined ? "FAIL" : "PASS", parentDevice === undefined ? `parent of the canonical root is missing: ${parent}` : `${dir} will be created under the canonical parent (same filesystem)`);
+    else add(id, dev === parentDevice ? "PASS" : "FAIL", dev === parentDevice ? `${dir} is on the canonical filesystem` : `${dir} is on a different filesystem: hard-link publication would fail closed`);
+  }
+  try {
+    const stats = (options.statfs ?? ((dir) => fs.statfsSync(dir)))(parentDevice === undefined ? process.cwd() : parent);
+    const free = stats.bavail * stats.bsize;
+    add("storage.free-space", free >= PREFLIGHT_MIN_FREE_BYTES ? "PASS" : "WARN", `${Math.floor(free / 1048576)} MiB available (warn below ${PREFLIGHT_MIN_FREE_BYTES / 1048576} MiB)`);
+  } catch { add("storage.free-space", "WARN", "free space could not be measured"); }
+
+  // Platform facts that offline code cannot verify.
+  add("render.single-instance-drain", "MANUAL", "confirm in Render that the old instance stopped before the new one started and no worker/cron can reach PRODUCT_PHOTO_DIR");
+  add("backups", "MANUAL", "run db:backup, photos:backup and db:restore-verify before deploying; record hashes");
+
+  const status: PreflightStatus = checks.some((c) => c.status === "FAIL") ? "FAIL" : checks.some((c) => c.status === "WARN" || c.status === "MANUAL") ? "WARN" : "PASS";
+  return { generatedAt: new Date().toISOString(), readOnly: true, status, checks };
+}
+
+if (require.main === module) {
+  const result = runPhotoReleasePreflight();
+  console.log(JSON.stringify(result, null, 2));
+  process.exitCode = result.status === "FAIL" ? 1 : 0;
+}
