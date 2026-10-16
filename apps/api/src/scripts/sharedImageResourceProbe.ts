@@ -10,6 +10,9 @@ export async function runCombinedScenario(config: any) {
   // #390 integrated acceptance: the real flagged original-source W3 writer (NODE_ENV "test" above), not a runtime adapter.
   if(config.scenario.aiIntakeOriginalSource)process.env.AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED="true";
   else delete process.env.AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED;
+  // FAZ A fencing-ON acceptance: real ownership fencing for W2/W4 (and W11 once adopted); never set by other profiles.
+  if(config.scenario.photoOwnershipFencing)Object.assign(process.env,{ NODE_ENV: "test", PHOTO_OWNERSHIP_FENCING_ENABLED: "true" });
+  else delete process.env.PHOTO_OWNERSHIP_FENCING_ENABLED;
   const { AdminRole, ProductType, ProductStatus, AiProductIntakeStatus }=await import("@noctella/shared");
   const app=(await import("../app")).default;
   const {db,dbRuntime}=await import("../db/client");
@@ -115,13 +118,21 @@ export async function runCombinedScenario(config: any) {
     if(config.scenario.aiIntakeOriginalSource){
       // The staged source is the upload itself, and W4 must equal the product-upload derivatives of the same bytes.
       const uploaded=createHash("sha256");for await(const chunk of createReadStream(input))uploaded.update(chunk);
-      if(!/.orig.jpg$/.test(staged.body.storageKey)||uploaded.digest("hex")!==sourceHash)throw Error("Original-source staging did not preserve the upload");
+      if(!/\.orig\.jpg$/.test(staged.body.storageKey)||uploaded.digest("hex")!==sourceHash)throw Error("Original-source staging did not preserve the upload");
       const file=(url:string)=>"/work/photos/"+path.basename(url);
       const w4=rows.find(r=>r.productId===aiProduct.id),uploads=rows.filter(r=>r.productId===targetProduct.id);
       if(!w4||uploads.length!==2)throw Error("Unexpected product photo rows");
       const w4Main=await digest(file(w4.url)),w4Thumb=await digest(file(w4.thumbnailUrl));
       for(const upload of uploads)if(await digest(file(upload.url))!==w4Main||await digest(file(upload.thumbnailUrl))!==w4Thumb)throw Error("W4 output differs from the product-upload derivatives of the same source");
       trace("original-source.parity",{stagedKeySuffix:".orig.jpg",w4Main,w4Thumb});
+    }
+    if(config.scenario.photoOwnershipFencing){
+      // FAZ A fencing-ON evidence: every canonical write went through the shared generation-fenced authority
+      // (3 W2 uploads + 1 W4 photo), nothing is left unfinished, and no unfenced writer ran.
+      const operations=(db as any).all((await import("drizzle-orm")).sql`SELECT kind, state FROM photo_operations`) as Array<{kind:string;state:string}>;
+      const committed=operations.filter(o=>o.state==="committed");
+      if(committed.filter(o=>o.kind==="product_upload").length!==3||committed.filter(o=>o.kind==="ai_finalize").length!==1||committed.length!==operations.length)throw Error("Fencing-ON operation evidence mismatch");
+      trace("fencing-on.operations",{committed:committed.length,productUpload:3,aiFinalize:1});
     }
     const privateFiles=await fs.readdir("/work/intake"),photoFiles=await fs.readdir("/work/photos");
     const tmpDirFiles=[...await fs.readdir("/work/tmp"),...await fs.readdir("/work/.product-photo-upload-staging"),...await fs.readdir("/work/.ai-intake-upload-ingress")];

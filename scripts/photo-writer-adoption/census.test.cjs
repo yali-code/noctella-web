@@ -21,6 +21,7 @@ const EXPECTED = {
   'services/managedFileDeletion.ts': { mutation: 1, writers: ['W5', 'W6'] },
   'services/productPhotoStorageWorkflow.ts': { mutation: 2, writers: ['W7', 'W8', 'W9'] },
   'integrations/instagram/mediaPreparation.ts': { mutation: 3, writers: ['W11'] },
+  'services/w11FencedInstagramDerivativeOwner.ts': { mutation: 3, writers: ['W11 INACTIVE PROPOSAL (FAZ A #424): not imported by production code; needs owner-approved 0042 schema; private generation dir, wx write, no-overwrite link'] },
   'integrations/media/reelRenderer.ts': { mutation: 3, child: 1, writers: ['W12 (FFmpeg subprocess writes the partial MP4)'] },
   'use-cases/product-photo-backup/useCases.ts': { mutation: 5, writers: ['W13'] },
   'repositories/product-photo-backup/s3Compatible.ts': { mutation: 2, handle: 1, writers: ['W13 (FileHandle download write)'] },

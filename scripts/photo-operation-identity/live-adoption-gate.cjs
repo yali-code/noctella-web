@@ -15,6 +15,9 @@ const w4Service = read('apps/api/src/services/aiIntakePhotoFinalization.ts');
 const w4Owner = read('apps/api/src/services/w4FencedFinalizationOwner.ts');
 const w4UseCase = read('apps/api/src/use-cases/ai-intake-photo-finalize/useCases.ts');
 const w4Capability = read('apps/api/src/services/aiIntakePhotoFinalizeTransactionCapabilityForDb.ts');
+const w11Live = read('apps/api/src/integrations/instagram/mediaPreparation.ts');
+const srcFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? srcFiles(path.join(dir, e.name)) : e.name.endsWith('.ts') ? [path.join(dir, e.name)] : []);
+const importsW11Proposal = srcFiles(path.join(root, 'apps/api/src')).filter((file) => /w11FencedInstagramDerivativeOwner/.test(fs.readFileSync(file, 'utf8')) && !file.endsWith('w11FencedInstagramDerivativeOwner.ts'));
 const evidence = {
   routerInjectsFencedOwner: /fencedUpload:\s*command\s*=>\s*uploadFencedProductPhoto\(db,\s*command\)/.test(router),
   handlerRefusesWithoutOwner: /fencingOn && !options\.fencedUpload/.test(handler),
@@ -26,6 +29,9 @@ const evidence = {
   w4OwnerUsesSharedAuthority: /publishSealedArtifacts\(/.test(w4Owner) && /sealPreparedArtifacts\(/.test(w4Owner),
   w4TransactionCommitsFence: /ctx\.commitPhotoOperation\(/.test(w4UseCase) && /commitPhotoOperation: \(proof\) => commitDrizzlePhotoOperationFenced\(tx, execution, proof\)/.test(w4Capability),
   w4RefusesUnprovenManifest: /entry\.fence\)\)\) refuseUnadoptedPhotoWriter\("W4_AI_FINALIZE"\)/.test(w4UseCase),
+  // W11 is NOT adopted: the live writer still refuses under fencing and the proposal owner is not wired anywhere.
+  w11LiveStillRefusesUnderFencing: w11Live.includes('if (photoOwnershipFencingEnabled()) throw new InstagramClientError("processing", true);'),
+  w11ProposalNotWired: importsW11Proposal.length === 0,
 };
 console.log(JSON.stringify({ gate: 'W2_W4_LIVE_ADOPTION_WIRING', evidence }, null, 2));
 if (!Object.values(evidence).every(Boolean)) {

@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
+import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, fencingOnBlocked, FENCING_ON_ACCEPTANCE, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
 import { usage } from "./disk-usage.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
@@ -31,6 +31,14 @@ function safeChild(root, child) {
 async function run() {
   if (process.platform !== "linux" || !fixtureRoot || fixtureRoot === output) throw Error("Linux and distinct fixture/output roots required");
   await fsp.mkdir(output, { recursive: true });
+  if (fencingOnBlocked(selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full"))) {
+    // Decided before any host probing, fixtures or containers. Explicit, distinct evidence: the fencing-ON profile is not run (and is never replaced by fencing-OFF data).
+    record.status = "BLOCKED"; record.blockedReason = FENCING_ON_ACCEPTANCE.reason; record.finishedAt = new Date().toISOString();
+    await write(path.join(output, "summary.json"), record);
+    console.error("BLOCKED: " + FENCING_ON_ACCEPTANCE.reason);
+    process.exitCode = 3;
+    return;
+  }
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "noctella-linux-cases-"));
   const fixtures = JSON.parse(await fsp.readFile(path.join(fixtureRoot, "fixtures.json"), "utf8"));
   record.fixtures = fixtures.map(({ file, ...rest }) => rest);
