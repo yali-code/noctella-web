@@ -19,6 +19,7 @@ import { acceptCanonicalProductProposal, generateCanonicalProductProposal, getCu
 import { acceptCanonicalProductProposalSchema, generateCanonicalProductProposalSchema } from "../validation/canonicalProductProposal";
 import { z } from "zod";
 import { getProductLifecycleState, pauseProduct, relistProduct, retryLifecycleOperation } from "../services/productLifecycle";
+import { uploadFencedProductPhoto } from "../services/w2FencedProductPhotoOwner";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -277,6 +278,8 @@ const legacyPhotoUpload: RequestHandler = async (req, res) => {
 const boundedPhotoUpload = createProductPhotoUploadHandler({
   assertProduct: id => getProductById(db, id),
   upload: (id, file, altText) => uploadStagedProductPhoto(db, id, file, altText),
+  // FAZ A / #424: the generation-fenced W2 owner; the handler uses it only when PHOTO_OWNERSHIP_FENCING_ENABLED=true.
+  fencedUpload: command => uploadFencedProductPhoto(db, command),
 });
 // Candidate remains off until independent full-API resource/compatibility acceptance.
 router.post("/:id/photos", requirePermission("products.edit"), process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? boundedPhotoUpload : [upload.single("photo"), legacyPhotoUpload]);

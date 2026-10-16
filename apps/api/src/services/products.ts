@@ -254,6 +254,11 @@ async function getImagesForProduct(db: DbClient, productId: string): Promise<Pro
 }
 
 
+/** FAZ A W2: the photo a committed fenced operation recorded, for idempotent retries (null if it no longer exists). */
+export async function getCommittedProductPhoto(db: DbClient, productId: string, photoId: string): Promise<ProductPhoto | null> {
+  return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === photoId) ?? null;
+}
+
 async function getPhotosForProduct(db: DbClient, productId: string): Promise<ProductPhoto[]> {
   const rows = await db
     .select()
