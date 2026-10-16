@@ -1086,3 +1086,18 @@ CREATE TABLE IF NOT EXISTS photo_operation_artifacts (
 
 CREATE INDEX IF NOT EXISTS idx_photo_operations_state ON photo_operations(state);
 CREATE INDEX IF NOT EXISTS idx_photo_operation_artifacts_operation ON photo_operation_artifacts(operation_id, generation);
+
+-- Stage 5 #424: additive W2 durable intent registry. No writer adoption by itself.
+-- Globally unique tokens reject cross-tenant token reuse; entire intent is immutable.
+CREATE TABLE IF NOT EXISTS photo_w2_upload_intents (
+  token TEXT PRIMARY KEY CHECK (length(token) BETWEEN 16 AND 128),
+  tenant_id TEXT NOT NULL CHECK (length(tenant_id) BETWEEN 1 AND 128),
+  actor_id TEXT NOT NULL CHECK (length(actor_id) BETWEEN 1 AND 128),
+  product_id TEXT NOT NULL CHECK (length(product_id) BETWEEN 1 AND 128),
+  input_sha256 TEXT NOT NULL CHECK (length(input_sha256) = 64),
+  alt_text TEXT NOT NULL CHECK (length(alt_text) <= 500),
+  operation_id TEXT UNIQUE REFERENCES photo_operations(id),
+  created_ms BIGINT NOT NULL CHECK (created_ms >= 0),
+  CHECK (operation_id IS NULL OR operation_id <> '')
+);
+CREATE INDEX IF NOT EXISTS idx_photo_w2_upload_intents_product ON photo_w2_upload_intents(tenant_id, product_id);
