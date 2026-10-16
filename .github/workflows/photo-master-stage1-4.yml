@@ -1,7 +1,7 @@
 name: Photo Master CI — Stage 1–4 evidence
 on:
   pull_request:
-    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424]
+    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424]
     paths:
       - .github/workflows/photo-master-stage1-4.yml
       - apps/api/**
