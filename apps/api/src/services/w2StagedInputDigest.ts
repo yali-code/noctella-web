@@ -35,7 +35,7 @@ export async function digestW2StagedInput(
         hash.update(chunk);
       }
     } catch (error) {
-      if (input.signal.aborted) throw new Error("W2_DIGEST_ABORTED", { cause: error });
+      if (input.signal.aborted) throw new Error("W2_DIGEST_ABORTED");
       throw error;
     }
     if (input.signal.aborted) throw new Error("W2_DIGEST_ABORTED");
