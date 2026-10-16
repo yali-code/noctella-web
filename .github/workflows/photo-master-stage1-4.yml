@@ -1,7 +1,7 @@
 name: Photo Master CI — Stage 1–4 evidence
 on:
   pull_request:
-    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424, test/w2-durable-retry-restart-424, test/w2-atomic-lock-contention-424, feat/w2-staged-digest-durable-claim-424, feat/photo-transaction-commit-fence-424, feat/w2-real-transaction-fence-424]
+    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424, test/w2-durable-retry-restart-424, test/w2-atomic-lock-contention-424, feat/w2-staged-digest-durable-claim-424, feat/photo-transaction-commit-fence-424, feat/w2-real-transaction-fence-424, feat/w2-live-route-ownership-entry-424, feat/w2-live-fenced-adoption-424]
     paths:
       - .github/workflows/photo-master-stage1-4.yml
       - apps/api/**
@@ -326,12 +326,37 @@ jobs:
           node -e 'const needs=JSON.parse(process.env.EVIDENCE); for (const [name,job] of Object.entries(needs)) { console.log(name+": "+job.result); if(job.result!=="success")process.exitCode=1 }'
 
   w2-live-adoption-gate:
-    # Stage 5 independent negative-proof job, intentionally red until real W2 integration.
+    # FAZ A W2 live adoption: behavioural HTTP/database/filesystem acceptance of the real fenced owner on SQLite
+    # and a real disposable PostgreSQL. The PostgreSQL cases must run (W2_LIVE_REQUIRE_POSTGRES), never skip.
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_w2_live_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_w2_live_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_w2_live_test
+      W2_LIVE_REQUIRE_POSTGRES: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Refuse to mislabel isolated W2 identity tests as live adoption
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Production router injects the real fenced owner (supplementary wiring check)
         run: node scripts/photo-operation-identity/live-adoption-gate.cjs
+      - name: W2 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
+        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts

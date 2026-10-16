@@ -31,33 +31,47 @@ export class LocalStagedProductPhotoStorage implements StagedProductPhotoStorage
   async saveStagedProductPhoto(input: StagedProductPhotoInput): Promise<StoredProductPhoto> {
     return runImageOperation(() => this.#saveStagedProductPhotoUnadmitted(input));
   }
-  async #saveStagedProductPhotoUnadmitted(input: StagedProductPhotoInput): Promise<StoredProductPhoto> {
+  /**
+   * FAZ A / #424 W2 fenced owner: the same validation and recipe as saveStagedProductPhoto, path-fed, encoding
+   * into an exclusively created output directory. Never publishes to the canonical root.
+   */
+  async prepareFencedProductPhoto(input: StagedProductPhotoInput, outDir: string): Promise<{ main: string; thumb: string; width: number; height: number }> {
+    return runImageOperation(async () => {
+      try { return await this.#encode(input, outDir); }
+      catch (error) { throw photoStorageError(error); }
+    });
+  }
+  async #encode(input: StagedProductPhotoInput, outDir: string): Promise<{ main: string; thumb: string; width: number; height: number }> {
     // libvips file-cache handles can outlive metadata() and prevent private-file cleanup on Windows.
     // Activate this process-level file-cache policy only when the gated staged processor is used.
     if (!fileCacheConfigured) { sharp.cache({ files: 0 }); fileCacheConfigured = true; }
+    if (input.signal.aborted) throw abortedError();
+    if (!PRODUCT_PHOTO_MIME_TYPES.includes(input.mimetype as any)) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Product photos must be JPEG, PNG, or WebP images");
+    const info = await lstat(input.path);
+    if (path.dirname(input.path) !== input.workDir || path.basename(input.path) !== "input" || info.isSymbolicLink() || !info.isFile() || await realpath(input.path) !== path.resolve(input.path)) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Invalid staged photo");
+    if (info.size !== input.size || info.size > PRODUCT_PHOTO_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Product photos must be 10 MB or smaller");
+    const image = productPhotoImage(input.path, { limitInputPixels: PHOTO_PIXEL_LIMIT, pages: 1, animated: false });
+    const metadata = await image.metadata();
+    if (!metadata.width || !metadata.height || metadata.width > PHOTO_EDGE_LIMIT || metadata.height > PHOTO_EDGE_LIMIT || metadata.width * metadata.height > PHOTO_PIXEL_LIMIT) throw new PhotoUploadError(400, "PHOTO_PIXEL_LIMIT", "Photo dimensions exceed the safety limit");
+    const main = path.join(outDir, "main.webp");
+    const thumb = path.join(outDir, "thumb.webp");
+    for (const [dest, thumbnail] of [[main, false], [thumb, true]] as const) {
+      if (input.signal.aborted) throw abortedError();
+      // Sharp stream output uses a complete encoded Buffer in 0.34.5. File output avoids that JS Buffer.
+      // Reserve a private, exclusively owned path before libvips opens it for output.
+      const reserved = await open(dest, "wx", 0o600); await reserved.close();
+      // Abort cannot release native work early; wait for the actual file encoder to settle.
+      await this.encode(productPhotoDerivative(image, thumbnail), dest);
+      if ((await lstat(dest)).size > PHOTO_OUTPUT_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Processed photo exceeds the safety limit");
+    }
+    if (input.signal.aborted) throw abortedError();
+    const output = await sharp(main, { limitInputPixels: PHOTO_PIXEL_LIMIT }).metadata();
+    return { main, thumb, width: output.width!, height: output.height! };
+  }
+  async #saveStagedProductPhotoUnadmitted(input: StagedProductPhotoInput): Promise<StoredProductPhoto> {
     const owned: string[] = [];
     try {
-      if (input.signal.aborted) throw abortedError();
-      if (!PRODUCT_PHOTO_MIME_TYPES.includes(input.mimetype as any)) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Product photos must be JPEG, PNG, or WebP images");
-      const info = await lstat(input.path);
-      if (path.dirname(input.path) !== input.workDir || path.basename(input.path) !== "input" || info.isSymbolicLink() || !info.isFile() || await realpath(input.path) !== path.resolve(input.path)) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Invalid staged photo");
-      if (info.size !== input.size || info.size > PRODUCT_PHOTO_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Product photos must be 10 MB or smaller");
-      const image = productPhotoImage(input.path, { limitInputPixels: PHOTO_PIXEL_LIMIT, pages: 1, animated: false });
-      const metadata = await image.metadata();
-      if (!metadata.width || !metadata.height || metadata.width > PHOTO_EDGE_LIMIT || metadata.height > PHOTO_EDGE_LIMIT || metadata.width * metadata.height > PHOTO_PIXEL_LIMIT) throw new PhotoUploadError(400, "PHOTO_PIXEL_LIMIT", "Photo dimensions exceed the safety limit");
-      const main = path.join(input.workDir, "main.webp");
-      const thumb = path.join(input.workDir, "thumb.webp");
-      for (const [dest, thumbnail] of [[main, false], [thumb, true]] as const) {
-        if (input.signal.aborted) throw abortedError();
-        // Sharp stream output uses a complete encoded Buffer in 0.34.5. File output avoids that JS Buffer.
-        // Reserve a private, exclusively owned path before libvips opens it for output.
-        const reserved = await open(dest, "wx", 0o600); await reserved.close();
-        // Abort cannot release native work early; wait for the actual file encoder to settle.
-        await this.encode(productPhotoDerivative(image, thumbnail), dest);
-        if ((await lstat(dest)).size > PHOTO_OUTPUT_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Processed photo exceeds the safety limit");
-      }
-      if (input.signal.aborted) throw abortedError();
-      const output = await sharp(main, { limitInputPixels: PHOTO_PIXEL_LIMIT }).metadata();
+      const { main, thumb, width, height } = await this.#encode(input, input.workDir);
       await mkdir(this.root, { recursive: true });
       const filename = Date.now() + "-" + randomUUID() + ".webp";
       const thumbFilename = filename.replace(".webp", "-thumb.webp");
@@ -67,7 +81,7 @@ export class LocalStagedProductPhotoStorage implements StagedProductPhotoStorage
         await this.publish(src, destination);
         owned.push(destination);
       }
-      return { filename, url: productPhotoStaticPath + "/" + filename, thumbnailUrl: productPhotoStaticPath + "/" + thumbFilename, mimeType: "image/webp", sizeBytes: input.size, width: output.width!, height: output.height! };
+      return { filename, url: productPhotoStaticPath + "/" + filename, thumbnailUrl: productPhotoStaticPath + "/" + thumbFilename, mimeType: "image/webp", sizeBytes: input.size, width, height };
     } catch (error) {
       const cleanup = await Promise.allSettled(owned.map(file => rm(file, { force: true })));
       if (cleanup.some(item => item.status === "rejected")) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo storage cleanup failed");

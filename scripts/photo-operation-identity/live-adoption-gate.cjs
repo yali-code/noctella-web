@@ -1,19 +1,25 @@
 'use strict';
-// Stage 5 release gate: offline proofs are NOT evidence of real W2 writer adoption.
-// This intentionally blocks until durable operation identity is wired to actual W2 upload.
-const fs=require('node:fs');
-const path=require('node:path');
-const root=path.resolve(__dirname,'../..');
-const route=fs.readFileSync(path.join(root,'apps/api/src/routes/productPhotoUpload.ts'),'utf8');
-const guard=fs.readFileSync(path.join(root,'apps/api/src/services/photoOwnershipFencing.ts'),'utf8');
-const evidence={
-  routeCarriesDurableOperationToken:/\b(operationToken|idempotencyKey)\b/.test(route),
-  routeCarriesGenerationFence:/\b(expectedGeneration|fencingGeneration|operationGeneration)\b/.test(route),
-  routeExplicitlyChecksOwnership:/\b(photoOwnershipFencing|claimPhotoOperation|assertPhotoOperationFence)\b/.test(route),
-  fencingSourceIsPresent:guard.includes('refuseUnadoptedPhotoWriter')
+// FAZ A / #424 supplementary wiring check for W2 live adoption. Source evidence alone is NOT adoption:
+// the required gate is the behavioural CI step (tests/w2LiveFencedAdoptionRoute.test.ts and
+// tests/w2FencedOwnerRecovery.test.ts on SQLite and real PostgreSQL). This only proves the production router
+// injects the real generation-fenced owner and that the owner commits through the fenced transaction.
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '../..');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const router = read('apps/api/src/routes/products.ts');
+const handler = read('apps/api/src/routes/productPhotoUpload.ts');
+const owner = read('apps/api/src/services/w2FencedProductPhotoOwner.ts');
+const evidence = {
+  routerInjectsFencedOwner: /fencedUpload:\s*command\s*=>\s*uploadFencedProductPhoto\(db,\s*command\)/.test(router),
+  handlerRefusesWithoutOwner: /fencingOn && !options\.fencedUpload/.test(handler),
+  handlerDigestsBeforeOwner: /digestW2StagedInput\(file/.test(handler) && /options\.fencedUpload!\(/.test(handler),
+  ownerBindsIntentToOperation: /INSERT INTO photo_w2_upload_intents[\s\S]*operation_id/.test(owner),
+  ownerCommitsThroughFencedTransaction: /persistFencedUploadedProductPhoto\(/.test(owner),
+  ownerNeverOverwrites: /await link\(file, destination\)/.test(owner) && !/rename\(|copyFile\(|writeFile\(/.test(owner),
 };
-console.log(JSON.stringify({gate:'W2_LIVE_ADOPTION_REQUIRED',evidence},null,2));
-if(!Object.values(evidence).every(Boolean)){
-  console.error('BLOCKED: independent W2 SQLite/PostgreSQL identity proofs are not wired to live product-photo upload; production adoption must not be inferred.');
-  process.exitCode=1;
+console.log(JSON.stringify({ gate: 'W2_LIVE_ADOPTION_WIRING', evidence }, null, 2));
+if (!Object.values(evidence).every(Boolean)) {
+  console.error('BLOCKED: the production W2 route is not wired to the generation-fenced owner.');
+  process.exitCode = 1;
 }

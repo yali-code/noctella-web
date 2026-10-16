@@ -12,6 +12,7 @@ const { census, scanText, sources, rel } = require('./scan.cjs');
 /** file -> expected counts per category, and what the file is in the writer matrix. */
 const EXPECTED = {
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
+  'services/w2FencedProductPhotoOwner.ts': { mutation: 3, writers: ['W2 generation-fenced owner (FAZ A #424, PHOTO_OWNERSHIP_FENCING_ENABLED only): exclusive private generation dirs, no-overwrite canonical link, post-commit unlink of its own private names'] },
   'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
   'services/photoStorage.ts': { mutation: 4, writers: ['W1', 'W4', 'W10'] },
   'services/aiIntakePhotoStorage.ts': { mutation: 11, handle: 1, writers: ['W3', 'W5', 'W3 original-source (#390, flag OFF by default; private staging writes only)'] },
