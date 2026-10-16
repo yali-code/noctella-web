@@ -28,3 +28,36 @@ export function classifyW2UploadIntent(stored: unknown, incoming: unknown): W2Id
   if (!isValidW2UploadIntent(stored)) return "CONFLICT";
   return FIELDS.every(field => stored[field] === incoming[field]) ? "SAME_INTENT" : "CONFLICT";
 }
+
+/**
+ * SQLite-only durable admission prerequisite. The immediate transaction serializes
+ * competing token claims; existing rows are compared without mutation. This does
+ * NOT grant a photo-operation generation, touch files or adopt the live W2 writer.
+ * PostgreSQL must use its own transactional implementation.
+ */
+export function claimSqliteW2UploadIntent(
+  db: import("better-sqlite3").Database,
+  incoming: unknown,
+  createdMs: number,
+): W2IdentityDecision {
+  if (!isValidW2UploadIntent(incoming) || !Number.isSafeInteger(createdMs) || createdMs < 0) return "INVALID";
+  return db.transaction((): W2IdentityDecision => {
+    const insert = db.prepare(`INSERT INTO photo_w2_upload_intents
+      (token, tenant_id, actor_id, product_id, input_sha256, alt_text, created_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`).run(
+      incoming.token, incoming.tenantId, incoming.actorId, incoming.productId,
+      incoming.sha256, incoming.altText, createdMs,
+    );
+    if (insert.changes === 1) return "NEW";
+    const row = db.prepare(`SELECT token, tenant_id, actor_id, product_id, input_sha256, alt_text
+      FROM photo_w2_upload_intents WHERE token = ?`).get(incoming.token) as
+      | { token: string; tenant_id: string; actor_id: string; product_id: string; input_sha256: string; alt_text: string }
+      | undefined;
+    if (!row) return "CONFLICT"; // Do not mistake other constraint conflicts for a duplicate.
+    return classifyW2UploadIntent({
+      token: row.token, tenantId: row.tenant_id, actorId: row.actor_id,
+      productId: row.product_id, sha256: row.input_sha256, altText: row.alt_text,
+      kind: "W2_PRODUCT_PHOTO_UPLOAD",
+    }, incoming);
+  }).immediate();
+}

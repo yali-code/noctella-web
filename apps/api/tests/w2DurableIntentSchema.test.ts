@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { ensureSchema } from "../src/db/migrate";
+import { claimSqliteW2UploadIntent, type W2UploadIntent } from "../src/services/w2OperationIdentity";
 
 const handles: Database.Database[] = [];
 afterEach(() => { for (const db of handles.splice(0)) db.close(); });
@@ -40,4 +41,31 @@ it("keeps PostgreSQL additive DDL aligned with the SQLite token identity contrac
   for (const field of ["token TEXT PRIMARY KEY","tenant_id TEXT NOT NULL","actor_id TEXT NOT NULL","product_id TEXT NOT NULL","input_sha256 TEXT NOT NULL","alt_text TEXT NOT NULL","operation_id TEXT UNIQUE REFERENCES photo_operations(id)"]) {
     expect(sql).toContain(field);
   }
+});
+
+it("atomically claims a validated SQLite W2 token and classifies retries without overwriting scope", () => {
+  const db = open();
+  const incoming: W2UploadIntent = {
+    kind: "W2_PRODUCT_PHOTO_UPLOAD", token: intent.token,
+    tenantId: intent.tenant, actorId: intent.actor, productId: intent.product,
+    sha256: intent.digest, altText: intent.alt,
+  };
+  expect(claimSqliteW2UploadIntent(db, incoming, 123)).toBe("NEW");
+  expect(claimSqliteW2UploadIntent(db, { ...incoming }, 124)).toBe("SAME_INTENT");
+  for (const changed of [
+    { ...incoming, tenantId: "other-tenant" },
+    { ...incoming, actorId: "other-actor" },
+    { ...incoming, productId: "other-product" },
+    { ...incoming, sha256: "b".repeat(64) },
+    { ...incoming, altText: "Changed" },
+  ]) expect(claimSqliteW2UploadIntent(db, changed, 125)).toBe("CONFLICT");
+  expect(claimSqliteW2UploadIntent(db, { ...incoming, token: "bad" }, 126)).toBe("INVALID");
+  expect(claimSqliteW2UploadIntent(db, incoming, -1)).toBe("INVALID");
+  expect(db.prepare("SELECT COUNT(*) AS n FROM photo_w2_upload_intents").get()).toEqual({ n: 1 });
+  expect(db.prepare("SELECT tenant_id, actor_id, product_id, input_sha256, alt_text, created_ms FROM photo_w2_upload_intents WHERE token=?").get(intent.token))
+    .toEqual({ tenant_id: intent.tenant, actor_id: intent.actor, product_id: intent.product,
+      input_sha256: intent.digest, alt_text: intent.alt, created_ms: 123 });
+  expect(db.prepare("SELECT COUNT(*) AS n FROM photo_operations").get()).toEqual({ n: 0 });
+  expect(db.prepare("SELECT COUNT(*) AS n FROM product_photos").get()).toEqual({ n: 0 });
+  expect(db.prepare("SELECT COUNT(*) AS n FROM outbox_events").get()).toEqual({ n: 0 });
 });
