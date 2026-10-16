@@ -133,11 +133,12 @@ async function run() {
   await fsp.rmdir(tempRoot);
   record.finishedAt = new Date().toISOString();
   record.expectedCases = selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").length;
-  record.status = record.cases.length === record.expectedCases && record.cases.every(c => c.assessment.status === "PASS") ? "PASS" : "FAIL";
+  // A BLOCKED case (fencing-ON while W11 is unadopted) makes the whole run BLOCKED, never PASS.
+  record.status = record.cases.some(c => c.assessment.status === "BLOCKED") ? "BLOCKED" : record.cases.length === record.expectedCases && record.cases.every(c => c.assessment.status === "PASS") ? "PASS" : "FAIL";
   await write(path.join(output, "summary.json"), record);
   const size = await usage(output);
   if (size.logical > 16 * 1024 * 1024) throw Error("Evidence exceeds 16-MiB artifact budget");
-  process.exitCode = record.status === "PASS" ? 0 : 1;
+  process.exitCode = record.status === "PASS" ? 0 : record.status === "BLOCKED" ? 3 : 1;
 }
 run().catch(async error => {
   record.fatal = String(error); record.status = "INCONCLUSIVE";

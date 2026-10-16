@@ -1,7 +1,7 @@
 name: Photo Master CI — Stage 1–4 evidence
 on:
   pull_request:
-    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424, test/w2-durable-retry-restart-424, test/w2-atomic-lock-contention-424, feat/w2-staged-digest-durable-claim-424, feat/photo-transaction-commit-fence-424, feat/w2-real-transaction-fence-424, feat/w2-live-route-ownership-entry-424, feat/w2-live-fenced-adoption-424, feat/w4-live-fenced-adoption-424, feat/w11-fenced-instagram-424, test/w11-0042-readiness-424]
+    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424, test/w2-durable-retry-restart-424, test/w2-atomic-lock-contention-424, feat/w2-staged-digest-durable-claim-424, feat/photo-transaction-commit-fence-424, feat/w2-real-transaction-fence-424, feat/w2-live-route-ownership-entry-424, feat/w2-live-fenced-adoption-424, feat/w4-live-fenced-adoption-424, feat/w11-fenced-instagram-424, test/w11-0042-readiness-424, test/fencing-on-harness-gates-424]
     paths:
       - .github/workflows/photo-master-stage1-4.yml
       - apps/api/**
@@ -361,7 +361,7 @@ jobs:
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
         run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts
       - name: Prove BLOCKED fencing-ON profile needs no Docker image
-        run: node --test scripts/photo-upload-linux/fencing-blocked.test.mjs
+        run: node --test scripts/photo-upload-linux/fencing-blocked.test.mjs scripts/photo-upload-linux/fencing-on-gates.test.mjs
       - name: Fencing-ON 24MP acceptance readiness (dry run; must report BLOCKED, never fencing-OFF data)
         shell: bash
         run: |

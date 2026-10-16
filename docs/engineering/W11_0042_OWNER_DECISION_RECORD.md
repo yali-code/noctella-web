@@ -94,3 +94,40 @@ There is no technical dependency on 0039/0040/0041 ordering.
   - `summary.status = PASS` at the exact candidate SHA.
 - **Until approval:** CI must keep proving `BLOCKED` (exit 3, W11 reason, zero cases, no Docker), and fencing-OFF
   profiles must never be reported as fencing-ON evidence.
+
+## Owner decision checklist (only items offline engineering cannot decide)
+
+Answer each explicitly; "continue" is not approval of a production schema change.
+
+1. **Migration number.** Approve the photo stack's numbers against the current `main`:
+   - `main` ends at 0038;
+   - Etsy `0039_etsy_listing_form_parity` is unmerged;
+   - photo uses 0040, 0041 and (proposed) 0042.
+
+   Either merge Etsy 0039 first and keep 0040/0041/0042, or name the renumbering.
+2. **0040/0041 ordering.** Approve merging 0040 and 0041 (already on Draft #414…#447) before 0042. There is no
+   technical dependency; this is release order only.
+3. **Flag-OFF SQLite startup side effects.** Accept that every deploy containing 0042 in `schema.sql` creates two
+   empty tables at startup, even with fencing OFF (as 0040/0041 already do).
+4. **Retention and operator recovery.** Set the retention for uncommitted W2/W4/W11 generation directories and
+   `review` items: they are never auto-deleted today. Name who runs the read-only recovery listings.
+5. **Rollback and backup.**
+   - Approve the procedure:
+     1. fencing OFF;
+     2. drop 0042 only if `DERIVATIVE_ROLLBACK_BLOCKERS_SQL` returns no rows;
+     3. never delete generation directories or canonical derivatives.
+   - Approve `db:backup` + `photos:backup` + `db:restore-verify` before any deploy.
+   - Decide whether private staging and generation directories enter backups.
+6. **Activation.** Explicitly approve moving 0042 into `schema.sql` / `postgres-migrations` together with the
+   W11 wiring diff, and flipping `FENCING_ON_ACCEPTANCE.blocked` to false in that same reviewed PR.
+
+Executable now without approval (offline, CI): every gate in this record. That covers:
+- the 0042 review and inverse-order proofs;
+- the W2/W4 fenced acceptance;
+- the W11 proposal suite;
+- the BLOCKED fencing-ON dry run;
+- the Docker-free regression;
+- the fencing-ON gate tests: never PASS while blocked; exact operation contract; no fencing-ON trials in the
+  measured matrix.
+
+Requires approval: items 1–6 above, then the measured fencing-ON 24 MP trials.

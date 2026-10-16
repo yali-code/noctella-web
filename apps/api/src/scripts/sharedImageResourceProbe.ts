@@ -126,19 +126,23 @@ export async function runCombinedScenario(config: any) {
       for(const upload of uploads)if(await digest(file(upload.url))!==w4Main||await digest(file(upload.thumbnailUrl))!==w4Thumb)throw Error("W4 output differs from the product-upload derivatives of the same source");
       trace("original-source.parity",{stagedKeySuffix:".orig.jpg",w4Main,w4Thumb});
     }
+    // FAZ A fencing-ON evidence, judged host-side by policy.validateFencingOnEvidence (exact counts, every operation
+    // committed, W11 rows only if its table exists). Recorded, never interpreted here.
+    let fencingOperations: {operations:Array<{kind:string;state:string}>;derivativeOperations:Array<{state:string}>|null}|undefined;
     if(config.scenario.photoOwnershipFencing){
-      // FAZ A fencing-ON evidence: every canonical write went through the shared generation-fenced authority
-      // (3 W2 uploads + 1 W4 photo), nothing is left unfinished, and no unfenced writer ran.
-      const operations=(db as any).all((await import("drizzle-orm")).sql`SELECT kind, state FROM photo_operations`) as Array<{kind:string;state:string}>;
-      const committed=operations.filter(o=>o.state==="committed");
-      if(committed.filter(o=>o.kind==="product_upload").length!==3||committed.filter(o=>o.kind==="ai_finalize").length!==1||committed.length!==operations.length)throw Error("Fencing-ON operation evidence mismatch");
-      trace("fencing-on.operations",{committed:committed.length,productUpload:3,aiFinalize:1});
+      const {sql}=await import("drizzle-orm");
+      const derivativeTable=((db as any).all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'photo_derivative_operations'`) as unknown[]).length===1;
+      fencingOperations={
+        operations:(db as any).all(sql`SELECT kind, state FROM photo_operations ORDER BY kind, state`),
+        derivativeOperations:derivativeTable?(db as any).all(sql`SELECT state FROM photo_derivative_operations ORDER BY state`):null,
+      };
+      trace("fencing-on.operations",fencingOperations);
     }
     const privateFiles=await fs.readdir("/work/intake"),photoFiles=await fs.readdir("/work/photos");
     const tmpDirFiles=[...await fs.readdir("/work/tmp"),...await fs.readdir("/work/.product-photo-upload-staging"),...await fs.readdir("/work/.ai-intake-upload-ingress")];
     if(rows.length!==4||events.length!==4||aiRows.length!==2||privateFiles.length!==2||nativePeak!==1||nativeActive!==0||nativeCalls<20||imageProcessingAdmission.snapshot().held!==0)throw Error("Combined integrity/admission mismatch");
     sample();
-    return {scenario:config.scenario,operations,baseline,warmBeforeCombined,peak,peakMaxRss:process.resourceUsage().maxRSS*1024,totalDurationMs:Date.now()-started,nativePeak,nativeCalls,admission:imageProcessingAdmission.snapshot(),retainedAiSourceFiles:privateFiles.length,leftovers:{photoDirFiles:photoFiles.length,expectedPhotoDirFiles:9,tmpDirFiles},scope:"synthetic authenticated product/AI HTTP and local-only Instagram; no provider calls; not full production acceptance"};
+    return {scenario:config.scenario,operations,baseline,warmBeforeCombined,peak,peakMaxRss:process.resourceUsage().maxRSS*1024,totalDurationMs:Date.now()-started,nativePeak,nativeCalls,admission:imageProcessingAdmission.snapshot(),retainedAiSourceFiles:privateFiles.length,leftovers:{photoDirFiles:photoFiles.length,expectedPhotoDirFiles:9,tmpDirFiles},fencingOperations,scope:"synthetic authenticated product/AI HTTP and local-only Instagram; no provider calls; not full production acceptance"};
   } finally {
     clearInterval(sampler);
     fs.readFile=originalRead;
