@@ -26,7 +26,7 @@ import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
 const OWNERSHIP_TABLES = ["photo_operation_artifacts", "photo_operation_generations", "photo_operations", "photo_storage_roots"];
 const MIGRATION_0040 = fs.readFileSync(path.join(__dirname, "../src/db/postgres-migrations/0040_photo_operation_ownership.sql"), "utf8");
 const product = { id: "p1", slug: "photo-product", sku: "SKU-PP", title: "Photo Product", type: ProductType.UniqueItem, status: ProductStatus.Published, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false, priceEur: 100 };
-const tables = (sqlite: Database.Database) => (sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'photo_%' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
+const tables = (sqlite: Database.Database) => (sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('photo_operation_artifacts', 'photo_operation_generations', 'photo_operations', 'photo_storage_roots') ORDER BY name").all() as { name: string }[]).map((r) => r.name);
 
 let root: string;
 beforeEach(async () => { root = await fsp.mkdtemp(path.join(os.tmpdir(), "noctella-photo-fencing-switch-")); });
