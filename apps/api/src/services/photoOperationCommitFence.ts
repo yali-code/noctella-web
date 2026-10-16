@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { sql } from "drizzle-orm";
 import type { PoolClient } from "pg";
 
 /**
@@ -65,4 +66,48 @@ export async function commitPostgresPhotoOperationFenced(tx: PoolClient, p: Phot
       AND nonce = $4 AND state = 'active' RETURNING operation_id`,
     [p.operationId, p.generation, p.owner, p.nonce]);
   if (history.rowCount !== 1) throw new Error("PHOTO_OPERATION_FENCE_LOST");
+}
+
+/**
+ * Execute the ownership CAS using the SAME Drizzle transaction handle as the
+ * existing canonical photo+promotion-outbox writer. SQLite stays synchronous;
+ * PostgreSQL resolves only after both updates complete. The caller must throw
+ * through its transaction callback on any failure (never swallow this error).
+ */
+export function commitDrizzlePhotoOperationFenced(
+  tx: any,
+  execution: "synchronous" | "asynchronous",
+  p: PhotoCommitFenceProof,
+): void | Promise<void> {
+  validate(p);
+  const now = execution === "synchronous"
+    ? sql.raw("CAST(unixepoch('subsec') * 1000 AS INTEGER)")
+    : sql.raw("(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint");
+  const run = (statement: ReturnType<typeof sql>): any =>
+    execution === "synchronous" ? tx.all(statement) : tx.execute(statement).then((result: { rows: unknown[] }) => result.rows);
+  const operation = sql`UPDATE photo_operations
+    SET state = 'committed', committed_photo_id = ${p.photoId},
+        committed_event_id = ${p.eventId}, updated_ms = ${now}
+    WHERE id = ${p.operationId} AND generation = ${p.generation}
+      AND owner = ${p.owner} AND nonce = ${p.nonce}
+      AND state = 'sealed' AND seal_id = ${p.sealId}
+      AND target_photo_id = ${p.photoId} AND lease_until_ms > ${now}
+    RETURNING id`;
+  const generation = sql`UPDATE photo_operation_generations
+    SET state = 'committed', updated_ms = ${now}
+    WHERE operation_id = ${p.operationId} AND generation = ${p.generation}
+      AND owner = ${p.owner} AND nonce = ${p.nonce} AND state = 'active'
+    RETURNING operation_id`;
+  const verify = (rows: unknown[]) => {
+    if (rows.length !== 1) throw new Error("PHOTO_OPERATION_FENCE_LOST");
+  };
+  if (execution === "synchronous") {
+    verify(run(operation));
+    verify(run(generation));
+    return;
+  }
+  return (run(operation) as Promise<unknown[]>).then(rows => {
+    verify(rows);
+    return run(generation) as Promise<unknown[]>;
+  }).then(verify);
 }
