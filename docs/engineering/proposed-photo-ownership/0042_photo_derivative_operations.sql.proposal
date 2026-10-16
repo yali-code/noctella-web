@@ -1,0 +1,41 @@
+-- FAZ A / #424 W11 PROPOSAL - NOT A MIGRATION. Not referenced by schema.sql or postgres-migrations; nothing
+-- creates these tables at startup. Requires owner approval of the schema and migration numbering
+-- (0039 Etsy / 0040 ownership / 0041 W2 intents are still unordered on main) before it may become 0042.
+--
+-- Why a separate table: photo_operations (0040, immutable) only admits kind ai_finalize/product_upload and
+-- requires a unique target photo id plus two distinct unique keys (main/thumb), with artifacts and the commit
+-- fence bound to a product photo row and outbox event. A W11 Instagram derivative has one content-addressed key,
+-- no photo row and no outbox event, so it cannot be represented there without misusing it.
+-- Portable DDL (SQLite and PostgreSQL); additive only.
+CREATE TABLE IF NOT EXISTS photo_derivative_operations (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('instagram_derivative')),
+  derivative_key TEXT NOT NULL UNIQUE,
+  source_key TEXT NOT NULL,
+  source_fingerprint TEXT NOT NULL CHECK (length(source_fingerprint) = 64),
+  recipe TEXT NOT NULL,
+  generation BIGINT NOT NULL CHECK (generation > 0),
+  owner TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('preparing', 'sealed', 'committed', 'review')),
+  lease_until_ms BIGINT NOT NULL,
+  seal_sha256 TEXT,
+  seal_bytes BIGINT,
+  seal_dev TEXT,
+  seal_ino TEXT,
+  review_reason TEXT,
+  created_ms BIGINT NOT NULL,
+  updated_ms BIGINT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS photo_derivative_operation_generations (
+  operation_id TEXT NOT NULL REFERENCES photo_derivative_operations(id),
+  generation BIGINT NOT NULL CHECK (generation > 0),
+  owner TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('active', 'superseded', 'committed', 'review')),
+  created_ms BIGINT NOT NULL,
+  updated_ms BIGINT NOT NULL,
+  PRIMARY KEY (operation_id, generation),
+  UNIQUE (operation_id, nonce)
+);
+CREATE INDEX IF NOT EXISTS idx_photo_derivative_operations_state ON photo_derivative_operations(state);

@@ -82,9 +82,16 @@ ORDER BY created_ms;
 
 ## 4. Open blockers (do not activate)
 
-- **W11 Instagram preparation is not adopted.** It refuses under fencing, so the unchanged 24 MP 8-operation
-  workload cannot run with fencing ON. Fencing-ON memory evidence is blocked until W11 is adopted. Fencing-OFF
-  24 MP evidence remains the CI gate.
+- **W11 Instagram preparation is not adopted.** It still refuses under fencing, so the unchanged 24 MP 8-operation
+  workload cannot run with fencing ON; fencing-OFF 24 MP evidence remains the CI gate.
+  - Exact blocker: 0040 photo_operations cannot represent a W11 derivative. Its kind CHECK allows only
+    ai_finalize/product_upload, it requires a unique target photo id and distinct main/thumb keys, and artifacts
+    and the commit fence are bound to a photo row and outbox event; W11 has one content-addressed key and no rows.
+  - Reviewed, tested, inactive patch: docs/engineering/proposed-photo-ownership/0042_photo_derivative_operations.sql.proposal
+    (additive tables, not created by any startup path) and services/w11FencedInstagramDerivativeOwner.ts (not
+    imported by production code).
+  - Wiring it requires owner approval of that schema and of migration numbering, and then switching
+    mediaPreparation.ts to the owner under fencing.
 - **W1 legacy upload, W6–W10 deleters and outbox handlers stay refused** under fencing (by design). Operating with
   fencing ON pauses those paths.
 - **Owner decisions:**

@@ -32,7 +32,20 @@ function canonicalFilename(url: string): string {
   if (!/^[a-zA-Z0-9_-][a-zA-Z0-9._-]*\.webp$/.test(filename) || filename.includes("..")) throw invalid();
   return filename;
 }
-const sourceFingerprint = (filename: string, source: Buffer) => createHash("sha256").update(filename).update("\0").update(source).digest("hex");
+export const sourceFingerprint = (filename: string, source: Buffer) => createHash("sha256").update(filename).update("\0").update(source).digest("hex");
+
+/** The W11 recipe: one immutable JPEG derivative of a single-frame WebP source (shared by every W11 writer). */
+export async function renderInstagramDerivative(source: Buffer, recipeId: InstagramImageRecipe): Promise<Buffer> {
+  const recipe = imageRecipes[recipeId];
+  const image = sharp(source, { failOn: "error", limitInputPixels: 40_000_000 });
+  const metadata = await image.metadata();
+  if (metadata.format !== "webp" || (metadata.pages ?? 1) !== 1) throw invalid();
+  // Contain preserves the entire image and its proportions, including extreme ratios.
+  const bytes = await image.rotate().resize(recipe.width, recipe.height, { fit: "contain", background: "#ffffff" })
+    .flatten({ background: "#ffffff" }).toColourspace("srgb").jpeg({ quality: 90 }).toBuffer();
+  if (bytes.length > 8 * 1024 * 1024) throw invalid();
+  return bytes;
+}
 
 async function readRegularLocalFile(root: string, filename: string): Promise<Buffer> {
   const file = productPhotoStorageSafety.safeJoin(root, filename);
@@ -134,13 +147,7 @@ async function prepareInstagramImageAssetUnadmitted(
     if (!work) {
       work = (async () => {
         if (await validDerivative(root, derivative, recipe)) return;
-        const image = sharp(source, { failOn: "error", limitInputPixels: 40_000_000 });
-        const metadata = await image.metadata();
-        if (metadata.format !== "webp" || (metadata.pages ?? 1) !== 1) throw invalid();
-        // Contain preserves the entire image and its proportions, including extreme ratios.
-        const bytes = await image.rotate().resize(recipe.width, recipe.height, { fit: "contain", background: "#ffffff" })
-          .flatten({ background: "#ffffff" }).toColourspace("srgb").jpeg({ quality: 90 }).toBuffer();
-        if (bytes.length > 8 * 1024 * 1024) throw invalid();
+        const bytes = await renderInstagramDerivative(source, recipeId);
         const temporary = productPhotoStorageSafety.safeJoin(root, `.instagram-${randomUUID()}.tmp`);
         try {
           await writeFile(temporary, bytes, { flag: "wx" });
