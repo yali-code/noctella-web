@@ -61,3 +61,54 @@ export function claimSqliteW2UploadIntent(
     }, incoming);
   }).immediate();
 }
+
+/**
+ * PostgreSQL counterpart to SQLite's durable W2 admission prerequisite.
+ * A single acquired connection/transaction is essential: concurrently inserting the
+ * same primary key waits for the winner, then reads its immutable intent.
+ * No photo-operation generation, canonical write or outbox event is authorized here.
+ */
+export async function claimPostgresW2UploadIntent(
+  pool: import("pg").Pool,
+  incoming: unknown,
+  createdMs: number,
+): Promise<W2IdentityDecision> {
+  if (!isValidW2UploadIntent(incoming) || !Number.isSafeInteger(createdMs) || createdMs < 0) return "INVALID";
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const inserted = await client.query(
+      `INSERT INTO photo_w2_upload_intents
+        (token, tenant_id, actor_id, product_id, input_sha256, alt_text, created_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (token) DO NOTHING RETURNING token`,
+      [incoming.token, incoming.tenantId, incoming.actorId, incoming.productId,
+        incoming.sha256, incoming.altText, createdMs],
+    );
+    let decision: W2IdentityDecision;
+    if (inserted.rowCount === 1) {
+      decision = "NEW";
+    } else {
+      const existing = await client.query(
+        `SELECT token, tenant_id, actor_id, product_id, input_sha256, alt_text
+         FROM photo_w2_upload_intents WHERE token = $1 FOR UPDATE`,
+        [incoming.token],
+      );
+      const row = existing.rows[0] as
+        | { token: string; tenant_id: string; actor_id: string; product_id: string; input_sha256: string; alt_text: string }
+        | undefined;
+      decision = row ? classifyW2UploadIntent({
+        kind: "W2_PRODUCT_PHOTO_UPLOAD", token: row.token,
+        tenantId: row.tenant_id, actorId: row.actor_id, productId: row.product_id,
+        sha256: row.input_sha256, altText: row.alt_text,
+      }, incoming) : "CONFLICT";
+    }
+    await client.query("COMMIT");
+    return decision;
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch { /* Preserve the original failure. */ }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
