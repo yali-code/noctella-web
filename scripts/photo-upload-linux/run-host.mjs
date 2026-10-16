@@ -31,20 +31,22 @@ function safeChild(root, child) {
 async function run() {
   if (process.platform !== "linux" || !fixtureRoot || fixtureRoot === output) throw Error("Linux and distinct fixture/output roots required");
   await fsp.mkdir(output, { recursive: true });
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "noctella-linux-cases-"));
   const fixtures = JSON.parse(await fsp.readFile(path.join(fixtureRoot, "fixtures.json"), "utf8"));
   record.fixtures = fixtures.map(({ file, ...rest }) => rest);
-  record.host = { platform: process.platform, kernel: os.release(), cpuModel: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemory: os.totalmem(), dockerVersion: docker("version", "--format", "{{.Server.Version}}").trim(), image: JSON.parse(docker("image", "inspect", image))[0].Id };
-  await write(path.join(output, "summary.json"), record);
-  console.log(JSON.stringify({ type: "environment", sourceSha: SOURCE_SHA, harnessSha: record.harnessSha, runUrl: record.runUrl, host: record.host, fixtures: record.fixtures }));
   if (fencingOnBlocked(selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full"))) {
-    // Explicit, distinct evidence: the fencing-ON profile is not run (and is never replaced by fencing-OFF data).
+    // No container or generated fixtures can run while W11 is unadopted.
+    // Record deliberate BLOCKED before Docker image inspection, which belongs
+    // only to actual resource measurement; never substitute fencing-OFF data.
     record.status = "BLOCKED"; record.blockedReason = FENCING_ON_ACCEPTANCE.reason; record.finishedAt = new Date().toISOString();
     await write(path.join(output, "summary.json"), record);
     console.error("BLOCKED: " + FENCING_ON_ACCEPTANCE.reason);
     process.exitCode = 3;
     return;
   }
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "noctella-linux-cases-"));
+  record.host = { platform: process.platform, kernel: os.release(), cpuModel: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemory: os.totalmem(), dockerVersion: docker("version", "--format", "{{.Server.Version}}").trim(), image: JSON.parse(docker("image", "inspect", image))[0].Id };
+  await write(path.join(output, "summary.json"), record);
+  console.log(JSON.stringify({ type: "environment", sourceSha: SOURCE_SHA, harnessSha: record.harnessSha, runUrl: record.runUrl, host: record.host, fixtures: record.fixtures }));
   for (const [index, scenario] of selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").entries()) {
     const evidence = path.join(output, scenario.name);
     await fsp.mkdir(evidence);
