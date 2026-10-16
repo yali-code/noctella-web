@@ -107,3 +107,25 @@ Business impact while `PHOTO_OWNERSHIP_FENCING_ENABLED=true`:
 | W3/W5 private, W12 reel (`MEDIA_ASSET_DIR`), W13/W14 backups | unaffected | none | none |
 
 **Decision: FAZ A BLOCKED.** Gates 2 and 3 are blocked and gate 1 registration depends on them. Gates 4–6 also carry owner decisions.
+
+## Blocker resolution, safe track (#424 comment 6224317277), from #453 `9b7f3fa`
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Admin `Idempotency-Key` | PASS (code + local tests) | See the details below. |
+| W11 security review packet | DONE | `W11_SECURITY_REVIEW_AND_OWNER_DECISIONS_424.md` §1–§4: the three denials, the exact authorization requirement, the minimal (unapplied) diff and the reviewer invariants. W11 still refuses; 0042 is still unregistered. |
+| Owner decision table (a)–(f) | DONE | Same document, §5 |
+| Fencing-ON 24 MP | BLOCKED | Unchanged: exit 3 and zero cases until (a) and (b) are decided |
+
+Admin `Idempotency-Key` details:
+- **Change:** one stable key per logical upload, meaning a File with its alt text, which the server binds to the key.
+  - The key is reused after ambiguous failures: no response, 5xx, 408/429, or 409 IN_PROGRESS / FENCE_LOST.
+  - It is released after success or a definitive rejection.
+  - Failed files stay selected for retry.
+  - `uploadForm` now surfaces the error `code`.
+- **Test results:**
+  - Admin targeted suites: 44/44. Full admin suite: 935/935. Admin typecheck passes; lint shows only existing warnings.
+  - Server W2 contract (fencing ON: replay, conflict, invalid then review): 7/7.
+  - New fencing-OFF compatibility test (header ignored, no ownership rows): 2/2.
+
+Recommendation: unchanged, **FAZ A BLOCKED** on owner decisions (a) and (b). (c)–(f) are needed for release.

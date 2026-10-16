@@ -108,19 +108,20 @@ export const api = {
 };
 
 
-export async function uploadForm<T>(path: string, formData: FormData): Promise<T> {
+export async function uploadForm<T>(path: string, formData: FormData, extraHeaders?: Record<string, string>): Promise<T> {
   const cookieHeader = await serverCookieHeader();
+  const headers = { ...(cookieHeader ? { Cookie: cookieHeader } : {}), ...extraHeaders };
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     body: formData,
     credentials: isServer ? undefined : "include",
-    headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   });
   const isJson = res.headers.get("content-type")?.includes("application/json");
   const body = isJson ? await res.json() : undefined;
   if (!res.ok) {
     if (res.status === 401 && !isServer) redirectToLoginFromBrowser();
-    throw new ApiError(body?.error ?? res.statusText, res.status, body?.details);
+    throw new ApiError(body?.error ?? res.statusText, res.status, body?.details, typeof body?.code === "string" ? body.code : undefined);
   }
   return body as T;
 }

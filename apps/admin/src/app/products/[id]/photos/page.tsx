@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, resolveApiAssetUrl } from "@/lib/api";
-import { productPhotoApi, productPhotoPublicationReadiness, reorderProductPhotoIds, type ProductPhotoUploadState } from "@/lib/productPhotos";
+import { createProductPhotoUploadKeys, productPhotoApi, productPhotoPublicationReadiness, reorderProductPhotoIds, type ProductPhotoUploadState } from "@/lib/productPhotos";
 import type { ProductDetail } from "@/lib/types";
 
 export default function ProductPhotosPage({ params }: { params: { id: string } }) {
@@ -14,6 +14,7 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
   const [activeOperation, setActiveOperation] = useState<{ kind: "upload" | "photo"; photoId?: string } | null>(null);
   const [altDrafts, setAltDrafts] = useState<Record<string, string>>({});
   const [uploadStates, setUploadStates] = useState<Record<string, ProductPhotoUploadState>>({});
+  const uploadKeys = useRef(createProductPhotoUploadKeys()).current;
 
   const load = useCallback(async () => {
     const next = await api.get<ProductDetail>(`/api/products/${params.id}`);
@@ -34,6 +35,8 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
    * remain authoritative and follow the selected order. A failure on one
    * file does not stop the remaining files from being attempted; already
    * -successful uploads are never retried or rolled back.
+   * #424: each file carries a stable Idempotency-Key; failed files stay selected
+   * (with their alt text) so submitting again retries the same logical upload.
    */
   async function uploadPhotos(e: React.FormEvent) {
     e.preventDefault();
@@ -42,26 +45,30 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
     setMessage(null);
     let successCount = 0;
     const failed: string[] = [];
+    const retry: File[] = [];
     setUploadStates(Object.fromEntries(files.map((file) => [file.name, "queued"])));
     for (const selected of files) {
       try {
         setUploadStates((current) => ({ ...current, [selected.name]: "uploading" }));
-        await productPhotoApi.upload(params.id, selected, altText);
+        await productPhotoApi.upload(params.id, selected, altText, uploadKeys.keyFor(selected, altText));
+        uploadKeys.settle(selected);
         setUploadStates((current) => ({ ...current, [selected.name]: "processing" }));
         successCount += 1;
         setUploadStates((current) => ({ ...current, [selected.name]: "completed" }));
       } catch (error) {
+        uploadKeys.settle(selected, error);
         setUploadStates((current) => ({ ...current, [selected.name]: "failed" }));
         failed.push(selected.name);
+        retry.push(selected);
         setMessage(error instanceof Error ? `Upload failed for ${selected.name}: ${error.message}` : `Upload failed for ${selected.name}.`);
       }
     }
-    setFiles([]);
-    setAltText("");
+    setFiles(retry);
+    if (retry.length === 0) setAltText("");
     setMessage(
       failed.length === 0
         ? `Uploaded ${successCount} photo${successCount === 1 ? "" : "s"}.`
-        : `Uploaded ${successCount} of ${successCount + failed.length} photo(s). Failed: ${failed.join(", ")}.`,
+        : `Uploaded ${successCount} of ${successCount + failed.length} photo(s). Failed: ${failed.join(", ")}. Submit again to retry the failed photo(s).`,
     );
     try { await load(); }
     finally { setActiveOperation(null); }
