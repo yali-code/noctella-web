@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
+import { SOURCE_SHA, DISK_STOP_BYTES, SCENARIO_TIMEOUT_MS, selectedScenarios, fencingOnBlocked, FENCING_ON_ACCEPTANCE, parseEvents, parseProcStatus, validateLimits, assess } from "./policy.mjs";
 import { usage } from "./disk-usage.mjs";
 
 const output = path.resolve(process.argv[2] ?? "photo-memory-results");
@@ -37,6 +37,14 @@ async function run() {
   record.host = { platform: process.platform, kernel: os.release(), cpuModel: os.cpus()[0]?.model, logicalCpus: os.cpus().length, totalMemory: os.totalmem(), dockerVersion: docker("version", "--format", "{{.Server.Version}}").trim(), image: JSON.parse(docker("image", "inspect", image))[0].Id };
   await write(path.join(output, "summary.json"), record);
   console.log(JSON.stringify({ type: "environment", sourceSha: SOURCE_SHA, harnessSha: record.harnessSha, runUrl: record.runUrl, host: record.host, fixtures: record.fixtures }));
+  if (fencingOnBlocked(selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full"))) {
+    // Explicit, distinct evidence: the fencing-ON profile is not run (and is never replaced by fencing-OFF data).
+    record.status = "BLOCKED"; record.blockedReason = FENCING_ON_ACCEPTANCE.reason; record.finishedAt = new Date().toISOString();
+    await write(path.join(output, "summary.json"), record);
+    console.error("BLOCKED: " + FENCING_ON_ACCEPTANCE.reason);
+    process.exitCode = 3;
+    return;
+  }
   for (const [index, scenario] of selectedScenarios(includeStress, process.env.CASE_PROFILE ?? "full").entries()) {
     const evidence = path.join(output, scenario.name);
     await fsp.mkdir(evidence);

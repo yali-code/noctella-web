@@ -81,3 +81,20 @@ test("#390 integrated original-source acceptance keeps the unchanged 24MP worklo
   }
   assert.ok(combined.every(s => !s.aiIntakeOriginalSource));
 });
+test("FAZ A fencing-ON 24MP acceptance: unchanged workload, distinct names, only it enables fencing, blocked until W11 is adopted", async () => {
+  const { selectedScenarios, fencingOnBlocked, FENCING_ON_ACCEPTANCE } = await import("./policy.mjs");
+  const on = selectedScenarios(true, "combined-fencing-on"), off = selectedScenarios(true, "combined"), original = selectedScenarios(true, "combined-original-source");
+  assert.equal(on.length, 3);
+  for (const [i, s] of on.entries()) {
+    for (const key of ["fixtures", "ops", "concurrency", "path", "trial"]) assert.deepEqual(s[key], off[i][key]);
+    assert.equal(s.photoOwnershipFencing, true);
+    assert.equal(s.aiIntakeOriginalSource, true);
+    assert.match(s.name, /^linux-combined-fencing-on-t[123]$/);
+  }
+  for (const s of [...off, ...original]) { assert.ok(!s.photoOwnershipFencing); assert.doesNotMatch(s.name, /fencing-on/); }
+  assert.equal(FENCING_ON_ACCEPTANCE.blocked, true);
+  assert.match(FENCING_ON_ACCEPTANCE.reason, /W11/);
+  assert.equal(fencingOnBlocked(on), true);
+  assert.equal(fencingOnBlocked(off), false);
+  assert.equal(fencingOnBlocked(original), false);
+});

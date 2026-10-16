@@ -359,4 +359,11 @@ jobs:
       - name: Production router injects the real fenced owner (supplementary wiring check)
         run: node scripts/photo-operation-identity/live-adoption-gate.cjs
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
-        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts
+        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts
+      - name: Fencing-ON 24MP acceptance readiness (dry run; must report BLOCKED, never fencing-OFF data)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/fon-fixtures" && echo '[]' > "$RUNNER_TEMP/fon-fixtures/fixtures.json"
+          set +e; CASE_PROFILE=combined-fencing-on node scripts/photo-upload-linux/run-host.mjs "$RUNNER_TEMP/fon-evidence" "$RUNNER_TEMP/fon-fixtures"; code=$?; set -e
+          test "$code" = 3
+          node -e 'const s=require(process.argv[1]); console.log(JSON.stringify({status:s.status,reason:s.blockedReason,cases:(s.cases||[]).length})); if(s.status!=="BLOCKED"||!/W11/.test(s.blockedReason)||(s.cases||[]).length)process.exit(1)' "$RUNNER_TEMP/fon-evidence/summary.json"

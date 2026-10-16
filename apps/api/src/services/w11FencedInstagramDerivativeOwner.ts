@@ -67,6 +67,9 @@ function* commitSteps(driver: OwnershipDriver, op: Owned, sealSha256: string): G
   if (history.length !== 1) throw new W11OperationRefusedError("W11_OPERATION_FENCE_LOST"); // rolls the commit back
   return true;
 }
+function* flagCommittedSteps(driver: OwnershipDriver, key: string, reason: string): Generator<SQL, void, Rows> {
+  yield sql`UPDATE photo_derivative_operations SET review_reason = ${reason}, updated_ms = ${nowMs(driver)} WHERE derivative_key = ${key} AND state = 'committed' RETURNING id`;
+}
 function* reviewSteps(driver: OwnershipDriver, op: Owned, reason: string): Generator<SQL, void, Rows> {
   yield sql`UPDATE photo_derivative_operations SET state = 'review', review_reason = ${reason}, updated_ms = ${nowMs(driver)} WHERE id = ${op.id} AND generation = ${op.generation} AND nonce = ${op.nonce} AND state IN ('preparing', 'sealed') RETURNING id`;
 }
@@ -91,9 +94,13 @@ export async function prepareFencedInstagramDerivative(
     claim = await inOwnershipTransaction(db, driver, () => claimSteps(driver, key, input.sourceKey, fingerprint, input.recipeId, ttl));
   }
   if (claim.kind === "committed") {
-    // Committed derivatives are served only if the canonical bytes still equal the seal.
-    if ((await fileProof(destination)).sha256 !== claim.sealSha256) throw new W11OperationRefusedError("W11_OPERATION_REVIEW");
-    return key;
+    // Committed derivatives are served only if the canonical bytes still equal the seal; otherwise the operation is
+    // flagged for operator review (state stays committed, nothing is rewritten or deleted).
+    let proof: Awaited<ReturnType<typeof fileProof>> | null = null;
+    try { proof = await fileProof(destination); } catch (error: any) { if (error?.code !== "ENOENT" && error?.message !== "PHOTO_ARTIFACT_NOT_REGULAR") throw error; }
+    if (proof?.sha256 === claim.sealSha256) return key;
+    await inOwnershipTransaction(db, driver, () => flagCommittedSteps(driver, key, proof ? "committed derivative bytes changed" : "committed derivative missing or not a regular file"));
+    throw new W11OperationRefusedError("W11_OPERATION_REVIEW");
   }
   if (claim.kind === "conflict") throw new W11OperationRefusedError("W11_OPERATION_CONFLICT");
   if (claim.kind === "in-progress") throw new W11OperationRefusedError("W11_OPERATION_IN_PROGRESS");
@@ -132,3 +139,14 @@ export async function prepareFencedInstagramDerivative(
   await options.hooks?.afterCommit?.();
   return key;
 }
+
+/** Operator diagnostics (read-only): review items, expired preparing/sealed operations and flagged committed ones. */
+export function listW11DerivativeOperationsRequiringRecovery(db: DbClient, driver: OwnershipDriver = ownershipDriver()) {
+  return inOwnershipTransaction(db, driver, function* (): Generator<SQL, Rows, Rows> {
+    return yield sql`SELECT id, derivative_key, source_key, generation, state, seal_sha256, review_reason FROM photo_derivative_operations
+      WHERE state = 'review' OR review_reason IS NOT NULL OR (state IN ('preparing', 'sealed') AND lease_until_ms <= ${nowMs(driver)}) ORDER BY created_ms`;
+  });
+}
+
+/** Rollback guard for the proposed 0042 tables: dropping them is safe only when no operation is unfinished or under review. */
+export const DERIVATIVE_ROLLBACK_BLOCKERS_SQL = "SELECT state, COUNT(*) AS n FROM photo_derivative_operations WHERE state IN ('preparing', 'sealed', 'review') OR review_reason IS NOT NULL GROUP BY state ORDER BY state";
