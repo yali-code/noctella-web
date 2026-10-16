@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { ensureSchema } from "../src/db/migrate";
-import { claimSqliteW2UploadIntent, type W2UploadIntent } from "../src/services/w2OperationIdentity";
+import { claimPostgresW2UploadIntent, claimSqliteW2UploadIntent, type W2UploadIntent } from "../src/services/w2OperationIdentity";
+import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
 
 const handles: Database.Database[] = [];
 afterEach(() => { for (const db of handles.splice(0)) db.close(); });
@@ -69,3 +70,29 @@ it("atomically claims a validated SQLite W2 token and classifies retries without
   expect(db.prepare("SELECT COUNT(*) AS n FROM product_photos").get()).toEqual({ n: 0 });
   expect(db.prepare("SELECT COUNT(*) AS n FROM outbox_events").get()).toEqual({ n: 0 });
 });
+
+it.skipIf(!postgresTestConfigured)("PostgreSQL W2 claim serializes concurrent retries and preserves immutable identity", async () => {
+  const testDb = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+  const incoming: W2UploadIntent = {
+    kind: "W2_PRODUCT_PHOTO_UPLOAD", token: intent.token,
+    tenantId: intent.tenant, actorId: intent.actor, productId: intent.product,
+    sha256: intent.digest, altText: intent.alt,
+  };
+  try {
+    const results = await Promise.all(Array.from({ length: 4 }, () =>
+      claimPostgresW2UploadIntent(testDb.pool, incoming, 123)));
+    expect(results.filter(x => x === "NEW")).toHaveLength(1);
+    expect(results.filter(x => x === "SAME_INTENT")).toHaveLength(3);
+    expect(await claimPostgresW2UploadIntent(testDb.pool, { ...incoming, tenantId: "tenant2" }, 124)).toBe("CONFLICT");
+    expect(await claimPostgresW2UploadIntent(testDb.pool, { ...incoming, sha256: "b".repeat(64) }, 124)).toBe("CONFLICT");
+    expect(await claimPostgresW2UploadIntent(testDb.pool, { ...incoming, token: "short" }, 124)).toBe("INVALID");
+    const persisted = await testDb.pool.query("SELECT tenant_id, input_sha256, created_ms FROM photo_w2_upload_intents WHERE token = $1", [incoming.token]);
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0].tenant_id).toBe(incoming.tenantId);
+    expect(persisted.rows[0].input_sha256).toBe(incoming.sha256);
+    expect(Number(persisted.rows[0].created_ms)).toBe(123);
+    for (const table of ["photo_operations", "product_photos", "outbox_events"]) {
+      expect((await testDb.pool.query(`SELECT COUNT(*) AS n FROM ${table}`)).rows[0].n).toBe("0");
+    }
+  } finally { await testDb.close(); }
+}, 120_000);
