@@ -48,7 +48,7 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
   for (const [id, dir] of [["storage.private-operations", path.join(parent, ".product-photo-operations")], ["storage.upload-staging", path.join(parent, ".product-photo-upload-staging")]] as const) {
     const dev = device(dir);
     if (dev === undefined) add(id, parentDevice === undefined ? "FAIL" : "PASS", parentDevice === undefined ? `parent of the canonical root is missing: ${parent}` : `${dir} will be created under the canonical parent (same filesystem)`);
-    else add(id, dev === parentDevice ? "PASS" : "FAIL", dev === parentDevice ? `${dir} is on the canonical filesystem` : `${dir} is on a different filesystem: link() publication would fail closed`);
+    else add(id, dev === parentDevice ? "PASS" : "FAIL", dev === parentDevice ? `${dir} is on the canonical filesystem` : `${dir} is on a different filesystem: hard-link publication would fail closed`);
   }
   try {
     const stats = (options.statfs ?? ((dir) => fs.statfsSync(dir)))(parentDevice === undefined ? process.cwd() : parent);
