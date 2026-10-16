@@ -37,7 +37,7 @@ it.runIf(process.env.W2_LIVE_REQUIRE_POSTGRES === "1")("PostgreSQL acceptance is
 type Driver = "sqlite" | "postgres";
 describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<[Driver, boolean]>)("fenced W2 + W4 on %s", (driver, enabled) => {
   let db: any, close: () => Promise<void> = async () => {}, categoryId: string;
-  const savedDriver = process.env.DATABASE_DRIVER;
+  const savedDriver = process.env.DATABASE_DRIVER, savedUrl = process.env.DATABASE_URL;
   const sources = new Map<string, Buffer>();
   const q = async (statement: SQL): Promise<any[]> => (driver === "sqlite" ? db.all(statement) : (await db.execute(statement)).rows);
   const n = async (statement: SQL) => Number((await q(statement))[0].n);
@@ -75,7 +75,9 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
   beforeAll(async () => {
     if (!enabled) return;
     if (driver === "postgres") {
+      // Same pattern as the existing PostgreSQL runtime tests: config validation needs the URL; queries use `db`.
       process.env.DATABASE_DRIVER = "postgres";
+      process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
       const harness = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
       db = harness.db; close = () => harness.close();
     } else {
@@ -85,7 +87,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     categoryId = randomUUID();
     await q(sql`INSERT INTO categories (id, name, slug) VALUES (${categoryId}, ${"W4 " + driver}, ${"w4-" + categoryId}) RETURNING id`);
   });
-  afterAll(async () => { await close(); if (savedDriver === undefined) delete process.env.DATABASE_DRIVER; else process.env.DATABASE_DRIVER = savedDriver; });
+  afterAll(async () => {
+    await close();
+    if (savedDriver === undefined) delete process.env.DATABASE_DRIVER; else process.env.DATABASE_DRIVER = savedDriver;
+    if (savedUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = savedUrl;
+  });
 
   it.skipIf(!enabled)("finalization commits exactly one fenced operation, photo and outbox event per staged photo, and finalizes the intake", async () => {
     const { productId, intakeId, stagedIds } = await appliedIntake(2);
