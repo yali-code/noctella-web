@@ -174,14 +174,15 @@ export async function uploadFencedProductPhoto(db: DbClient, command: FencedUplo
     }
     const destination = path.join(canonicalRoot, key);
     await mkdir(canonicalRoot, { recursive: true });
-    try { await link(file, destination); }
-    catch (error: any) {
-      if (error?.code !== "EEXIST") throw error;
-      const existing = await fileProof(destination);
-      if (existing.sha256 !== proof.sha256) {
-        await inTransaction(db, driver, () => reviewSteps(driver, op, "canonical key exists with different bytes"));
-        throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Canonical photo key already exists with different content");
-      }
+    let linked = false;
+    try { await link(file, destination); linked = true; }
+    catch (error: any) { if (error?.code !== "EEXIST") throw error; }
+    // Close the verify-then-link window: the published name must now be exactly the sealed inode (this generation
+    // linked it) or a pre-existing regular file with the sealed bytes (an earlier generation of this operation).
+    const published = await fileProof(destination);
+    if (published.sha256 !== proof.sha256 || (linked && (published.ino !== proof.ino || published.dev !== proof.dev))) {
+      await inTransaction(db, driver, () => reviewSteps(driver, op, linked ? "published inode differs from the seal" : "canonical key exists with different bytes"));
+      throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Canonical photo key does not match the sealed artifact");
     }
   }
   await options.hooks?.afterPublish?.();

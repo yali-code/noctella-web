@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
+import { randomUUID } from "node:crypto";
 import { lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -60,8 +61,17 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
       const harness = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
       db = harness.db; close = () => harness.close();
     } else db = createTestDb();
-    const category = await createCategory(db, { name: `W2 ${driver}`, displayOrder: 0, isActive: true });
-    productId = (await createProduct(db, { sku: `W2-${driver}`, title: "Synthetic", type: ProductType.UniqueItem, status: ProductStatus.Draft, categoryId: category.id, priceEur: 10, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false } as any)).id;
+    if (driver === "postgres") {
+      // Seed directly: the category write path is outside W2 and still passes ISO strings to PostgreSQL timestamp
+      // columns (pre-existing gap, recorded separately). The W2 owner and photo/outbox transaction under test are real.
+      const categoryId = randomUUID();
+      productId = randomUUID();
+      await q(sql`INSERT INTO categories (id, name, slug) VALUES (${categoryId}, 'W2 postgres', ${"w2-pg-" + categoryId}) RETURNING id`);
+      await q(sql`INSERT INTO products (id, sku, title, slug, type, status, category_id) VALUES (${productId}, ${"W2-PG-" + productId}, 'Synthetic', ${"w2-pg-" + productId}, ${ProductType.UniqueItem}, ${ProductStatus.Draft}, ${categoryId}) RETURNING id`);
+    } else {
+      const category = await createCategory(db, { name: `W2 ${driver}`, displayOrder: 0, isActive: true });
+      productId = (await createProduct(db, { sku: `W2-${driver}`, title: "Synthetic", type: ProductType.UniqueItem, status: ProductStatus.Draft, categoryId: category.id, priceEur: 10, customsWarning: false, isFeatured: false, allowMakeOffer: false, allowCashOnDelivery: false, showInArchiveAfterSale: false } as any)).id;
+    }
     front = await sharp({ create: { width: 120, height: 80, channels: 3, background: "#705030" } }).jpeg().toBuffer();
     back = await sharp({ create: { width: 120, height: 80, channels: 3, background: "#305070" } }).jpeg().toBuffer();
   });
@@ -129,6 +139,20 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     expect(record.state).toBe("committed");
     expect(await n("photo_operations", `WHERE subject_id = '${token}'`)).toBe(1);
     expect(await n("product_photos", `WHERE id = '${record.committed_photo_id}'`)).toBe(1);
+  });
+
+  it.skipIf(!enabled)("a different file at the canonical key is never overwritten: the operation goes to review, nothing commits", async () => {
+    const token = `collide-${driver}-0000000001`;
+    const foreign = Buffer.from("foreign bytes that must survive");
+    const attempt = upload(token, front, {
+      afterSeal: async () => { await writeFile(path.join(root, "photos", (await op(token)).main_key), foreign, { flag: "wx" }); },
+    });
+    await expect(attempt).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+    const record = await op(token);
+    expect(record.state).toBe("review");
+    await expect((await import("node:fs/promises")).readFile(path.join(root, "photos", record.main_key))).resolves.toEqual(foreign);
+    expect(await n("product_photos", `WHERE id = '${record.committed_photo_id ?? "none"}'`)).toBe(0);
+    expect((await listW2OperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).toContain(token);
   });
 
   it.skipIf(!enabled)("private generation evidence never lives under the public static root", async () => {
