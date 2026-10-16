@@ -28,7 +28,7 @@ jobs:
       - run: npm run typecheck -w apps/api
       - run: node --import tsx --test scripts/photo-w4-fencing-gap/real-w4.test.cjs
       - run: node --test scripts/photo-operation-identity/release-gate.test.cjs
-      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts tests/aiIntakeOriginalSourceStaging.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2OperationIdentity.test.ts
+      - run: npm exec -w apps/api -- vitest run tests/photoOwnershipFencingSwitch.test.ts tests/aiIntakeOriginalSourceStaging.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2OperationIdentity.test.ts tests/w2StagedInputDigest.test.ts
   fenced-storage-and-crash:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
