@@ -1,6 +1,7 @@
 import { stagedProductPhotoStorage, type StagedProductPhotoInput, type StagedProductPhotoStorage } from "./stagedProductPhotoStorage";
 import { abortedError, PhotoUploadError } from "./photoUploadAdmission";
 import { photoOwnershipFencingEnabled } from "./photoOwnershipFencing";
+import { commitDrizzlePhotoOperationFenced, type PhotoCommitFenceProof } from "./photoOperationCommitFence";
 
 /** W1/W2 (and with them W10 rollback deletion) are not adopted: with fencing ON they refuse before any write. */
 function refuseUnfencedProductUpload() {
@@ -477,9 +478,25 @@ export async function uploadStagedProductPhoto(db: DbClient, productId: string, 
   return persistUploadedProductPhoto(db, productId, stored, altText, storage, false);
 }
 
-async function persistUploadedProductPhoto(db: DbClient, productId: string, stored: StoredProductPhoto, altText: string | undefined, storage: Pick<PhotoStorage, "deleteProductPhoto">, compensateOnTransactionFailure = true): Promise<ProductPhoto> {
+/**
+ * The fenced writer must already own a sealed generation and have safely
+ * published its verified artifacts. This only performs the final DB effects,
+ * in the EXACT SAME product-row-locked transaction as the existing photo/outbox.
+ * It must never compensate/delete canonical bytes after ambiguous commit.
+ * NOT called by the current W2 route until ownership/publish adoption is proven.
+ */
+export function persistFencedUploadedProductPhoto(
+  db: DbClient, productId: string, stored: StoredProductPhoto,
+  altText: string | undefined, proof: PhotoCommitFenceProof,
+): Promise<ProductPhoto> {
+  return persistUploadedProductPhoto(db, productId, stored, altText, {
+    deleteProductPhoto: async () => { throw new Error("PHOTO_FENCED_DELETE_FORBIDDEN"); },
+  }, false, proof);
+}
+
+async function persistUploadedProductPhoto(db: DbClient, productId: string, stored: StoredProductPhoto, altText: string | undefined, storage: Pick<PhotoStorage, "deleteProductPhoto">, compensateOnTransactionFailure = true, fencedProof?: PhotoCommitFenceProof): Promise<ProductPhoto> {
   const now = new Date().toISOString();
-  const id = randomUUID();
+  const id = fencedProof?.photoId ?? randomUUID();
   const driver = ((process.env.DATABASE_DRIVER as string) || "sqlite") as ProductPhotoMutationLockDriver;
   try {
     const lock = createProductPhotoMutationLockCapabilityForDb(db, driver);
@@ -509,7 +526,7 @@ async function persistUploadedProductPhoto(db: DbClient, productId: string, stor
           updatedAt: now,
         };
         const outboxEvent = {
-          id: randomUUID(),
+          id: fencedProof?.eventId ?? randomUUID(),
           eventType: OutboxEventType.ProductPhotoPromoteRequested,
           aggregateType: "ProductPhoto",
           aggregateId: id,
@@ -522,7 +539,13 @@ async function persistUploadedProductPhoto(db: DbClient, productId: string, stor
           createdAt: now,
           updatedAt: now,
         };
-        return createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, { values, outboxEvent });
+        return then(
+          createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, { values, outboxEvent }),
+          created => then(
+            fencedProof ? commitDrizzlePhotoOperationFenced(tx, execution, fencedProof) : undefined,
+            () => created,
+          ),
+        );
       }),
     );
   } catch (err) {
