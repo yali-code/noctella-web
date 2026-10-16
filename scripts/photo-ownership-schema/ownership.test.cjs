@@ -61,7 +61,10 @@ test('BIGINT boundary decoding is exact for both drivers (int8 strings, numbers,
 test('registered SQLite schema.sql block and PostgreSQL 0040 are identical to the reviewed DDL', () => {
   const norm = (sql) => sql.replace(/\r\n/g, '\n').replace(/--[^\n]*\n/g, '').replace(/\s+/g, ' ').trim();
   const schema = fs.readFileSync(path.resolve(__dirname, '../../apps/api/src/db/schema.sql'), 'utf8');
-  const registered = norm(schema.slice(schema.indexOf('-- Photo-operation ownership')));
+  const start = schema.indexOf('-- Photo-operation ownership');
+  const end = schema.indexOf('-- Stage 5 #424: additive W2 durable intent registry.', start);
+  assert.ok(start >= 0 && end > start, '0040 ownership block must have explicit 0041 boundary');
+  const registered = norm(schema.slice(start, end));
   const pg = norm(fs.readFileSync(path.resolve(__dirname, '../../apps/api/src/db/postgres-migrations/0040_photo_operation_ownership.sql'), 'utf8'));
   assert.equal(registered, norm(UP));
   assert.equal(pg, norm(UP));
