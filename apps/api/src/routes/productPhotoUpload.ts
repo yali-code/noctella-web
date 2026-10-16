@@ -1,4 +1,6 @@
 import type { AuthedRequest } from "../auth/permissions";
+import { randomUUID } from "node:crypto";
+import { digestW2StagedInput } from "../services/w2StagedInputDigest";
 import type { Request, RequestHandler } from "express";
 import multer from "multer";
 import { createWriteStream } from "node:fs";
@@ -34,6 +36,12 @@ export interface ProductPhotoUploadOptions {
   receiveMs?: number;
   assertProduct(productId: string): Promise<unknown>;
   upload(productId: string, file: StagedProductPhotoInput, altText?: string): Promise<unknown>;
+  /** Generation-fenced owner only. MUST NOT be wired until durable claim, seal,
+   * canonical publication, same-transaction commit and recovery are verified. */
+  fencedUpload?: (command: {
+    productId: string; actorId: string; operationToken: string;
+    sha256: string; altText: string; file: StagedProductPhotoInput;
+  }) => Promise<unknown>;
   removeDir?: typeof rm;
   inputWriter?: (file: string) => Writable;
 }
@@ -111,9 +119,19 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
       req.once("aborted", interrupted);
       res.once("close", closed);
       try {
-        // Stage 5: even private multipart staging is refused before admission/DB/body while W2 is unadopted.
-        // No durable operation token or generation ownership is yet checked by this route.
-        if (photoOwnershipFencingEnabled()) throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "W2 photo upload requires durable ownership adoption");
+        // No legacy-writer fallback when fencing is ON. A verified owning
+        // implementation must be injected explicitly before private staging.
+        const fencingOn = photoOwnershipFencingEnabled();
+        if (fencingOn && !options.fencedUpload)
+          throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "W2 photo upload requires durable ownership adoption");
+        const actorId = (req as AuthedRequest).adminUser?.id;
+        if (fencingOn && (!actorId || !/^[A-Za-z0-9:_-]{1,128}$/.test(actorId)))
+          throw new PhotoUploadError(403, "PHOTO_UPLOAD_ACTOR_REQUIRED", "Authenticated upload actor is required");
+        const suppliedToken = req.headers?.["idempotency-key"];
+        if (fencingOn && suppliedToken !== undefined &&
+          (typeof suppliedToken !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(suppliedToken)))
+          throw new PhotoUploadError(400, "PHOTO_UPLOAD_TOKEN_INVALID", "Invalid photo upload idempotency key");
+        const operationToken = fencingOn ? (suppliedToken as string | undefined ?? randomUUID()) : undefined;
         lease = admission.reserve(); // Before DB, body parsing, directory creation or request buffering.
         await options.assertProduct(String(req.params.id));
         await initialize();
@@ -141,7 +159,21 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
         if (req.file && req.file.size > PRODUCT_PHOTO_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Product photos must be 10 MB or smaller");
         if (!req.file) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Photo file is required");
         if (Object.keys(req.body ?? {}).some(key => key !== "altText") || (req.body.altText !== undefined && typeof req.body.altText !== "string")) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Photo multipart fields exceed the safety limit");
-        value = await lease.run(() => options.upload(String(req.params.id), { path: req.file!.path, workDir: workDir!, size: req.file!.size, mimetype: req.file!.mimetype, signal: abort.signal, originalname: req.file!.originalname, actorAdminUserId: (req as AuthedRequest).adminUser?.id }, req.body.altText), abort.signal);
+        const file: StagedProductPhotoInput = { path: req.file.path, workDir: workDir!, size: req.file.size,
+          mimetype: req.file.mimetype, signal: abort.signal, originalname: req.file.originalname,
+          actorAdminUserId: actorId };
+        value = await lease.run(async () => {
+          if (!fencingOn) return options.upload(String(req.params.id), file, req.body.altText);
+          // Digest the real private inode. The owning service MUST atomically
+          // bind this identity to a generation before publishing canonical bytes.
+          const sha256 = await digestW2StagedInput(file, PRODUCT_PHOTO_MAX_BYTES);
+          if (abort.signal.aborted) throw abortedError();
+          return options.fencedUpload!({
+            productId: String(req.params.id), actorId: actorId!,
+            operationToken: operationToken!, sha256,
+            altText: req.body.altText ?? "", file,
+          });
+        }, abort.signal);
         committed = true;
       } catch (err) {
         error = err;
