@@ -166,6 +166,20 @@ async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProd
 export const writeDeterministicProductPhoto: (input: DeterministicProductPhotoInput) => Promise<DeterministicProductPhotoResult> = input =>
   runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input));
 
+/**
+ * FAZ A / #424 fenced W4: the exact writeDeterministicProductPhoto recipe (processProductPhoto), written exclusively
+ * into a generation-private directory instead of the canonical root. Publication is the fenced owner's job.
+ */
+export function prepareDeterministicProductPhotoFiles(input: { buffer: Buffer; mimetype: string; size: number }, outDir: string): Promise<{ main: string; thumb: string; width: number; height: number }> {
+  return runImageOperation(async () => {
+    const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
+    const main = path.join(outDir, "main.webp"), thumb = path.join(outDir, "thumb.webp");
+    await writeFile(main, mainBytes, { flag: "wx", mode: 0o600 });
+    await writeFile(thumb, thumbBytes, { flag: "wx", mode: 0o600 });
+    return { main, thumb, width, height };
+  });
+}
+
 /** Explicit test/development private-root producer; existing exports retain their default root. */
 export function writeDeterministicProductPhotoInPrivateRoot(input: DeterministicProductPhotoInput, permit: DevelopmentPrivatePhotoRoot) {
   if (!["test", "development"].includes(process.env.NODE_ENV ?? "") || process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED !== "true") throw new Error("PHOTO_DEVELOPMENT_CAPABILITY_DISABLED");
