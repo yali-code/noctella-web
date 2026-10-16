@@ -47,6 +47,36 @@ describe("0042 proposal is inactive and order-independent (static)", () => {
   });
 });
 
+/**
+ * Migration-readiness: 0042 must also tolerate being applied BEFORE 0040/0041 (or a late Etsy 0039, which only adds
+ * products columns), because PostgreSQL migrations here are idempotent files without a ledger.
+ */
+describe("0042 inverse-order application", () => {
+  it("SQLite: 0042 on an empty database, then the full startup schema (0040/0041 included)", async () => {
+    const { ensureSchema } = await import("../src/db/migrate");
+    const raw = new Database(":memory:");
+    raw.pragma("foreign_keys = ON");
+    for (const s of proposal) raw.exec(s);
+    ensureSchema(raw);
+    const tables = (raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((t) => t.name);
+    expect(tables).toEqual(expect.arrayContaining(["photo_derivative_operations", "photo_derivative_operation_generations", "photo_operations", "photo_w2_upload_intents"]));
+    raw.close();
+  });
+  it.skipIf(!postgresTestConfigured)("PostgreSQL: through 0038, then 0042, then the repository's 0040 and 0041", async () => {
+    const harness = await createPostgresTestDb("0038_background_job_claim_fencing.sql");
+    try {
+      for (const s of proposal) await harness.db.execute(sql.raw(s));
+      const dir = path.join(repo, "apps/api/src/db/postgres-migrations");
+      const client = await harness.pool.connect();
+      try {
+        for (const file of ["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql"]) await client.query(readFileSync(path.join(dir, file), "utf8"));
+        const tables = (await client.query("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()")).rows.map((r: any) => r.table_name);
+        expect(tables).toEqual(expect.arrayContaining(["photo_derivative_operations", "photo_derivative_operation_generations", "photo_operations", "photo_w2_upload_intents"]));
+      } finally { client.release(); }
+    } finally { await harness.close(); }
+  });
+});
+
 type Driver = "sqlite" | "postgres";
 describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<[Driver, boolean]>)("0042 schema review on %s", (driver, enabled) => {
   let db: any, close: () => Promise<void> = async () => {};
