@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { afterEach, expect, it } from "vitest";
 import { ensureSchema } from "../src/db/migrate";
 import { claimPostgresW2UploadIntent, claimSqliteW2UploadIntent, type W2UploadIntent } from "../src/services/w2OperationIdentity";
@@ -94,5 +95,56 @@ it.skipIf(!postgresTestConfigured)("PostgreSQL W2 claim serializes concurrent re
     for (const table of ["photo_operations", "product_photos", "outbox_events"]) {
       expect((await testDb.pool.query(`SELECT COUNT(*) AS n FROM ${table}`)).rows[0].n).toBe("0");
     }
+  } finally { await testDb.close(); }
+}, 120_000);
+
+it("SQLite W2 intent persists across closed connections and lost-response retries", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "noctella-w2-retry-"));
+  const dbPath = path.join(dir, "w2.sqlite");
+  const incoming: W2UploadIntent = {
+    kind: "W2_PRODUCT_PHOTO_UPLOAD", token: "durable_restart_0001",
+    tenantId: "tenant-1", actorId: "actor-1", productId: "product-1",
+    sha256: "a".repeat(64), altText: "Front",
+  };
+  try {
+    const first = new Database(dbPath);
+    try {
+      first.pragma("foreign_keys = ON");
+      ensureSchema(first);
+      expect(claimSqliteW2UploadIntent(first, incoming, 100)).toBe("NEW");
+    } finally { first.close(); }
+    const second = new Database(dbPath);
+    try {
+      second.pragma("foreign_keys = ON");
+      ensureSchema(second);
+      expect(claimSqliteW2UploadIntent(second, incoming, 200)).toBe("SAME_INTENT");
+      expect(claimSqliteW2UploadIntent(second, { ...incoming, actorId: "other-actor" }, 201)).toBe("CONFLICT");
+      expect(second.prepare("SELECT COUNT(*) AS n FROM photo_w2_upload_intents").get()).toEqual({ n: 1 });
+      expect(second.prepare("SELECT created_ms FROM photo_w2_upload_intents WHERE token = ?").get(incoming.token)).toEqual({ created_ms: 100 });
+    } finally { second.close(); }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+it.skipIf(!postgresTestConfigured)("PostgreSQL W2 same-token concurrent conflicting intents never overwrite the winner", async () => {
+  const testDb = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+  const original: W2UploadIntent = {
+    kind: "W2_PRODUCT_PHOTO_UPLOAD", token: "concurrent_token_0001",
+    tenantId: "tenant-1", actorId: "actor-1", productId: "product-1",
+    sha256: "a".repeat(64), altText: "Front",
+  };
+  const competitor = { ...original, tenantId: "tenant-2", sha256: "b".repeat(64) };
+  try {
+    const outcomes = await Promise.all([
+      claimPostgresW2UploadIntent(testDb.pool, original, 100),
+      claimPostgresW2UploadIntent(testDb.pool, competitor, 101),
+    ]);
+    expect(outcomes.filter(v => v === "NEW")).toHaveLength(1);
+    expect(outcomes.filter(v => v === "CONFLICT")).toHaveLength(1);
+    const row = (await testDb.pool.query("SELECT tenant_id, input_sha256, created_ms FROM photo_w2_upload_intents WHERE token=$1", [original.token])).rows[0];
+    const winner = row.tenant_id === original.tenantId ? original : competitor;
+    expect(row.input_sha256).toBe(winner.sha256);
+    expect(Number(row.created_ms)).toBe(winner === original ? 100 : 101);
+    expect(await claimPostgresW2UploadIntent(testDb.pool, winner, 300)).toBe("SAME_INTENT");
+    expect((await testDb.pool.query("SELECT COUNT(*) AS n FROM photo_w2_upload_intents")).rows[0].n).toBe("1");
   } finally { await testDb.close(); }
 }, 120_000);
