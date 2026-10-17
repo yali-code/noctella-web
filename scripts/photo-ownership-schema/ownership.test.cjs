@@ -101,6 +101,12 @@ for (const driver of ['sqlite', 'postgres']) {
         [token, 'a'.repeat(64), op]);
     };
     await bind('op-457-1', 'token-457-000000001');
+    // A failed step after all DROP statements must undo the whole transaction, preserving W2 retry history.
+    await assert.rejects(async () => applyScript(engine, DOWN, { failAfter: true }), /table_that_does_not_exist_p2_2b3d5/);
+    for (const table of ['photo_w2_upload_intents', 'photo_operations', 'photo_storage_roots'])
+      assert.equal(await hasTable(engine, table), true, `${table} must survive the interrupted rollback`);
+    assert.equal(await count(engine, 'photo_w2_upload_intents'), 1, 'W2 idempotency history must survive');
+    assert.equal(await count(engine, 'photo_operations'), 1, 'referenced operation must survive');
     await applyScript(engine, DOWN); // isolated disposable database, same transaction for all DDL
     for (const table of ['photo_w2_upload_intents', 'photo_operation_artifacts', 'photo_operation_generations', 'photo_operations', 'photo_storage_roots'])
       assert.equal(await hasTable(engine, table), false, `${table} must be removed`);
