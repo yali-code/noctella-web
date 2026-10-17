@@ -2,6 +2,11 @@
 -- Dropping these tables discards ownership evidence. Never run it while any operation is
 -- 'preparing', 'sealed' or 'review', or while capability writers may still run.
 -- Media files and existing tables are untouched; retained private bytes then need operator review.
+-- Apply as ONE transaction (BEGIN ... COMMIT / psql -1): a partial run would drop evidence and leave a broken schema.
+-- #457: 0041 (photo_w2_upload_intents.operation_id REFERENCES photo_operations) depends on 0040, so its objects are
+-- dropped first; IF EXISTS keeps this valid on schemas without 0041.
+DROP INDEX IF EXISTS idx_photo_w2_upload_intents_product;
+DROP TABLE IF EXISTS photo_w2_upload_intents;
 DROP INDEX IF EXISTS idx_photo_operation_artifacts_operation;
 DROP INDEX IF EXISTS idx_photo_operations_state;
 DROP TABLE IF EXISTS photo_operation_artifacts;

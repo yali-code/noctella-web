@@ -59,7 +59,9 @@ ORDER BY created_ms;
    - Committed photos are ordinary rows and files.
    - Operations still in `preparing`/`sealed` keep their private evidence. Legacy code ignores them and they stay
      visible to the recovery listing after re-enabling.
-   - Dropping 0040/0041 tables is allowed only when `ownershipRollbackBlockers` reports `safe`.
+   - Dropping 0040/0041 tables is allowed only when `ownershipRollbackBlockers` reports `safe`. Use
+     `docs/engineering/proposed-photo-ownership/down.sql` as one transaction: it drops 0041 (W2 intents, which
+     reference `photo_operations`) before 0040. Dropping the intents discards W2 idempotency records.
 4. **Storage roots.**
    - `.product-photo-operations/` must be on the same filesystem as `PRODUCT_PHOTO_DIR`; `link()` fails closed on
      EXDEV.
