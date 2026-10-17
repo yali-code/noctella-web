@@ -1,0 +1,63 @@
+name: F1 F2 offline protocol verification
+on:
+  pull_request:
+    branches: [fix/photo-ownership-driver-routing-458]
+    paths:
+      - apps/api/tests/f1f2PublicationClosure462.test.ts
+      - apps/api/tests/support/*462.ts
+      - apps/api/tests/support/tsconfig.audit462.json
+      - .github/workflows/f1-f2-closure-462.yml
+permissions:
+  contents: read
+jobs:
+  offline-protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_462_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_462_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_462_test
+      AUDIT462_REQUIRE_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build -w packages/shared
+      - name: Test-only hostile protocol and unchanged media/driver regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/audit462"
+          git rev-parse HEAD | tee "$RUNNER_TEMP/audit462/head-sha.txt"
+          npm exec -w apps/api -- vitest run tests/f1f2PublicationClosure462.test.ts tests/instagramMediaPreparation.test.ts tests/photoOwnershipDriverRouting.test.ts --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/audit462/tests.txt"
+          npm run typecheck -w apps/api
+          node node_modules/typescript/bin/tsc -p apps/api/tests/support/tsconfig.audit462.json --noEmit
+          node --test scripts/photo-upload-linux/fencing-blocked.test.mjs scripts/photo-upload-linux/fencing-on-gates.test.mjs 2>&1 | tee "$RUNNER_TEMP/audit462/blocked.txt"
+      - name: Verify production source and 0042 registration unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git diff 60a45569e19bf11d7af67123509d04d8dea3684b -- apps/api/src)"
+          test -z "$(find apps/api/src/db/postgres-migrations -name '0042*' -print)"
+          if grep -q photo_derivative_operations apps/api/src/db/schema.sql; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-f1-f2-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/audit462

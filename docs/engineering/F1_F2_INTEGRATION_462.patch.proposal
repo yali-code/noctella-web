@@ -1,0 +1,35 @@
+# REVIEW-ONLY PATCH SHAPE — NOT APPLIED; NOT A COMPILED ACTIVATION DIFF
+# Prerequisites are in CODEX_F1_F2_CLOSURE_DESIGN_462.md. No imports from tests into src.
+# This requires new reviewed schema/state/adapter contracts; 0042 is NOT registered or modified here.
+
+--- a/apps/api/src/services/photoOperationAuthority.ts
++++ b/apps/api/src/services/photoOperationAuthority.ts
+@@ shared proof contract (all live call sites require independent review)
+-export async function fileProof(file: string): Promise<FileProof>
++export async function fileProof(root: ProvisionedPhotoRoot, relative: string): Promise<FileProof>
++# Production implementation of the tested descriptor-bound/rooted algorithm,
++# with explicit ACL/native-root policy; no unsafe default root and no pathname streaming.
+
+--- a/apps/api/src/services/w11FencedInstagramDerivativeOwner.ts
++++ b/apps/api/src/services/w11FencedInstagramDerivativeOwner.ts
+@@ after immutable generation seal has been persisted
+-const current = await fileProof(privateFile);
+-// path link followed only later by lease-sensitive commitSteps
++const intent = await acquireDurablePublicationIntent(db, {
++  operationId, generation, owner, nonce, seal, sourceFingerprint, recipe, derivativeKey,
++});
++# T1: row guard + fresh DB-time CAS sealed->publishing + immutable intent; COMMIT before filesystem work.
++# No intent means no link. Acknowledgement ambiguity requires authoritative intent lookup before any link.
++await publishExactIntentInode(provisionedRoots, intent);
++# Exact seal hash/bytes/dev/ino; EEXIST must have SAME intent provenance, never byte-only adoption.
++await commitExactPublicationIntent(db, intent);
++# T2 CAS publishing->committed, no lease revocation of a durable intent; lost ACK lookup is read/verify-only.
+
+@@ every claimant/reclaimer and recovery path, including future schema CHECK
++# 'publishing' cannot be reclaimed by lease expiry. Recovery resumes the SAME immutable intent only.
++# Revocation requires proven old-worker storage fencing and separately authorized operator procedure.
++# Retain generation private inode and intent evidence; no automatic delete/overwrite/purge.
+
+# No mediaPreparation.ts wiring is proposed for application by this mission.
+# Its fencing-ON refusal stays unchanged. Any production module/schema migration and actual
+# W11 activation require separate independent human review and explicit owner authorization.

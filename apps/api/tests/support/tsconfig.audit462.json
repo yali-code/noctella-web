@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "rootDir": "../..", "noEmit": true, "target": "ES2022", "lib": ["ES2022"] },
+  "include": ["../f1f2PublicationClosure462.test.ts", "./rootedDescriptorProof462.ts", "./publicationAuthority462.ts"]
+}
