@@ -19,7 +19,7 @@ const pgSkip = !process.env.POSTGRES_TEST_DATABASE_URL && 'POSTGRES_TEST_DATABAS
 const evidence = [];
 const TTL = 1000;
 
-async function env(driver, { up = true } = {}) {
+async function env(driver, { up = true, through = LATEST_PG } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'noctella-photo-fence-'));
   let engine, h;
   try {
@@ -35,7 +35,7 @@ async function env(driver, { up = true } = {}) {
         }
       }
     }
-    else { h = await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb(LATEST_PG); engine = postgresEngine(h.pool); }
+    else { h = await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb(through); engine = postgresEngine(h.pool); }
     if (up) await applyScript(engine, UP);
     await engine.q('INSERT INTO products(id,sku,title,slug,type,status) VALUES(?,?,?,?,?,?) RETURNING id', ['prod-1', 'SKU-1', 'Synthetic', 'synthetic-1', 'unique_item', 'draft']);
   } catch (error) { engine?.close(); await h?.close(); fs.rmSync(root, { recursive: true, force: true }); throw error; }
@@ -88,6 +88,24 @@ for (const driver of ['sqlite', 'postgres']) {
     await applyScript(engine, UP);
     evidence.push({ driver, name: 'ddl', columnsBefore: before });
   }, { up: false }));
+
+  test(`${driver}: #457 rollback on the registered 0040+0041 schema drops the W2 intents first, atomically, and re-applies`, opts, withEnv(async ({ engine }) => {
+    // SQLite: startup ensureSchema (0040 + 0041 registered). PostgreSQL: repository migrations through 0041.
+    assert.equal(await hasTable(engine, 'photo_w2_upload_intents'), true, 'registered 0041 is present');
+    const bind = async (op, token) => {
+      await engine.q(`INSERT INTO photo_operations (id, kind, subject_type, subject_id, target_photo_id, main_key, thumb_key, input_sha256, generation, owner, nonce, state, lease_until_ms, created_ms, updated_ms)
+        VALUES (?, 'product_upload', 'w2_request', ?, ?, ?, ?, ?, 1, 'o', ?, 'committed', 0, 0, 0) RETURNING id`, [op, token, `${op}-photo`, `${op}.webp`, `${op}-thumb.webp`, 'a'.repeat(64), `${op}-nonce`]);
+      await engine.q("INSERT INTO photo_w2_upload_intents (token, tenant_id, actor_id, product_id, input_sha256, alt_text, operation_id, created_ms) VALUES (?, 't', 'a', 'prod-1', ?, '', ?, 0) RETURNING token", [token, 'a'.repeat(64), op]);
+    };
+    await bind('op-457-1', 'token-457-000000001'); // committed only: the operation rollback blockers report safe
+    await applyScript(engine, DOWN);
+    for (const t of ['photo_w2_upload_intents', 'photo_operation_artifacts', 'photo_operation_generations', 'photo_operations', 'photo_storage_roots']) assert.equal(await hasTable(engine, t), false, `${t} dropped`);
+    assert.equal(await count(engine, 'products'), 1, 'rollback leaves application data intact');
+    await applyScript(engine, UP);
+    await applyScript(engine, fs.readFileSync(path.resolve(__dirname, '../../apps/api/src/db/postgres-migrations/0041_photo_w2_upload_intents.sql'), 'utf8'));
+    await bind('op-457-2', 'token-457-000000002'); // the re-applied schema is fully usable (no orphaned 0041 table)
+    assert.equal(await count(engine, 'photo_w2_upload_intents'), 1);
+  }, { through: '0041_photo_w2_upload_intents.sql' }));
 
   test(`${driver}: atomic finalize, idempotent retry after a lost acknowledgement, rollback on failure`, opts, withEnv(async ({ engine, c }) => {
     const t = await c.claim(intent());
