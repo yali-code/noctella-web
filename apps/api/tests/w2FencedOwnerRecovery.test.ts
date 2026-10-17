@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { sql, type SQL } from "drizzle-orm";
@@ -42,7 +42,7 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
   const savedDriver = process.env.DATABASE_DRIVER;
   const q = async (statement: SQL): Promise<any[]> => (driver === "sqlite" ? db.all(statement) : (await db.execute(statement)).rows);
   const n = async (table: string, where = "") => Number((await q(sql.raw(`SELECT COUNT(*) AS n FROM ${table} ${where}`)))[0].n);
-  const op = async (token: string) => (await q(sql`SELECT id, state, generation, main_key, thumb_key, committed_photo_id FROM photo_operations WHERE subject_id = ${token}`))[0];
+  const op = async (token: string) => (await q(sql`SELECT id, state, generation, main_key, thumb_key, target_photo_id, committed_photo_id FROM photo_operations WHERE subject_id = ${token}`))[0];
   const expire = (token: string) => q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE subject_id = ${token} RETURNING id`);
   async function upload(token: string, bytes: Buffer, hooks?: FencedUploadHooks) {
     const workDir = await mkdtemp(path.join(os.tmpdir(), "noctella-w2-input-"));
@@ -153,6 +153,82 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     await expect((await import("node:fs/promises")).readFile(path.join(root, "photos", record.main_key))).resolves.toEqual(foreign);
     expect(await n("product_photos", `WHERE id = '${record.committed_photo_id ?? "none"}'`)).toBe(0);
     expect((await listW2OperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).toContain(token);
+  });
+
+  it.skipIf(!enabled).each(["main", "thumb"] as const)("F3: foreign identical-byte %s canonical inode is preserved and rejected", async (artifact) => {
+    const token = `foreign-equal-${artifact}-${driver}-000001`;
+    let destination = "", foreignInode = "", foreignBytes: Buffer;
+    await expect(upload(token, front, { afterSeal: async () => {
+      const record = await op(token);
+      const source = path.join(root, ".product-photo-operations", record.id, String(record.generation), artifact + ".webp");
+      destination = path.join(root, "photos", record[artifact + "_key"]);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await copyFile(source, destination);
+      foreignBytes = await readFile(destination);
+      foreignInode = String((await lstat(destination, { bigint: true })).ino);
+      expect(foreignInode).not.toBe(String((await lstat(source, { bigint: true })).ino));
+    } })).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+    const record = await op(token);
+    expect(record.state).toBe("review");
+    expect(String((await lstat(destination, { bigint: true })).ino)).toBe(foreignInode);
+    expect(await readFile(destination)).toEqual(foreignBytes!);
+    expect(await n("product_photos", `WHERE id = '${record.target_photo_id}'`)).toBe(0);
+    expect(await n("outbox_events", `WHERE aggregate_id = '${record.target_photo_id}'`)).toBe(0);
+  });
+
+  it.skipIf(!enabled).each(["missing", "replaced"] as const)("F3: recorded prior seal with %s private name cannot authorize adoption", async (mode) => {
+    const token = `orphan-${mode}-${driver}-000001`;
+    await expect(upload(token, front, { afterPublish: () => { throw new Error("crash retains canonical"); } })).rejects.toThrow("crash retains canonical");
+    const record = await op(token), destination = path.join(root, "photos", record.main_key);
+    const before = await lstat(destination, { bigint: true });
+    const privateName = path.join(root, ".product-photo-operations", record.id, "1", "main.webp");
+    await rm(privateName);
+    if (mode === "replaced") await copyFile(destination, privateName);
+    await expire(token);
+    await expect(upload(token, front)).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+    expect((await op(token)).state).toBe("review");
+    expect((await lstat(destination, { bigint: true })).ino).toBe(before.ino);
+    expect(await n("product_photos", `WHERE id = '${record.target_photo_id}'`)).toBe(0);
+  });
+
+  it.skipIf(!enabled)("REPRO F2 SECURITY FAIL: stale W2 A publishes while reclaimed B is sealed but has not published", async () => {
+    const token = `stale-before-b-${driver}-001`;
+    let release!: () => void;
+    const paused = new Promise<void>((resolve) => { release = resolve; });
+    let winner: Promise<any> | undefined, staleInode = "";
+    try {
+      await expect(upload(token, front, {
+        afterSeal: async () => {
+          await expire(token);
+          let sealed!: () => void, failed!: (e: unknown) => void;
+          const ready = new Promise<void>((resolve, reject) => { sealed = resolve; failed = reject; });
+          winner = upload(token, front, { afterSeal: async () => { sealed(); await paused; } });
+          winner.catch(failed); // observe rejection immediately, including preparation failures
+          await ready;
+          const record = await op(token);
+          expect([Number(record.generation), record.state]).toEqual([2, "sealed"]);
+          await expect(lstat(path.join(root, "photos", record.main_key))).rejects.toMatchObject({ code: "ENOENT" });
+        },
+        afterPublish: async () => {
+          const record = await op(token);
+          expect([Number(record.generation), record.state]).toEqual([2, "sealed"]);
+          const privateA = await lstat(path.join(root, ".product-photo-operations", record.id, "1", "main.webp"), { bigint: true });
+          const canonical = await lstat(path.join(root, "photos", record.main_key), { bigint: true });
+          expect([canonical.dev, canonical.ino]).toEqual([privateA.dev, privateA.ino]);
+          expect(await n("product_photos", `WHERE id = '${record.target_photo_id}'`)).toBe(0);
+          expect(await n("outbox_events", `WHERE aggregate_id = '${record.target_photo_id}'`)).toBe(0);
+          staleInode = String(canonical.ino); // vulnerability: stale actor successfully linked before final CAS
+        },
+      })).rejects.toMatchObject({ status: 503 });
+      expect(staleInode).not.toBe("");
+      release();
+      const recovered = await winner!;
+      const record = await op(token);
+      expect([Number(record.generation), record.state]).toEqual([2, "committed"]);
+      expect(String((await lstat(path.join(root, "photos", record.main_key), { bigint: true })).ino)).toBe(staleInode);
+      expect(await n("product_photos", `WHERE id = '${recovered.id}'`)).toBe(1);
+      expect(await n("outbox_events", `WHERE aggregate_id = '${recovered.id}'`)).toBe(1);
+    } finally { release(); if (winner) await winner.catch(() => undefined); }
   });
 
   it.skipIf(!enabled)("private generation evidence never lives under the public static root", async () => {

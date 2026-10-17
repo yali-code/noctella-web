@@ -1,6 +1,6 @@
 /**
- * FAZ A #463 - INACTIVE PROPOSAL: not imported by production code. Decision rules for review before any
- * owner-approved wiring into photoOperationAuthority (W2/W4) or the gated W11 owner. No I/O, no side effects.
+ * FAZ A #463/#468: F3 provenance classification is used by the W2/W4 authority.
+ * F4 and W11 helpers remain inactive proposals. No I/O, no side effects.
  *
  * F3 - an existing canonical file at the operation's key (link() returned EEXIST) may be adopted only when it is
  * provably this operation's own publication: same bytes as the current seal AND the inode of one of this
