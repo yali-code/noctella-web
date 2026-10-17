@@ -95,6 +95,9 @@ it("a restored database is structurally sound: integrity_check ok, no foreign-ke
     expect(restored.sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)).toBeTruthy();
   expect(op(restored.db, token).state).toBe("committed");
   expect(Number((restored.db.all(sql`SELECT COUNT(*) AS n FROM photo_w2_upload_intents WHERE token = ${token}`) as any[])[0].n)).toBe(1);
+  // Gate 6 "stable single-tenant scope": persisted intents carry the fixed scope. Changing it would make every
+  // retry of an already-stored key (including after a restore or deploy) an idempotency CONFLICT.
+  expect((restored.db.all(sql`SELECT tenant_id FROM photo_w2_upload_intents WHERE token = ${token}`) as any[])[0].tenant_id).toBe("noctella");
 });
 
 it("restore of a mid-operation (sealed) snapshot without private files: the retry recovers exactly once after the lease expires", async () => {
