@@ -65,9 +65,18 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
     add("storage.free-space", free >= PREFLIGHT_MIN_FREE_BYTES ? "PASS" : "WARN", `${Math.floor(free / 1048576)} MiB available (warn below ${PREFLIGHT_MIN_FREE_BYTES / 1048576} MiB)`);
   } catch { add("storage.free-space", "WARN", "free space could not be measured"); }
 
-  // Platform facts that offline code cannot verify.
+  // Platform facts that offline code cannot verify. The built-in database backup and restore verification commands
+  // handle only SQLite; they cannot prove a PostgreSQL backup or recovery.
+  const databaseDriver = env.DATABASE_DRIVER ?? "sqlite";
+  const postgresDriver = databaseDriver === "postgres" || databaseDriver === "supabase-postgres";
+  add("database.driver", databaseDriver === "sqlite" || postgresDriver ? "PASS" : "FAIL",
+    databaseDriver === "sqlite" || postgresDriver ? `supported database driver: ${databaseDriver}` : "unsupported DATABASE_DRIVER; release must stop");
   add("render.single-instance-drain", "MANUAL", "confirm in Render that the old instance stopped before the new one started and no worker/cron can reach PRODUCT_PHOTO_DIR");
-  add("backups", "MANUAL", "run db:backup, photos:backup and db:restore-verify before deploying; record hashes");
+  add("backups", "MANUAL", postgresDriver
+    ? "PostgreSQL: db:backup and db:restore-verify are SQLite-only and do NOT prove PostgreSQL recovery; require owner-approved consistent PostgreSQL-native backup and restore evidence, photos:backup and a compatible point-in-time plan before deployment; record integrity hashes"
+    : databaseDriver === "sqlite"
+      ? "run db:backup, photos:backup and db:restore-verify before deploying; record hashes"
+      : "unsupported database driver: backup and restore procedure must be resolved before deployment");
 
   const status: PreflightStatus = checks.some((c) => c.status === "FAIL") ? "FAIL" : checks.some((c) => c.status === "WARN" || c.status === "MANUAL") ? "WARN" : "PASS";
   return { generatedAt: new Date().toISOString(), readOnly: true, status, checks };
