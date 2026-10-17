@@ -71,6 +71,11 @@ ORDER BY created_ms;
      test/development).
    - Whether private staging and generation directories join backups, and their retention, are owner decisions.
      The design (#418) recommends keeping staging out of backups.
+   - Restore the database and photos **from the same point in time**. Restored photos are byte copies (new inodes)
+     and generation directories are not restored. An operation that was mid-flight in the database snapshot, but
+     whose canonical files come from a newer photo backup, goes to review (`REVIEW_FOREIGN_SAME_BYTES`), never
+     adopted or overwritten (`tests/photoOwnershipRestoreRecovery.test.ts`). Sealed operations with no restored
+     canonical files, and committed ones, recover through normal retries.
 6. **Staging acceptance checklist.**
    1. Deploy with fencing OFF and verify unchanged W2/W4.
    2. Enable fencing; run a W2 upload with an `Idempotency-Key`, plus an identical retry and a conflicting retry.
