@@ -1,6 +1,7 @@
 /* #470 OFFLINE TEST LAUNCHER ONLY. No runtime imports or privileged host changes.
  * Restrict before exec/threads. Refuse unsupported kernels; never run an unsandboxed fallback.
- * Filesystem mutation is denied except beneath explicit test-private directories.
+ * Handled pathname mutation is denied except beneath explicit test-private directories.
+ * A writable private hardlink alias still needs producer/descriptor revocation before publication.
  * This is not a broker, a deployment policy, or revocation of an already-running process.
  */
 #define _GNU_SOURCE

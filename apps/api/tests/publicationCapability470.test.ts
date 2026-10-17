@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -31,6 +31,19 @@ it.runIf(process.env.F2_CAPABILITY_REQUIRE_LINUX === "1")("required unprivileged
   expect(process.platform).toBe("linux"); expect(launcher).toBeTruthy(); expect(process.getuid?.()).not.toBe(0); expect(postgresTestConfigured).toBe(true);
 });
 afterAll(async () => { await rm(root, { recursive: true, force: true, maxRetries: 3 }); });
+it.skipIf(!native)("LIMIT: writable private hardlink alias can mutate canonical; producer revocation is mandatory", async () => {
+  const work = await mkdtemp(path.join(root, "alias-limit-"));
+  const denied = await mkdtemp(path.join(root, "canonical-limit-"));
+  const privateName = path.join(work, "private.webp"), canonicalName = path.join(denied, "canonical.webp");
+  await writeFile(privateName, "sealed-before-handoff"); await link(privateName, canonicalName);
+  const proc = spawn(launcher!, [work, "--", process.execPath, "-e", "require('node:fs').writeFileSync(process.argv[1], 'changed-via-private-alias')", privateName], { stdio: ["ignore", "pipe", "pipe"] });
+  let log = ""; proc.stderr?.on("data", d => { log += d; });
+  const exit = new Promise<number | null>((resolve, reject) => { proc.once("exit", resolve); proc.once("error", reject); });
+  try { expect(await bounded(exit, "alias limit fixture")).toBe(0); }
+  finally { if (proc.exitCode === null && proc.signalCode === null) { proc.kill("SIGKILL"); await exit; } }
+  expect(log).toContain("LANDLOCK_ENFORCED");
+  expect(await readFile(canonicalName, "utf8")).toBe("changed-via-private-alias"); // LIMIT, not security PASS
+});
 async function bounded<T>(promise: Promise<T>, label: string, ms = 15_000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("BLOCKED: " + label)), ms); })]); }
