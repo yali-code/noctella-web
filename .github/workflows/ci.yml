@@ -4,7 +4,8 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    # Option B isolated Etsy Phase 1 candidate on the production baseline (1994f50): exact-head CI on push.
+    branches: [main, release/etsy-phase1-production-baseline]
 
 jobs:
   validate:
