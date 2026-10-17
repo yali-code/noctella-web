@@ -1,4 +1,4 @@
-﻿/** #457 independent evidence. REPRO passes mean a vulnerability was reproduced, NEVER security acceptance. */
+/** #457 independent evidence. REPRO passes mean a vulnerability was reproduced, NEVER security acceptance. */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
@@ -140,7 +140,3 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     const h = history[0]; await expect(q(sql`INSERT INTO photo_derivative_operation_generations (operation_id,generation,owner,nonce,state,created_ms,updated_ms) VALUES (${h.operation_id},2,'foreign',${h.nonce},'active',0,0) RETURNING operation_id`)).rejects.toThrow();
   });
 });
-
-
-
-
