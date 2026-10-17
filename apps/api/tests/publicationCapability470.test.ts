@@ -49,6 +49,18 @@ async function bounded<T>(promise: Promise<T>, label: string, ms = 15_000): Prom
   try { return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("BLOCKED: " + label)), ms); })]); }
   finally { if (timer) clearTimeout(timer); }
 }
+async function afterRevocation<T>(revoked: Promise<void>, start: () => T | Promise<T>, ms = 5000): Promise<T> {
+  await bounded(revoked, "revocation not proven", ms);
+  return start();
+}
+it("REFUSED offline: failed or timed-out revocation cannot release a publisher", async () => {
+  let released = false;
+  const release = () => { released = true; };
+  await expect(afterRevocation(Promise.reject(new Error("revocation failed")), release)).rejects.toThrow("revocation failed");
+  expect(released).toBe(false);
+  await expect(afterRevocation(new Promise<void>(() => {}), release, 25)).rejects.toThrow("BLOCKED: revocation not proven");
+  expect(released).toBe(false);
+});
 function deferred<T = void>() { let resolve!: (v: T) => void, reject!: (e: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 
 describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)("OFFLINE capability on %s", (driver, configured) => {
@@ -121,8 +133,8 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
         await expect(lstat(path.join(canonical, row.main_key))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(lstat(path.join(canonical, row.thumb_key))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(lstat(path.join(canonical, "forbidden-alias.webp"))).rejects.toMatchObject({ code: "ENOENT" });
-        await a.kill(); // exact known child is reaped before the trusted authority resumes
-        release.resolve(); await bounded(b, "trusted authority progress");
+        await afterRevocation(a.kill(), () => release.resolve()); // exact child reaped before publication resumes
+        await bounded(b, "trusted authority progress");
         const [seal] = await q(sql`SELECT main_dev, main_ino FROM photo_operation_artifacts WHERE operation_id=${row.id} AND generation=2`);
         const published = await lstat(path.join(canonical, row.main_key), { bigint: true });
         expect([String(published.dev), String(published.ino)]).toEqual([seal.main_dev, seal.main_ino]);
@@ -132,7 +144,13 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
           await upload(kind, token); // lost response / retry: committed identity, no new generation
           expect(Number((await op(token)).generation)).toBe(2);
         } else expect((await op(token)).state).toBe("sealed"); // W4 manifest publication only; existing full-finalization suites verify commit
-      } finally { release.resolve(); await a.kill(); if (b) await b.catch(() => undefined); }
+      } finally {
+        try { await afterRevocation(a.kill(), () => release.resolve()); }
+        catch (error) {
+          // Failed cleanup must abort the waiting owner's hook, never release it to link without revocation.
+          void release.promise.catch(() => undefined); release.reject(error); throw error;
+        } finally { if (b) await b.catch(() => undefined); }
+      }
     });
     it.skipIf(!native || !configured)("PREVENTED offline: reap known capability-owning child before bounded replacement", async () => {
       const token = randomUUID(), a = await child(kind, token, false);

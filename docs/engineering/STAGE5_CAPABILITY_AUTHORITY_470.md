@@ -30,6 +30,8 @@ The [kernel Landlock contract](https://docs.kernel.org/userspace-api/landlock.ht
 
 A second drill starts the exact known **unconfined** child holding canonical capability, pauses it after seal, kills it and observes exit **before** expiring/reclaiming and starting B. This is actual process death, not DB connection release. The test has a 5-second revocation deadline and 15-second progress deadline; failure blocks transfer. These are measured fixture bounds, not a production SLA.
 
+An explicit refused-transfer test checks failed and timed-out revocation: neither may invoke the release callback. Failure cleanup also waits for proven child exit; if that cannot be obtained, it rejects the paused owner's hook instead of permitting publication. These are offline control-flow checks, not proof of production supervisor availability.
+
 **What this proves:** under the fixture's startup/FD/root assumptions, a confined stale W2/W4 worker cannot publish through the real link path even after lease expiry or DB shutdown. A trusted fixture supervisor can revoke one known child's capability by observing its death and then make progress.
 
 **What this does not prove:** deployed worker confinement; revocation of an arbitrary process, escaped descendant, unknown host or broker; root containment of the unconfined test parent; durable broker-intent T1/T2 transactions; production crash recovery/topology or availability. The test parent is a trusted authority surrogate, not an implemented publication broker. The known-child kill drill cannot be generalized into proof that all real writers are dead.
