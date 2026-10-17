@@ -22,9 +22,9 @@ vi.mock("node:fs/promises", async original => {
       handle.close = async () => { audit.closed++; return close(); }; return handle;
     } };
 });
-import { lstat, mkdir, writeFile, readFile, rename, rm, readdir, symlink, open } from "node:fs/promises";
+import { link, lstat, mkdir, writeFile, readFile, rename, rm, readdir, symlink, open } from "node:fs/promises";
 import { ownedPhotoArtifactProof } from "../src/services/ownedPhotoArtifactProof";
-import { fileProof, createOperation, claimExistingOperation, inOwnershipTransaction, sealPreparedArtifacts, publishSealedArtifacts, type OwnedOperation } from "../src/services/photoOperationAuthority";
+import { fileProof, createGenerationDirectory, createOperation, claimExistingOperation, inOwnershipTransaction, sealPreparedArtifacts, publishSealedArtifacts, type OwnedOperation } from "../src/services/photoOperationAuthority";
 import { ensureSchema } from "../src/db/migrate";
 import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 120_000 });
@@ -105,7 +105,8 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     async function fixture() {
       const id = randomUUID();
       const op = await tx(() => createOperation(driver, { kind, subjectType: "stage5-test", subjectId: id, targetPhotoId: id, mainKey: id + ".webp", thumbKey: id + "-thumb.webp", inputSha256: sha("synthetic") }, 300_000));
-      const files = { main: path.join(dir, "main.webp"), thumb: path.join(dir, "thumb.webp") };
+      const generationDir = await createGenerationDirectory(op, path.join(dir, "canonical"));
+      const files = { main: path.join(generationDir, "main.webp"), thumb: path.join(generationDir, "thumb.webp") };
       await writeFile(files.main, "synthetic-main"); await writeFile(files.thumb, "synthetic-thumb");
       return { op, files };
     }
@@ -138,6 +139,55 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
       expect((await lstat(path.join(canonical, op.mainKey), { bigint: true })).ino).toBe(before.ino);
       expect(await readFile(path.join(canonical, op.mainKey), "utf8")).toBe("synthetic-main");
     });
+    it.skipIf(!enabled)("#470 mixed own generations authenticate main/thumb independently after partial publication", async () => {
+      const { op, files } = await fixture(), first = await sealPreparedArtifacts(db, driver, op, files), canonical = path.join(dir, "canonical");
+      await mkdir(canonical); await link(files.main, path.join(canonical, op.mainKey)); // generation 1 published only main
+      await q(sql`UPDATE photo_operations SET lease_until_ms=0 WHERE id=${op.id} RETURNING id`);
+      const claim = await tx(() => claimExistingOperation(driver, op.id, 300_000));
+      if (claim.kind !== "owned") throw new Error("fixture reclaim failed");
+      const generationDir = await createGenerationDirectory(claim.op, canonical);
+      const next = { main: path.join(generationDir, "main.webp"), thumb: path.join(generationDir, "thumb.webp") };
+      await writeFile(next.main, "synthetic-main"); await writeFile(next.thumb, "synthetic-thumb");
+      const second = await sealPreparedArtifacts(db, driver, claim.op, next);
+      await publishSealedArtifacts(db, driver, claim.op, next, second!, canonical);
+      await publishSealedArtifacts(db, driver, claim.op, next, second!, canonical); // identical retry
+      expect(String((await lstat(path.join(canonical, op.mainKey), { bigint: true })).ino)).toBe(first!.main.ino);
+      expect(String((await lstat(path.join(canonical, op.thumbKey), { bigint: true })).ino)).toBe(second!.thumb.ino);
+    });
+
+    for (const mode of ["symlink", "fifo", "mutation", "EIO", "ENOSPC", "unknown"] as const) {
+      it.skipIf(!enabled || (process.platform === "win32" && (mode === "symlink" || mode === "fifo")))(`#470 prior-generation ${mode}: review only proven not-live evidence; retain canonical`, async () => {
+        const { op, files } = await fixture(), seal = await sealPreparedArtifacts(db, driver, op, files), canonical = path.join(dir, "canonical");
+        await publishSealedArtifacts(db, driver, op, files, seal!, canonical);
+        await q(sql`UPDATE photo_operations SET lease_until_ms=0 WHERE id=${op.id} RETURNING id`);
+        const claim = await tx(() => claimExistingOperation(driver, op.id, 300_000));
+        if (claim.kind !== "owned") throw new Error("fixture reclaim failed");
+        const generationDir = await createGenerationDirectory(claim.op, canonical);
+        const nextFiles = { main: path.join(generationDir, "main.webp"), thumb: path.join(generationDir, "thumb.webp") };
+        await writeFile(nextFiles.main, "synthetic-main"); await writeFile(nextFiles.thumb, "synthetic-thumb");
+        const nextSeal = await sealPreparedArtifacts(db, driver, claim.op, nextFiles);
+        const before = await lstat(path.join(canonical, op.mainKey), { bigint: true });
+        if (mode === "symlink" || mode === "fifo") {
+          await rename(files.main, files.main + ".retained");
+          if (mode === "symlink") await symlink(files.main + ".retained", files.main);
+          else expect(spawnSync("mkfifo", [files.main]).status).toBe(0);
+        } else if (mode === "mutation") {
+          audit.afterRead = async name => { if (name !== files.main) return; audit.afterRead = undefined; await writeFile(files.main, "mutated-evidence"); };
+        } else {
+          audit.afterStat = async name => { if (name !== files.main) return; audit.afterStat = undefined; throw Object.assign(new Error("proof I/O failure"), { code: mode === "unknown" ? "EUNKNOWN" : mode }); };
+        }
+        const attempt = publishSealedArtifacts(db, driver, claim.op, nextFiles, nextSeal!, canonical);
+        if (mode === "symlink" || mode === "fifo" || mode === "mutation") {
+          await expect(attempt).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+          expect((await q(sql`SELECT state FROM photo_operations WHERE id=${op.id}`))[0].state).toBe("review");
+        } else {
+          await expect(attempt).rejects.toMatchObject({ code: mode === "unknown" ? "EUNKNOWN" : mode });
+          expect((await q(sql`SELECT state FROM photo_operations WHERE id=${op.id}`))[0].state).toBe("sealed");
+        }
+        expect((await lstat(path.join(canonical, op.mainKey), { bigint: true })).ino).toBe(before.ino);
+      });
+    }
+
     it.skipIf(!enabled)("VULNERABILITY REPRODUCED F2: replaced A still links before its DB ownership can be rejected", async () => {
       const { op, files } = await fixture(), seal = await sealPreparedArtifacts(db, driver, op, files);
       await q(sql`UPDATE photo_operations SET lease_until_ms=0 WHERE id=${op.id} RETURNING id`);

@@ -158,7 +158,13 @@ async function ownSealedGenerations(db: DbClient, driver: OwnershipDriver, op: O
     const seal = { sha256: String(row[artifact + "_sha256"]), dev: String(row[artifact + "_dev"]), ino: String(row[artifact + "_ino"]) };
     let live: FileProof | null = null;
     try { live = await ownedPhotoArtifactProof(generation === op.generation ? currentFile : path.join(photoOperationPrivateRoot(canonicalRoot), op.id, String(generation), artifact + ".webp")); }
-    catch (error: any) { if (error?.code !== "ENOENT") throw error; }
+    catch (error: any) {
+      // These proofs establish that the private name cannot authenticate a live sealed regular inode.
+      // Resource/DB/unknown failures remain errors; they must not become permanent provenance decisions.
+      const notLive = error?.code === "ENOENT" || error?.code === "ELOOP" ||
+        (error instanceof Error && (error.message === "PHOTO_ARTIFACT_NOT_REGULAR" || error.message === "PHOTO_ARTIFACT_CHANGED"));
+      if (!notLive) throw error;
+    }
     generations.push({ seal, live: live?.sha256 === seal.sha256 ? live : null });
   }
   return generations;
@@ -170,6 +176,9 @@ async function ownSealedGenerations(db: DbClient, driver: OwnershipDriver, op: O
  * of this operation with the current sealed bytes. Anything else moves the operation to review; nothing is replaced.
  */
 export async function publishSealedArtifacts(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, files: { main: string; thumb: string }, seal: { main: FileProof; thumb: FileProof }, canonicalRoot = productPhotoStaticRoot) {
+  // Main and thumb may come from different authenticated generations after a partial crash. Each must
+  // independently match this operation's live recorded inode AND the current artifact's sealed bytes;
+  // this proves per-artifact provenance, not a single-generation pair or publication authority (F2).
   for (const [artifact, file, proof, key] of [["main", files.main, seal.main, op.mainKey], ["thumb", files.thumb, seal.thumb, op.thumbKey]] as const) {
     const current = await ownedPhotoArtifactProof(file);
     if (current.sha256 !== proof.sha256 || current.ino !== proof.ino || current.dev !== proof.dev) {
