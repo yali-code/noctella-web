@@ -100,7 +100,13 @@ describe.skipIf(!postgresTestConfigured)("disposable PostgreSQL: Etsy 0039 with 
       photoFirst = await catalog(h);
     });
     expect(photoFirst).toEqual(etsyFirst);
-    expect(etsyFirst!.columns.filter((c: any) => c.table_name === "products" && String(c.column_name).startsWith("etsy_")).length).toBe(23);
+    // 0038 already has legacy etsy_ columns: assert the 23 columns declared by 0039, not the overall etsy_ count.
+    const introduced = [...ETSY_0039.matchAll(/ALTER TABLE products ADD COLUMN IF NOT EXISTS (etsy_[a-z0-9_]+)/g)].map((m) => m[1]);
+    expect(introduced.length).toBe(23);
+    expect(new Set(introduced).size).toBe(23);
+    const productColumns = etsyFirst!.columns.filter((c: any) => c.table_name === "products");
+    for (const name of introduced)
+      expect(productColumns.find((c: any) => c.column_name === name)?.is_nullable).toBe("YES");
   });
 
   it("re-applying 0039, 0040 and 0041 is idempotent: no error, catalog and data unchanged", () => withFresh(async (h) => {
