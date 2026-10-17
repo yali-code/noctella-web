@@ -27,7 +27,17 @@ export type OperationClaim = { kind: "owned"; op: OwnedOperation } | { kind: "co
 export interface OperationSubject { kind: "product_upload" | "ai_finalize"; subjectType: string; subjectId: string; targetPhotoId: string; mainKey: string; thumbKey: string; inputSha256: string }
 export type FileProof = { sha256: string; bytes: number; dev: string; ino: string };
 
-export const ownershipDriver = (): OwnershipDriver => (((process.env.DATABASE_DRIVER as string) || "sqlite") === "postgres" ? "postgres" : "sqlite");
+/**
+ * SQL dialect of the ownership tables for the configured runtime driver (db/config.ts): both PostgreSQL drivers
+ * ("postgres", "supabase-postgres") are asynchronous PostgreSQL; "sqlite" (and the SQLite-backed "test-memory"
+ * test driver, NODE_ENV=test only) is synchronous SQLite. Anything else is refused instead of guessing SQLite (#458).
+ */
+export function ownershipDriver(env: NodeJS.ProcessEnv = process.env): OwnershipDriver {
+  const driver = env.DATABASE_DRIVER ?? "sqlite";
+  if (driver === "postgres" || driver === "supabase-postgres") return "postgres";
+  if (driver === "sqlite" || (driver === "test-memory" && env.NODE_ENV === "test")) return "sqlite";
+  throw new Error(`UNSUPPORTED_PHOTO_OWNERSHIP_DRIVER:${driver}`);
+}
 export const nowMs = (driver: OwnershipDriver): SQL => sql.raw(driver === "sqlite" ? "CAST(unixepoch('subsec') * 1000 AS INTEGER)" : "(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint");
 export const uniqueViolation = (error: any) => error?.code === "23505" || /UNIQUE constraint failed|SQLITE_CONSTRAINT/.test(String(error?.message ?? error?.code ?? ""));
 const rowLock = (driver: OwnershipDriver) => sql.raw(driver === "postgres" ? " FOR UPDATE" : "");
@@ -43,6 +53,12 @@ export function inOwnershipTransaction<T>(db: DbClient, driver: OwnershipDriver,
       result = step.value;
     }, { behavior: "immediate" });
     if (typeof run === "function") run();
+    else if (typeof run?.then === "function") {
+      // An asynchronous (PostgreSQL) client on the synchronous path: fail loudly, never return an unset result or
+      // leave its rejection unhandled (#458).
+      run.then(undefined, () => undefined);
+      throw new Error("PHOTO_OWNERSHIP_DRIVER_MISMATCH: asynchronous database client on the SQLite ownership path");
+    }
     return result;
   }
   return (db as any).transaction(async (tx: any) => {

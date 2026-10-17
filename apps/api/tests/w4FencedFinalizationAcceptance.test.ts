@@ -182,6 +182,36 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     expect(await counts(productId)).toEqual([2, 2]);
   });
 
+  it.skipIf(!enabled)("#458: with no explicit driver, W2 and W4 route from DATABASE_DRIVER (incl. supabase-postgres) and commit", async () => {
+    const runtimeValues = driver === "postgres" ? ["postgres", "supabase-postgres"] : [undefined, "sqlite"];
+    const before = process.env.DATABASE_DRIVER, beforeSupabaseUrl = process.env.SUPABASE_DATABASE_URL;
+    try {
+      for (const value of runtimeValues) {
+        if (value === undefined) delete process.env.DATABASE_DRIVER; else process.env.DATABASE_DRIVER = value;
+        // Runtime config validation requires a URL for this driver; point it at the same disposable test database
+        // (queries still use the harness `db`; no Supabase access).
+        if (value === "supabase-postgres") process.env.SUPABASE_DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
+        const { productId, intakeId, stagedIds } = await appliedIntake(1);
+        expect((await finalizeAiIntakePhotos(db, intakeId, {}, "admin-finalizer", deps, {})).created).toBe(true);
+        expect((await ops(stagedIds)).map((r) => [r.kind, r.state])).toEqual([["ai_finalize", "committed"]]);
+        expect(await counts(productId)).toEqual([1, 1]);
+        const w2Product = await product(), workDir = await mkdtemp(path.join(os.tmpdir(), "noctella-w2-route-"));
+        try {
+          const bytes = await jpeg(20, 180);
+          await writeFile(path.join(workDir, "input"), bytes);
+          const file = { path: path.join(workDir, "input"), workDir, size: bytes.length, mimetype: "image/jpeg", signal: new AbortController().signal };
+          const token = `route-${String(value)}-${randomUUID().slice(0, 12)}`;
+          const photo = await uploadFencedProductPhoto(db, { productId: w2Product, actorId: "actor-1", operationToken: token, sha256: await digestW2StagedInput(file, 10 * 1024 * 1024), altText: "", file });
+          expect(photo.productId).toBe(w2Product);
+          expect((await ops([token])).map((r) => [r.kind, r.state])).toEqual([["product_upload", "committed"]]);
+        } finally { await rm(workDir, { recursive: true, force: true }); }
+      }
+    } finally {
+      if (before === undefined) delete process.env.DATABASE_DRIVER; else process.env.DATABASE_DRIVER = before;
+      if (beforeSupabaseUrl === undefined) delete process.env.SUPABASE_DATABASE_URL; else process.env.SUPABASE_DATABASE_URL = beforeSupabaseUrl;
+    }
+  });
+
   it.skipIf(!enabled)("W2 and W4 share one authority: both crashes are reported together and both recover", async () => {
     const { productId: w4Product, intakeId, stagedIds } = await appliedIntake(1);
     const w2Product = await product();
