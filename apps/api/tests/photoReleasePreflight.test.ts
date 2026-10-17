@@ -18,8 +18,12 @@ describe("photo release preflight", () => {
     expect(check(result, "migrations.unique-numbers").status).toBe("PASS");
     expect(check(result, "migrations.0040").status).toBe("PASS");
     expect(check(result, "migrations.0041").status).toBe("PASS");
-    expect(check(result, "migrations.gaps")).toMatchObject({ status: "WARN" });
-    expect(check(result, "migrations.gaps").detail).toContain("0039");
+    // The real inventory must report exactly its missing numbers: 0039 while the Etsy migration is unmerged on this
+    // stack, nothing once it lands (#424 migration ordering). Never hard-code the gap.
+    const real = readdirSync(path.resolve(__dirname, "../src/db/postgres-migrations")).filter((f) => f.endsWith(".sql")).map((f) => f.slice(0, 4));
+    const missing = Array.from({ length: Math.max(...real.map(Number)) }, (_, i) => String(i + 1).padStart(4, "0")).filter((n) => !real.includes(n));
+    expect(check(result, "migrations.gaps").status).toBe(missing.length ? "WARN" : "PASS");
+    for (const n of missing) expect(check(result, "migrations.gaps").detail).toContain(n);
     expect(check(result, "migrations.0042-w11")).toMatchObject({ status: "PASS" });
     expect(check(result, "flag.fencing").detail).toContain("OFF");
     expect(check(result, "storage.private-operations").status).toBe("PASS");
@@ -43,6 +47,17 @@ describe("photo release preflight", () => {
     const result = runPhotoReleasePreflight({ env: { NODE_ENV: "production", AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED: "true" }, canonicalRoot: path.join(root, "photos"), migrationsDir: migrations(["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql", "0042_photo_derivative_operations.sql"]) });
     expect(check(result, "migrations.0042-w11")).toMatchObject({ status: "WARN" });
     expect(check(result, "flag.w3-original-source").status).toBe("WARN");
+  });
+
+  it("after the Etsy 0039 merge the inventory is contiguous: no gap, 0040/0041 still required, 0042 still unregistered", () => {
+    const root = temp(); mkdirSync(path.join(root, "photos"));
+    const names = Array.from({ length: 41 }, (_, i) => `${String(i + 1).padStart(4, "0")}_m.sql`)
+      .map((n) => n.startsWith("0039") ? "0039_etsy_listing_form_parity.sql" : n.startsWith("0040") ? "0040_photo_operation_ownership.sql" : n.startsWith("0041") ? "0041_photo_w2_upload_intents.sql" : n);
+    const result = runPhotoReleasePreflight({ env: {}, canonicalRoot: path.join(root, "photos"), migrationsDir: migrations(names) });
+    expect(check(result, "migrations.gaps")).toMatchObject({ status: "PASS", detail: "no gaps" });
+    expect(check(result, "migrations.unique-numbers").status).toBe("PASS");
+    expect([check(result, "migrations.0040").status, check(result, "migrations.0041").status]).toEqual(["PASS", "PASS"]);
+    expect(check(result, "migrations.0042-w11").status).toBe("PASS");
   });
 
   it("reports low free space and a missing canonical parent", () => {
