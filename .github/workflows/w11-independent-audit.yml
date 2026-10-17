@@ -1,0 +1,68 @@
+﻿name: Independent W11 adversarial evidence
+on:
+  pull_request:
+    branches: [fix/photo-ownership-driver-routing-458]
+    paths:
+      - apps/api/tests/w11IndependentAdversarialEvidence.test.ts
+      - .github/workflows/w11-independent-audit.yml
+permissions:
+  contents: read
+jobs:
+  disposable-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_test
+          POSTGRES_PASSWORD: noctella_test_password
+          POSTGRES_DB: noctella_w11_audit_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U noctella_test -d noctella_w11_audit_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_test:noctella_test_password@127.0.0.1:5432/noctella_w11_audit_test
+      W2_LIVE_REQUIRE_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build -w packages/shared
+      - name: Independent reproductions and unchanged targeted regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w11-audit-evidence"
+          git rev-parse HEAD | tee "$RUNNER_TEMP/w11-audit-evidence/head-sha.txt"
+          npm exec -w apps/api -- vitest run tests/w11IndependentAdversarialEvidence.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/instagramMediaPreparation.test.ts tests/photoOwnershipDriverRouting.test.ts tests/aiIntakeOriginalSourceStaging.test.ts --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/w11-audit-evidence/tests.txt"
+          node --test scripts/photo-upload-linux/fencing-blocked.test.mjs scripts/photo-upload-linux/fencing-on-gates.test.mjs 2>&1 | tee "$RUNNER_TEMP/w11-audit-evidence/blocked.txt"
+          npm run typecheck -w apps/api
+      - name: Existing real ext4 disk-budget and ENOSPC acceptance (not W11 power-loss proof)
+        shell: bash
+        env:
+          NOCTELLA_DISK_BUDGET_EVIDENCE_DIR: ${{ runner.temp }}/w11-audit-evidence/disk
+        run: |
+          set -euo pipefail
+          mkdir -p "$NOCTELLA_DISK_BUDGET_EVIDENCE_DIR"
+          IMAGE="$RUNNER_TEMP/w11-audit-budget.img"
+          MOUNT="$RUNNER_TEMP/w11-audit-budget-mount"
+          dd if=/dev/zero of="$IMAGE" bs=1M count=64 status=none
+          mkfs.ext4 -q -F -m 0 -N 4096 "$IMAGE"
+          sudo mkdir -p "$MOUNT"
+          sudo mount -o loop "$IMAGE" "$MOUNT"
+          trap 'sudo umount "$MOUNT" || true' EXIT
+          sudo chown "$(id -u):$(id -g)" "$MOUNT"
+          TMPDIR="$MOUNT" NOCTELLA_DISK_BUDGET_ENOSPC=1 node --import tsx --test scripts/photo-disk-budget/budget.test.cjs 2>&1 | tee "$NOCTELLA_DISK_BUDGET_EVIDENCE_DIR/tests.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-w11-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/w11-audit-evidence
