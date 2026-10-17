@@ -6,6 +6,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { DbClient } from "../db/client";
 import { PhotoUploadError } from "./photoUploadAdmission";
 import { productPhotoStaticRoot } from "./photoStorage";
+import { ownedPhotoArtifactProof } from "./ownedPhotoArtifactProof";
 
 /**
  * FAZ A / #424: the shared generation-fenced photo-operation authority used by the W2 product upload owner and the
@@ -139,7 +140,7 @@ export async function createGenerationDirectory(op: OwnedOperation, canonicalRoo
 /** Seals prepared files under the fence; false (nothing published) if this generation lost ownership. */
 export async function sealPreparedArtifacts(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, files: { main: string; thumb: string }) {
   const sealId = randomUUID();
-  const main = await fileProof(files.main), thumb = await fileProof(files.thumb);
+  const main = await ownedPhotoArtifactProof(files.main), thumb = await ownedPhotoArtifactProof(files.thumb);
   const sealed = await inOwnershipTransaction(db, driver, () => sealSteps(driver, op, sealId, main, thumb));
   return sealed ? { sealId, main, thumb } : null;
 }
@@ -151,7 +152,7 @@ export async function sealPreparedArtifacts(db: DbClient, driver: OwnershipDrive
  */
 export async function publishSealedArtifacts(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, files: { main: string; thumb: string }, seal: { main: FileProof; thumb: FileProof }, canonicalRoot = productPhotoStaticRoot) {
   for (const [file, proof, key] of [[files.main, seal.main, op.mainKey], [files.thumb, seal.thumb, op.thumbKey]] as const) {
-    const current = await fileProof(file);
+    const current = await ownedPhotoArtifactProof(file);
     if (current.sha256 !== proof.sha256 || current.ino !== proof.ino || current.dev !== proof.dev) {
       await inOwnershipTransaction(db, driver, () => reviewSteps(driver, op, "sealed artifact changed before publication"));
       throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Sealed photo artifact changed before publication");
@@ -161,7 +162,7 @@ export async function publishSealedArtifacts(db: DbClient, driver: OwnershipDriv
     let linked = false;
     try { await link(file, destination); linked = true; }
     catch (error: any) { if (error?.code !== "EEXIST") throw error; }
-    const published = await fileProof(destination);
+    const published = await ownedPhotoArtifactProof(destination);
     if (published.sha256 !== proof.sha256 || (linked && (published.ino !== proof.ino || published.dev !== proof.dev))) {
       await inOwnershipTransaction(db, driver, () => reviewSteps(driver, op, linked ? "published inode differs from the seal" : "canonical key exists with different bytes"));
       throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Canonical photo key does not match the sealed artifact");
