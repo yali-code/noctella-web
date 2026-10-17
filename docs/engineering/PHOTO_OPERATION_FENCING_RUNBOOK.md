@@ -52,8 +52,13 @@ ORDER BY created_ms;
    `PRODUCT_PHOTO_DIR`. Unknown instances mean STOP.
 2. **Migration sequencing.** 0040 (ownership tables) and 0041 (W2 intents) are additive. SQLite creates them via
    `ensureSchema` at startup, so every deploy is a schema change. PostgreSQL applies them after `main`'s latest
-   migration. Resolve the Etsy 0039 / photo 0040 ordering on `main`; never renumber an applied file. Back up first
-   (`db:backup`, `photos:backup`).
+   migration. Resolve the Etsy 0039 / photo 0040 ordering on `main`; never renumber an applied file. Back up first:
+   - For `DATABASE_DRIVER=sqlite`, run and verify `db:backup`, `db:restore-verify`, and `photos:backup`.
+   - For `DATABASE_DRIVER=postgres` or `supabase-postgres`, the built-in `db:backup` and
+     `db:restore-verify` cover **SQLite only** and MUST NOT be treated as proof of PostgreSQL recovery.
+     Obtain owner-approved, consistent PostgreSQL-native backup **and restore verification** evidence,
+     together with `photos:backup` and compatible point-in-time recovery evidence. STOP before a real
+     migration or deployment if the PostgreSQL backup/recovery method is unverified.
 3. **Rollback limitations.**
    - Turning fencing OFF returns W2/W4 to the legacy path at once.
    - Committed photos are ordinary rows and files.

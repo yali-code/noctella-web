@@ -84,6 +84,30 @@ describe("photo release preflight", () => {
     expect(readdirSync(parent)).toEqual(["photos"]);
   });
 
+  it.each(["postgres", "supabase-postgres"])("does not mislabel SQLite backup commands as a database backup for %s", (driver) => {
+    const root = temp(); mkdirSync(path.join(root, "photos"));
+    const result = runPhotoReleasePreflight({ env: { DATABASE_DRIVER: driver }, canonicalRoot: path.join(root, "photos") });
+    expect(check(result, "database.driver").status).toBe("PASS");
+    expect(check(result, "backups")).toMatchObject({ status: "MANUAL" });
+    expect(check(result, "backups").detail).toContain("SQLite-only");
+    expect(check(result, "backups").detail).toContain("PostgreSQL-native backup and restore evidence");
+    expect(check(result, "backups").detail).toContain("photos:backup");
+    expect(result.status).toBe("WARN"); // manual gate is never completed offline
+    expect(readdirSync(root)).toEqual(["photos"]);
+  });
+
+  it("keeps the established SQLite backup instructions unchanged and refuses unknown drivers", () => {
+    const root = temp(); mkdirSync(path.join(root, "photos"));
+    const sqlite = runPhotoReleasePreflight({ env: { DATABASE_DRIVER: "sqlite" }, canonicalRoot: path.join(root, "photos") });
+    expect(check(sqlite, "database.driver").status).toBe("PASS");
+    expect(check(sqlite, "backups")).toMatchObject({ status: "MANUAL", detail: "run db:backup, photos:backup and db:restore-verify before deploying; record hashes" });
+    const unknown = runPhotoReleasePreflight({ env: { DATABASE_DRIVER: "unrecognized-db" }, canonicalRoot: path.join(root, "photos") });
+    expect(check(unknown, "database.driver").status).toBe("FAIL");
+    expect(unknown.status).toBe("FAIL");
+    expect(check(unknown, "backups").detail).not.toContain("db:restore-verify");
+    expect(readdirSync(root)).toEqual(["photos"]);
+  });
+
   it("reports low free space and a missing canonical parent", () => {
     const root = temp();
     const low = runPhotoReleasePreflight({ env: {}, canonicalRoot: path.join(root, "photos"), statfs: () => ({ bavail: 10, bsize: 4096 }) });
