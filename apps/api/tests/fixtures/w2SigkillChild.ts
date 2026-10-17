@@ -7,7 +7,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 async function main() {
-  const stage = process.env.F5_KILL_STAGE as "afterSeal" | "afterPublish" | "afterCommit";
+  const stage = process.env.F5_KILL_STAGE as "beforeSeal" | "afterSeal" | "afterPublish" | "afterCommit";
   const { db } = await import("../../src/db/client");
   const { uploadFencedProductPhoto } = await import("../../src/services/w2FencedProductPhotoOwner");
   const { digestW2StagedInput } = await import("../../src/services/w2StagedInputDigest");
@@ -16,10 +16,14 @@ async function main() {
   await writeFile(path.join(workDir, "input"), bytes);
   const file = { path: path.join(workDir, "input"), workDir, size: bytes.length, mimetype: "image/jpeg", signal: new AbortController().signal };
   const park = () => { process.send?.(`at:${stage}`); return new Promise<never>(() => undefined); };
+  if (stage === "beforeSeal") {
+    const { stagedProductPhotoStorage } = await import("../../src/services/stagedProductPhotoStorage");
+    stagedProductPhotoStorage.prepareFencedProductPhoto = park; // test child only: claimed/private directory exists, nothing sealed
+  }
   await uploadFencedProductPhoto(db as any, {
     productId: process.env.F5_PRODUCT_ID!, actorId: "actor-1", operationToken: process.env.F5_TOKEN!,
     sha256: await digestW2StagedInput(file, 10 * 1024 * 1024), altText: "", file,
-  }, { driver: "sqlite", hooks: { [stage]: park } });
+  }, { driver: process.env.F5_DRIVER === "postgres" ? "postgres" : "sqlite", hooks: stage === "beforeSeal" ? {} : { [stage]: park } });
   process.send?.("finished-without-parking");
 }
 main().catch((error) => { process.send?.(`error:${String(error?.message ?? error)}`); process.exitCode = 2; });

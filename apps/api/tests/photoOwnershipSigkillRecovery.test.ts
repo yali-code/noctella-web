@@ -83,6 +83,19 @@ const effects = (token: string) => {
 const exists = (file: string) => lstat(file).then(() => true, () => false);
 const expire = (token: string) => all(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE subject_id = ${token} AND state IN ('preparing', 'sealed') RETURNING id`);
 
+it("SIGKILL before sealing: a preparing claim recovers without canonical adoption", async () => {
+  const token = `f5-before-seal-${randomUUID().slice(0, 12)}`;
+  await killAt("beforeSeal", token);
+  const killed = op(token);
+  expect(killed.state).toBe("preparing");
+  expect([await exists(path.join(photos(), killed.main_key)), await exists(path.join(photos(), killed.thumb_key))]).toEqual([false, false]);
+  expect(effects(token)).toEqual([0, 0]);
+  expire(token);
+  await recover(token);
+  expect([op(token).state, Number(op(token).generation)]).toEqual(["committed", 2]);
+  expect(effects(token)).toEqual([1, 1]);
+});
+
 it("SIGKILL after sealing: nothing published or committed; retry after lease expiry commits exactly once", async () => {
   const token = `f5-seal-${randomUUID().slice(0, 12)}`;
   await killAt("afterSeal", token);

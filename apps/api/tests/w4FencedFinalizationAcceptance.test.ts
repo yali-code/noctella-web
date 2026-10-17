@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { sql, type SQL } from "drizzle-orm";
@@ -159,6 +159,26 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     const [row] = await ops(stagedIds);
     expect([row.state, Number(row.generation)]).toEqual(["committed", 2]);
     expect(await counts(productId)).toEqual([1, 1]);
+  });
+
+  it.skipIf(!enabled).each(["main", "thumb"] as const)("F3: W4 rejects foreign identical-byte %s canonical inode without finalizing", async (artifact) => {
+    const { productId, intakeId, stagedIds } = await appliedIntake(1);
+    let destination = "", foreignInode = "", foreignBytes: Buffer;
+    await expect(finalize(intakeId, { hooks: { afterSeal: async () => {
+      const [record] = await q(sql`SELECT id, generation, main_key, thumb_key FROM photo_operations WHERE subject_id = ${stagedIds[0]}`);
+      const source = path.join(root, ".product-photo-operations", record.id, String(record.generation), artifact + ".webp");
+      destination = path.join(root, "photos", record[artifact + "_key"]);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await copyFile(source, destination);
+      foreignBytes = await readFile(destination);
+      foreignInode = String((await lstat(destination, { bigint: true })).ino);
+      expect(foreignInode).not.toBe(String((await lstat(source, { bigint: true })).ino));
+    } } })).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+    expect((await ops(stagedIds))[0].state).toBe("review");
+    expect(await counts(productId)).toEqual([0, 0]);
+    expect(await intakeStatus(intakeId)).toBe(AiProductIntakeStatus.Applied);
+    expect(String((await lstat(destination, { bigint: true })).ino)).toBe(foreignInode);
+    expect(await readFile(destination)).toEqual(foreignBytes!);
   });
 
   it.skipIf(!enabled)("a changed staged source never reuses an existing operation (409, nothing committed)", async () => {

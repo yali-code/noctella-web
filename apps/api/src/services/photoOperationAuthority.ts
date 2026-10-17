@@ -7,6 +7,7 @@ import type { DbClient } from "../db/client";
 import { PhotoUploadError } from "./photoUploadAdmission";
 import { productPhotoStaticRoot } from "./photoStorage";
 import { ownedPhotoArtifactProof } from "./ownedPhotoArtifactProof";
+import { classifyExistingCanonical, type SealedGeneration } from "./photoPublicationRecoveryPolicy";
 
 /**
  * FAZ A / #424: the shared generation-fenced photo-operation authority used by the W2 product upload owner and the
@@ -145,13 +146,31 @@ export async function sealPreparedArtifacts(db: DbClient, driver: OwnershipDrive
   return sealed ? { sealId, main, thumb } : null;
 }
 
+/** Reads only this operation's durable seals; a live private inode prevents inode-number reuse. */
+async function ownSealedGenerations(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, artifact: "main" | "thumb", currentFile: string, canonicalRoot: string): Promise<SealedGeneration[]> {
+  const rows = await inOwnershipTransaction(db, driver, function* (): Generator<SQL, Rows, Rows> {
+    return yield sql`SELECT generation, main_sha256, thumb_sha256, main_dev, main_ino, thumb_dev, thumb_ino FROM photo_operation_artifacts WHERE operation_id = ${op.id}`;
+  });
+  const generations: SealedGeneration[] = [];
+  for (const row of rows) {
+    const generation = Number(row.generation);
+    if (!Number.isSafeInteger(generation) || generation < 1) throw new Error("PHOTO_ARTIFACT_GENERATION_INVALID");
+    const seal = { sha256: String(row[artifact + "_sha256"]), dev: String(row[artifact + "_dev"]), ino: String(row[artifact + "_ino"]) };
+    let live: FileProof | null = null;
+    try { live = await ownedPhotoArtifactProof(generation === op.generation ? currentFile : path.join(photoOperationPrivateRoot(canonicalRoot), op.id, String(generation), artifact + ".webp")); }
+    catch (error: any) { if (error?.code !== "ENOENT") throw error; }
+    generations.push({ seal, live: live?.sha256 === seal.sha256 ? live : null });
+  }
+  return generations;
+}
+
 /**
  * Re-verifies the sealed private files, then publishes them with link() to the operation's canonical keys. The
- * published name must afterwards be exactly the sealed inode, or a pre-existing regular file with the sealed bytes
- * (an earlier generation of this operation). Anything else moves the operation to review; nothing is replaced.
+ * published name must afterwards be exactly the sealed inode, or an authenticated still-live sealed inode
+ * of this operation with the current sealed bytes. Anything else moves the operation to review; nothing is replaced.
  */
 export async function publishSealedArtifacts(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, files: { main: string; thumb: string }, seal: { main: FileProof; thumb: FileProof }, canonicalRoot = productPhotoStaticRoot) {
-  for (const [file, proof, key] of [[files.main, seal.main, op.mainKey], [files.thumb, seal.thumb, op.thumbKey]] as const) {
+  for (const [artifact, file, proof, key] of [["main", files.main, seal.main, op.mainKey], ["thumb", files.thumb, seal.thumb, op.thumbKey]] as const) {
     const current = await ownedPhotoArtifactProof(file);
     if (current.sha256 !== proof.sha256 || current.ino !== proof.ino || current.dev !== proof.dev) {
       await inOwnershipTransaction(db, driver, () => reviewSteps(driver, op, "sealed artifact changed before publication"));
@@ -163,8 +182,15 @@ export async function publishSealedArtifacts(db: DbClient, driver: OwnershipDriv
     try { await link(file, destination); linked = true; }
     catch (error: any) { if (error?.code !== "EEXIST") throw error; }
     const published = await ownedPhotoArtifactProof(destination);
-    if (published.sha256 !== proof.sha256 || (linked && (published.ino !== proof.ino || published.dev !== proof.dev))) {
-      await inOwnershipTransaction(db, driver, () => reviewSteps(driver, op, linked ? "published inode differs from the seal" : "canonical key exists with different bytes"));
+    const decision = linked ? null : classifyExistingCanonical(published, proof, await ownSealedGenerations(db, driver, op, artifact, file, canonicalRoot));
+    if (published.sha256 !== proof.sha256 || (linked ? (published.ino !== proof.ino || published.dev !== proof.dev) : decision !== "ADOPT_OWN_GENERATION")) {
+      // A committed successor may have removed its private names. Never re-adopt or mutate on its behalf.
+      const [latest] = await inOwnershipTransaction(db, driver, function* (): Generator<SQL, Rows, Rows> {
+        return yield sql`SELECT generation, state FROM photo_operations WHERE id = ${op.id}`;
+      });
+      if (latest?.state === "committed" && Number(latest.generation) !== op.generation)
+        throw new PhotoUploadError(503, "PHOTO_OPERATION_FENCE_LOST", "Photo operation ownership was lost before publication");
+      await inOwnershipTransaction(db, driver, () => reviewSteps(driver, op, linked ? "published inode differs from the seal" : String(decision)));
       throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Canonical photo key does not match the sealed artifact");
     }
   }
