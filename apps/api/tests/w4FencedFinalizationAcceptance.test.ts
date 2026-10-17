@@ -184,10 +184,13 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
 
   it.skipIf(!enabled)("#458: with no explicit driver, W2 and W4 route from DATABASE_DRIVER (incl. supabase-postgres) and commit", async () => {
     const runtimeValues = driver === "postgres" ? ["postgres", "supabase-postgres"] : [undefined, "sqlite"];
-    const before = process.env.DATABASE_DRIVER;
+    const before = process.env.DATABASE_DRIVER, beforeSupabaseUrl = process.env.SUPABASE_DATABASE_URL;
     try {
       for (const value of runtimeValues) {
         if (value === undefined) delete process.env.DATABASE_DRIVER; else process.env.DATABASE_DRIVER = value;
+        // Runtime config validation requires a URL for this driver; point it at the same disposable test database
+        // (queries still use the harness `db`; no Supabase access).
+        if (value === "supabase-postgres") process.env.SUPABASE_DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
         const { productId, intakeId, stagedIds } = await appliedIntake(1);
         expect((await finalizeAiIntakePhotos(db, intakeId, {}, "admin-finalizer", deps, {})).created).toBe(true);
         expect((await ops(stagedIds)).map((r) => [r.kind, r.state])).toEqual([["ai_finalize", "committed"]]);
@@ -205,6 +208,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       }
     } finally {
       if (before === undefined) delete process.env.DATABASE_DRIVER; else process.env.DATABASE_DRIVER = before;
+      if (beforeSupabaseUrl === undefined) delete process.env.SUPABASE_DATABASE_URL; else process.env.SUPABASE_DATABASE_URL = beforeSupabaseUrl;
     }
   });
 
