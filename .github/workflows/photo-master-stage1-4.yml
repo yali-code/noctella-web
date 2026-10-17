@@ -359,6 +359,8 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      # Child processes (F5 SIGKILL fixture) resolve @noctella/shared through Node, not the vitest alias.
+      - run: npm run build -w packages/shared
       - name: Production router injects the real fenced owner (supplementary wiring check)
         run: node scripts/photo-operation-identity/live-adoption-gate.cjs
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)

@@ -22,7 +22,7 @@ const { root } = vi.hoisted(() => {
 
 import { createTestDb } from "./testDb";
 import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
-import { fileProof } from "../src/services/photoOperationAuthority";
+import { fileProof, photoOperationPrivateRoot } from "../src/services/photoOperationAuthority";
 import { uploadFencedProductPhoto } from "../src/services/w2FencedProductPhotoOwner";
 import { digestW2StagedInput } from "../src/services/w2StagedInputDigest";
 import { assertSameCanonicalRoot, classifyExistingCanonical, classifyPhotoOperationFailure, instagramErrorFor } from "../src/services/photoPublicationRecoveryPolicy";
@@ -35,21 +35,32 @@ const id = (sha: string, dev: string, ino: string) => ({ sha256: sha, dev, ino }
 
 describe("F3 classifyExistingCanonical", () => {
   const seal = id("a".repeat(64), "1", "300"), prior = id("a".repeat(64), "1", "200");
-  it("adopts only this operation's own inode with the current seal's bytes", () => {
-    expect(classifyExistingCanonical(seal, seal, [prior, seal])).toBe("ADOPT_OWN_GENERATION"); // just linked
-    expect(classifyExistingCanonical(prior, seal, [prior, seal])).toBe("ADOPT_OWN_GENERATION"); // earlier generation's publication
+  const live = (s: ReturnType<typeof id>) => ({ seal: s, live: { dev: s.dev, ino: s.ino } });
+  const gone = (s: ReturnType<typeof id>) => ({ seal: s, live: null });
+  it("adopts only this operation's own live inode with the current seal's bytes", () => {
+    expect(classifyExistingCanonical(seal, seal, [live(prior), live(seal)])).toBe("ADOPT_OWN_GENERATION"); // just linked
+    expect(classifyExistingCanonical(prior, seal, [live(prior), gone(seal)])).toBe("ADOPT_OWN_GENERATION"); // earlier generation's publication
   });
   it("never adopts equal bytes from a foreign inode (or another device with the same inode number)", () => {
-    expect(classifyExistingCanonical(id("a".repeat(64), "1", "999"), seal, [prior, seal])).toBe("REVIEW_FOREIGN_SAME_BYTES");
-    expect(classifyExistingCanonical(id("a".repeat(64), "2", "200"), seal, [prior, seal])).toBe("REVIEW_FOREIGN_SAME_BYTES");
+    expect(classifyExistingCanonical(id("a".repeat(64), "1", "999"), seal, [live(prior), live(seal)])).toBe("REVIEW_FOREIGN_SAME_BYTES");
+    expect(classifyExistingCanonical(id("a".repeat(64), "2", "200"), seal, [live(prior), live(seal)])).toBe("REVIEW_FOREIGN_SAME_BYTES");
+  });
+  it("a recorded inode number whose private name is gone is not proof: the number may have been reused (ext4)", () => {
+    // The committing generation's private names are unlinked after commit; an unrelated same-bytes file can then
+    // receive the very same inode number. Without liveness this was misclassified as ADOPT_OWN_GENERATION.
+    expect(classifyExistingCanonical(seal, seal, [live(prior), gone(seal)])).toBe("REVIEW_FOREIGN_SAME_BYTES");
+    expect(classifyExistingCanonical(prior, seal, [gone(prior), gone(seal)])).toBe("REVIEW_FOREIGN_SAME_BYTES");
+  });
+  it("a private name that now holds a different inode is not proof either", () => {
+    expect(classifyExistingCanonical(prior, seal, [{ seal: prior, live: { dev: "1", ino: "201" } }, live(seal)])).toBe("REVIEW_FOREIGN_SAME_BYTES");
   });
   it("reviews different bytes, distinguishing an own earlier generation (non-deterministic render) from foreign", () => {
     const olderRender = id("b".repeat(64), "1", "200");
-    expect(classifyExistingCanonical(olderRender, seal, [olderRender, seal])).toBe("REVIEW_OWN_GENERATION_DIFFERENT_BYTES");
-    expect(classifyExistingCanonical(id("c".repeat(64), "1", "777"), seal, [prior, seal])).toBe("REVIEW_DIFFERENT_BYTES");
+    expect(classifyExistingCanonical(olderRender, seal, [live(olderRender), live(seal)])).toBe("REVIEW_OWN_GENERATION_DIFFERENT_BYTES");
+    expect(classifyExistingCanonical(id("c".repeat(64), "1", "777"), seal, [live(prior), live(seal)])).toBe("REVIEW_DIFFERENT_BYTES");
   });
   it("an inode recorded with different bytes is not proof of ownership of the current bytes", () => {
-    expect(classifyExistingCanonical(id("a".repeat(64), "1", "200"), seal, [id("b".repeat(64), "1", "200")])).toBe("REVIEW_FOREIGN_SAME_BYTES");
+    expect(classifyExistingCanonical(id("a".repeat(64), "1", "200"), seal, [live(id("b".repeat(64), "1", "200"))])).toBe("REVIEW_FOREIGN_SAME_BYTES");
   });
 });
 
@@ -139,14 +150,23 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       const canonical = await fileProof(path.join(root, "photos", op.main_key));
       expect(canonical.ino).toBe(seals[0].ino); // the canonical name is generation 1's inode, not the current seal's
       expect(canonical.ino).not.toBe(current.ino);
-      expect(classifyExistingCanonical(canonical, current, seals)).toBe("ADOPT_OWN_GENERATION");
+      // Each generation's private name, as the authority would lstat it at publication time.
+      const generations = await Promise.all(seals.map(async (s) => {
+        const info = await lstat(path.join(photoOperationPrivateRoot(path.join(root, "photos")), op.id, String(s.generation), "main.webp")).catch(() => null);
+        return { seal: s, live: info ? { dev: String(info.dev), ino: String(info.ino) } : null };
+      }));
+      expect(generations[0].live).toEqual({ dev: seals[0].dev, ino: seals[0].ino }); // crashed generation 1 keeps its private name
+      expect(generations[1].live).toBeNull(); // committing generation 2's private names were unlinked: its inode number is free for reuse
+      expect(classifyExistingCanonical(canonical, current, generations)).toBe("ADOPT_OWN_GENERATION");
 
       const foreignCopy = path.join(workDir, "same-bytes-copy.webp"); // outside the canonical root
       await copyFile(path.join(root, "photos", op.main_key), foreignCopy);
       const foreign = await fileProof(foreignCopy);
       expect(foreign.sha256).toBe(canonical.sha256);
       expect(foreign.ino).not.toBe(canonical.ino);
-      expect(classifyExistingCanonical(foreign, current, seals)).toBe("REVIEW_FOREIGN_SAME_BYTES");
+      // On ext4 the copy can receive generation 2's freed inode number (the CI failure on d8c4ddf); it must still be foreign.
+      expect(classifyExistingCanonical(foreign, current, generations)).toBe("REVIEW_FOREIGN_SAME_BYTES");
+      expect(classifyExistingCanonical({ ...foreign, dev: current.dev, ino: current.ino }, current, generations)).toBe("REVIEW_FOREIGN_SAME_BYTES");
       expect((await lstat(path.join(root, "photos", op.main_key))).ino.toString()).toBe(canonical.ino); // nothing replaced
     } finally { await rm(workDir, { recursive: true, force: true }); }
   });

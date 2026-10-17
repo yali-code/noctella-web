@@ -17,6 +17,9 @@ Line references are at `60a4556`. "Codex" refers to PR #461 / #455 comment 62316
 **Provenance proof (designed, tested, not wired): `services/photoPublicationRecoveryPolicy.ts` `classifyExistingCanonical`.** An existing file is adopted only if both of these hold:
 1. its bytes equal the **current** seal's;
 2. its `(dev, ino)` is one of **this operation's own sealed generations**.
+3. that generation's **private name still holds that inode** (`lstat` of `<private root>/<operation>/<generation>/main.webp`).
+
+Rule 3 was added after CI run 39018070525 on `d8c4ddf`. On ext4, the W2 owner unlinks the committing generation's private names after commit (`w2FencedProductPhotoOwner.ts:103`), and an unrelated same-bytes file then received that freed inode number. The rule without liveness wrongly returned `ADOPT_OWN_GENERATION`. A recorded inode number is proof only while a live name still holds it.
 
 | Outcome | When |
 | --- | --- |

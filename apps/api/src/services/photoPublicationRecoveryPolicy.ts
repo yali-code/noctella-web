@@ -3,28 +3,42 @@
  * owner-approved wiring into photoOperationAuthority (W2/W4) or the gated W11 owner. No I/O, no side effects.
  *
  * F3 - an existing canonical file at the operation's key (link() returned EEXIST) may be adopted only when it is
- * provably this operation's own earlier publication: same bytes as the current seal AND the inode of one of this
- * operation's sealed generations (0040 keeps every generation's sealed dev/ino in photo_operation_artifacts).
+ * provably this operation's own publication: same bytes as the current seal AND the inode of one of this
+ * operation's sealed generations whose private name still holds that inode (0040 keeps every generation's sealed
+ * dev/ino in photo_operation_artifacts; liveness rules out inode-number reuse).
  * Equal bytes alone do not establish ownership. W11/0042 cannot use this yet: reclaim clears seal_* and the
  * generations table keeps no per-generation seal (see FAZ_A_F3_F5_RECOVERY_CLOSURE_463.md).
  *
  * F4 - failures are classified by what a retry can achieve, never collapsed into "invalid media".
  */
 export interface ArtifactIdentity { sha256: string; dev: string; ino: string }
+type InodeIdentity = Pick<ArtifactIdentity, "dev" | "ino">;
+/**
+ * One of this operation's sealed generations: its recorded seal and the identity its private name has NOW
+ * (lstat of `<private root>/<operation>/<generation>/<file>`, null if that name no longer exists). A recorded inode
+ * number alone is not proof: once its last name is unlinked the filesystem may reuse the number for an unrelated file
+ * (observed on ext4: the W2 owner unlinks the committing generation's private names, and a new file got that number).
+ */
+export interface SealedGeneration { seal: ArtifactIdentity; live: InodeIdentity | null }
 export type ExistingCanonicalDecision =
   | "ADOPT_OWN_GENERATION"
   | "REVIEW_FOREIGN_SAME_BYTES"
   | "REVIEW_OWN_GENERATION_DIFFERENT_BYTES"
   | "REVIEW_DIFFERENT_BYTES";
 
-const sameInode = (a: ArtifactIdentity, b: ArtifactIdentity) => a.dev === b.dev && a.ino === b.ino;
+const sameInode = (a: InodeIdentity, b: InodeIdentity) => a.dev === b.dev && a.ino === b.ino;
 
+/**
+ * `ownGenerations` must include the current generation. The existing file is this operation's own publication only
+ * if a generation's private name still holds exactly that inode (so the number cannot have been reused) and the
+ * recorded seal of that generation has the existing file's bytes.
+ */
 export function classifyExistingCanonical(
   existing: ArtifactIdentity,
   currentSeal: ArtifactIdentity,
-  ownSeals: readonly ArtifactIdentity[],
+  ownGenerations: readonly SealedGeneration[],
 ): ExistingCanonicalDecision {
-  const own = sameInode(existing, currentSeal) || ownSeals.some((seal) => sameInode(existing, seal) && seal.sha256 === existing.sha256);
+  const own = ownGenerations.some((g) => g.live !== null && sameInode(g.live, g.seal) && sameInode(existing, g.seal) && g.seal.sha256 === existing.sha256);
   if (existing.sha256 === currentSeal.sha256) return own ? "ADOPT_OWN_GENERATION" : "REVIEW_FOREIGN_SAME_BYTES";
   return own ? "REVIEW_OWN_GENERATION_DIFFERENT_BYTES" : "REVIEW_DIFFERENT_BYTES";
 }
