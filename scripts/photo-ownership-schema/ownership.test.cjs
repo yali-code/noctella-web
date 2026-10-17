@@ -19,7 +19,7 @@ const pgSkip = !process.env.POSTGRES_TEST_DATABASE_URL && 'POSTGRES_TEST_DATABAS
 const evidence = [];
 const TTL = 1000;
 
-async function env(driver, { up = true } = {}) {
+async function env(driver, { up = true, through = LATEST_PG } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'noctella-photo-fence-'));
   let engine, h;
   try {
@@ -35,7 +35,7 @@ async function env(driver, { up = true } = {}) {
         }
       }
     }
-    else { h = await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb(LATEST_PG); engine = postgresEngine(h.pool); }
+    else { h = await require('../../apps/api/tests/postgresTestDb.ts').createPostgresTestDb(through); engine = postgresEngine(h.pool); }
     if (up) await applyScript(engine, UP);
     await engine.q('INSERT INTO products(id,sku,title,slug,type,status) VALUES(?,?,?,?,?,?) RETURNING id', ['prod-1', 'SKU-1', 'Synthetic', 'synthetic-1', 'unique_item', 'draft']);
   } catch (error) { engine?.close(); await h?.close(); fs.rmSync(root, { recursive: true, force: true }); throw error; }
@@ -88,6 +88,34 @@ for (const driver of ['sqlite', 'postgres']) {
     await applyScript(engine, UP);
     evidence.push({ driver, name: 'ddl', columnsBefore: before });
   }, { up: false }));
+
+
+  test(`${driver}: 0041 intent dependency rolls back before 0040, atomically, and re-applies`, opts, withEnv(async ({ engine }) => {
+    // SQLite startup has 0040 + 0041; PostgreSQL fixture starts at registered 0041.
+    assert.equal(await hasTable(engine, 'photo_w2_upload_intents'), true, '0041 must exist before rollback');
+    const bind = async (op, token) => {
+      await engine.q(`INSERT INTO photo_operations (id, kind, subject_type, subject_id, target_photo_id, main_key, thumb_key, input_sha256, generation, owner, nonce, state, lease_until_ms, created_ms, updated_ms)
+        VALUES (?, 'product_upload', 'w2_request', ?, ?, ?, ?, ?, 1, 'o', ?, 'committed', 0, 0, 0) RETURNING id`,
+        [op, token, `${op}-photo`, `${op}.webp`, `${op}-thumb.webp`, 'a'.repeat(64), `${op}-nonce`]);
+      await engine.q("INSERT INTO photo_w2_upload_intents (token, tenant_id, actor_id, product_id, input_sha256, alt_text, operation_id, created_ms) VALUES (?, 't', 'a', 'prod-1', ?, '', ?, 0) RETURNING token",
+        [token, 'a'.repeat(64), op]);
+    };
+    await bind('op-457-1', 'token-457-000000001');
+    // A failed step after all DROP statements must undo the whole transaction, preserving W2 retry history.
+    await assert.rejects(async () => applyScript(engine, DOWN, { failAfter: true }), /table_that_does_not_exist_p2_2b3d5/);
+    for (const table of ['photo_w2_upload_intents', 'photo_operations', 'photo_storage_roots'])
+      assert.equal(await hasTable(engine, table), true, `${table} must survive the interrupted rollback`);
+    assert.equal(await count(engine, 'photo_w2_upload_intents'), 1, 'W2 idempotency history must survive');
+    assert.equal(await count(engine, 'photo_operations'), 1, 'referenced operation must survive');
+    await applyScript(engine, DOWN); // isolated disposable database, same transaction for all DDL
+    for (const table of ['photo_w2_upload_intents', 'photo_operation_artifacts', 'photo_operation_generations', 'photo_operations', 'photo_storage_roots'])
+      assert.equal(await hasTable(engine, table), false, `${table} must be removed`);
+    assert.equal(await count(engine, 'products'), 1, 'application products must survive');
+    await applyScript(engine, UP);
+    await applyScript(engine, fs.readFileSync(path.resolve(__dirname, '../../apps/api/src/db/postgres-migrations/0041_photo_w2_upload_intents.sql'), 'utf8'));
+    await bind('op-457-2', 'token-457-000000002');
+    assert.equal(await count(engine, 'photo_w2_upload_intents'), 1, 'restored dependency schema must remain usable');
+  }, { through: '0041_photo_w2_upload_intents.sql' }));
 
   test(`${driver}: atomic finalize, idempotent retry after a lost acknowledgement, rollback on failure`, opts, withEnv(async ({ engine, c }) => {
     const t = await c.claim(intent());

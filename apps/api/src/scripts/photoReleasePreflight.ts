@@ -12,7 +12,7 @@ export type PreflightStatus = "PASS" | "WARN" | "FAIL" | "MANUAL";
 export interface PreflightCheck { id: string; status: PreflightStatus; detail: string }
 export const PREFLIGHT_MIN_FREE_BYTES = 1024 * 1024 * 1024;
 
-export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; migrationsDir?: string; canonicalRoot?: string; statfs?: (dir: string) => { bavail: number; bsize: number } } = {}) {
+export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; migrationsDir?: string; canonicalRoot?: string; statfs?: (dir: string) => { bavail: number; bsize: number }; device?: (dir: string) => number | undefined } = {}) {
   const env = options.env ?? process.env;
   const migrationsDir = options.migrationsDir ?? path.resolve(__dirname, "../db/postgres-migrations");
   const canonicalRoot = path.resolve(options.canonicalRoot ?? env.PRODUCT_PHOTO_DIR ?? path.resolve(process.cwd(), "uploads/product-photos"));
@@ -42,13 +42,22 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
 
   // Storage roots: link() publication requires one filesystem; nothing is created here.
   const parent = path.dirname(canonicalRoot);
-  const device = (dir: string) => { try { return fs.statSync(dir).dev; } catch { return undefined; } };
-  const parentDevice = device(parent);
-  add("storage.canonical-root", device(canonicalRoot) !== undefined ? "PASS" : "WARN", device(canonicalRoot) !== undefined ? `canonical root exists: ${canonicalRoot}` : `canonical root does not exist yet: ${canonicalRoot}`);
+  const device = options.device ?? ((dir: string) => { try { return fs.statSync(dir).dev; } catch { return undefined; } });
+  const parentDevice = device(parent), canonicalDevice = device(canonicalRoot);
+  // Private generations and upload staging live under parent, but canonicalRoot may itself be a mount point.
+  // A different canonical device makes link() publication fail with EXDEV even when the private dirs match parent.
+  const sameFilesystem = parentDevice !== undefined && (canonicalDevice === undefined || canonicalDevice === parentDevice);
+  add("storage.canonical-root",
+    canonicalDevice === undefined ? "WARN" : sameFilesystem ? "PASS" : "FAIL",
+    canonicalDevice === undefined ? `canonical root does not exist yet: ${canonicalRoot}`
+      : sameFilesystem ? `canonical root exists on parent filesystem: ${canonicalRoot}`
+      : `canonical root and its parent are on different filesystems: hard-link publication would fail (EXDEV)`);
   for (const [id, dir] of [["storage.private-operations", path.join(parent, ".product-photo-operations")], ["storage.upload-staging", path.join(parent, ".product-photo-upload-staging")]] as const) {
     const dev = device(dir);
-    if (dev === undefined) add(id, parentDevice === undefined ? "FAIL" : "PASS", parentDevice === undefined ? `parent of the canonical root is missing: ${parent}` : `${dir} will be created under the canonical parent (same filesystem)`);
-    else add(id, dev === parentDevice ? "PASS" : "FAIL", dev === parentDevice ? `${dir} is on the canonical filesystem` : `${dir} is on a different filesystem: hard-link publication would fail closed`);
+    const compatible = sameFilesystem && (dev === undefined || dev === (canonicalDevice ?? parentDevice));
+    add(id, compatible ? "PASS" : "FAIL", compatible
+      ? dev === undefined ? `${dir} will be created under the canonical parent (same filesystem)` : `${dir} is on the canonical filesystem`
+      : `${dir} cannot be proven on the canonical filesystem: hard-link publication would fail (EXDEV)`);
   }
   try {
     const stats = (options.statfs ?? ((dir) => fs.statfsSync(dir)))(parentDevice === undefined ? process.cwd() : parent);
