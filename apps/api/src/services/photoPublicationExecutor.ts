@@ -165,7 +165,7 @@ export async function publishAuthorizedArtifacts(db: DbClient, driver: Ownership
         source: sealedArtifactPath(canonicalRoot, a, artifact),
         seal: { sha256: a.identity[artifact].sha256, size: exactPositiveInteger(sizes[`${artifact}_bytes`]), dev: a.identity[artifact].dev, ino: a.identity[artifact].ino },
         canonicalDir: path.resolve(canonicalRoot), canonicalName: artifact === "main" ? a.mainKey : a.thumbKey,
-        stagingDir: path.join(operationStagingDir(canonicalRoot, a.operationId), artifact),
+        stagingDir: path.join(operationStagingDir(canonicalRoot, a.operationId), artifact), retainStagingLink: true,
       }, ledger, (phase) => hook(artifact, phase));
     } catch (error: any) {
       if (error instanceof PhotoUploadError) throw error;

@@ -1141,6 +1141,7 @@ CREATE TABLE IF NOT EXISTS photo_publication_copies (
   staging_name TEXT NOT NULL CHECK (length(staging_name) BETWEEN 1 AND 128),
   copy_dev TEXT NOT NULL CHECK (length(copy_dev) BETWEEN 1 AND 64),
   copy_ino TEXT NOT NULL CHECK (length(copy_ino) BETWEEN 1 AND 64),
+  copy_birth_ns TEXT NOT NULL CHECK (length(copy_birth_ns) BETWEEN 1 AND 32),
   sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
   bytes BIGINT NOT NULL CHECK (bytes > 0),
   recorded_ms BIGINT NOT NULL CHECK (recorded_ms >= 0),

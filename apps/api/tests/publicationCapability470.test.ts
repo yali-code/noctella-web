@@ -146,7 +146,9 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
         const published = await lstat(path.join(canonical, row.main_key), { bigint: true });
         // Publisher-owned verified copy: never the worker's sealed inode, no alias (nlink 1), durably recorded.
         expect([String(published.dev), String(published.ino)]).toEqual([String(copy.copy_dev), String(copy.copy_ino)]);
-        expect(String(published.ino)).not.toBe(String(seal.main_ino)); expect(published.nlink).toBe(1n);
+        expect(String(published.ino)).not.toBe(String(seal.main_ino));
+        // nlink 1 after commit (W2); before the W4 finalization commits, the only other link is the publisher's anchor.
+        expect(published.nlink).toBe(kind === "w2" ? 1n : 2n);
         if (kind === "w2") {
           expect((await op(token)).state).toBe("committed");
           expect(Number((await q(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id=${row.target_photo_id}`))[0].n)).toBe(1);

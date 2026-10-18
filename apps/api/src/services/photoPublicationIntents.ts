@@ -225,12 +225,12 @@ export function* transferAfterAuthenticatedExitSteps(driver: OwnershipDriver, op
   return yield* transferPublicationAuthoritySteps(driver, operationId, epoch, me);
 }
 
-export interface PublicationCopyRow { stagingName: string; dev: string; ino: string; sha256: string; bytes: number }
+export interface PublicationCopyRow { stagingName: string; dev: string; ino: string; birthNs: string; sha256: string; bytes: number }
 
 /** The recorded publisher-owned copy of one artifact (migration 0044), if any. */
 export function* readPublicationCopySteps(operationId: string, artifact: "main" | "thumb"): Generator<SQL, PublicationCopyRow | null, Rows> {
-  const [row] = yield sql`SELECT staging_name, copy_dev, copy_ino, sha256, bytes FROM photo_publication_copies WHERE operation_id = ${operationId} AND artifact = ${artifact}`;
-  return row ? { stagingName: row.staging_name, dev: String(row.copy_dev), ino: String(row.copy_ino), sha256: row.sha256, bytes: exactPositiveInteger(row.bytes) } : null;
+  const [row] = yield sql`SELECT staging_name, copy_dev, copy_ino, copy_birth_ns, sha256, bytes FROM photo_publication_copies WHERE operation_id = ${operationId} AND artifact = ${artifact}`;
+  return row ? { stagingName: row.staging_name, dev: String(row.copy_dev), ino: String(row.copy_ino), birthNs: String(row.copy_birth_ns), sha256: row.sha256, bytes: exactPositiveInteger(row.bytes) } : null;
 }
 
 /** Records a verified copy BEFORE it is linked; only the CURRENT executor of the authorized intent may record. */
@@ -240,7 +240,7 @@ export function* recordPublicationCopySteps(driver: OwnershipDriver, a: Publicat
     AND seal_id = ${a.sealId} AND state = 'authorized' AND executor_epoch = ${a.epoch} AND executor_token = ${a.token} AND executor_identity = ${a.executorIdentity}${lockClause(driver)}`;
   if (!current) return false;
   yield sql`DELETE FROM photo_publication_copies WHERE operation_id = ${a.operationId} AND artifact = ${artifact} RETURNING operation_id`;
-  yield sql`INSERT INTO photo_publication_copies (operation_id, artifact, executor_epoch, staging_name, copy_dev, copy_ino, sha256, bytes, recorded_ms)
-    VALUES (${a.operationId}, ${artifact}, ${a.epoch}, ${copy.stagingName}, ${copy.dev}, ${copy.ino}, ${copy.sha256}, ${copy.bytes}, ${nowMs(driver)}) RETURNING operation_id`;
+  yield sql`INSERT INTO photo_publication_copies (operation_id, artifact, executor_epoch, staging_name, copy_dev, copy_ino, copy_birth_ns, sha256, bytes, recorded_ms)
+    VALUES (${a.operationId}, ${artifact}, ${a.epoch}, ${copy.stagingName}, ${copy.dev}, ${copy.ino}, ${copy.birthNs}, ${copy.sha256}, ${copy.bytes}, ${nowMs(driver)}) RETURNING operation_id`;
   return true;
 }

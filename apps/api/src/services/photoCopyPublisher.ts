@@ -10,6 +10,10 @@
  *   (sha256 + size), checked on the publisher's copy, never on the source.
  * - Recovery: an existing canonical name is adopted only when it is exactly the recorded copy inode and still holds the
  *   sealed bytes; anything else is a COLLISION and is never touched (no overwrite, no cleanup of foreign files).
+ * - Anchor (runtime owners, `retainStagingLink`): the verified copy keeps its staging name as a second link until the
+ *   operation commits. While that name exists the inode cannot be freed, so its number cannot be reused by a later file;
+ *   adoption requires the canonical name and the staging anchor to be the same inode. The owner removes the staging
+ *   namespace only after commit.
  * - Cleanup: only `data-*` names inside this artifact's own staging directory.
  * - Descriptors: every descriptor is closed before returning; none is retained after verification.
  */
@@ -18,10 +22,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 export interface CopySeal { sha256: string; size: number; dev: string; ino: string }
-export interface CopyRecord { stagingName: string; dev: string; ino: string; sha256: string; bytes: number }
+/** birthNs: the inode birth time, an additional identity check (the staging anchor is the primary reuse guard). */
+export interface CopyRecord { stagingName: string; dev: string; ino: string; birthNs: string; sha256: string; bytes: number }
 /** The caller's durable, authority-fenced record of the copy (database). record() must throw if authority is lost. */
 export interface CopyLedger { read(): Promise<CopyRecord | null>; record(copy: CopyRecord): Promise<void> }
-export interface CopyTarget { source: string; seal: CopySeal; canonicalDir: string; canonicalName: string; stagingDir: string; chunkSize?: number }
+export interface CopyTarget { source: string; seal: CopySeal; canonicalDir: string; canonicalName: string; stagingDir: string; chunkSize?: number; retainStagingLink?: boolean }
 export type CopyPhase = "source-opened" | "staging-created" | "copy-partial" | "copied" | "verified" | "recorded" | "linked" | "cleaned";
 /** `detail.fd` is the publisher's own staging descriptor while it is open (diagnostics and capability probes only). */
 export type CopyHook = (phase: CopyPhase, detail?: { fd?: number }) => void | Promise<void>;
@@ -30,7 +35,8 @@ export type CopyOutcome =
   | { kind: "SOURCE_REPLACED" | "SNAPSHOT_MISMATCH" | "COLLISION" | "SOURCE_MISSING"; detail?: string };
 
 const DATA_NAME = /^data-[0-9a-f]{16}$/;
-const identity = (st: fs.BigIntStats) => ({ dev: String(st.dev), ino: String(st.ino) });
+const identity = (st: fs.BigIntStats) => ({ dev: String(st.dev), ino: String(st.ino), birthNs: String(st.birthtimeNs) });
+const sameInode = (st: fs.BigIntStats, r: Pick<CopyRecord, "dev" | "ino" | "birthNs">) => String(st.dev) === r.dev && String(st.ino) === r.ino && String(st.birthtimeNs) === r.birthNs;
 
 function hashFd(fd: number) {
   const hash = createHash("sha256"), buffer = Buffer.alloc(64 * 1024);
@@ -48,24 +54,32 @@ function fsyncDir(dir: string) {
   const fd = fs.openSync(dir, "r"); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
 }
 
-/** Cleanup ownership: only data-* names inside this artifact's own staging directory. Never canonical or source. */
-export function removeOwnStagingData(stagingDir: string) {
+/** Cleanup ownership: only data-* names inside this artifact's own staging directory (except `keep`). Never canonical or source. */
+export function removeOwnStagingData(stagingDir: string, keep?: string) {
   let names: string[] = [];
   try { names = fs.readdirSync(stagingDir); } catch (e: any) { if (e?.code === "ENOENT") return; throw e; }
-  for (const name of names) if (DATA_NAME.test(name)) fs.rmSync(path.join(stagingDir, name), { force: true });
+  for (const name of names) if (DATA_NAME.test(name) && name !== keep) fs.rmSync(path.join(stagingDir, name), { force: true });
+}
+
+/** With an anchor, the publisher's own staging name must still be exactly the recorded (and canonical) inode. */
+function anchored(t: CopyTarget, recorded: CopyRecord, st: fs.BigIntStats): boolean {
+  if (!t.retainStagingLink) return true;
+  if (!DATA_NAME.test(recorded.stagingName)) return false;
+  try { const anchor = fs.lstatSync(path.join(t.stagingDir, recorded.stagingName), { bigint: true }); return anchor.isFile() && anchor.dev === st.dev && anchor.ino === st.ino; }
+  catch (e: any) { if (e?.code === "ENOENT") return false; throw e; }
 }
 
 async function resolveExisting(t: CopyTarget, ledger: CopyLedger, canonical: string): Promise<CopyOutcome> {
   const recorded = await ledger.read();
   const st = fs.lstatSync(canonical, { bigint: true });
-  if (recorded && st.isFile() && String(st.dev) === recorded.dev && String(st.ino) === recorded.ino && recorded.sha256 === t.seal.sha256) {
+  if (recorded && st.isFile() && sameInode(st, recorded) && recorded.sha256 === t.seal.sha256 && anchored(t, recorded, st)) {
     const fd = fs.openSync(canonical, "r");
     try {
       const fresh = fs.fstatSync(fd, { bigint: true });
       const current = hashFd(fd);
-      if (String(fresh.dev) === recorded.dev && String(fresh.ino) === recorded.ino && current.sha256 === t.seal.sha256 && current.bytes === t.seal.size) {
-        removeOwnStagingData(t.stagingDir);
-        return { kind: "ADOPTED", ...identity(fresh) };
+      if (sameInode(fresh, recorded) && current.sha256 === t.seal.sha256 && current.bytes === t.seal.size && anchored(t, recorded, fresh)) {
+        removeOwnStagingData(t.stagingDir, t.retainStagingLink ? recorded.stagingName : undefined);
+        return { kind: "ADOPTED", dev: String(fresh.dev), ino: String(fresh.ino) };
       }
     } finally { fs.closeSync(fd); }
   }
@@ -118,7 +132,7 @@ export async function publishVerifiedCopy(t: CopyTarget, ledger: CopyLedger, hoo
     catch (e: any) { if (e?.code === "EEXIST") return resolveExisting(t, ledger, canonical); throw e; }
     fsyncDir(t.canonicalDir);
     await hook("linked");
-    removeOwnStagingData(t.stagingDir); fsyncDir(t.stagingDir);
+    if (!t.retainStagingLink) { removeOwnStagingData(t.stagingDir); fsyncDir(t.stagingDir); }
     await hook("cleaned");
     return { kind: "PUBLISHED", dev: copy.dev, ino: copy.ino };
   } catch (error) {

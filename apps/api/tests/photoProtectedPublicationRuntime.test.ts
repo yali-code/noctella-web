@@ -97,6 +97,34 @@ describe("runtime copy-owned publisher", () => {
     expect(f.events).toEqual([]); // nothing recorded for a foreign name
   });
 
+  // Runtime owners keep the staging name as an anchor until commit (retainStagingLink), so the recorded inode can
+  // never be freed and its number never handed to a foreign file (ext4 reuses freed inode numbers; birth times are coarse).
+  it("anchored copy: canonical and staging anchor are one inode until commit; a recreated same-bytes file is foreign", async () => {
+    const f = fixture(), target = { ...f.target, retainStagingLink: true };
+    expect((await publishVerifiedCopy(target, f.ledger)).kind).toBe("PUBLISHED");
+    const key = path.join(f.canonicalDir, "k.webp"), anchor = fs.readdirSync(f.stagingDir);
+    expect(anchor).toHaveLength(1);
+    expect(ident(path.join(f.stagingDir, anchor[0]))).toEqual({ ...ident(key), nlink: 2n });
+    expect((await publishVerifiedCopy(target, f.ledger)).kind).toBe("ADOPTED"); // retry before commit
+    const recorded = ident(key);
+    fs.rmSync(key); fs.writeFileSync(key, f.bytes); // the anchor keeps the old inode alive: no number reuse possible
+    expect(ident(key).ino).not.toBe(recorded.ino);
+    expect((await publishVerifiedCopy(target, f.ledger)).kind).toBe("COLLISION");
+    expect(fs.readFileSync(key, "utf8")).toBe(f.bytes); // untouched
+  });
+
+  it("anchored copy: a missing or replaced staging anchor never authorizes adoption (fail closed)", async () => {
+    for (const mode of ["missing", "replaced"] as const) {
+      const f = fixture(), target = { ...f.target, retainStagingLink: true };
+      expect((await publishVerifiedCopy(target, f.ledger)).kind).toBe("PUBLISHED");
+      const [name] = fs.readdirSync(f.stagingDir);
+      fs.rmSync(path.join(f.stagingDir, name));
+      if (mode === "replaced") fs.writeFileSync(path.join(f.stagingDir, name), f.bytes);
+      expect((await publishVerifiedCopy(target, f.ledger)).kind, mode).toBe("COLLISION");
+      expect(fs.readFileSync(path.join(f.canonicalDir, "k.webp"), "utf8")).toBe(f.bytes);
+    }
+  });
+
   it("crash after link adopts exactly the recorded inode; crash after record (before link) publishes a fresh copy", async () => {
     const linked = fixture();
     await expect(publishVerifiedCopy(linked.target, linked.ledger, (p) => { if (p === "linked") throw new Error("crash"); })).rejects.toThrow("crash");

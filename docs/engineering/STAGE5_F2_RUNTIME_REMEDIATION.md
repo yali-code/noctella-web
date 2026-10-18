@@ -25,6 +25,7 @@ With `PHOTO_OWNERSHIP_FENCING_ENABLED=true`, the real W2 owner (`uploadFencedPro
    - Verify sha256 and size on the publisher's own descriptor.
    - Record the copy identity in `photo_publication_copies`. This is fenced: only the current intent executor can record.
    - Only then `link()` it to the canonical key. Nothing is ever replaced.
+   - The staging name stays as an **anchor** (a second link) until T2 commits. The inode therefore cannot be freed, and its number cannot be reused by a foreign file: ext4 reuses freed inode numbers and birth times are coarse. Adoption requires the canonical name and the anchor to be the same inode (dev, ino, birth time) with the sealed bytes. A missing or replaced anchor is a `COLLISION`.
 6. **T2:** the existing photo + promote-outbox transaction, unchanged.
    - Its fence proof now carries `intent { epoch, token, executorIdentity }`, so `commitDrizzlePhotoOperationFenced` delegates to `commitIntentAuthorizedPhotoOperation`: the real predicates minus the lease, plus the full authority tuple.
    - W4 keeps one transaction: intake lock, product lock, each photo + outbox + fence, then intake finalization.
@@ -41,7 +42,7 @@ Recovery outcomes:
   - Identity: `px1:<boot_id>:<pid-namespace inode>:<pid>:<start time>:<nonce>`, from Linux `/proc`.
   - On a platform without `/proc`: `px1u:…`, which can never be authenticated.
   - Each T1 gets a fresh token registered in the process's execution registry. The token is released only when the owner's whole execution (publication **and** commit, or failure) has settled.
-- **Preparer lifecycle.** Preparation writes generation-private files that the publisher only reads; worker descriptors and aliases cannot reach published bytes because the canonical inode is the publisher's verified copy (`nlink 1`).
+- **Preparer lifecycle.** Preparation writes generation-private files that the publisher only reads; worker descriptors and aliases cannot reach published bytes because the canonical inode is the publisher's verified copy (`nlink 1` after commit; before it, the only other link is the publisher anchor).
   - **In-process (default):** preparation runs inside the API process.
   - **Confined (`PHOTO_PREPARATION_CONFINEMENT=required` + `PHOTO_PREPARATION_LAUNCHER`, `photoPreparationConfinement.ts`):** each W2/W4 preparation runs in a separate worker started through the Step 2 Landlock launcher (plain mode).
     - Writes are allowed only beneath its generation directory and a per-job directory.

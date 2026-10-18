@@ -41,7 +41,7 @@ function manifestLedger(t: PublishTarget): CopyLedger {
     async read() {
       let m: any;
       try { m = JSON.parse(fs.readFileSync(manifestPath(t), "utf8")); } catch (e: any) { if (e?.code === "ENOENT") return null; throw e; }
-      return { stagingName: String(m.stagingName ?? ""), dev: String(m.dev), ino: String(m.ino), sha256: String(m.sha256), bytes: Number(m.bytes ?? t.seal.size) };
+      return { stagingName: String(m.stagingName ?? ""), dev: String(m.dev), ino: String(m.ino), birthNs: String(m.birthNs ?? ""), sha256: String(m.sha256), bytes: Number(m.bytes ?? t.seal.size) };
     },
     async record(copy) {
       const tmp = manifestPath(t) + ".tmp";

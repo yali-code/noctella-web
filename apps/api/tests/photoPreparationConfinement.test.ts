@@ -132,6 +132,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     const staged = [{ id: randomUUID(), storageKey: "a.jpg" }, { id: randomUUID(), storageKey: "b.jpg" }];
     const result = await buildFencedAiIntakePhotoFinalizationManifest(db, async () => input, staged as any, productId, undefined, { driver, canonicalRoot: canonical });
     expect(result.manifest.map((e) => [e.stagedPhotoId, typeof e.fence?.intent?.token])).toEqual(staged.map((s) => [s.id, "string"]));
-    for (const entry of result.manifest) expect(fs.statSync(path.join(canonical, entry.mainStorageKey), { bigint: true }).nlink).toBe(1n);
+    // Before the finalization commits, the second link of each published copy is the publisher's staging anchor.
+    for (const entry of result.manifest) expect(fs.statSync(path.join(canonical, entry.mainStorageKey), { bigint: true }).nlink).toBe(2n);
   });
 });
