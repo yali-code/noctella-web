@@ -349,3 +349,27 @@ describe("ProductPhotosPage — Etsy media preview integration", () => {
     expect(upload).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("ProductPhotosPage — read-only reload ownership", () => {
+  it("reuses the existing operation lock so no photo write can race the preview reload", async () => {
+    const user = userEvent.setup();
+    const pending = deferred<any>();
+    const photos = [photo("a", "a.webp", true, "A"), photo("b", "b.webp", false, "B")];
+    vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct({ photos })).mockReturnValueOnce(pending.promise);
+    const primary = vi.spyOn(productPhotosLib.productPhotoApi, "setPrimary").mockResolvedValue([]);
+    const upload = vi.spyOn(productPhotosLib.productPhotoApi, "upload").mockResolvedValue({} as any);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await screen.findByText("Etsy rank 1 — Primary image");
+    await user.upload(document.querySelector("input[type=file]") as HTMLInputElement, file("new.jpg"));
+    await user.click(screen.getByRole("button", { name: "Reload product photos" }));
+    expect(screen.getByRole("button", { name: "Upload photo" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Set primary" })[1]).toBeDisabled();
+    expect(screen.getByLabelText("Move a.webp later")).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Delete" })[0]).toBeDisabled();
+    await user.click(screen.getAllByRole("button", { name: "Set primary" })[1]!);
+    expect(primary).not.toHaveBeenCalled(); expect(upload).not.toHaveBeenCalled();
+    pending.resolve(baseProduct({ photos }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Set primary" })[1]).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Upload photo" })).toBeEnabled();
+  });
+});

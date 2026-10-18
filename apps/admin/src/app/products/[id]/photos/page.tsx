@@ -30,6 +30,14 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
     }
   }, [params.id]);
 
+  async function reloadPhotos() {
+    if (activeOperation || previewState === "loading") return;
+    setActiveOperation({ kind: "photo" });
+    try { await load(); }
+    catch { setMessage("Failed to reload photos."); }
+    finally { setActiveOperation(null); }
+  }
+
   useEffect(() => {
     load().catch((err) => setMessage(err.message ?? "Failed to load photos"));
   }, [load]);
@@ -113,7 +121,7 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
       <h1>Manage Photos — {product.title}</h1>
       {message && <p role={/failed/i.test(message) ? "alert" : "status"} aria-live="polite" style={{ color: "#c86a6a" }}>{message}</p>}
       <EtsyMediaPreview photos={product.photos} loading={previewState === "loading"} error={previewState === "error"} />
-      <button type="button" disabled={activeOperation !== null || previewState === "loading"} onClick={() => { void load().catch(() => setMessage("Failed to reload photos.")); }}>Reload product photos</button>
+      <button type="button" disabled={activeOperation !== null || previewState === "loading"} onClick={() => { void reloadPhotos(); }}>Reload product photos</button>
       <form onSubmit={uploadPhotos} className="noctella-panel" style={{ padding: 20, margin: "20px 0", display: "grid", gap: 12 }}>
         <input
           type="file"

@@ -8,7 +8,7 @@ Etsy Media Preview appears on Product Photos and Product Edit. It uses canonical
 
 **Read only — not published or synced to Etsy.** Media eligibility does not prove listing-field or publication readiness. No automatic repair, upload, reorder, delete, or provider action is performed by the preview.
 
-Photos reflects the existing reload after successful mutations and batch-upload completion. Failed single-photo operations retain the last read. The read-only Reload product photos button fetches canonical state without retrying writes or discarding alt drafts. Pending/failed reads hide stale preview eligibility. Edit shows the last product-read snapshot, excluding unsaved form edits; existing save/version-conflict/publish callbacks are unchanged.
+Photos reflects the existing reload after successful mutations and batch-upload completion. Failed single-photo operations retain the last read. The read-only Reload product photos button fetches canonical state without retrying writes or discarding alt drafts. Reload uses the existing photo-operation lock, preventing uploads or photo mutations from racing its read. Pending/failed reads hide stale preview eligibility. Edit shows the last product-read snapshot, excluding unsaved form edits; existing save/version-conflict/publish callbacks are unchanged.
 
 ## Acceptance
 
