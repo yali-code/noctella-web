@@ -23,7 +23,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { sql, type SQL } from "drizzle-orm";
-import sharp from "sharp";
 import type { DbClient } from "../db/client";
 import { PhotoUploadError } from "./photoUploadAdmission";
 import { inOwnershipTransaction, photoOperationPrivateRoot, type OwnershipDriver, type Rows } from "./photoOperationAuthority";
@@ -33,6 +32,7 @@ import {
 } from "./photoPublicationIntents";
 import { publishVerifiedCopy, type CopyOutcome, type CopyPhase } from "./photoCopyPublisher";
 import { assertPreparationConfinementReady } from "./photoPreparationConfinement";
+import { readPublishedPhotoDimensions } from "./photoStorage";
 
 interface LinuxProcess { bootId: string; pidNs: string; pid: number; start: string }
 
@@ -184,9 +184,9 @@ export async function publishAuthorizedArtifacts(db: DbClient, driver: Ownership
 
 /** Width/height of the PUBLISHED (publisher-owned, verified) main artifact; used when resuming another execution. */
 export async function publishedMainDimensions(canonicalRoot: string, mainKey: string): Promise<{ width: number; height: number }> {
-  const meta = await sharp(path.join(canonicalRoot, mainKey)).metadata();
-  if (!meta.width || !meta.height) throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Published photo dimensions are unreadable");
-  return { width: meta.width, height: meta.height };
+  const dimensions = await readPublishedPhotoDimensions(path.join(canonicalRoot, mainKey));
+  if (!dimensions) throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Published photo dimensions are unreadable");
+  return dimensions;
 }
 
 /** Removes this operation's own staging namespace and the committed generation's private files (after T2 only). */
