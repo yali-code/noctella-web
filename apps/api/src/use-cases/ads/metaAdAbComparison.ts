@@ -36,13 +36,17 @@ function validMoney(v: number | null): boolean {
   return v === null || Number.isFinite(v) && v >= 0
     && Math.abs(v * 100 - Math.round(v * 100)) < 0.00001;
 }
-function derived(o: MetaAdTrafficObservation) {
+function validObservation(o: MetaAdTrafficObservation): boolean {
+  return validCount(o.impressions) && validCount(o.clicks) && validMoney(o.spendEur)
+    && (o.impressions === null || o.clicks === null || o.clicks <= o.impressions);
+}
+function derived(o: MetaAdTrafficObservation, valid: boolean) {
   return {
     adId: o.adId, spendEur: o.spendEur,
     impressions: o.impressions, clicks: o.clicks,
-    ctr: o.clicks !== null && o.impressions ? round(o.clicks / o.impressions, 6) : null,
-    cpcEur: o.spendEur !== null && o.clicks ? round(o.spendEur / o.clicks, 4) : null,
-    cpmEur: o.spendEur !== null && o.impressions ? round(o.spendEur * 1000 / o.impressions, 4) : null,
+    ctr: valid && o.clicks !== null && o.impressions ? round(o.clicks / o.impressions, 6) : null,
+    cpcEur: valid && o.spendEur !== null && o.clicks ? round(o.spendEur / o.clicks, 4) : null,
+    cpmEur: valid && o.spendEur !== null && o.impressions ? round(o.spendEur * 1000 / o.impressions, 4) : null,
   };
 }
 
@@ -60,14 +64,15 @@ export function compareMetaAdTraffic(a: MetaAdTrafficObservation, b: MetaAdTraff
     throw new Error("ADS-AB1: ad comparison provenance or reporting window mismatch");
   }
 
-  const metrics = [derived(a), derived(b)] as const;
+  const validA = validObservation(a), validB = validObservation(b);
+  // Preserve raw evidence, but never calculate ratios for an invalid observation.
+  const metrics = [derived(a, validA), derived(b, validB)] as const;
   const reasons: string[] = [];
   let verdict: AbTrafficVerdict = "INSUFFICIENT_EVIDENCE";
   let directionalLeaderAdId: string | null = null;
   let absoluteCtrZScore: number | null = null;
 
-  if (![a, b].every(o => validCount(o.impressions) && validCount(o.clicks) && validMoney(o.spendEur)
-    && (o.impressions === null || o.clicks === null || o.clicks <= o.impressions))) {
+  if (!validA || !validB) {
     verdict = "DATA_QUALITY_REVIEW";
     reasons.push("INVALID_META_NUMERIC_EVIDENCE");
   } else if ([a, b].some(o => o.impressions === null || o.clicks === null || o.spendEur === null)) {
