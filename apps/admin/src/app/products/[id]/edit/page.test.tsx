@@ -9,7 +9,7 @@
 // Publish Selected batch - regardless of per-channel outcome - navigates to /products only after
 // the existing canonical Product refetch; a request-level batch rejection never navigates.
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "@/lib/api";
 import * as apiLib from "@/lib/api";
@@ -234,5 +234,34 @@ describe("EditProductPage — Sprint 147: Publish Selected navigation (end-to-en
 
     await screen.findByText("This product changed after you opened it. Reload the latest version before saving again.");
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe("EditProductPage — Etsy media preview integration", () => {
+  it("uses the existing canonical product read, not legacy images or unsaved title fields", async () => {
+    const user = userEvent.setup();
+    const product = baseProduct({ photos: [{ id: "photo", url: "/canonical.webp", thumbnailUrl: "", sortOrder: 0, isPrimary: true, processingStatus: "Ready", altText: "Canonical image" }], images: [{ url: "/legacy.webp", isPrimary: true }] });
+    const get = mockGetForProduct(product);
+    const put = vi.spyOn(apiLib.api, "put");
+    render(<EditProductPage params={{ id: "p1" }} />);
+    const title = await screen.findByDisplayValue("Original Title");
+    const preview = screen.getByRole("region", { name: "Etsy Media Preview" });
+    expect(within(preview).getByRole("img", { name: "Canonical image" })).toHaveAttribute("src", apiLib.resolveApiAssetUrl("/canonical.webp"));
+    expect(preview.innerHTML).not.toContain("legacy.webp");
+    await user.clear(title); await user.type(title, "Unsaved title");
+    expect(within(preview).getByRole("img")).toHaveAttribute("alt", "Canonical image");
+    expect(get.mock.calls.filter(([path]) => path === "/api/products/p1")).toHaveLength(1);
+    expect(put).not.toHaveBeenCalled();
+    expect(preview).toHaveTextContent("not published or synced to Etsy");
+    expect(preview).not.toHaveTextContent("Ready to Publish");
+  });
+
+  it("provides an accessible preview loading and failed-read state", async () => {
+    vi.spyOn(apiLib.api, "get").mockRejectedValue(new Error("Product read failed"));
+    render(<EditProductPage params={{ id: "p1" }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading Etsy media preview");
+    const preview = screen.getByRole("region", { name: "Etsy Media Preview" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("preview unavailable");
+    expect(within(preview).queryByRole("img")).not.toBeInTheDocument();
   });
 });
