@@ -37,7 +37,8 @@ describe("WP1 migration files (forward-only convention)", () => {
   it("uses the next unused number 0043, leaves the reserved 0039/0042 numbers unused and is the only 0043", () => {
     expect(files.filter((f) => f.startsWith("0043_"))).toEqual([MIGRATION]);
     expect(files.filter((f) => f.startsWith("0039_") || f.startsWith("0042_"))).toEqual([]);
-    expect(files.filter((f) => f.localeCompare(MIGRATION) > 0)).toEqual([]);
+    // Only the protected-publication copy registry (0044, #472) follows it.
+    expect(files.filter((f) => f.localeCompare(MIGRATION) > 0)).toEqual(["0044_photo_publication_copies.sql"]);
   });
   it("is purely additive: creates only its two tables, never alters, drops or rewrites existing data", () => {
     const body = migrationSql().replace(/--.*$/gm, "");
