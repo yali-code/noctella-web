@@ -1,6 +1,7 @@
 /**
  * #472 F2 Step 4 OFFLINE composition proof (single host, unprivileged Linux, SQLite + disposable PostgreSQL).
- * Composes Contract 1 (durable intent, guarded reclaim, T1/T2), Step 2 (confined executor/worker, supervisor-
+ * Composes Contract 1 (durable intent, guarded reclaim, T1/T2; since WP1 the runtime photoPublicationIntents module on
+ * migration 0043 tables, not wired into any owner), Step 2 (confined executor/worker, supervisor-
  * authenticated completion before authority transfer) and Step 3 (publisher-owned verified copies) around the REAL
  * photo-operation authority and REAL W2/W4 preparation and T2 building blocks. It does NOT prove production
  * integration: the real W2/W4 owners hard-wire publishSealedArtifacts and the lease fence (documented seam).
@@ -25,8 +26,9 @@ const { root } = vi.hoisted(() => {
 import { ensureSchema } from "../src/db/migrate";
 import * as schema from "../src/db/schema.sqlite";
 import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
-import { f2c1IntentDdl, type F2c1Driver } from "./f2c1/intentSchema";
-import { inF2c1Transaction, recordExitReceiptSteps } from "./f2c1/protocol";
+import { inOwnershipTransaction } from "../src/services/photoOperationAuthority";
+import { persistAuthenticatedExecutorExitSteps } from "../src/services/photoPublicationIntents";
+import type { F2c1Driver } from "./f2c1/protocol";
 
 vi.setConfig({ testTimeout: 240_000, hookTimeout: 240_000 });
 const launcher = process.env.F2_CAPABILITY_LAUNCHER;
@@ -94,13 +96,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     process.env.DATABASE_DRIVER = driver;
     if (driver === "postgres") {
       process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
-      const h = await createPostgresTestDb("0041_photo_w2_upload_intents.sql"); db = h.db; close = () => h.close();
-      for (const ddl of f2c1IntentDdl("postgres")) await db.execute(sql.raw(ddl));
+      const h = await createPostgresTestDb("0043_photo_publication_intents.sql"); db = h.db; close = () => h.close();
       const url = new URL(process.env.POSTGRES_TEST_DATABASE_URL!); url.searchParams.set("options", "-c search_path=" + h.schemaName); dbUrl = url.toString();
     } else {
       dbUrl = path.join(dbDir, "f2s4.sqlite"); process.env.DATABASE_URL = dbUrl;
       raw = new Database(dbUrl); raw.pragma("journal_mode=WAL"); raw.pragma("foreign_keys=ON"); ensureSchema(raw);
-      for (const ddl of f2c1IntentDdl("sqlite")) raw.exec(ddl);
       db = drizzle(raw, { schema }); close = async () => { raw!.close(); };
     }
     categoryId = randomUUID();
@@ -151,7 +151,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     const inner = r.lines.map((l) => /^F2PA1 INNER_EXIT pid=(\d+) code=(\d+)$/.exec(l)).find(Boolean);
     return done && inner && inner[1] === done[1] && inner[2] === "0" ? "COMPLETE" : "BLOCKED";
   }
-  /** Executor death -> authenticated completion -> (PostgreSQL) backend gone -> Contract 1 receipts. Never a raw PID. */
+  /** Executor death -> authenticated completion -> (PostgreSQL) backend gone -> Contract 1 exit records. Never a raw PID. */
   async function authenticateExitAndReceipt(e: Proc, operationIds: string[], epoch: number) {
     await until(() => e.reports.get(4)!.ended && e.reports.get(5)!.lines.some((l) => l.startsWith("F2PA1 INNER_EXIT")), e.name + " completion");
     expect(gate(e)).toBe("COMPLETE");
@@ -162,7 +162,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
         await new Promise((r) => setTimeout(r, 50));
       }
     }
-    for (const id of operationIds) await inF2c1Transaction(db, driver, () => recordExitReceiptSteps(driver, id, epoch, "trusted-test-parent", e.actorId));
+    for (const id of operationIds) await inOwnershipTransaction(db, driver, () => persistAuthenticatedExecutorExitSteps(driver, { operationId: id, epoch, executorIdentity: e.actorId, attestedBy: "trusted-test-parent" }));
   }
 
   async function product() {
@@ -206,7 +206,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
   const expire = (opId: string) => q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE id = ${opId} RETURNING id`);
   // photo_operations.generation is BIGINT on PostgreSQL; node-postgres returns int8 as a string, SQLite as a number.
   const opRow = async (id: string) => { const [row] = await q(sql`SELECT state, generation FROM photo_operations WHERE id = ${id}`); return { state: row.state, generation: Number(row.generation) }; };
-  const intentState = async (id: string) => (await q(sql`SELECT state, executor_epoch FROM f2c1_publication_intents WHERE operation_id = ${id}`))[0];
+  const intentState = async (id: string) => (await q(sql`SELECT state, executor_epoch FROM photo_publication_intents WHERE operation_id = ${id}`))[0];
   const effects = async (photoId: string) => [await n(sql`SELECT COUNT(*) AS n FROM product_photos WHERE id = ${photoId}`), await n(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id = ${photoId}`)];
   const canonicalOf = (op: any, artifact: "main" | "thumb") => path.join(canonical, artifact === "main" ? op.mainKey : op.thumbKey);
   const absent = (op: any) => { for (const a of ["main", "thumb"] as const) expect(fs.existsSync(canonicalOf(op, a)), a).toBe(false); };
@@ -269,7 +269,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     expect((await a.send("t1", { i: 0 })).kind).toBe("own");
     await expire(ra.op.id);
     expect((await b.send("claim", { kind: "w2", i: 0, ...w2Claim(src, productId, token) })).kind).toBe("in-progress");
-    expect((await b.send("transfer", { i: 0, operationId: ra.op.id, expectedEpoch: 1 })).kind).toBe("no-receipt");
+    expect((await b.send("transfer", { i: 0, operationId: ra.op.id, expectedEpoch: 1 })).kind).toBe("no-exit-record");
     absent(ra.op);
     expect((await a.send("publish", { i: 0 })).status).toBe("published");
     expect(await a.send("t2w2", w2T2(ra, productId, src))).toEqual({ committed: true });
@@ -357,7 +357,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     expect(await effects(r.op.photoId)).toEqual([0, 0]);
   });
 
-  run("W2-10: supervisor loss -> no authenticated completion -> no receipt, no transfer, no reclaim (BLOCKED)", async () => {
+  run("W2-10: supervisor loss -> no authenticated completion -> no exit record, no transfer, no reclaim (BLOCKED)", async () => {
     const productId = await product(), src = await input(127), a = await executor("A"), b = await executor("B");
     const token = randomUUID(), r = await prepared(a, 0, w2Claim(src, productId, token), src, "w2");
     expect((await a.send("t1", { i: 0 })).kind).toBe("own");
@@ -365,7 +365,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     await until(() => a.reports.get(4)!.ended && a.reports.get(5)!.lines.some((l) => l.startsWith("F2PA1 INNER_EXIT")), "supervisor death");
     expect(a.reports.get(5)!.lines).toContainEqual(expect.stringMatching(/^F2PA1 INNER_EXIT pid=\d+ signal=9$/));
     expect(gate(a)).toBe("BLOCKED");
-    expect((await b.send("transfer", { i: 0, operationId: r.op.id, expectedEpoch: 1 })).kind).toBe("no-receipt");
+    expect((await b.send("transfer", { i: 0, operationId: r.op.id, expectedEpoch: 1 })).kind).toBe("no-exit-record");
     await expire(r.op.id);
     expect((await b.send("claim", { kind: "w2", i: 0, ...w2Claim(src, productId, token) })).kind).toBe("in-progress");
     absent(r.op);
@@ -459,14 +459,14 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     await expectPublished(rs[0].op, 1); // photo 1 is physically published per the W4 contract, but not DB-visible
   });
 
-  run("W4-10: supervisor loss -> BLOCKED; no receipt, no transfer, no reclaim", async () => {
+  run("W4-10: supervisor loss -> BLOCKED; no exit record, no transfer, no reclaim", async () => {
     const { productId, staged } = await w4Intake(1), a = await executor("A"), b = await executor("B");
     const r = await prepared(a, 0, w4Claim(staged[0], productId), staged[0].input, "w4");
     expect((await a.send("t1", { i: 0 })).kind).toBe("own");
     a.fire("killSupervisor");
     await until(() => a.reports.get(4)!.ended && a.reports.get(5)!.lines.some((l) => l.startsWith("F2PA1 INNER_EXIT")), "supervisor death");
     expect(gate(a)).toBe("BLOCKED");
-    expect((await b.send("transfer", { i: 0, operationId: r.op.id, expectedEpoch: 1 })).kind).toBe("no-receipt");
+    expect((await b.send("transfer", { i: 0, operationId: r.op.id, expectedEpoch: 1 })).kind).toBe("no-exit-record");
     await expire(r.op.id);
     expect((await b.send("claim", { kind: "w4", i: 0, ...w4Claim(staged[0], productId) })).kind).toBe("in-progress");
     absent(r.op);

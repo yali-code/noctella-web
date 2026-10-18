@@ -1,5 +1,5 @@
 /**
- * #472 F2 Contract 1 OFFLINE PROOF ONLY. One barrier-driven actor process. Each parent command runs one
+ * #472 F2 Contract 1 proof actor (runtime intents since WP1). One barrier-driven actor process. Each parent command runs one
  * protocol step and replies only after that step's transaction committed (commit -> reply). The parent never
  * learns state from cross-actor IPC arrival order. Started with --require f2c1LinkObserver.cjs.
  */
@@ -15,13 +15,14 @@ async function main() {
   const authority = await import("../../src/services/photoOperationAuthority");
   const { stagedProductPhotoStorage } = await import("../../src/services/stagedProductPhotoStorage");
   const protocol = await import("../f2c1/protocol");
+  const intents = await import("../../src/services/photoPublicationIntents");
   const driver = process.env.F2C1_DRIVER === "postgres" ? "postgres" as const : "sqlite" as const;
   const canonical = process.env.F2C1_CANONICAL!;
   const actorId = process.env.F2C1_ACTOR_ID!;
   // One executor token per actor attempt, generated before the first T1 and reused for every retry of it.
-  const me = { token: process.env.F2C1_TOKEN || randomUUID(), actorId };
+  const me = { token: process.env.F2C1_TOKEN || randomUUID(), executorIdentity: actorId };
   let op: any, seal: any, prepared: any, held: any;
-  const tx = (steps: () => Generator<any, any, any>) => protocol.inF2c1Transaction(db as any, driver, steps);
+  const tx = (steps: () => Generator<any, any, any>) => authority.inOwnershipTransaction(db as any, driver, steps);
   const own = (a: any) => { held = a; emit("AUTHORITY", { operationId: a.operationId, epoch: a.epoch, token: a.token, mainKey: a.mainKey, thumbKey: a.thumbKey }); };
 
   const handlers: Record<string, (args: any) => Promise<unknown>> = {
@@ -43,13 +44,13 @@ async function main() {
       return { sealId: seal.sealId, seal, width: prepared.width, height: prepared.height, sizeBytes: input.length };
     },
     async t1(args) {
-      const result: any = await tx(() => protocol.t1Steps(driver, op, seal.sealId, me));
+      const result: any = await intents.acquirePublicationIntent(db as any, driver, op, seal.sealId, me);
       if (args?.lostAck) { emit("LOST_ACK", { step: "t1" }); return { lostAck: true }; } // committed, result discarded
       if (result.kind === "own") own(result.authority);
       return { kind: result.kind, reason: result.reason, state: result.state };
     },
     async transfer(args) {
-      const result: any = await tx(() => protocol.transferSteps(driver, args.operationId, args.expectedEpoch, me));
+      const result: any = await tx(() => intents.transferPublicationAuthoritySteps(driver, args.operationId, args.expectedEpoch, me));
       if (result.kind === "own") own(result.authority);
       return { kind: result.kind };
     },
@@ -76,7 +77,7 @@ async function main() {
       const [durable]: any = await tx(function* () { return yield sqlCommitted(held.operationId); });
       if (durable?.state === "committed") return { committed: true, already: true, photoId: durable.committed_photo_id };
       try {
-        await protocol.harnessT2(db, driver, { ...input, mainKey: held.mainKey, thumbKey: held.thumbKey }, protocol.intentAuthorizedFence(driver, input));
+        await protocol.harnessT2(db, driver, { ...input, mainKey: held.mainKey, thumbKey: held.thumbKey }, protocol.intentFence(input));
       } catch (error: any) {
         if (!String(error?.message ?? error).includes("PHOTO_OPERATION_FENCE_LOST")) throw error;
         // Lost T2 acknowledgement retry: the fence no longer matches because T2 already committed.

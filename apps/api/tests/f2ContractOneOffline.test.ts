@@ -1,8 +1,9 @@
 /**
  * #472 F2 Contract 1 OFFLINE PROOF (W2 only). Cooperative-worker ordering between reclaim and canonical-name
- * creation, exactly-once commit and crash recovery, using real child processes, the real photo authority and
- * a TEST-ONLY intent-authorized fence. Proves nothing about capability enforcement or byte immutability, does
- * not accept production availability, and does not change runtime Photo F2 (HIGH/FAIL).
+ * creation, exactly-once commit and crash recovery, using real child processes, the real photo authority and,
+ * since WP1, the runtime publication-intent module and tables (photoPublicationIntents.ts, migration 0043; NOT wired
+ * into any owner). Proves nothing about capability enforcement or byte immutability, does not accept production
+ * availability, and does not change runtime Photo F2 (HIGH/FAIL).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { fork, type ChildProcess } from "node:child_process";
@@ -27,8 +28,8 @@ import { claimExistingOperation, inOwnershipTransaction, PHOTO_OPERATION_LEASE_M
 import { persistFencedUploadedProductPhoto } from "../src/services/products";
 import { commitDrizzlePhotoOperationFenced } from "../src/services/photoOperationCommitFence";
 import { productPhotoStaticPath } from "../src/services/photoStorage";
-import { f2c1IntentDdl, type F2c1Driver } from "./f2c1/intentSchema";
-import { harnessT2, inF2c1Transaction, recordExitReceiptSteps } from "./f2c1/protocol";
+import { persistAuthenticatedExecutorExitSteps } from "../src/services/photoPublicationIntents";
+import { harnessT2, type F2c1Driver } from "./f2c1/protocol";
 import { linkAttempts, validateLinkAuthorization, type TraceEvent } from "./f2c1/trace";
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
@@ -64,13 +65,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     process.env.DATABASE_DRIVER = driver;
     if (driver === "postgres") {
       process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
-      const h = await createPostgresTestDb("0041_photo_w2_upload_intents.sql"); db = h.db; close = () => h.close();
-      for (const ddl of f2c1IntentDdl("postgres")) await db.execute(sql.raw(ddl));
+      const h = await createPostgresTestDb("0043_photo_publication_intents.sql"); db = h.db; close = () => h.close();
       const url = new URL(process.env.POSTGRES_TEST_DATABASE_URL!); url.searchParams.set("options", "-c search_path=" + h.schemaName); childUrl = url.toString();
     } else {
       childUrl = path.join(root, "f2c1.sqlite"); process.env.DATABASE_URL = childUrl;
       raw = new Database(childUrl); raw.pragma("journal_mode=WAL"); raw.pragma("foreign_keys=ON"); ensureSchema(raw);
-      for (const ddl of f2c1IntentDdl("sqlite")) raw.exec(ddl);
       db = drizzle(raw, { schema }); close = async () => { raw!.close(); };
     }
     input = await sharp({ create: { width: 120, height: 80, channels: 3, background: "#704030" } }).jpeg().toBuffer();
@@ -126,7 +125,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     return actor;
   }
 
-  /** Trusted parent: observed exit of the exact handle, then (PostgreSQL) no live backend for it, then receipt. */
+  /** Trusted parent: observed exit of the exact handle, then (PostgreSQL) no live backend for it, then the exit record. */
   async function observeExitAndReceipt(actor: Actor, operationId: string, epoch: number) {
     await actor.kill();
     if (driver === "postgres") {
@@ -136,7 +135,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
         await new Promise((r) => setTimeout(r, 100));
       }
     }
-    await inF2c1Transaction(db, driver, () => recordExitReceiptSteps(driver, operationId, epoch, "trusted-test-parent", actor.id));
+    await inOwnershipTransaction(db, driver, () => persistAuthenticatedExecutorExitSteps(driver, { operationId, epoch, executorIdentity: actor.id, attestedBy: "trusted-test-parent" }));
   }
 
   async function sealed(actor: Actor, productId: string, token = randomUUID()) {
@@ -148,7 +147,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
   }
   const expire = (operationId: string) => q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE id = ${operationId} RETURNING id`);
   const opRow = async (id: string) => (await q(sql`SELECT generation, state, lease_until_ms, committed_photo_id FROM photo_operations WHERE id = ${id}`))[0];
-  const intentRows = (id: string) => q(sql`SELECT * FROM f2c1_publication_intents WHERE operation_id = ${id}`);
+  const intentRows = (id: string) => q(sql`SELECT * FROM photo_publication_intents WHERE operation_id = ${id}`);
   const effects = async (photoId: string) => [
     Number((await q(sql`SELECT COUNT(*) AS n FROM product_photos WHERE id = ${photoId}`))[0].n),
     Number((await q(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id = ${photoId}`))[0].n),
@@ -265,14 +264,14 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     const outcomes: string[] = [];
     for (let i = 0; i < 3; i++) outcomes.push((await b.send("claim", { token: s.token, productId, sha256: digest, altText: "" })).kind);
     outcomes.push((await r.send("transfer", { operationId: s.op.id, expectedEpoch: 1 })).kind);
-    expect(outcomes).toEqual(["in-progress", "in-progress", "in-progress", "no-receipt"]); // asserted outcome: BLOCKED
+    expect(outcomes).toEqual(["in-progress", "in-progress", "in-progress", "no-exit-record"]); // asserted outcome: BLOCKED
     const [intent] = await intentRows(s.op.id);
     expect([intent.state, Number(intent.executor_epoch)]).toEqual(["authorized", 1]);
     expect([...linkAttempts(trace, "B"), ...linkAttempts(trace, "R")]).toEqual([]);
     await expect(lstat(path.join(canonical, s.op.mainKey))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  run("S3: observed exit + receipt -> transfer to epoch 2; links and T2 only from epoch 2", async () => {
+  run("S3: observed exit + exit record -> transfer to epoch 2; links and T2 only from epoch 2", async () => {
     const productId = await product(), a = await spawnActor("A"), r = await spawnActor("R");
     const s = await sealed(a, productId);
     expect((await a.send("t1")).kind).toBe("own");
@@ -287,17 +286,17 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     await expectCanonicalMatchesIntent(s.op.id);
   });
 
-  run("S3b: transfer without a receipt is rejected while the executor may be alive (BLOCKED)", async () => {
+  run("S3b: transfer without an exit record is rejected while the executor may be alive (BLOCKED)", async () => {
     const productId = await product(), a = await spawnActor("A"), r = await spawnActor("R");
     const s = await sealed(a, productId);
     expect((await a.send("t1")).kind).toBe("own");
-    expect((await r.send("transfer", { operationId: s.op.id, expectedEpoch: 1 })).kind).toBe("no-receipt");
+    expect((await r.send("transfer", { operationId: s.op.id, expectedEpoch: 1 })).kind).toBe("no-exit-record");
     expect(await r.send("link")).toEqual({ refused: "no-authority" });
     expect(linkAttempts(trace, "R")).toEqual([]);
     expect(Number((await intentRows(s.op.id))[0].executor_epoch)).toBe(1);
   });
 
-  run("S3c: concurrent transfers after a valid receipt grant exactly one executor", async () => {
+  run("S3c: concurrent transfers after a valid exit record grant exactly one executor", async () => {
     const productId = await product(), a = await spawnActor("A"), r1 = await spawnActor("R1"), r2 = await spawnActor("R2");
     const s = await sealed(a, productId);
     expect((await a.send("t1")).kind).toBe("own");
@@ -403,13 +402,13 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     expect(await intentRows(s.op.id)).toEqual([]);
   });
 
-  run("UNIQUE: a forced unique violation recovers via savepoint, never queries an aborted transaction", async () => {
+  run("UNIQUE: a forced unique violation recovers in a fresh transaction, never queries an aborted transaction", async () => {
     const shared = randomUUID();
     const z = await spawnActor("Z", { F2C1_TOKEN: shared }), a = await spawnActor("A", { F2C1_TOKEN: shared });
     const sz = await sealed(z, await product());
     expect((await z.send("t1")).kind).toBe("own"); // occupies UNIQUE(executor_token) for another operation
     const s = await sealed(a, await product());
-    const result = await a.send("t1"); // INSERT violates UNIQUE(executor_token) -> ROLLBACK TO SAVEPOINT -> re-select
+    const result = await a.send("t1"); // INSERT violates UNIQUE(executor_token) -> rollback -> re-select in a fresh transaction
     expect(result).toEqual({ kind: "rejected", reason: "unique violation without an intent for this operation" });
     expect(await intentRows(s.op.id)).toEqual([]);
     expect((await opRow(s.op.id)).state).toBe("sealed");
