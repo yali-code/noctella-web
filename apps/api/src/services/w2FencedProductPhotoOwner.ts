@@ -17,6 +17,7 @@ import {
   resumeAfterAuthenticatedExit, sealedArtifactPath,
 } from "./photoPublicationExecutor";
 import type { CopyPhase } from "./photoCopyPublisher";
+import { photoPreparationConfinementConfig, prepareInConfinedWorker, withPreparationJobDir } from "./photoPreparationConfinement";
 
 /**
  * FAZ A / #424: the generation-fenced W2 product-photo owner (used only when PHOTO_OWNERSHIP_FENCING_ENABLED=true),
@@ -105,7 +106,14 @@ export async function uploadFencedProductPhoto(db: DbClient, command: FencedUplo
     // Generation-private, path-fed preparation (the full original is never read into a Buffer here).
     const generationDir = await createGenerationDirectory(op, canonicalRoot);
     let prepared: Awaited<ReturnType<typeof stagedProductPhotoStorage.prepareFencedProductPhoto>>;
-    try { prepared = await stagedProductPhotoStorage.prepareFencedProductPhoto(command.file, generationDir); }
+    const confinement = photoPreparationConfinementConfig();
+    try {
+      prepared = confinement.mode === "confined"
+        ? await withPreparationJobDir(generationDir, (jobDir) => prepareInConfinedWorker(confinement.launcher, {
+          kind: "w2", inputPath: command.file.path, workDir: command.file.workDir, size: command.file.size, mimetype: command.file.mimetype, outDir: generationDir,
+        }, jobDir, { signal: command.file.signal }))
+        : await stagedProductPhotoStorage.prepareFencedProductPhoto(command.file, generationDir);
+    }
     catch (error) {
       // A deterministic input rejection (nothing sealed or published) ends this identity; retries of it are 409.
       if (error instanceof PhotoUploadError && (error.status === 400 || error.status === 413))

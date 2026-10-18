@@ -41,8 +41,17 @@ Recovery outcomes:
   - Identity: `px1:<boot_id>:<pid-namespace inode>:<pid>:<start time>:<nonce>`, from Linux `/proc`.
   - On a platform without `/proc`: `px1u:…`, which can never be authenticated.
   - Each T1 gets a fresh token registered in the process's execution registry. The token is released only when the owner's whole execution (publication **and** commit, or failure) has settled.
-- **No separate worker principal at runtime.** Image preparation runs in-process, into generation-private files that the publisher only reads. Worker descriptors and aliases cannot reach published bytes, because the canonical inode is the publisher's verified copy (`nlink 1`).
-  - Landlock confinement of preparation (Step 2) remains defence in depth against decoder compromise. It is not a correctness prerequisite of the F2 property, and it is not enabled at runtime (see §6).
+- **Preparer lifecycle.** Preparation writes generation-private files that the publisher only reads; worker descriptors and aliases cannot reach published bytes because the canonical inode is the publisher's verified copy (`nlink 1`).
+  - **In-process (default):** preparation runs inside the API process.
+  - **Confined (`PHOTO_PREPARATION_CONFINEMENT=required` + `PHOTO_PREPARATION_LAUNCHER`, `photoPreparationConfinement.ts`):** each W2/W4 preparation runs in a separate worker started through the Step 2 Landlock launcher (plain mode).
+    - Writes are allowed only beneath its generation directory and a per-job directory.
+    - stdio is `/dev/null` + parent sockets, verified by the launcher; every other descriptor is closed.
+    - The environment carries no database URL or secret.
+    - `LANDLOCK_ENFORCED` must be reported, otherwise 503.
+    - The parent waits for the worker's exit (and kills it on timeout or abort) **before** sealing.
+    - Descendants inherit the confinement. A surviving descendant can at most alter private bytes, which then fail copy verification (`SNAPSHOT_MISMATCH` → review).
+  - An invalid value, a non-Linux platform or a missing launcher is NOT READY (503); it never falls back to in-process preparation.
+  - Confinement is defence in depth against a decoder compromise. The F2 authority property holds in both modes.
 - **Exit authenticator.** Authority moves (epoch n → n+1, `transferAfterAuthenticatedExitSteps`, in one transaction under the row lock) only when one of these holds:
   - (a) an exit record for that exact epoch and identity already exists, written by a trusted caller; or
   - (b) the authenticator proves termination now, and the record is written in the same transaction. Proof means:
@@ -106,7 +115,8 @@ Recovery outcomes:
 | Lost acknowledgements: no duplicates | W2 lost-commit-ack; W4 lost-finalization; SIGKILL afterCommit (SQLite + PostgreSQL) |
 | Partial multi-artifact recovery | runtime suite crash after record / after link; F3 private-name cases (adopt recorded copy only); Step 4 W4-4/6/9 |
 | Foreign artifacts never adopted/overwritten/cleaned | W2/W4 foreign-collision and identical-byte cases; recovery-policy same-bytes replacement → review |
-| Supervisor loss / unsupported prerequisites fail closed | readiness NOT_READY (schema missing, non-directory root); non-Linux BLOCKED branches; Step 2/4 supervisor-loss cases |
+| Supervisor loss / unsupported prerequisites fail closed | readiness NOT_READY (schema missing, non-directory root, invalid confinement config); non-Linux BLOCKED branches; non-confining launcher refused; Step 2/4 supervisor-loss cases |
+| Confined preparer lifecycle | `photoPreparationConfinement`: real launcher, enforcement reported, worker exited before seal, hostile worker denied canonical/database writes and aliases, no database URL; W2/W4 end to end in required mode (SQLite + PostgreSQL) |
 | All writers respect the boundary | `photoCanonicalWriterInventory` + `photoOwnershipFencingSwitch` behavioural refusals |
 | Migration compatibility and data preservation | `photoPublicationIntentSchema` (0043 onto 0041 with rows; idempotent; forward-only) + 0044 inventory; preflight |
 | Resource / disk | copy-owned publication: one extra transient copy per artifact in staging (same filesystem), removed after link; ENOSPC case. Existing disk-budget gates measure the canonical filesystem, which contains staging |
@@ -125,7 +135,7 @@ Expected results:
 **Disposable executable probe** (needs separate written authorization; never the canonical root):
 - In `/var/data/f2-probe-<uuid>`, run a node one-liner that creates `a`, `link(a, b)`, verifies `st_dev` equals the canonical root's (stat only), reads `/proc/self/stat`, then deletes the directory.
 - Acceptance: hard links work on the attached disk and `/proc` is readable.
-- The Step 2 Landlock probe is needed only if preparation confinement is later required.
+- The Step 2 Landlock probe (ABI ≥ 3, plain-mode `LANDLOCK_ENFORCED` with a denied sibling write) is needed only before `PHOTO_PREPARATION_CONFINEMENT=required` is enabled.
 
 **Release acceptance**, all of the following:
 - exact-head CI is green;
@@ -138,6 +148,6 @@ Expected results:
 ## 7. Remaining gaps (explicit)
 - **Cross-instance executor loss** is BLOCKED until operator attestation, by design. The availability cost is listed in §3.
 - **Instagram preparation and deletion cleanup** are refused while fencing is ON (§3).
-- **Preparation confinement** (Landlock worker processes) is not integrated at runtime. It is defence in depth against an image-decoder compromise, not part of the F2 authority property. If required, it needs a reviewed Render build change (compiling the launcher) and target Landlock evidence.
+- **Preparation confinement** is implemented but opt-in (`PHOTO_PREPARATION_CONFINEMENT=required`). Enabling it on Render needs a reviewed build change, compiling `scripts/photo-publication-capability/landlock-worker.c` with `-Wall -Wextra -Werror`, and target Landlock ABI ≥ 3 evidence (§6 probe). The preflight reports the mode: in-process is WARN, invalid is FAIL.
 - **Power-loss durability:** the publisher fsyncs the copy and both directories, but no power-loss test exists.
 - **Closure:** F2 may be marked CLOSED only after exact-head CI, independent review, target verification, authorized staging and production acceptance. None of these is claimed here.

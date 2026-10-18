@@ -15,6 +15,9 @@ import {
   sealedArtifactPath, type PublicationScope,
 } from "./photoPublicationExecutor";
 import type { CopyPhase } from "./photoCopyPublisher";
+import { photoPreparationConfinementConfig, prepareInConfinedWorker, withPreparationJobDir } from "./photoPreparationConfinement";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   AiIntakePhotoFinalizationNoStagedPhotosError, AiIntakePhotoFinalizationPrimaryInvalidError, AiIntakePhotoFinalizationSourceMissingError, NotFoundError,
 } from "./errors";
@@ -116,7 +119,16 @@ export async function buildFencedAiIntakePhotoFinalizationManifest(
         const op = claim.op;
         const generationDir = await createGenerationDirectory(op, canonicalRoot);
         let prepared: Awaited<ReturnType<typeof prepareDeterministicProductPhotoFiles>>;
-        try { prepared = await prepareDeterministicProductPhotoFiles({ buffer: bytes, mimetype: stagedSourceMimeType(staged.storageKey), size: bytes.length }, generationDir); }
+        const confinement = photoPreparationConfinementConfig(), mimetype = stagedSourceMimeType(staged.storageKey);
+        try {
+          prepared = confinement.mode === "confined"
+            ? await withPreparationJobDir(generationDir, async (jobDir) => {
+              const inputPath = path.join(jobDir, "source");
+              await writeFile(inputPath, bytes, { flag: "wx", mode: 0o600 });
+              return prepareInConfinedWorker(confinement.launcher, { kind: "w4", inputPath, size: bytes.length, mimetype, outDir: generationDir }, jobDir);
+            })
+            : await prepareDeterministicProductPhotoFiles({ buffer: bytes, mimetype, size: bytes.length }, generationDir);
+        }
         catch (error) {
           if (error && typeof error === "object" && (error as { status?: number }).status === 400)
             await inOwnershipTransaction(db, driver, () => reviewSteps(driver, op, "staged source rejected by the W4 recipe"));

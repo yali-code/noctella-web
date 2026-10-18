@@ -32,6 +32,7 @@ import {
   type AuthenticatedResume, type ExecutorExitEvidence, type PublicationAuthority, type PublicationCopyRow, type PublicationExecutor,
 } from "./photoPublicationIntents";
 import { publishVerifiedCopy, type CopyOutcome, type CopyPhase } from "./photoCopyPublisher";
+import { assertPreparationConfinementReady } from "./photoPreparationConfinement";
 
 interface LinuxProcess { bootId: string; pidNs: string; pid: number; start: string }
 
@@ -119,6 +120,7 @@ export const sealedArtifactPath = (canonicalRoot: string, a: Pick<PublicationAut
  * Never falls back to linking worker-owned inodes.
  */
 export async function assertPhotoPublicationReady(db: DbClient, driver: OwnershipDriver, canonicalRoot: string): Promise<void> {
+  assertPreparationConfinementReady(); // an invalid PHOTO_PREPARATION_CONFINEMENT is never ignored
   try {
     await inOwnershipTransaction(db, driver, function* (): Generator<SQL, void, Rows> {
       yield sql`SELECT operation_id FROM photo_publication_intents WHERE 1 = 0`;

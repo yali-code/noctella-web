@@ -39,6 +39,8 @@ describe("photo release preflight", () => {
     expect(check(result, "migrations.unique-numbers")).toMatchObject({ status: "FAIL" });
     expect(check(result, "migrations.0041").status).toBe("FAIL");
     for (const id of ["migrations.0043", "migrations.0044"]) expect(check(result, id).status).toBe("FAIL"); // protected publication schema (#472)
+    expect(check(runPhotoReleasePreflight({ env: { PHOTO_PREPARATION_CONFINEMENT: "yes" }, canonicalRoot: path.join(root, "photos") }), "flag.preparation-confinement").status).toBe("FAIL");
+    expect(check(runPhotoReleasePreflight({ env: {}, canonicalRoot: path.join(root, "photos") }), "flag.preparation-confinement").status).toBe("WARN");
     expect(check(result, "migrations.0042-w11").status).toBe("FAIL");
     expect(check(result, "flag.fencing").status).toBe("FAIL");
     expect(result.status).toBe("FAIL");

@@ -8,6 +8,7 @@ import path from "node:path";
 import { photoOwnershipFencingConfig } from "../services/photoOwnershipFencing";
 import { aiIntakeOriginalSourceStagingConfig } from "../services/aiIntakeOriginalSourceStaging";
 import { crossProcessExitAuthenticationAvailable } from "../services/photoPublicationExecutor";
+import { photoPreparationConfinementConfig } from "../services/photoPreparationConfinement";
 
 export type PreflightStatus = "PASS" | "WARN" | "FAIL" | "MANUAL";
 export interface PreflightCheck { id: string; status: PreflightStatus; detail: string }
@@ -23,6 +24,11 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
   // Flags: invalid values must be visible before any deploy.
   const fencing = photoOwnershipFencingConfig(env);
   add("flag.fencing", fencing.valid ? "PASS" : "FAIL", fencing.valid ? `PHOTO_OWNERSHIP_FENCING_ENABLED is ${fencing.enabled ? "ON" : "OFF"}` : `invalid PHOTO_OWNERSHIP_FENCING_ENABLED value (treated as ON): ${JSON.stringify(fencing.raw)}`);
+  const confinement = photoPreparationConfinementConfig(env);
+  add("flag.preparation-confinement", confinement.mode === "invalid" ? "FAIL" : confinement.mode === "confined" ? "PASS" : "WARN",
+    confinement.mode === "invalid" ? `${confinement.reason} (protected publication refuses: NOT READY)`
+      : confinement.mode === "confined" ? `image preparation runs in Landlock-confined workers (${confinement.launcher})`
+        : "image preparation runs in the API process (defence-in-depth confinement OFF; publication authority unaffected)");
   const original = aiIntakeOriginalSourceStagingConfig(env);
   add("flag.w3-original-source", original.valid ? (original.requested && !original.activatable ? "WARN" : "PASS") : "FAIL",
     !original.valid ? "invalid AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED value" : original.requested && !original.activatable ? "requested but not activatable outside test/development (owner retention decision pending)" : `original-source staging ${original.enabled ? "ON" : "OFF"}`);

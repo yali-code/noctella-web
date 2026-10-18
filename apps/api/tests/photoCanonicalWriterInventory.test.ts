@@ -19,6 +19,7 @@ const MUTATION = /\b(link|linkSync|writeFile|writeFileSync|rename|renameSync|unl
 /** Every runtime module that can reach the protected roots AND mutates the filesystem, with its governance. */
 const GOVERNED: Record<string, string> = {
   "services/photoPublicationExecutor.ts": "protected publisher: readiness mkdir, copy-owned publication, post-commit cleanup of its own namespace",
+  "services/w4FencedFinalizationOwner.ts": "W4 owner: confined-preparation input copy into its private job directory only (no canonical write)",
   "services/photoOperationAuthority.ts": "generation-private directories; legacy publishSealedArtifacts primitive (no runtime caller, asserted below)",
   "services/photoStorage.ts": "W1 legacy upload/delete (refused with fencing ON) and generation-private W4 preparation",
   "services/stagedProductPhotoStorage.ts": "W10 staged upload (refused with fencing ON) and generation-private W2 preparation",
