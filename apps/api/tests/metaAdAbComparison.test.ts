@@ -74,3 +74,54 @@ describe("ADS-AB1 ad-level comparison (all clicks, advisory only)", () => {
     for (const b of variations) expect(() => compareMetaAdTraffic(a, b)).toThrow(/provenance|window/);
   });
 });
+
+
+describe("ADS-AB1 invalid metric hardening", () => {
+  it.each([
+    { impressions: -1 }, { clicks: -1 }, { impressions: 10, clicks: 11 },
+    { impressions: Number.NaN }, { impressions: Infinity },
+    { clicks: Number.NaN }, { clicks: Infinity },
+    { impressions: 2000.5 }, { clicks: 1.5 },
+    { spendEur: -1 }, { spendEur: Number.NaN }, { spendEur: Infinity },
+    { spendEur: 0.001 },
+  ])("suppresses invalid ratios in either position: %j", bad => {
+    for (const invalidIndex of [0, 1]) {
+      const result = compareMetaAdTraffic(
+        observation(aId, invalidIndex === 0 ? bad : {}),
+        observation(bId, invalidIndex === 1 ? bad : {}),
+      );
+      expect(result).toMatchObject({
+        verdict: "DATA_QUALITY_REVIEW", directionalLeaderAdId: null,
+        absoluteCtrZScore: null, causalAbWinnerVerified: false,
+        comparisonIsRandomizedExperimentVerified: false,
+        marketplaceAttributionVerified: false, marketplaceRoas: null,
+      });
+      expect(result.reasons).toContain("INVALID_META_NUMERIC_EVIDENCE");
+      expect(result.metrics[invalidIndex]).toMatchObject({ ...bad, ctr: null, cpcEur: null, cpmEur: null });
+      expect(result.metrics[1 - invalidIndex]).toMatchObject({ ctr: 0.06, cpcEur: 0.05, cpmEur: 3 });
+      for (const metric of result.metrics) {
+        for (const ratio of [metric.ctr, metric.cpcEur, metric.cpmEur]) {
+          expect(ratio === null || Number.isFinite(ratio)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it.each([
+    { changes: { impressions: 0, clicks: 0 }, ctr: null, cpcEur: null, cpmEur: null },
+    { changes: { clicks: 0 }, ctr: 0, cpcEur: null, cpmEur: 3 },
+    { changes: { spendEur: 0 }, ctr: 0.06, cpcEur: 0, cpmEur: 0 },
+    { changes: { impressions: null }, ctr: null, cpcEur: 0.05, cpmEur: null },
+    { changes: { clicks: null }, ctr: null, cpcEur: null, cpmEur: 3 },
+    { changes: { spendEur: null }, ctr: 0.06, cpcEur: null, cpmEur: null },
+  ])("preserves zero and missing evidence: %j", ({ changes, ...ratios }) => {
+    const result = compareMetaAdTraffic(observation(aId, changes), observation(bId));
+    expect(result).toMatchObject({
+      verdict: "INSUFFICIENT_EVIDENCE", directionalLeaderAdId: null,
+      causalAbWinnerVerified: false, marketplaceAttributionVerified: false, marketplaceRoas: null,
+    });
+    expect(result.metrics[0]).toMatchObject({ ...changes, ...ratios });
+    expect(result.reasons).toContain(Object.values(changes).includes(null)
+      ? "MISSING_METRICS_NOT_ZERO" : "INSUFFICIENT_PER_AD_TRAFFIC_SAMPLE");
+  });
+});
