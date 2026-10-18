@@ -236,7 +236,7 @@ describe("Etsy listing form parity: additive migrations", () => {
 
   it("PostgreSQL: migration 0039 only adds the same nullable columns (no drop, update, default or backfill)", () => {
     const sql = fs.readFileSync(path.resolve(__dirname, "../src/db/postgres-migrations/0039_etsy_listing_form_parity.sql"), "utf8");
-    const statements = sql.split("\n").filter((line) => line.trim() && !line.startsWith("--"));
+    const statements = sql.split(/\r?\n/).filter((line) => line.trim() && !line.startsWith("--"));
     expect(statements).toHaveLength(NEW_COLUMNS.length);
     expect(statements.map((s) => /^ALTER TABLE products ADD COLUMN IF NOT EXISTS (\w+) (text|integer|boolean);$/.exec(s)?.[1])).toEqual(NEW_COLUMNS);
     expect(statements.join(" ")).not.toMatch(/DROP|UPDATE|DEFAULT|NOT NULL/i);

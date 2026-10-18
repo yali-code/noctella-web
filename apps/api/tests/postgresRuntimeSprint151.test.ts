@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import { buildEtsyMediaPlan } from "../../admin/src/lib/etsyMediaPlan";
+import fs from "node:fs";
+import path from "node:path";
 import { and, asc, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { MarketplaceOrderStatus, MarketplaceWebhookEventType, ProductStatus, ProductType, PublishChannel, StockMovementType } from "@noctella/shared";
@@ -36,6 +39,29 @@ async function photo(h:PostgresTestDb,productId="p1"){const t=now();await h.db.i
 const order=(overrides:Record<string,unknown>={})=>({externalOrderId:"external-1",externalOrderNumber:"1001",status:"pending",currency:"EUR",subtotal:10,shipping:0,tax:0,total:10,buyerEmail:"buyer@example.test",buyerName:"Buyer",orderedAt:new Date().toISOString(),items:[{externalOrderItemId:"item-1",externalListingId:"listing-1",sku:"SKU-1",title:"Marketplace title",quantity:1,unitPrice:10,lineTotal:10}],raw:{native:true},...overrides} as any);
 
 suite("Sprint 151 real PostgreSQL runtime", () => {
+  it("keeps legacy rows intact when additive Etsy 0039 is applied twice, without Photo 0040–0042", async () => {
+    const h = await createPostgresTestDb("0038_background_job_claim_fencing.sql");
+    try {
+      await h.pool.query("INSERT INTO products (id,sku,title,slug,type,status,stock_quantity,price_eur,etsy_title) VALUES ('legacy-etsy','LEGACY-ETSY','Legacy','legacy-etsy','lot_item','draft',3,100,'Legacy Etsy')");
+      const migration = fs.readFileSync(path.resolve(__dirname, "../src/db/postgres-migrations/0039_etsy_listing_form_parity.sql"), "utf8");
+      const columns = [...migration.matchAll(/ADD COLUMN IF NOT EXISTS (etsy_\w+)/g)].map(match => match[1]);
+      expect(columns).toHaveLength(23);
+      for (let i = 0; i < 2; i++) await h.pool.query(migration);
+      const row = (await h.pool.query("SELECT * FROM products WHERE id = 'legacy-etsy'")).rows[0];
+      expect(row).toMatchObject({ sku: "LEGACY-ETSY", etsy_title: "Legacy Etsy", stock_quantity: 3 });
+      for (const column of columns) expect(row[column], column).toBeNull();
+      const metadata = await h.pool.query("SELECT column_name,is_nullable,column_default FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='products' AND column_name=ANY($1)", [columns]);
+      expect(metadata.rows).toHaveLength(23);
+      for (const column of metadata.rows) expect(column).toMatchObject({ is_nullable: "YES", column_default: null });
+      expect(await productsService.getProductById(h.db as any, "legacy-etsy")).toMatchObject({ sku: "LEGACY-ETSY", stockQuantity: 3, priceEur: 100, etsyTitle: "Legacy Etsy", photos: [] });
+      await h.pool.query("UPDATE products SET etsy_taxonomy_id='1234', etsy_quantity=2 WHERE id='legacy-etsy'");
+      expect(await productsService.getProductById(h.db as any, "legacy-etsy")).toMatchObject({ etsyTaxonomyId: "1234", etsyQuantity: 2, stockQuantity: 3 });
+      await photo(h, "legacy-etsy");
+      const withPhoto = await productsService.getProductById(h.db as any, "legacy-etsy");
+      expect(buildEtsyMediaPlan(withPhoto.photos)).toMatchObject({ ready: true, eligibleCount: 1, media: [{ photoId: "photo-legacy-etsy", etsyRank: 1 }] });
+    } finally { await h.close(); }
+  });
+
   it("applies Etsy listing parity fields in the default PostgreSQL test harness", async () => {
     const h = await createPostgresTestDb();
     try {

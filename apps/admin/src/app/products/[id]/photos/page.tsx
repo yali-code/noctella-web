@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, resolveApiAssetUrl } from "@/lib/api";
 import { productPhotoApi, productPhotoPublicationReadiness, reorderProductPhotoIds, type ProductPhotoUploadState } from "@/lib/productPhotos";
+import { EtsyMediaPreview } from "@/components/EtsyMediaPreview";
 import type { ProductDetail } from "@/lib/types";
 
 export default function ProductPhotosPage({ params }: { params: { id: string } }) {
+  const [previewState, setPreviewState] = useState<"loading" | "loaded" | "error">("loading");
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [altText, setAltText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -16,10 +18,25 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
   const [uploadStates, setUploadStates] = useState<Record<string, ProductPhotoUploadState>>({});
 
   const load = useCallback(async () => {
-    const next = await api.get<ProductDetail>(`/api/products/${params.id}`);
-    setProduct(next);
-    setAltDrafts((current) => Object.fromEntries(next.photos.map((photo) => [photo.id, Object.hasOwn(current, photo.id) ? current[photo.id] : photo.altText ?? ""])));
+    setPreviewState("loading");
+    try {
+      const next = await api.get<ProductDetail>(`/api/products/${params.id}`);
+      setProduct(next);
+      setAltDrafts((current) => Object.fromEntries(next.photos.map((photo) => [photo.id, Object.hasOwn(current, photo.id) ? current[photo.id] : photo.altText ?? ""])));
+      setPreviewState("loaded");
+    } catch (error) {
+      setPreviewState("error");
+      throw error;
+    }
   }, [params.id]);
+
+  async function reloadPhotos() {
+    if (activeOperation || previewState === "loading") return;
+    setActiveOperation({ kind: "photo" });
+    try { await load(); }
+    catch { setMessage("Failed to reload photos."); }
+    finally { setActiveOperation(null); }
+  }
 
   useEffect(() => {
     load().catch((err) => setMessage(err.message ?? "Failed to load photos"));
@@ -96,13 +113,15 @@ export default function ProductPhotosPage({ params }: { params: { id: string } }
     await mutate(photoId, "save alt text", () => productPhotoApi.updateAltText(params.id, photoId, altDrafts[photoId]?.trim() || undefined));
   }
 
-  if (!product) return <p>Loading...</p>;
+  if (!product) return <EtsyMediaPreview photos={[]} loading={previewState === "loading"} error={previewState === "error"} />;
 
   return (
     <div>
       <Link href={`/products/${params.id}`}>← Back to product</Link>
       <h1>Manage Photos — {product.title}</h1>
       {message && <p role={/failed/i.test(message) ? "alert" : "status"} aria-live="polite" style={{ color: "#c86a6a" }}>{message}</p>}
+      <EtsyMediaPreview photos={product.photos} loading={previewState === "loading"} error={previewState === "error"} />
+      <button type="button" disabled={activeOperation !== null || previewState === "loading"} onClick={() => { void reloadPhotos(); }}>Reload product photos</button>
       <form onSubmit={uploadPhotos} className="noctella-panel" style={{ padding: 20, margin: "20px 0", display: "grid", gap: 12 }}>
         <input
           type="file"
