@@ -10,14 +10,14 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { sql, type SQL } from "drizzle-orm";
+import { DrizzleQueryError, sql, type SQL } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ensureSchema } from "../src/db/migrate";
 import * as schema from "../src/db/schema.sqlite";
 import { claimExistingOperation, createOperation, inOwnershipTransaction, PHOTO_OPERATION_LEASE_MS, type OwnershipDriver } from "../src/services/photoOperationAuthority";
 import {
   acquirePublicationIntent, commitIntentAuthorizedPhotoOperation, exactPositiveInteger, guardedReclaimSteps,
-  persistAuthenticatedExecutorExitSteps, transferPublicationAuthoritySteps, type PublicationAuthority,
+  persistAuthenticatedExecutorExitSteps, publicationUniqueViolation, transferPublicationAuthoritySteps, type PublicationAuthority,
 } from "../src/services/photoPublicationIntents";
 import { createPostgresTestDb, postgresTestConfigured, type PostgresTestDb } from "./postgresTestDb";
 
@@ -57,6 +57,25 @@ describe("exactPositiveInteger never converts lossily", () => {
   });
   it.each([0, -1, "0", "01", "1.0", 1.5, "9007199254740993", 9007199254740992, "", "abc", null, undefined, Number.NaN])("rejects %s", (value) => {
     expect(() => exactPositiveInteger(value)).toThrow("PHOTO_PUBLICATION_INTEGER_INVALID");
+  });
+});
+
+describe("publicationUniqueViolation classifies by driver code through the cause chain", () => {
+  const wrapped = (cause: unknown, params: unknown[] = []) => new DrizzleQueryError("INSERT INTO photo_publication_intents ...", params, cause as Error);
+  it("recognizes PostgreSQL 23505 wrapped by drizzle (the CI failure) and direct SQLite unique/PK codes", () => {
+    expect(publicationUniqueViolation(wrapped(Object.assign(new Error("duplicate key"), { code: "23505", constraint: "photo_publication_intents_executor_token_key" })))).toBe(true);
+    expect(publicationUniqueViolation(Object.assign(new Error("x"), { code: "23505" }))).toBe(true);
+    expect(publicationUniqueViolation(Object.assign(new Error("x"), { code: "SQLITE_CONSTRAINT_UNIQUE" }))).toBe(true);
+    expect(publicationUniqueViolation(Object.assign(new Error("x"), { code: "SQLITE_CONSTRAINT_PRIMARYKEY" }))).toBe(true);
+  });
+  it("never treats other database errors or message text as a unique violation", () => {
+    expect(publicationUniqueViolation(wrapped(Object.assign(new Error("fk"), { code: "23503" })))).toBe(false);
+    expect(publicationUniqueViolation(wrapped(Object.assign(new Error("aborted"), { code: "25P02" })))).toBe(false);
+    expect(publicationUniqueViolation(Object.assign(new Error("x"), { code: "SQLITE_CONSTRAINT_FOREIGNKEY" }))).toBe(false);
+    expect(publicationUniqueViolation(Object.assign(new Error("x"), { code: "SQLITE_CONSTRAINT_CHECK" }))).toBe(false);
+    expect(publicationUniqueViolation(wrapped(new Error("UNIQUE constraint failed"), ["SQLITE_CONSTRAINT_UNIQUE 23505"]))).toBe(false);
+    expect(publicationUniqueViolation(new Error("UNIQUE constraint failed: photo_publication_intents.executor_token"))).toBe(false);
+    expect([undefined, null, "23505"].map(publicationUniqueViolation)).toEqual([false, false, false]);
   });
 });
 

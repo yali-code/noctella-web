@@ -103,7 +103,12 @@ async function main() {
   process.on("message", async (message: any) => {
     if (message?.type !== "cmd") return;
     try { process.send?.({ type: "reply", id: message.id, ok: true, result: await handlers[message.cmd](message.args) }); }
-    catch (error: any) { process.send?.({ type: "reply", id: message.id, ok: false, error: String(error?.message ?? error), code: error?.code }); }
+    catch (error: any) {
+      // Driver evidence from the cause chain (drizzle wraps PostgreSQL errors): code and constraint only, never URLs.
+      let code = error?.code, constraint: unknown;
+      for (let e = error, d = 0; e && d < 5; e = e.cause, d++) { code ??= e.code; constraint ??= e.constraint; }
+      process.send?.({ type: "reply", id: message.id, ok: false, error: String(error?.message ?? error), code, constraint });
+    }
   });
   process.send?.({ type: "ready", actorId, pid: process.pid });
 }

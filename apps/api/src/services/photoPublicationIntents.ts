@@ -18,7 +18,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { DbClient } from "../db/client";
 import {
-  claimExistingOperation, inOwnershipTransaction, nowMs, reviewSteps, uniqueViolation,
+  claimExistingOperation, inOwnershipTransaction, nowMs, reviewSteps,
   type OperationClaim, type OwnedOperation, type OwnershipDriver, type Rows,
 } from "./photoOperationAuthority";
 
@@ -92,14 +92,25 @@ export function* acquirePublicationIntentSteps(driver: OwnershipDriver, op: Owne
 }
 
 /**
- * T1 with unique-violation recovery in a FRESH transaction (the aborted one is never queried again), following the
- * repository's W2 claim convention. A violation without an intent for this operation (e.g. a token or seal already
- * bound elsewhere) fails closed.
+ * True only for a unique/primary-key violation identified by its driver code, anywhere in the cause chain: drizzle's
+ * PostgreSQL session wraps driver errors in DrizzleQueryError (code on `cause`), better-sqlite3 throws SqliteError
+ * directly. Messages are never matched (they embed query parameters); other constraint failures are not unique.
+ */
+export function publicationUniqueViolation(error: unknown): boolean {
+  for (let e: any = error, depth = 0; e && depth < 5; e = e.cause, depth++)
+    if (e.code === "23505" || e.code === "SQLITE_CONSTRAINT_UNIQUE" || e.code === "SQLITE_CONSTRAINT_PRIMARYKEY") return true;
+  return false;
+}
+
+/**
+ * T1 with unique-violation recovery in a FRESH transaction, started only after the failed one has rolled back (the
+ * aborted one is never queried again), following the repository's W2 claim convention. A violation without an
+ * intent for this operation (e.g. a token or seal already bound elsewhere) fails closed.
  */
 export async function acquirePublicationIntent(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, sealId: string, me: PublicationExecutor): Promise<IntentAcquisition> {
   try { return await inOwnershipTransaction(db, driver, () => acquirePublicationIntentSteps(driver, op, sealId, me)); }
   catch (error) {
-    if (!uniqueViolation(error)) throw error;
+    if (!publicationUniqueViolation(error)) throw error;
     return inOwnershipTransaction(db, driver, function* (): Generator<SQL, IntentAcquisition, Rows> {
       yield lockOperationRow(driver, op.id);
       const [winner] = yield sql`SELECT ${INTENT_COLUMNS} FROM photo_publication_intents WHERE operation_id = ${op.id}`;

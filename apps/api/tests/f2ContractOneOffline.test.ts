@@ -110,7 +110,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
       proc.on("message", (m: any) => {
         if (m?.type === "ready") resolve();
         else if (m?.type === "event") trace.push({ actor: name, seq: m.seq, kind: m.kind, data: m.data });
-        else if (m?.type === "reply") { const p = pending.get(m.id); pending.delete(m.id); if (!p) return; if (m.ok) p.resolve(m.result); else p.reject(Object.assign(new Error(m.error), { code: m.code })); }
+        else if (m?.type === "reply") { const p = pending.get(m.id); pending.delete(m.id); if (!p) return; if (m.ok) p.resolve(m.result); else p.reject(Object.assign(new Error(m.error), { code: m.code, constraint: m.constraint })); }
         else if (m?.type === "fatal") reject(new Error("actor fatal: " + m.error + " " + log.slice(-1500)));
       });
       proc.once("exit", () => { reject(new Error("actor exited: " + log.slice(-1500))); for (const p of pending.values()) p.reject(new Error("actor exited")); });
