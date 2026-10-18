@@ -24,9 +24,14 @@ const evidence = {
   handlerDigestsBeforeOwner: /digestW2StagedInput\(file/.test(handler) && /options\.fencedUpload!\(/.test(handler),
   w2BindsIntentToOperation: /INSERT INTO photo_w2_upload_intents[\s\S]*operation_id/.test(owner),
   w2CommitsThroughFencedTransaction: /persistFencedUploadedProductPhoto\(/.test(owner),
-  authorityNeverOverwrites: /await link\(file, destination\)/.test(authority) && !/rename\(|copyFile\(|writeFile\(/.test(authority + owner + w4Owner),
+  // The only owner-side write is W4's exclusive (wx) confined-preparation input inside its private job directory (#472).
+  authorityNeverOverwrites: /await link\(file, destination\)/.test(authority) && !/rename\(|copyFile\(/.test(authority + owner + w4Owner)
+    && !/writeFile\((?!inputPath, bytes, \{ flag: "wx", mode: 0o600 \}\))/.test(authority + owner + w4Owner),
   w4ServiceUsesFencedOwnerWhenFencingOn: /photoOwnershipFencingEnabled\(\)[\s\S]*buildFencedAiIntakePhotoFinalizationManifest\(/.test(w4Service),
-  w4OwnerUsesSharedAuthority: /publishSealedArtifacts\(/.test(w4Owner) && /sealPreparedArtifacts\(/.test(w4Owner),
+  // Stage 5 F2 (#472): W2 and W4 seal through the shared authority, then publish only through the protected,
+  // intent-authorized copy publisher; the legacy worker-inode link primitive is never called by either owner.
+  w4OwnerUsesSharedAuthority: /sealPreparedArtifacts\(/.test(w4Owner) && /acquirePublicationIntent\(/.test(w4Owner) && /publishAuthorizedArtifacts\(/.test(w4Owner),
+  ownersUseProtectedPublication: [owner, w4Owner].every((s) => /assertPhotoPublicationReady\(/.test(s) && /guardedReclaimSteps\(/.test(s) && /acquirePublicationIntent\(/.test(s) && /publishAuthorizedArtifacts\(/.test(s) && !/publishSealedArtifacts/.test(s)),
   w4TransactionCommitsFence: /ctx\.commitPhotoOperation\(/.test(w4UseCase) && /commitPhotoOperation: \(proof\) => commitDrizzlePhotoOperationFenced\(tx, execution, proof\)/.test(w4Capability),
   w4RefusesUnprovenManifest: /entry\.fence\)\)\) refuseUnadoptedPhotoWriter\("W4_AI_FINALIZE"\)/.test(w4UseCase),
   // W11 is NOT adopted: the live writer still refuses under fencing and the proposal owner is not wired anywhere.
