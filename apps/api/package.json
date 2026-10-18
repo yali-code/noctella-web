@@ -29,6 +29,7 @@
     "photos:recovery-verify": "tsx src/scripts/verifyProductPhotoRecovery.ts",
     "photos:operations-report": "tsx src/scripts/photoOperationRecoveryReport.ts",
     "photos:release-preflight": "tsx src/scripts/photoReleasePreflight.ts",
+    "photos:publication-intents": "tsx src/scripts/photoPublicationIntentRecovery.ts",
     "bootstrap:admin": "tsx src/scripts/bootstrapAdmin.ts",
     "reset:admin-password": "tsx src/scripts/resetAdminPassword.ts",
     "architecture:audit": "tsx src/scripts/architectureAudit.ts",
