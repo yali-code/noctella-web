@@ -192,7 +192,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     expect(claim.kind).toBe("owned");
     const { dir } = await e.send("genDir", { i });
     const w = await preparer(dir);
-    const files = await w.p.send("prepare", { kind, input: src.file, genDir: dir, workDir: w.tmp });
+    // Trusted staging, as the real W2 admission layer does: the staged input is the regular file `<workDir>/input`
+    // (stagedProductPhotoStorage validates dirname, basename "input", no symlink, realpath and size).
+    const stagedInput = path.join(w.tmp, "input");
+    fs.copyFileSync(src.file, stagedInput);
+    const files = await w.p.send("prepare", { kind, input: stagedInput, genDir: dir, workDir: w.tmp });
     expect(typeof (await w.p.send("retain", { path: files.main }))).toBe("number");
     expect(await w.p.send("alias", { from: files.main, to: path.join(dir, "alias.webp") })).toBe("OK");
     const sealed = await e.send("seal", { i, files: { main: files.main, thumb: files.thumb } });
@@ -200,7 +204,8 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     return { op: claim.op, files, seal: sealed.seal, worker: w.p, dir };
   }
   const expire = (opId: string) => q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE id = ${opId} RETURNING id`);
-  const opRow = async (id: string) => (await q(sql`SELECT state, generation FROM photo_operations WHERE id = ${id}`))[0];
+  // photo_operations.generation is BIGINT on PostgreSQL; node-postgres returns int8 as a string, SQLite as a number.
+  const opRow = async (id: string) => { const [row] = await q(sql`SELECT state, generation FROM photo_operations WHERE id = ${id}`); return { state: row.state, generation: Number(row.generation) }; };
   const intentState = async (id: string) => (await q(sql`SELECT state, executor_epoch FROM f2c1_publication_intents WHERE operation_id = ${id}`))[0];
   const effects = async (photoId: string) => [await n(sql`SELECT COUNT(*) AS n FROM product_photos WHERE id = ${photoId}`), await n(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id = ${photoId}`)];
   const canonicalOf = (op: any, artifact: "main" | "thumb") => path.join(canonical, artifact === "main" ? op.mainKey : op.thumbKey);
