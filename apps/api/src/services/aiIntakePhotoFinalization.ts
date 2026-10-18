@@ -22,6 +22,9 @@ import type { FinalizeAiIntakePhotosInput as FinalizeAiIntakePhotosRequestInput 
 import { unlink } from "node:fs/promises";
 import { photoOwnershipFencingEnabled } from "./photoOwnershipFencing";
 import { buildFencedAiIntakePhotoFinalizationManifest, type W4FencedOptions } from "./w4FencedFinalizationOwner";
+import { cleanupCommittedPublication, openPublicationScope } from "./photoPublicationExecutor";
+import { productPhotoStaticRoot } from "./photoStorage";
+import type { PublicationAuthority } from "./photoPublicationIntents";
 
 export interface FinalizeAiIntakePhotosResult {
   /** false for the idempotent already-Finalized retry - no new canonical write was performed. */
@@ -66,6 +69,10 @@ export async function finalizeAiIntakePhotos(
 
   let manifest: AiIntakePhotoFinalizationManifestEntry[] | null = null;
   let privateFiles: string[] = [];
+  let publications: PublicationAuthority[] = [];
+  // #472: the publication executions of this request stay registered until the finalization transaction settled.
+  const scope = photoOwnershipFencingEnabled() ? openPublicationScope() : null;
+  try {
   if (precheckIntake.status === AiProductIntakeStatus.Applied && precheckIntake.resultProductId) {
     const stagedPhotos = await listIntakePhotos(db, intakeId);
     const resultProductId = precheckIntake.resultProductId;
@@ -73,9 +80,10 @@ export async function finalizeAiIntakePhotos(
     if (photoOwnershipFencingEnabled()) {
       // FAZ A / #424: generation-fenced W4 - sealed, verified, no-overwrite publication; the commit CAS runs in the
       // finalization transaction below. The unfenced builder still refuses with fencing ON.
-      const fenced = await runImageScope(() => buildFencedAiIntakePhotoFinalizationManifest(db, manifestDeps.readStagedPhotoBytes, staged, resultProductId, input.primaryIntakePhotoId, fencedOptions));
+      const fenced = await runImageScope(() => buildFencedAiIntakePhotoFinalizationManifest(db, manifestDeps.readStagedPhotoBytes, staged, resultProductId, input.primaryIntakePhotoId, { ...fencedOptions, scope: fencedOptions.scope ?? scope! }));
       manifest = fenced.manifest;
       privateFiles = fenced.privateFiles;
+      publications = fenced.publications;
     } else {
       manifest = await runImageScope(() => buildAiIntakePhotoFinalizationManifest(manifestDeps, staged, resultProductId, input.primaryIntakePhotoId));
     }
@@ -85,9 +93,17 @@ export async function finalizeAiIntakePhotos(
   const capability = createAiIntakePhotoFinalizeTransactionCapabilityForDb(db, driver);
 
   const result = await finalizeAiIntakePhotosUseCase(capability, { intakeId, actorId, manifest });
-  // Committed: canonical names and rows own these inodes; the private names are the generations' own.
-  if (result.created) await Promise.allSettled(privateFiles.map((file) => unlink(file)));
+  // Committed: canonical names hold publisher-owned copies; the private names and staging namespaces are ours.
+  if (result.created) {
+    await Promise.allSettled(privateFiles.map((file) => unlink(file)));
+    const canonicalRoot = fencedOptions.canonicalRoot ?? productPhotoStaticRoot;
+    await Promise.allSettled(publications.map((authority) => cleanupCommittedPublication(canonicalRoot, authority)));
+  }
+  return await finalizedResult(db, result);
+  } finally { scope?.close(); }
+}
 
+async function finalizedResult(db: DbClient, result: { created: boolean; productId: string }): Promise<FinalizeAiIntakePhotosResult> {
   try {
     const product = await getProductById(db, result.productId);
     return { created: result.created, product };

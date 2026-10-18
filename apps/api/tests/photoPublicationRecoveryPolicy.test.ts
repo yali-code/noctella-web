@@ -115,7 +115,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     if (driver === "postgres") {
       process.env.DATABASE_DRIVER = "postgres";
       process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
-      const harness = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+      const harness = await createPostgresTestDb("0044_photo_publication_copies.sql");
       db = harness.db; close = () => harness.close();
     } else { delete process.env.DATABASE_DRIVER; db = createTestDb(); }
     categoryId = randomUUID();
@@ -127,7 +127,9 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     if (savedUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = savedUrl;
   });
 
-  it.skipIf(!enabled)("after a crash after publication and a reclaim, generation 1's sealed inode proves the canonical file is the operation's own; a same-bytes copy is foreign", async () => {
+  // #472: the real owner no longer reclaims after T1 and never links a worker inode. Provenance of a canonical name is
+  // the durably recorded publisher-owned copy: a retry adopts exactly that inode; a same-bytes file at the key is foreign.
+  it.skipIf(!enabled)("after a crash after publication the retry adopts exactly the recorded publisher copy (no reclaim); a same-bytes replacement is foreign", async () => {
     const productId = randomUUID();
     await q(sql`INSERT INTO products (id, sku, title, slug, type, status, category_id) VALUES (${productId}, ${"F3-" + productId}, 'Synthetic', ${"f3-" + productId}, ${ProductType.UniqueItem}, ${ProductStatus.Draft}, ${categoryId}) RETURNING id`);
     const workDir = await mkdtemp(path.join(os.tmpdir(), "noctella-f3-input-"));
@@ -135,39 +137,34 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       const bytes = await sharp({ create: { width: 120, height: 80, channels: 3, background: { r: 30, g: 140, b: 90 } } }).jpeg().toBuffer();
       await writeFile(path.join(workDir, "input"), bytes);
       const file = { path: path.join(workDir, "input"), workDir, size: bytes.length, mimetype: "image/jpeg", signal: new AbortController().signal };
-      const token = `f3-${driver}-${randomUUID().slice(0, 12)}`;
-      const upload = async (hooks?: any) => uploadFencedProductPhoto(db, { productId, actorId: "actor-1", operationToken: token, sha256: await digestW2StagedInput(file, 10 * 1024 * 1024), altText: "", file }, { driver, hooks });
+      const uploadAs = (token: string) => async (hooks?: any) => uploadFencedProductPhoto(db, { productId, actorId: "actor-1", operationToken: token, sha256: await digestW2StagedInput(file, 10 * 1024 * 1024), altText: "", file }, { driver, hooks });
+      const token = `f3-${driver}-${randomUUID().slice(0, 12)}`, upload = uploadAs(token);
       await expect(upload({ afterPublish: () => { throw new Error("crash after publication"); } })).rejects.toThrow("crash");
       await q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE subject_id = ${token} AND state IN ('preparing', 'sealed') RETURNING id`);
-      await upload(); // generation 2 reclaims, re-seals a new private inode, finds the key (EEXIST) and commits
+      await upload(); // the ended execution is authenticated; authority moves to epoch 2 of generation 1
 
       const [op] = await q(sql`SELECT id, generation, state, main_key, seal_id FROM photo_operations WHERE subject_id = ${token}`);
-      expect([op.state, Number(op.generation)]).toEqual(["committed", 2]);
-      const seals = (await q(sql`SELECT generation, id, main_sha256, main_dev, main_ino FROM photo_operation_artifacts WHERE operation_id = ${op.id} ORDER BY generation`))
-        .map((r) => ({ generation: Number(r.generation), sealId: r.id, ...id(r.main_sha256, r.main_dev, r.main_ino) }));
-      expect(seals.map((s) => s.generation)).toEqual([1, 2]); // reclaim keeps the earlier generation's seal
-      const current = seals.find((s) => s.sealId === op.seal_id)!;
+      expect([op.state, Number(op.generation)]).toEqual(["committed", 1]);
+      const [seal] = await q(sql`SELECT main_sha256, main_dev, main_ino FROM photo_operation_artifacts WHERE operation_id = ${op.id}`);
+      const [copy] = await q(sql`SELECT copy_dev, copy_ino, sha256, executor_epoch FROM photo_publication_copies WHERE operation_id = ${op.id} AND artifact = 'main'`);
       const canonical = await fileProof(path.join(root, "photos", op.main_key));
-      expect(canonical.ino).toBe(seals[0].ino); // the canonical name is generation 1's inode, not the current seal's
-      expect(canonical.ino).not.toBe(current.ino);
-      // Each generation's private name, as the authority would lstat it at publication time.
-      const generations = await Promise.all(seals.map(async (s) => {
-        const info = await lstat(path.join(photoOperationPrivateRoot(path.join(root, "photos")), op.id, String(s.generation), "main.webp")).catch(() => null);
-        return { seal: s, live: info ? { dev: String(info.dev), ino: String(info.ino) } : null };
-      }));
-      expect(generations[0].live).toEqual({ dev: seals[0].dev, ino: seals[0].ino }); // crashed generation 1 keeps its private name
-      expect(generations[1].live).toBeNull(); // committing generation 2's private names were unlinked: its inode number is free for reuse
-      expect(classifyExistingCanonical(canonical, current, generations)).toBe("ADOPT_OWN_GENERATION");
+      expect([canonical.dev, canonical.ino, canonical.sha256]).toEqual([String(copy.copy_dev), String(copy.copy_ino), seal.main_sha256]);
+      expect(canonical.ino).not.toBe(String(seal.main_ino)); // never the sealed worker inode
+      expect(Number(copy.executor_epoch)).toBe(1); // recorded by the crashed executor, adopted by its successor
+      await expect(lstat(path.join(photoOperationPrivateRoot(path.join(root, "photos")), op.id, "1", "main.webp"))).rejects.toMatchObject({ code: "ENOENT" });
 
-      const foreignCopy = path.join(workDir, "same-bytes-copy.webp"); // outside the canonical root
-      await copyFile(path.join(root, "photos", op.main_key), foreignCopy);
-      const foreign = await fileProof(foreignCopy);
-      expect(foreign.sha256).toBe(canonical.sha256);
-      expect(foreign.ino).not.toBe(canonical.ino);
-      // On ext4 the copy can receive generation 2's freed inode number (the CI failure on d8c4ddf); it must still be foreign.
-      expect(classifyExistingCanonical(foreign, current, generations)).toBe("REVIEW_FOREIGN_SAME_BYTES");
-      expect(classifyExistingCanonical({ ...foreign, dev: current.dev, ino: current.ino }, current, generations)).toBe("REVIEW_FOREIGN_SAME_BYTES");
-      expect((await lstat(path.join(root, "photos", op.main_key))).ino.toString()).toBe(canonical.ino); // nothing replaced
+      // Same bytes, different inode at the key after a crash: foreign; never adopted, replaced or cleaned.
+      const other = `f3-foreign-${driver}-${randomUUID().slice(0, 8)}`, uploadOther = uploadAs(other);
+      await expect(uploadOther({ afterPublish: () => { throw new Error("crash after publication"); } })).rejects.toThrow("crash");
+      const [victim] = await q(sql`SELECT id, main_key FROM photo_operations WHERE subject_id = ${other}`);
+      const key = path.join(root, "photos", victim.main_key), foreignCopy = path.join(workDir, "same-bytes-copy.webp");
+      await copyFile(key, foreignCopy); await rm(key); await copyFile(foreignCopy, key);
+      const foreign = await fileProof(key);
+      await expect(uploadOther()).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+      expect((await q(sql`SELECT state FROM photo_operations WHERE id = ${victim.id}`))[0].state).toBe("review");
+      expect((await q(sql`SELECT state FROM photo_publication_intents WHERE operation_id = ${victim.id}`))[0].state).toBe("review");
+      expect(await fileProof(key)).toEqual(foreign); // nothing replaced
+      expect(Number((await q(sql`SELECT COUNT(*) AS n FROM product_photos WHERE id = (SELECT target_photo_id FROM photo_operations WHERE id = ${victim.id})`))[0].n)).toBe(0);
     } finally { await rm(workDir, { recursive: true, force: true }); }
   });
 });

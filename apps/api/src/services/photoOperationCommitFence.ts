@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import type { PoolClient } from "pg";
+import { commitIntentAuthorizedPhotoOperation } from "./photoPublicationIntents";
 
 /**
  * FAZ A / #424: caller-owned transaction COMMIT fence.
@@ -18,6 +19,11 @@ export interface PhotoCommitFenceProof {
   sealId: string;
   photoId: string;
   eventId: string;
+  /**
+   * Stage 5 F2 (#472): the publication-intent authority of the current executor. When present the commit is fenced by
+   * the authorized intent (full tuple) instead of the lease; protected publication always supplies it.
+   */
+  intent?: { epoch: number; token: string; executorIdentity: string };
 }
 
 function validate(p: PhotoCommitFenceProof): void {
@@ -80,6 +86,12 @@ export function commitDrizzlePhotoOperationFenced(
   p: PhotoCommitFenceProof,
 ): void | Promise<void> {
   validate(p);
+  if (p.intent) {
+    return commitIntentAuthorizedPhotoOperation(tx, execution, {
+      authority: { operationId: p.operationId, generation: p.generation, owner: p.owner, nonce: p.nonce, sealId: p.sealId, ...p.intent },
+      photoId: p.photoId, eventId: p.eventId,
+    });
+  }
   const now = execution === "synchronous"
     ? sql.raw("CAST(unixepoch('subsec') * 1000 AS INTEGER)")
     : sql.raw("(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint");

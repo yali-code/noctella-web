@@ -28,13 +28,15 @@ async function main() {
     process.send?.({ event: "UNEXPECTED_PUBLICATION" });
   } catch (error: any) {
     // Also try a symlink alias from the allowed work directory to the denied canonical hierarchy.
-    let aliasCode = "UNEXPECTED_ALIAS_PUBLICATION";
+    let aliasCode = "UNEXPECTED_ALIAS_PUBLICATION", directCode = "UNEXPECTED_DIRECT_PUBLICATION";
+    try { await link(path.join(workDir, "input"), path.join(process.env.PRODUCT_PHOTO_DIR!, "forbidden-direct.webp")); }
+    catch (directError: any) { directCode = directError.code; }
     try {
       const alias = path.join(workDir, "canonical-alias");
       await symlink(process.env.PRODUCT_PHOTO_DIR!, alias);
       await link(path.join(workDir, "input"), path.join(alias, "forbidden-alias.webp"));
     } catch (aliasError: any) { aliasCode = aliasError.code; }
-    process.send?.({ event: "denied", code: error.code, aliasCode });
+    process.send?.({ event: "denied", code: error.code, aliasCode, directCode });
   }
   // Remain alive until the test supervisor kills and observes this exact process's exit.
   setInterval(() => {}, 1000);

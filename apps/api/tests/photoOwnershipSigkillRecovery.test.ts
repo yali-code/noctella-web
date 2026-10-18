@@ -13,6 +13,7 @@ import { lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { sql } from "drizzle-orm";
+import { crossProcessExitAuthenticationAvailable } from "../src/services/photoPublicationExecutor";
 import { ProductStatus, ProductType } from "@noctella/shared";
 
 const { root } = vi.hoisted(() => {
@@ -112,17 +113,49 @@ it("SIGKILL after sealing: nothing published or committed; retry after lease exp
   expect(await readdir(path.join(privateRoot(), killed.id))).toEqual(expect.arrayContaining(["1", "2"])); // dead generation's evidence retained
 });
 
-it("SIGKILL after canonical publication: the published inodes are adopted on recovery, never replaced", async () => {
+const intent = (token: string) => all(sql`SELECT i.state, i.executor_epoch FROM photo_publication_intents i JOIN photo_operations o ON o.id = i.operation_id WHERE o.subject_id = ${token}`)[0];
+
+/**
+ * #472: after T1 the dead child still holds the durable publication intent. Its termination is authenticated only
+ * where this process can prove it (Linux /proc in the same boot and PID namespace); then authority moves to epoch 2
+ * of the SAME generation and the recorded copies are adopted. Elsewhere the operation stays BLOCKED, even with an
+ * expired lease (never reclaimed). The required Linux gate runs the proven branch.
+ */
+async function expectRecoveryAfterKilledExecutor(token: string) {
+  expire(token);
+  if (!crossProcessExitAuthenticationAvailable()) {
+    await expect(recover(token)).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_IN_PROGRESS" });
+    expect([op(token).state, Number(op(token).generation)]).toEqual(["sealed", 1]);
+    expect([intent(token).state, Number(intent(token).executor_epoch)]).toEqual(["authorized", 1]);
+    expect(effects(token)).toEqual([0, 0]);
+    return false;
+  }
+  await recover(token);
+  expect([op(token).state, Number(op(token).generation)]).toEqual(["committed", 1]);
+  expect([intent(token).state, Number(intent(token).executor_epoch)]).toEqual(["committed", 2]);
+  expect(String(all(sql`SELECT e.attested_by FROM photo_executor_exit_records e JOIN photo_operations o ON o.id = e.operation_id WHERE o.subject_id = ${token}`)[0].attested_by)).toMatch(/|pid d+ (absent|reused|exited)$/);
+  expect(effects(token)).toEqual([1, 1]);
+  return true;
+}
+
+it("SIGKILL after T1 before any canonical name: BLOCKED until the executor's death is authenticated, then published once", async () => {
+  const token = `f5-intent-${randomUUID().slice(0, 12)}`;
+  await killAt("afterIntent", token);
+  const killed = op(token);
+  expect(killed.state).toBe("sealed");
+  expect([await exists(path.join(photos(), killed.main_key)), await exists(path.join(photos(), killed.thumb_key))]).toEqual([false, false]);
+  if (await expectRecoveryAfterKilledExecutor(token))
+    expect((await lstat(path.join(photos(), killed.main_key), { bigint: true })).nlink).toBe(1n); // publisher-owned copy
+});
+
+it("SIGKILL after canonical publication: the recorded copies are adopted on recovery, never replaced", async () => {
   const token = `f5-pub-${randomUUID().slice(0, 12)}`;
   await killAt("afterPublish", token);
   const killed = op(token);
   expect(killed.state).toBe("sealed");
   const before = [(await lstat(path.join(photos(), killed.main_key))).ino, (await lstat(path.join(photos(), killed.thumb_key))).ino];
   expect(effects(token)).toEqual([0, 0]); // published bytes but no committed photo row or outbox event
-  expire(token);
-  await recover(token);
-  expect([op(token).state, Number(op(token).generation)]).toEqual(["committed", 2]);
-  expect(effects(token)).toEqual([1, 1]);
+  await expectRecoveryAfterKilledExecutor(token);
   expect([(await lstat(path.join(photos(), killed.main_key))).ino, (await lstat(path.join(photos(), killed.thumb_key))).ino]).toEqual(before);
 });
 

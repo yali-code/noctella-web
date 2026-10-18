@@ -171,6 +171,10 @@ async function ownSealedGenerations(db: DbClient, driver: OwnershipDriver, op: O
 }
 
 /**
+ * LEGACY / NEGATIVE CONTROL ONLY (Stage 5 F2, #472): links the worker-owned sealed inode and has no publication
+ * authority, which is the F2 vulnerability. No runtime owner calls it (photoCanonicalWriterInventory.test.ts); fenced
+ * W2/W4 publish through photoPublicationExecutor.publishAuthorizedArtifacts. Kept for the reproduction controls.
+ *
  * Re-verifies the sealed private files, then publishes them with link() to the operation's canonical keys. The
  * published name must afterwards be exactly the sealed inode, or an authenticated still-live sealed inode
  * of this operation with the current sealed bytes. Anything else moves the operation to review; nothing is replaced.

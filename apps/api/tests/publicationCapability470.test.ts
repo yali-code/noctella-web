@@ -22,6 +22,7 @@ import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
 import { uploadFencedProductPhoto } from "../src/services/w2FencedProductPhotoOwner";
 import { digestW2StagedInput } from "../src/services/w2StagedInputDigest";
 import { buildFencedAiIntakePhotoFinalizationManifest } from "../src/services/w4FencedFinalizationOwner";
+import { photoPublicationStagingRoot } from "../src/services/photoPublicationExecutor";
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 const launcher = process.env.F2_CAPABILITY_LAUNCHER;
@@ -71,11 +72,12 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
   const op = async (token: string) => (await q(sql`SELECT id, generation, state, main_key, thumb_key, target_photo_id FROM photo_operations WHERE subject_id=${token}`))[0];
   beforeAll(async () => {
     if (!native || !configured) return;
-    await Promise.all([mkdir(dbDir, { recursive: true }), mkdir(canonical, { recursive: true }), mkdir(privateRoot, { recursive: true })]);
+    // The publication staging root belongs to the trusted publisher; confined workers may not create it (#472).
+    await Promise.all([mkdir(dbDir, { recursive: true }), mkdir(canonical, { recursive: true }), mkdir(privateRoot, { recursive: true }), mkdir(photoPublicationStagingRoot(canonical), { recursive: true })]);
     process.env.DATABASE_DRIVER = driver;
     if (driver === "postgres") {
       process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
-      const h = await createPostgresTestDb("0041_photo_w2_upload_intents.sql"); db = h.db; close = () => h.close();
+      const h = await createPostgresTestDb("0044_photo_publication_copies.sql"); db = h.db; close = () => h.close();
       const url = new URL(process.env.POSTGRES_TEST_DATABASE_URL!); url.searchParams.set("options", "-c search_path=" + h.schemaName); childUrl = url.toString();
     } else {
       childUrl = path.join(dbDir, "test.sqlite"); process.env.DATABASE_URL = childUrl;
@@ -129,15 +131,22 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
         const row = await op(token); expect([Number(row.generation), row.state]).toEqual([2, "sealed"]);
         const denied = a.message(); a.proc.send(command);
         const result = await denied; expect(result.event).toBe("denied");
-        expect(["EACCES", "EPERM", "EXDEV"]).toContain(result.code); expect(["EACCES", "EPERM", "EXDEV"]).toContain(result.aliasCode);
+        // #472: the stale owner is refused by the protocol at T1 (or cannot reach the database) before any filesystem
+        // attempt; its confinement independently denies both a direct link and a symlink alias into the canonical root.
+        if (command === "resume") expect(result.code).toBe("PHOTO_OPERATION_FENCE_LOST");
+        expect(["EACCES", "EPERM", "EXDEV"]).toContain(result.directCode); expect(["EACCES", "EPERM", "EXDEV"]).toContain(result.aliasCode);
         await expect(lstat(path.join(canonical, row.main_key))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(lstat(path.join(canonical, row.thumb_key))).rejects.toMatchObject({ code: "ENOENT" });
         await expect(lstat(path.join(canonical, "forbidden-alias.webp"))).rejects.toMatchObject({ code: "ENOENT" });
+        await expect(lstat(path.join(canonical, "forbidden-direct.webp"))).rejects.toMatchObject({ code: "ENOENT" });
         await afterRevocation(a.kill(), () => release.resolve()); // exact child reaped before publication resumes
         await bounded(b, "trusted authority progress");
         const [seal] = await q(sql`SELECT main_dev, main_ino FROM photo_operation_artifacts WHERE operation_id=${row.id} AND generation=2`);
+        const [copy] = await q(sql`SELECT copy_dev, copy_ino FROM photo_publication_copies WHERE operation_id=${row.id} AND artifact='main'`);
         const published = await lstat(path.join(canonical, row.main_key), { bigint: true });
-        expect([String(published.dev), String(published.ino)]).toEqual([seal.main_dev, seal.main_ino]);
+        // Publisher-owned verified copy: never the worker's sealed inode, no alias (nlink 1), durably recorded.
+        expect([String(published.dev), String(published.ino)]).toEqual([String(copy.copy_dev), String(copy.copy_ino)]);
+        expect(String(published.ino)).not.toBe(String(seal.main_ino)); expect(published.nlink).toBe(1n);
         if (kind === "w2") {
           expect((await op(token)).state).toBe("committed");
           expect(Number((await q(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id=${row.target_photo_id}`))[0].n)).toBe(1);
