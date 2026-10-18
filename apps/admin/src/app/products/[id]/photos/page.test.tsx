@@ -5,7 +5,7 @@
 // awaited call per file, never in parallel, so the backend's own sortOrder/primary-photo semantics
 // (computed per request) remain authoritative and follow selection order.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as apiLib from "@/lib/api";
 import * as productPhotosLib from "@/lib/productPhotos";
@@ -245,5 +245,131 @@ describe("ProductPhotosPage — Roadmap B operation ownership", () => {
     expect(screen.getByLabelText("Move b.webp later")).toBeDisabled();
     expect(screen.getAllByRole("button", { name: "Set primary" })[0]).toBeDisabled();
     expect(screen.getAllByRole("button", { name: "Set primary" })[1]).toBeEnabled();
+  });
+});
+
+describe("ProductPhotosPage — Etsy media preview integration", () => {
+  const preview = () => screen.getByRole("region", { name: "Etsy Media Preview" });
+
+  it("uses only canonical photos, performs one product read and no writes on mount", async () => {
+    const get = vi.spyOn(apiLib.api, "get").mockResolvedValue(baseProduct({ photos: [photo("a", "a.webp", true, "Canonical")], images: [{ url: "/legacy.webp", isPrimary: true }] }));
+    const post = vi.spyOn(apiLib.api, "post");
+    const put = vi.spyOn(apiLib.api, "put");
+    const remove = vi.spyOn(apiLib.api, "delete");
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await screen.findByText("Etsy rank 1 — Primary image");
+    expect(within(preview()).getByRole("img", { name: "Canonical" })).toBeInTheDocument();
+    expect(preview().innerHTML).not.toContain("legacy.webp");
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith("/api/products/p1");
+    expect(post).not.toHaveBeenCalled(); expect(put).not.toHaveBeenCalled(); expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("shows an accessible initial read failure rather than endless loading", async () => {
+    vi.spyOn(apiLib.api, "get").mockRejectedValue(new Error("fetch failed"));
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading Etsy media preview");
+    expect(await screen.findByRole("alert")).toHaveTextContent("preview unavailable");
+    expect(screen.queryByText(/Eligible for media preview/)).not.toBeInTheDocument();
+  });
+
+  it("refreshes the preview from the authoritative read after primary selection", async () => {
+    const user = userEvent.setup();
+    const before = [photo("a", "a.webp", true, "A"), photo("b", "b.webp", false, "B")];
+    const after = [photo("a", "a.webp", false, "A"), photo("b", "b.webp", true, "B")];
+    vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct({ photos: before })).mockResolvedValueOnce(baseProduct({ photos: after }));
+    const primary = vi.spyOn(productPhotosLib.productPhotoApi, "setPrimary").mockResolvedValue([]);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await screen.findByText("Etsy rank 1 — Primary image");
+    await user.click(screen.getAllByRole("button", { name: "Set primary" })[1]!);
+    await screen.findByText("Successfully completed: set primary photo.");
+    expect(primary).toHaveBeenCalledWith("p1", "b");
+    const first = within(screen.getByRole("list", { name: "Etsy candidate images" })).getAllByRole("listitem")[0]!;
+    expect(within(first).getByRole("img")).toHaveAttribute("alt", "B");
+    expect(before[0].isPrimary).toBe(true);
+  });
+
+  it("keeps alt drafts out of the preview until the existing save and canonical reload complete", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct({ photos: [photo("a", "a.webp", true, "Original alt")] }))
+      .mockResolvedValueOnce(baseProduct({ photos: [photo("a", "a.webp", true, "Saved alt")] }));
+    const save = vi.spyOn(productPhotosLib.productPhotoApi, "updateAltText").mockResolvedValue({} as any);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    const input = await screen.findByLabelText("Alt text for a.webp");
+    await user.clear(input); await user.type(input, "Saved alt");
+    expect(within(preview()).getByRole("img")).toHaveAttribute("alt", "Original alt");
+    await user.click(screen.getByRole("button", { name: "Save alt text" }));
+    await screen.findByText("Successfully completed: save alt text.");
+    expect(within(preview()).getByRole("img")).toHaveAttribute("alt", "Saved alt");
+    expect(save).toHaveBeenCalledWith("p1", "a", "Saved alt");
+  });
+
+  it("retains the last read after a failed operation, then reflects a manual reload without retrying the write", async () => {
+    const user = userEvent.setup();
+    const get = vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct({ photos: [photo("a", "a.webp", true, "Old")] }))
+      .mockResolvedValueOnce(baseProduct({ photos: [photo("a", "a.webp", true, "Fresh")] }));
+    const save = vi.spyOn(productPhotosLib.productPhotoApi, "updateAltText").mockRejectedValue(new Error("save rejected"));
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    const input = await screen.findByLabelText("Alt text for a.webp");
+    await user.clear(input); await user.type(input, "Draft");
+    await user.click(screen.getByRole("button", { name: "Save alt text" }));
+    await screen.findByRole("alert");
+    expect(within(preview()).getByRole("img")).toHaveAttribute("alt", "Old");
+    expect(get).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Reload product photos" }));
+    await waitFor(() => expect(within(preview()).getByRole("img")).toHaveAttribute("alt", "Fresh"));
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue("Draft");
+  });
+
+  it("hides stale eligibility while reloading and after a failed reload", async () => {
+    const user = userEvent.setup();
+    const pending = deferred<any>();
+    vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct({ photos: [photo("a", "a.webp", true, "A")] })).mockReturnValueOnce(pending.promise);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await screen.findByText("Etsy rank 1 — Primary image");
+    await user.click(screen.getByRole("button", { name: "Reload product photos" }));
+    expect(within(preview()).getByRole("status")).toHaveTextContent("Loading");
+    expect(within(preview()).queryByRole("img")).not.toBeInTheDocument();
+    pending.reject(new Error("read failed"));
+    expect(await within(preview()).findByRole("alert")).toHaveTextContent("preview unavailable");
+    expect(within(preview()).queryByText(/Eligible for media preview/)).not.toBeInTheDocument();
+  });
+
+  it("uses the existing failed-upload reload to refresh the preview without creating a photo", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct()).mockResolvedValueOnce(baseProduct({ photos: [photo("a", "a.webp", true, "Reloaded")] }));
+    const upload = vi.spyOn(productPhotosLib.productPhotoApi, "upload").mockRejectedValue(new Error("upload rejected"));
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await screen.findByText("No canonical photos yet.");
+    await user.upload(document.querySelector("input[type=file]") as HTMLInputElement, file("bad.jpg"));
+    await user.click(screen.getByRole("button", { name: "Upload photo" }));
+    await screen.findByText("Etsy rank 1 — Primary image");
+    expect(within(preview()).getByRole("img")).toHaveAttribute("alt", "Reloaded");
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ProductPhotosPage — read-only reload ownership", () => {
+  it("reuses the existing operation lock so no photo write can race the preview reload", async () => {
+    const user = userEvent.setup();
+    const pending = deferred<any>();
+    const photos = [photo("a", "a.webp", true, "A"), photo("b", "b.webp", false, "B")];
+    vi.spyOn(apiLib.api, "get").mockResolvedValueOnce(baseProduct({ photos })).mockReturnValueOnce(pending.promise);
+    const primary = vi.spyOn(productPhotosLib.productPhotoApi, "setPrimary").mockResolvedValue([]);
+    const upload = vi.spyOn(productPhotosLib.productPhotoApi, "upload").mockResolvedValue({} as any);
+    render(<ProductPhotosPage params={{ id: "p1" }} />);
+    await screen.findByText("Etsy rank 1 — Primary image");
+    await user.upload(document.querySelector("input[type=file]") as HTMLInputElement, file("new.jpg"));
+    await user.click(screen.getByRole("button", { name: "Reload product photos" }));
+    expect(screen.getByRole("button", { name: "Upload photo" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Set primary" })[1]).toBeDisabled();
+    expect(screen.getByLabelText("Move a.webp later")).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Delete" })[0]).toBeDisabled();
+    await user.click(screen.getAllByRole("button", { name: "Set primary" })[1]!);
+    expect(primary).not.toHaveBeenCalled(); expect(upload).not.toHaveBeenCalled();
+    pending.resolve(baseProduct({ photos }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Set primary" })[1]).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Upload photo" })).toBeEnabled();
   });
 });
