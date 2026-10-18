@@ -109,17 +109,28 @@ describe.skipIf(!native)("descriptor controls and launcher refusals", () => {
     expect(fs.readFileSync(x, "utf8")).toBe("ORIGINAL");
     if (k !== 2) { expect(r.err()).toContain(`LAUNCHER_REFUSED fd${k}`); expect(r.err()).not.toContain("LANDLOCK_ENFORCED"); }
   });
-  it("D4: an inherited fd >= 4 is closed before exec (EBADF), distinct from Landlock path policy", async () => {
+  // Closure is proven by FILE IDENTITY, not by probing fd number 4: after exec, Node/libuv reuse the lowest free
+  // numbers for internal descriptors, so a number-based probe can hit an unrelated fd (EBADF/EINVAL either way).
+  const identity = (x: string) => { const st = fs.statSync(x, { bigint: true }); return [String(st.dev), String(st.ino)]; };
+  it("C0-4p control: the identity probe finds an inherited fd >= 4 and writes through it without the launcher", async () => {
+    const x = tempFile("probe"), fd = fs.openSync(x, "r+");
+    const r = run(node, [fixture, "probe-file", ...identity(x)], slot(4, fd)); fs.closeSync(fd);
+    expect((await bounded(r.exit, "probe control")).code).toBe(6);
+    expect(r.out).toContain("FOUND fd=4 write=OK");
+    expect(fs.readFileSync(x, "utf8")).toContain("MARK");
+  });
+  it("D4: an inherited fd >= 4 is closed before exec (no descriptor to the file remains), distinct from Landlock path policy", async () => {
     const { allowed } = dirs(); const x = tempFile("fd4"), fd = fs.openSync(x, "r+");
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "4", "MARK"], slot(4, fd)); fs.closeSync(fd);
-    expect((await bounded(r.exit, "fd4")).code).toBe(3);
+    const r = run(launcher!, [allowed, "--", node, fixture, "probe-file", ...identity(x)], slot(4, fd)); fs.closeSync(fd);
+    expect((await bounded(r.exit, "fd4")).code).toBe(0);
+    expect(r.out).toContain("FD_ABSENT");
     expect(r.err()).toContain("LANDLOCK_ENFORCED");
     expect(fs.readFileSync(x, "utf8")).toBe("ORIGINAL");
   });
   it("D5a: a named FIFO as stdout is refused", async () => {
     const { allowed } = dirs(); const fifo = path.join(root, "fifo-" + Date.now());
     execFileSync("mkfifo", [fifo]); const fd = fs.openSync(fifo, "r+");
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", fd, "pipe"]); fs.closeSync(fd);
+    const r = run(launcher!, [allowed, "--", node, fixture, "ran"], ["ignore", fd, "pipe"]); fs.closeSync(fd);
     expect((await bounded(r.exit, "fifo")).code).toBe(125);
     expect(r.err()).toContain("LAUNCHER_REFUSED fd1-untrusted-endpoint");
   });
@@ -128,20 +139,20 @@ describe.skipIf(!native)("descriptor controls and launcher refusals", () => {
     const helper = run(node, ["-e", `require('net').createServer(()=>{}).listen(${JSON.stringify(sock)},()=>console.log('L'))`], ["ignore", "pipe", "pipe"]);
     await waitFor(() => helper.out.includes("L"), "helper listen");
     const client = net.createConnection(sock); await new Promise((r) => client.once("connect", r));
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", "pipe", "pipe", client]);
-    expect((await bounded(r.exit, "foreign peer")).code).toBe(125);
+    const r = run(launcher!, [allowed, "--", node, fixture, "ran"], ["ignore", "pipe", "pipe", client]);
+    expect((await bounded(r.exit, "foreign peer")).code).toBe(125); expect(r.out.some((l) => l.startsWith("WORKER_RAN"))).toBe(false);
     expect(r.err()).toContain("LAUNCHER_REFUSED fd3-untrusted-endpoint");
     client.destroy();
   });
   it("D5c: an absent fd 2 is refused (silently) and the worker never runs", async () => {
     const { allowed } = dirs();
-    const r = run("/bin/sh", ["-c", 'exec 2>&- "$@"', "sh", launcher!, allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", "pipe", "pipe"]);
-    expect((await bounded(r.exit, "absent fd2")).code).toBe(125);
+    const r = run("/bin/sh", ["-c", 'exec 2>&- "$@"', "sh", launcher!, allowed, "--", node, fixture, "ran"], ["ignore", "pipe", "pipe"]);
+    expect((await bounded(r.exit, "absent fd2")).code).toBe(125); expect(r.out.some((l) => l.startsWith("WORKER_RAN"))).toBe(false);
   });
   it("D5d: a forged trusted-spawner environment is checked against the actual peer, not trusted", async () => {
     const { allowed } = dirs();
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", "pipe", "pipe"], { F2_TRUSTED_SPAWNER_PID: "1" });
-    expect((await bounded(r.exit, "forged spawner")).code).toBe(125);
+    const r = run(launcher!, [allowed, "--", node, fixture, "ran"], ["ignore", "pipe", "pipe"], { F2_TRUSTED_SPAWNER_PID: "1" });
+    expect((await bounded(r.exit, "forged spawner")).code).toBe(125); expect(r.out.some((l) => l.startsWith("WORKER_RAN"))).toBe(false);
   });
   it("D6: under the trusted layout, Landlock denies opening or linking into the canonical directory", async () => {
     const { allowed, canonical, src } = dirs(); const x = path.join(canonical, "existing.webp"); fs.writeFileSync(x, "ORIGINAL");
@@ -153,14 +164,14 @@ describe.skipIf(!native)("descriptor controls and launcher refusals", () => {
   });
   it("D7a: the trusted direct layout including Node IPC is accepted", async () => {
     const { allowed } = dirs();
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", "pipe", "pipe", "ipc"]);
-    expect((await bounded(r.exit, "direct ipc")).code).toBe(3); expect(r.err()).toContain("LANDLOCK_ENFORCED");
+    const r = run(launcher!, [allowed, "--", node, fixture, "ran"], ["ignore", "pipe", "pipe", "ipc"]);
+    expect((await bounded(r.exit, "direct ipc")).code).toBe(0); expect(r.out.some((l) => l.startsWith("WORKER_RAN "))).toBe(true); expect(r.err()).toContain("LANDLOCK_ENFORCED");
   });
   it("D7b: the trusted layout including Node IPC is accepted through the reaper wrapper", async () => {
     const { allowed } = dirs();
-    const r = underReaper([launcher!, allowed, "--", node, fixture, "write-fd", "9", "x"], {}, true);
+    const r = underReaper([launcher!, allowed, "--", node, fixture, "ran"], {}, true);
     await waitFor(() => r.reports.get(5)!.lines.some((l) => l.startsWith("F2PA1 INNER_EXIT")), "inner exit");
-    expect(r.reports.get(5)!.lines).toContainEqual(expect.stringMatching(/^F2PA1 INNER_EXIT pid=\d+ code=3$/));
+    expect(r.reports.get(5)!.lines).toContainEqual(expect.stringMatching(/^F2PA1 INNER_EXIT pid=\d+ code=0$/)); expect(r.out.some((l) => l.startsWith("WORKER_RAN "))).toBe(true);
     expect(r.err()).toContain("LANDLOCK_ENFORCED");
     await stopReaper(r); reapers.splice(reapers.indexOf(r), 1);
   });
@@ -248,8 +259,8 @@ describe.skipIf(!native)("descendants, completion authenticity and transfer safe
 describe.skipIf(!native)("deterministic fault points and real setup failures (fail closed)", () => {
   it.each(["landlock-unavailable", "close-range-unavailable"])("plain fault %s refuses before exec", async (name) => {
     const { allowed } = dirs();
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", "pipe", "pipe"], { F2_LAUNCHER_FAULT: "plain:" + name });
-    expect((await bounded(r.exit, name)).code).toBe(125); // worker would have exited 3
+    const r = run(launcher!, [allowed, "--", node, fixture, "ran"], ["ignore", "pipe", "pipe"], { F2_LAUNCHER_FAULT: "plain:" + name });
+    expect((await bounded(r.exit, name)).code).toBe(125); expect(r.out.some((l) => l.startsWith("WORKER_RAN"))).toBe(false);
     if (name === "landlock-unavailable") { expect(r.err()).toContain("LANDLOCK_ABI_3_REQUIRED got=-1"); expect(r.err()).not.toContain("LANDLOCK_ENFORCED"); }
     // close_range is the last step after confinement: confined, but the worker is never executed.
     else expect(r.err()).toContain("LAUNCHER_REFUSED close-range-unavailable");
@@ -265,19 +276,19 @@ describe.skipIf(!native)("deterministic fault points and real setup failures (fa
   });
   it("a fault addressed to another role is ignored", async () => {
     const { allowed } = dirs();
-    const r = run(launcher!, [allowed, "--", node, fixture, "write-fd", "9", "x"], ["ignore", "pipe", "pipe"], { F2_LAUNCHER_FAULT: "supervise:landlock-unavailable" });
-    expect((await bounded(r.exit, "role isolation")).code).toBe(3); expect(r.err()).toContain("LANDLOCK_ENFORCED");
+    const r = run(launcher!, [allowed, "--", node, fixture, "ran"], ["ignore", "pipe", "pipe"], { F2_LAUNCHER_FAULT: "supervise:landlock-unavailable" });
+    expect((await bounded(r.exit, "role isolation")).code).toBe(0); expect(r.out.some((l) => l.startsWith("WORKER_RAN "))).toBe(true); expect(r.err()).toContain("LANDLOCK_ENFORCED");
   });
   it.each([
-    ["missing directory", (d: ReturnType<typeof dirs>) => [path.join(d.allowed, "missing"), "--", node, fixture, "write-fd", "9", "x"]],
-    ["file instead of directory", (d: ReturnType<typeof dirs>) => [d.src, "--", node, fixture, "write-fd", "9", "x"]],
-    ["symlinked directory", (d: ReturnType<typeof dirs>) => { const l = path.join(root, "link-" + Math.random().toString(16).slice(2)); fs.symlinkSync(d.allowed, l); return [l, "--", node, fixture, "write-fd", "9", "x"]; }],
+    ["missing directory", (d: ReturnType<typeof dirs>) => [path.join(d.allowed, "missing"), "--", node, fixture, "ran"]],
+    ["file instead of directory", (d: ReturnType<typeof dirs>) => [d.src, "--", node, fixture, "ran"]],
+    ["symlinked directory", (d: ReturnType<typeof dirs>) => { const l = path.join(root, "link-" + Math.random().toString(16).slice(2)); fs.symlinkSync(d.allowed, l); return [l, "--", node, fixture, "ran"]; }],
     ["missing separator", (d: ReturnType<typeof dirs>) => [d.allowed, node, fixture]],
     ["missing command", (d: ReturnType<typeof dirs>) => [d.allowed, "--"]],
     ["nonexistent executable", (d: ReturnType<typeof dirs>) => [d.allowed, "--", path.join(root, "no-such-exe")]],
   ] as const)("real setup failure: %s exits 125 and never runs an unconfined worker", async (_label, argsFor) => {
     const r = run(launcher!, argsFor(dirs()), ["ignore", "pipe", "pipe"]);
-    expect((await bounded(r.exit, "setup failure")).code).toBe(125);
+    expect((await bounded(r.exit, "setup failure")).code).toBe(125); expect(r.out.some((l) => l.startsWith("WORKER_RAN"))).toBe(false);
   });
   it("supervise: an exec failure after fork is reported as SETUP_FAILED, never COMPLETE", async () => {
     const { allowed } = dirs();

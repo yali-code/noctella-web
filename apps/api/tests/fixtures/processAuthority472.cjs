@@ -1,7 +1,12 @@
 /*
  * #472 Step 2 OFFLINE fixture. Worker-side behaviours run (optionally) under the test launcher. Results go to stdout
  * lines or exit codes; nothing here is trusted as revocation evidence by the test.
- *   write-fd FD MARKER          write MARKER through an inherited fd: exit 0 written, 3 EBADF, 4 other error
+ *   write-fd FD MARKER          write MARKER through an fd inherited AT SPAWN (controls only): exit 0 written,
+ *                               3 EBADF, 4 other error (code on stderr). Never use it to probe a number that may be
+ *                               free at spawn: Node/libuv reuse the lowest free numbers for internal descriptors.
+ *   ran                         prints WORKER_RAN: an explicit "the worker executed" marker
+ *   probe-file DEV INO          scan /proc/self/fd by IDENTITY for the file (dev, ino); on a match try to write through
+ *                               it and exit 6 (FOUND fd=N write=CODE); otherwise exit 0 (FD_ABSENT)
  *   open-write PATH             try to open PATH for writing: prints OPEN <code|OK>
  *   link SRC DST                try link(): prints LINK <code|OK>
  *   tree DIR SRC BEHAVIOUR      spawn a detached setsid grandchild and a double-fork orphan, wait until both are ready,
@@ -32,7 +37,22 @@ function ready(proc) {
 async function main() {
   if (mode === "write-fd") {
     try { fs.writeSync(Number(args[0]), args[1]); process.exit(0); }
-    catch (error) { process.exit(error && error.code === "EBADF" ? 3 : 4); }
+    catch (error) {
+      try { fs.writeSync(2, `WRITE_FD_ERROR fd=${args[0]} code=${error && error.code}\n`); } catch { /* stderr may be the target */ }
+      process.exit(error && error.code === "EBADF" ? 3 : 4);
+    }
+  }
+  if (mode === "ran") { say("WORKER_RAN " + process.pid); process.exit(0); }
+  if (mode === "probe-file") {
+    const [dev, ino] = args;
+    for (const name of fs.readdirSync("/proc/self/fd")) {
+      const fd = Number(name);
+      let st; try { st = fs.fstatSync(fd, { bigint: true }); } catch { continue; } // e.g. the readdir handle itself
+      if (String(st.dev) !== dev || String(st.ino) !== ino) continue;
+      say(`FOUND fd=${fd} write=${code(() => fs.writeSync(fd, "MARK"))}`);
+      process.exit(6);
+    }
+    say("FD_ABSENT"); process.exit(0);
   }
   if (mode === "open-write") { say("OPEN " + code(() => fs.closeSync(fs.openSync(args[0], "w")))); return; }
   if (mode === "link") { say("LINK " + code(() => fs.linkSync(args[0], args[1]))); return; }
