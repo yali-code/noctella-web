@@ -2,7 +2,8 @@
  * #472 F2 Step 4 OFFLINE COMPOSITION (test-only; never imported by runtime code).
  *
  * Composes, around the REAL photo-operation authority and REAL W2/W4 preparation/T2 building blocks:
- *  - Contract 1 durable intent, guarded reclaim and T1/T2 (`../f2c1/protocol`),
+ *  - Contract 1 durable intent, guarded reclaim and the intent-authorized T2 fence, since WP1 the runtime module
+ *    `src/services/photoPublicationIntents.ts` (not wired into any owner; orchestration in `../f2c1/protocol`),
  *  - Step 2 confined workers and authenticated supervisor completion (the test launcher),
  *  - Step 3 publisher-owned verified copies (`../f2s3/snapshotPublisher`).
  *
@@ -15,9 +16,10 @@
 import { sql } from "drizzle-orm";
 import path from "node:path";
 import {
-  claimExistingOperation, createOperation, findOperationBySubject, nowMs, reviewSteps,
-  type OperationClaim, type OwnedOperation, type Rows,
+  createOperation, findOperationBySubject, inOwnershipTransaction,
+  type OperationClaim, type Rows,
 } from "../../src/services/photoOperationAuthority";
+import { guardedReclaimSteps } from "../../src/services/photoPublicationIntents";
 import { lockProductRowInTransaction } from "../../src/services/productPhotoMutationLockTransactionCapabilityForDb";
 import { createProductPhotoWithPromotionOutboxInTransaction } from "../../src/repositories/product-write/drizzle";
 import { finalizeIntakeWithExpectedStateInTransaction } from "../../src/repositories/ai-product-intake/drizzle";
@@ -25,24 +27,20 @@ import { OutboxEventStatus, OutboxEventType } from "../../src/services/outbox";
 import { productPhotoStaticPath } from "../../src/services/photoStorage";
 import * as sqliteSchema from "../../src/db/schema.sqlite";
 import * as postgresSchema from "../../src/db/schema.postgres";
-import { inF2c1Transaction, intentAuthorizedFence, privateArtifactPath, type Authority } from "../f2c1/protocol";
-import type { F2c1Driver } from "../f2c1/intentSchema";
+import { intentFence, markReview, privateArtifactPath, type Authority, type F2c1Driver } from "../f2c1/protocol";
 import { publish, type Outcome, type Phase, type PublishTarget } from "../f2s3/snapshotPublisher";
 
 type Step = ReturnType<typeof sql>;
 const lockClause = (driver: F2c1Driver) => sql.raw(driver === "postgres" ? " FOR UPDATE" : "");
 
-/** Mirrors the real W4 claimSteps; the reclaim decision is the unchanged real claimExistingOperation. */
+/** Mirrors the real W4 claimSteps; an existing operation goes through the runtime guarded reclaim. */
 export function* guardedClaimW4Steps(driver: F2c1Driver, productId: string, stagedPhotoId: string, inputSha256: string, ttl: number): Generator<Step, OperationClaim | { kind: "conflict" }, Rows> {
   const mainKey = `${productId}-${stagedPhotoId}.webp`, thumbKey = `${productId}-${stagedPhotoId}-thumb.webp`;
   const existing = yield* findOperationBySubject(driver, "ai_intake_photo", stagedPhotoId);
   if (existing) {
     if (existing.kind !== "ai_finalize" || existing.target_photo_id !== stagedPhotoId || existing.main_key !== mainKey || existing.thumb_key !== thumbKey || existing.input_sha256 !== inputSha256)
       return { kind: "conflict" };
-    yield sql`SELECT id FROM photo_operations WHERE id = ${existing.id}${lockClause(driver)}`;
-    const [publication] = yield sql`SELECT state FROM f2c1_publication_intents WHERE operation_id = ${existing.id}`;
-    if (publication?.state === "authorized") return { kind: "in-progress" }; // Contract 1: never reclaim publishing
-    return yield* claimExistingOperation(driver, existing.id, ttl);
+    return yield* guardedReclaimSteps(driver, existing.id, ttl);
   }
   const op = yield* createOperation(driver, { kind: "ai_finalize", subjectType: "ai_intake_photo", subjectId: stagedPhotoId, targetPhotoId: stagedPhotoId, mainKey, thumbKey, inputSha256 }, ttl);
   return { kind: "owned", op };
@@ -56,23 +54,13 @@ export const stagingTarget = (a: Authority, artifact: "main" | "thumb", size: nu
   stagingRoot, operationId: `${a.operationId}-${artifact}`, generation: a.generation,
 });
 
-async function markReview(db: any, driver: F2c1Driver, a: Authority, reason: string) {
-  const op: OwnedOperation = { id: a.operationId, generation: a.generation, owner: a.owner, nonce: a.nonce, photoId: "", mainKey: a.mainKey, thumbKey: a.thumbKey };
-  await inF2c1Transaction(db, driver, function* () {
-    yield sql`SELECT id FROM photo_operations WHERE id = ${a.operationId}${lockClause(driver)}`;
-    yield* reviewSteps(driver, op, reason);
-    yield sql`UPDATE f2c1_publication_intents SET state = 'review', updated_ms = ${nowMs(driver)}
-      WHERE operation_id = ${a.operationId} AND state = 'authorized' AND executor_epoch = ${a.epoch} AND executor_token = ${a.token} RETURNING operation_id`;
-  });
-}
-
 /**
  * Copy-owned publication of ONE authorized operation (main, then thumb). Called only by the current intent executor.
  * Any outcome other than PUBLISHED/ADOPTED moves the operation and its intent to review; nothing is overwritten.
  */
 export async function publishAuthorized(db: any, driver: F2c1Driver, a: Authority, canonicalDir: string, stagingRoot: string,
   hook: (artifact: "main" | "thumb", phase: Phase) => void | Promise<void> = () => {}): Promise<{ status: "published" | "review"; outcomes: Record<string, Outcome> }> {
-  const [sizes]: any = await inF2c1Transaction(db, driver, function* (): Generator<any, Rows, Rows> {
+  const [sizes]: any = await inOwnershipTransaction(db, driver, function* (): Generator<any, Rows, Rows> {
     return yield sql`SELECT main_bytes, thumb_bytes FROM photo_operation_artifacts WHERE id = ${a.sealId} AND operation_id = ${a.operationId} AND generation = ${a.generation}`;
   });
   const outcomes: Record<string, Outcome> = {};
@@ -90,7 +78,7 @@ export async function publishAuthorized(db: any, driver: F2c1Driver, a: Authorit
 export interface W4Entry { authority: Authority; stagedPhotoId: string; sortOrder: number; isPrimary: boolean; sizeBytes: number; width: number; height: number; eventId: string }
 
 /**
- * Composed W4 T2: ONE transaction — intake lock, product lock, per entry photo + promote outbox + test-only
+ * Composed W4 T2: ONE transaction — intake lock, product lock, per entry photo + promote outbox + runtime
  * intent-authorized fence, then the real guarded intake finalization. Row values mirror the real W4 use case.
  */
 export function harnessT2W4(db: any, driver: F2c1Driver, input: { intakeId: string; productId: string; actorId: string; entries: W4Entry[] }): unknown {
@@ -121,7 +109,7 @@ export function harnessT2W4(db: any, driver: F2c1Driver, input: { intakeId: stri
       lockProductRowInTransaction(tx, schema, execution, input.productId);
       for (const e of input.entries) {
         createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, photo(e));
-        intentAuthorizedFence(driver, { authority: e.authority, productId: input.productId, photoId: e.stagedPhotoId, eventId: e.eventId, sizeBytes: e.sizeBytes, width: e.width, height: e.height })(tx, execution);
+        intentFence({ authority: e.authority, productId: input.productId, photoId: e.stagedPhotoId, eventId: e.eventId, sizeBytes: e.sizeBytes, width: e.width, height: e.height })(tx, execution);
       }
       const result: any = finalizeIntakeWithExpectedStateInTransaction(tx, schema, execution, finalize);
       if (!result.updated) throw new Error("INTAKE_NOT_APPLIED");
@@ -132,7 +120,7 @@ export function harnessT2W4(db: any, driver: F2c1Driver, input: { intakeId: stri
     await lockProductRowInTransaction(tx, schema, execution, input.productId);
     for (const e of input.entries) {
       await createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, photo(e));
-      await intentAuthorizedFence(driver, { authority: e.authority, productId: input.productId, photoId: e.stagedPhotoId, eventId: e.eventId, sizeBytes: e.sizeBytes, width: e.width, height: e.height })(tx, execution);
+      await intentFence({ authority: e.authority, productId: input.productId, photoId: e.stagedPhotoId, eventId: e.eventId, sizeBytes: e.sizeBytes, width: e.width, height: e.height })(tx, execution);
     }
     const result: any = await finalizeIntakeWithExpectedStateInTransaction(tx, schema, execution, finalize);
     if (!result.updated) throw new Error("INTAKE_NOT_APPLIED");

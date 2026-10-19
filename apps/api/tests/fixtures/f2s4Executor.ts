@@ -1,7 +1,7 @@
 /**
  * #472 F2 Step 4 OFFLINE publication executor. Started as: reaper -> supervisor (--supervise) -> this process, so it
  * runs CONFINED (Landlock allowlist: canonical, staging, private and database/tmp directories) and its exit is
- * authenticated by the Step 2 supervisor. It holds Contract 1 intent authority. One IPC command = one protocol step;
+ * authenticated by the Step 2 supervisor. It holds Contract 1 intent authority (runtime photoPublicationIntents since WP1). One IPC command = one protocol step;
  * the reply is sent only after that step's transaction committed. Without authority it never publishes or commits.
  */
 import { randomUUID } from "node:crypto";
@@ -10,14 +10,15 @@ async function main() {
   const { db } = await import("../../src/db/client");
   const authority = await import("../../src/services/photoOperationAuthority");
   const c1 = await import("../f2c1/protocol");
+  const intents = await import("../../src/services/photoPublicationIntents");
   const comp = await import("../f2s4/composition");
   const { sql } = await import("drizzle-orm");
   const driver = process.env.F2S4_DRIVER === "postgres" ? "postgres" as const : "sqlite" as const;
   const canonical = process.env.F2S4_CANONICAL!, staging = process.env.F2S4_STAGING!;
   const actorId = process.env.F2S4_ACTOR_ID!, base = process.env.F2S4_TOKEN || randomUUID();
-  const me = (i: number) => ({ token: `${base}:${i}`, actorId });
+  const me = (i: number) => ({ token: `${base}:${i}`, executorIdentity: actorId });
   const ops: any[] = [], seals: any[] = [], held: any[] = [];
-  const tx = (steps: () => Generator<any, any, any>) => c1.inF2c1Transaction(db as any, driver, steps);
+  const tx = (steps: () => Generator<any, any, any>) => authority.inOwnershipTransaction(db as any, driver, steps);
   const die = () => process.kill(process.pid, "SIGKILL");
   const committed = async (opId: string) => (await tx(function* () { return yield sql`SELECT state FROM photo_operations WHERE id = ${opId}`; }) as any)[0]?.state === "committed";
 
@@ -38,13 +39,13 @@ async function main() {
       seals[a.i] = seal; return { sealed: true, seal };
     },
     async t1(a) {
-      const r: any = await tx(() => c1.t1Steps(driver, ops[a.i], seals[a.i].sealId, me(a.i)));
+      const r: any = await intents.acquirePublicationIntent(db as any, driver, ops[a.i], seals[a.i].sealId, me(a.i));
       if (a.lostAck) return { lostAck: true };
       if (r.kind === "own") held[a.i] = r.authority;
       return { kind: r.kind };
     },
     async transfer(a) {
-      const r: any = await tx(() => c1.transferSteps(driver, a.operationId, a.expectedEpoch, me(a.i)));
+      const r: any = await tx(() => intents.transferPublicationAuthoritySteps(driver, a.operationId, a.expectedEpoch, me(a.i)));
       if (r.kind === "own") held[a.i] = r.authority;
       return { kind: r.kind, authority: r.authority };
     },
@@ -56,7 +57,7 @@ async function main() {
       if (!held[a.i]) return { refused: "no-authority" };
       if (await committed(held[a.i].operationId)) return { committed: true, already: true }; // durable result first
       const input = { authority: held[a.i], productId: a.productId, photoId: a.photoId, eventId: randomUUID(), sizeBytes: a.sizeBytes, width: a.width, height: a.height };
-      await c1.harnessT2(db, driver, { ...input, mainKey: held[a.i].mainKey, thumbKey: held[a.i].thumbKey }, c1.intentAuthorizedFence(driver, input));
+      await c1.harnessT2(db, driver, { ...input, mainKey: held[a.i].mainKey, thumbKey: held[a.i].thumbKey }, c1.intentFence(input));
       if (a.crashAfter) die();
       return a.lostAck ? { lostAck: true } : { committed: true };
     },
