@@ -8,7 +8,8 @@ on:
       - scripts/photo-*/**
   # Stage 5 F2 (#472) runtime remediation: exact-head evidence on push to the dedicated task branch.
   push:
-    branches: [fix/f2-runtime-remediation, release/f2-closure-stage1-packaging]
+    # Branches whose Draft PR base is not listed above (stacked F2 Stage 1 candidate and its children); #488 uses its PR run.
+    branches: [fix/f2-runtime-remediation, release/f2-stage1-candidate, feat/f2-photo-ingress-parity, feat/f2-instagram-derivative-store, feat/f2-canonical-reclaim]
 permissions:
   contents: read
 concurrency:
