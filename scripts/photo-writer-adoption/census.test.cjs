@@ -12,8 +12,11 @@ const { census, scanText, sources, rel } = require('./scan.cjs');
 /** file -> expected counts per category, and what the file is in the writer matrix. */
 const EXPECTED = {
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
-  'services/w2FencedProductPhotoOwner.ts': { mutation: 2, writers: ['W2 generation-fenced owner (FAZ A #424, PHOTO_OWNERSHIP_FENCING_ENABLED only): post-commit unlink of its own private names'] },
-  'services/photoOperationAuthority.ts': { mutation: 1, writers: ['W2/W4 shared generation-fenced authority (FAZ A #424, fencing ON only): exclusive private generation dirs, no-overwrite canonical link with post-link verification'] },
+  'services/photoOperationAuthority.ts': { mutation: 1, writers: ['W2/W4 shared generation-fenced authority (FAZ A #424, fencing ON only): exclusive private generation dirs; legacy worker-inode link primitive kept only as a negative control (no runtime caller, #472)'] },
+  'services/photoPublicationExecutor.ts': { mutation: 4, writers: ['W2/W4 protected publication (Stage 5 F2 #472, fencing ON): readiness mkdir of the canonical/private/staging roots, post-commit cleanup of its own staging namespace and private names'] },
+  'services/w4FencedFinalizationOwner.ts': { mutation: 1, writers: ['W4 confined preparation input (Stage 5 F2 #472, PHOTO_PREPARATION_CONFINEMENT=required only): exclusive wx write of the staged source into its private job directory'] },
+  'services/photoCopyPublisher.ts': { mutation: 2, writers: ['W2/W4 protected publication (Stage 5 F2 #472): publisher-owned verified copy, recorded before a no-overwrite canonical link; removes only its own data-* staging names'] },
+  'services/photoPreparationConfinement.ts': { mutation: 1, child: 2, writers: ['W2/W4 confined preparation (Stage 5 F2 #472, PHOTO_PREPARATION_CONFINEMENT=required only): Landlock launcher worker writing only its generation/job directories; job directory removal'] },
   'services/aiIntakePhotoFinalization.ts': { mutation: 1, writers: ['W4 generation-fenced finalization (FAZ A #424, fencing ON only): post-commit unlink of its generations private names'] },
   'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
   'services/photoStorage.ts': { mutation: 6, writers: ['W1', 'W4', 'W10', 'W4 fenced prepare (FAZ A #424): exclusive wx writes into a generation-private directory only'] },

@@ -18,12 +18,17 @@ describe("photo release preflight", () => {
     expect(check(result, "migrations.unique-numbers").status).toBe("PASS");
     expect(check(result, "migrations.0040").status).toBe("PASS");
     expect(check(result, "migrations.0041").status).toBe("PASS");
+    expect(check(result, "migrations.0043").status).toBe("PASS");
+    expect(check(result, "migrations.0044").status).toBe("PASS");
     expect(check(result, "migrations.gaps")).toMatchObject({ status: "WARN" });
     expect(check(result, "migrations.gaps").detail).toContain("0039");
     expect(check(result, "migrations.0042-w11")).toMatchObject({ status: "PASS" });
     expect(check(result, "flag.fencing").detail).toContain("OFF");
     expect(check(result, "storage.private-operations").status).toBe("PASS");
-    expect(result.checks.filter((c) => c.status === "MANUAL").map((c) => c.id)).toEqual(["render.single-instance-drain", "backups"]);
+    expect(check(result, "storage.publication-staging").status).toBe("PASS");
+    expect(["PASS", "WARN"]).toContain(check(result, "publication.exit-authentication").status);
+    expect(check(result, "publication.exit-authentication").status).toBe(process.platform === "linux" ? "PASS" : "WARN");
+    expect(result.checks.filter((c) => c.status === "MANUAL").map((c) => c.id)).toEqual(["render.single-instance-drain", "publication.restart-attestation", "backups"]);
     expect(result.status).toBe("WARN"); // manual platform steps can never be reported as PASS
     expect(readdirSync(root)).toEqual(["photos"]); // read-only: nothing created
   });
@@ -33,6 +38,9 @@ describe("photo release preflight", () => {
     const result = runPhotoReleasePreflight({ env: { PHOTO_OWNERSHIP_FENCING_ENABLED: "TRUE" }, canonicalRoot: path.join(root, "photos"), migrationsDir: migrations(["0001_a.sql", "0039_etsy.sql", "0039_other.sql", "0040_photo_operation_ownership.sql", "0042_something_else.sql"]) });
     expect(check(result, "migrations.unique-numbers")).toMatchObject({ status: "FAIL" });
     expect(check(result, "migrations.0041").status).toBe("FAIL");
+    for (const id of ["migrations.0043", "migrations.0044"]) expect(check(result, id).status).toBe("FAIL"); // protected publication schema (#472)
+    expect(check(runPhotoReleasePreflight({ env: { PHOTO_PREPARATION_CONFINEMENT: "yes" }, canonicalRoot: path.join(root, "photos") }), "flag.preparation-confinement").status).toBe("FAIL");
+    expect(check(runPhotoReleasePreflight({ env: {}, canonicalRoot: path.join(root, "photos") }), "flag.preparation-confinement").status).toBe("WARN");
     expect(check(result, "migrations.0042-w11").status).toBe("FAIL");
     expect(check(result, "flag.fencing").status).toBe("FAIL");
     expect(result.status).toBe("FAIL");

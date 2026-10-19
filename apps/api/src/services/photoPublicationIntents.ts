@@ -1,6 +1,6 @@
 /**
- * Stage 5 F2 WP1 (#472): runtime publication-intent foundation. NOT WIRED: no owner, route or flag uses it yet, so
- * the vulnerable runtime paths (owners linking worker-owned inodes under the lease-only fence) are unchanged.
+ * Stage 5 F2 (#472): runtime publication-intent authority (WP1), wired into the fenced W2/W4 owners by the runtime
+ * remediation (photoPublicationExecutor.ts). Fencing ON never links worker-owned inodes any more.
  *
  * Adapted from the offline Contract 1 proof. A publication intent is NON-EXPIRING authority for exactly one
  * operation generation and seal, held by one executor (epoch, token, identity):
@@ -162,7 +162,9 @@ export function* reviewPublicationIntentSteps(driver: OwnershipDriver, a: Public
     WHERE operation_id = ${a.operationId} AND state = 'authorized' AND executor_epoch = ${a.epoch} AND executor_token = ${a.token} RETURNING operation_id`;
 }
 
-export interface IntentCommitProof { authority: PublicationAuthority; photoId: string; eventId: string }
+/** The authority tuple the commit fence binds (keys and artifact identities are not needed to commit). */
+export type CommitAuthority = Pick<PublicationAuthority, "operationId" | "generation" | "owner" | "nonce" | "sealId" | "epoch" | "token" | "executorIdentity">;
+export interface IntentCommitProof { authority: CommitAuthority; photoId: string; eventId: string }
 
 /**
  * Intent-authorized commit fence, used in the caller's photo + outbox transaction exactly like
@@ -191,4 +193,54 @@ export function commitIntentAuthorizedPhotoOperation(tx: any, execution: "synchr
   const verify = (rows: unknown[]) => { if (rows.length !== 1) throw new Error("PHOTO_OPERATION_FENCE_LOST"); };
   if (execution === "synchronous") { for (const s of statements) verify(tx.all(s)); return; }
   return (async () => { for (const s of statements) verify(((await tx.execute(s)) as { rows: unknown[] }).rows); })();
+}
+
+/** What a trusted exit authenticator concluded about the CURRENT executor of an authorized intent. */
+export type ExecutorExitEvidence = { proven: true; attestedBy: string } | { proven: false; reason: string };
+export type AuthenticatedResume = AuthorityTransfer | { kind: "none" } | { kind: "blocked"; reason: string };
+
+/**
+ * Resume after executor loss, in ONE transaction under the row lock. Authority moves to `me` (epoch + 1) only when the
+ * current executor's termination is established: either an exit record for that exact epoch and identity already
+ * exists (persisted by a trusted caller, e.g. an operator attestation after a host/instance replacement), or the
+ * injected authenticator PROVES it now (never satisfied by lease expiry, a missing heartbeat or a worker-reported PID)
+ * and the record is written in this transaction. Otherwise -> blocked.
+ */
+export function* transferAfterAuthenticatedExitSteps(driver: OwnershipDriver, operationId: string,
+  authenticate: (current: { epoch: number; token: string; executorIdentity: string }) => ExecutorExitEvidence, me: PublicationExecutor): Generator<SQL, AuthenticatedResume, Rows> {
+  yield lockOperationRow(driver, operationId);
+  const [intent] = yield sql`SELECT ${INTENT_COLUMNS} FROM photo_publication_intents WHERE operation_id = ${operationId}${lockClause(driver)}`;
+  if (!intent) return { kind: "none" };
+  if (intent.state !== "authorized") return { kind: "terminal" };
+  const epoch = exactPositiveInteger(intent.executor_epoch);
+  const [recorded] = yield sql`SELECT executor_identity FROM photo_executor_exit_records WHERE operation_id = ${operationId} AND executor_epoch = ${epoch}`;
+  if (recorded) {
+    // A record for another identity can never be replaced (one per epoch): fail closed.
+    if (recorded.executor_identity !== intent.executor_identity) return { kind: "blocked", reason: "exit record does not match the current executor" };
+  } else {
+    const exit = authenticate({ epoch, token: intent.executor_token, executorIdentity: intent.executor_identity });
+    if (!exit.proven) return { kind: "blocked", reason: exit.reason };
+    yield* persistAuthenticatedExecutorExitSteps(driver, { operationId, epoch, executorIdentity: intent.executor_identity, attestedBy: exit.attestedBy });
+  }
+  return yield* transferPublicationAuthoritySteps(driver, operationId, epoch, me);
+}
+
+export interface PublicationCopyRow { stagingName: string; dev: string; ino: string; birthNs: string; sha256: string; bytes: number }
+
+/** The recorded publisher-owned copy of one artifact (migration 0044), if any. */
+export function* readPublicationCopySteps(operationId: string, artifact: "main" | "thumb"): Generator<SQL, PublicationCopyRow | null, Rows> {
+  const [row] = yield sql`SELECT staging_name, copy_dev, copy_ino, copy_birth_ns, sha256, bytes FROM photo_publication_copies WHERE operation_id = ${operationId} AND artifact = ${artifact}`;
+  return row ? { stagingName: row.staging_name, dev: String(row.copy_dev), ino: String(row.copy_ino), birthNs: String(row.copy_birth_ns), sha256: row.sha256, bytes: exactPositiveInteger(row.bytes) } : null;
+}
+
+/** Records a verified copy BEFORE it is linked; only the CURRENT executor of the authorized intent may record. */
+export function* recordPublicationCopySteps(driver: OwnershipDriver, a: PublicationAuthority, artifact: "main" | "thumb", copy: PublicationCopyRow): Generator<SQL, boolean, Rows> {
+  yield lockOperationRow(driver, a.operationId);
+  const [current] = yield sql`SELECT operation_id FROM photo_publication_intents WHERE operation_id = ${a.operationId} AND generation = ${a.generation}
+    AND seal_id = ${a.sealId} AND state = 'authorized' AND executor_epoch = ${a.epoch} AND executor_token = ${a.token} AND executor_identity = ${a.executorIdentity}${lockClause(driver)}`;
+  if (!current) return false;
+  yield sql`DELETE FROM photo_publication_copies WHERE operation_id = ${a.operationId} AND artifact = ${artifact} RETURNING operation_id`;
+  yield sql`INSERT INTO photo_publication_copies (operation_id, artifact, executor_epoch, staging_name, copy_dev, copy_ino, copy_birth_ns, sha256, bytes, recorded_ms)
+    VALUES (${a.operationId}, ${artifact}, ${a.epoch}, ${copy.stagingName}, ${copy.dev}, ${copy.ino}, ${copy.birthNs}, ${copy.sha256}, ${copy.bytes}, ${nowMs(driver)}) RETURNING operation_id`;
+  return true;
 }

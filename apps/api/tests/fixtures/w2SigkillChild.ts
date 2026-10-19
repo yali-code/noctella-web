@@ -7,7 +7,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 async function main() {
-  const stage = process.env.F5_KILL_STAGE as "beforeSeal" | "afterSeal" | "afterPublish" | "afterCommit";
+  const stage = process.env.F5_KILL_STAGE as "beforeSeal" | "afterSeal" | "afterIntent" | "afterPublish" | "afterCommit";
   const { db } = await import("../../src/db/client");
   const { uploadFencedProductPhoto } = await import("../../src/services/w2FencedProductPhotoOwner");
   const { digestW2StagedInput } = await import("../../src/services/w2StagedInputDigest");

@@ -166,6 +166,12 @@ async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProd
 export const writeDeterministicProductPhoto: (input: DeterministicProductPhotoInput) => Promise<DeterministicProductPhotoResult> = input =>
   runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input));
 
+/** Width/height of an already published (publisher-verified) derivative; metadata only, bounded like the recipe. */
+export async function readPublishedPhotoDimensions(file: string): Promise<{ width: number; height: number } | null> {
+  const meta = await sharp(file, { limitInputPixels: 24_000_000 }).metadata();
+  return meta.width && meta.height ? { width: meta.width, height: meta.height } : null;
+}
+
 /**
  * FAZ A / #424 fenced W4: the exact writeDeterministicProductPhoto recipe (processProductPhoto), written exclusively
  * into a generation-private directory instead of the canonical root. Publication is the fenced owner's job.

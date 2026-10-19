@@ -58,7 +58,7 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     if (!enabled) return;
     if (driver === "postgres") {
       process.env.DATABASE_DRIVER = "postgres";
-      const harness = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+      const harness = await createPostgresTestDb("0044_photo_publication_copies.sql");
       db = harness.db; close = () => harness.close();
     } else db = createTestDb();
     if (driver === "postgres") {
@@ -105,14 +105,19 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     const published = await Promise.all([sealed.main_key, sealed.thumb_key].map(async (key) => (await lstat(path.join(root, "photos", key))).ino));
     expect(await n("product_photos", `WHERE id = '${sealed.committed_photo_id ?? "none"}'`)).toBe(0);
     expect((await listW2OperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).not.toContain(token); // lease still live
-    await expect(upload(token, back)).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_IN_PROGRESS" });
-    await expire(token);
-    expect((await listW2OperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).toContain(token);
+    // #472: the crashed execution has provably ended in this process (execution registry), so the retry transfers the
+    // durable publication intent (epoch 2) and adopts the recorded copies; it never waits for or depends on the lease.
     const recovered = await upload(token, back);
     const record = await op(token);
     expect(record).toMatchObject({ state: "committed", committed_photo_id: recovered.id });
+    expect(Number(record.generation)).toBe(1);
     expect(await n("product_photos", `WHERE id = '${recovered.id}'`)).toBe(1);
+    expect(await n("outbox_events", `WHERE aggregate_id = '${recovered.id}'`)).toBe(1);
     expect(await Promise.all([record.main_key, record.thumb_key].map(async (key) => (await lstat(path.join(root, "photos", key))).ino))).toEqual(published);
+    const [intent] = await q(sql`SELECT state, executor_epoch FROM photo_publication_intents WHERE operation_id = ${record.id}`);
+    expect([intent.state, Number(intent.executor_epoch)]).toEqual(["committed", 2]);
+    const [exit] = await q(sql`SELECT attested_by FROM photo_executor_exit_records WHERE operation_id = ${record.id} AND executor_epoch = 1`);
+    expect(String(exit.attested_by)).toMatch(/^self-ended:/);
     expect((await listW2OperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).not.toContain(token);
   });
 
@@ -176,7 +181,9 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     expect(await n("outbox_events", `WHERE aggregate_id = '${record.target_photo_id}'`)).toBe(0);
   });
 
-  it.skipIf(!enabled).each(["missing", "replaced"] as const)("F3: recorded prior seal with %s private name cannot authorize adoption", async (mode) => {
+  // #472: adoption is keyed to the durably recorded publisher-owned copy, never to a private (worker) name. A missing or
+  // replaced private name therefore neither authorizes nor blocks adopting the operation's own recorded copy.
+  it.skipIf(!enabled).each(["missing", "replaced"] as const)("F3: a %s private name is never linked; recovery adopts only the recorded copy inode", async (mode) => {
     const token = `orphan-${mode}-${driver}-000001`;
     await expect(upload(token, front, { afterPublish: () => { throw new Error("crash retains canonical"); } })).rejects.toThrow("crash retains canonical");
     const record = await op(token), destination = path.join(root, "photos", record.main_key);
@@ -184,51 +191,96 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     const privateName = path.join(root, ".product-photo-operations", record.id, "1", "main.webp");
     await rm(privateName);
     if (mode === "replaced") await copyFile(destination, privateName);
+    const replacedInode = mode === "replaced" ? (await lstat(privateName, { bigint: true })).ino : undefined;
     await expire(token);
-    await expect(upload(token, front)).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
-    expect((await op(token)).state).toBe("review");
-    expect((await lstat(destination, { bigint: true })).ino).toBe(before.ino);
-    expect(await n("product_photos", `WHERE id = '${record.target_photo_id}'`)).toBe(0);
+    const recovered = await upload(token, front);
+    expect(await op(token)).toMatchObject({ state: "committed", committed_photo_id: recovered.id });
+    expect(Number((await op(token)).generation)).toBe(1); // no reclaim after T1, whatever the lease says
+    const after = await lstat(destination, { bigint: true });
+    expect([after.dev, after.ino]).toEqual([before.dev, before.ino]);
+    if (replacedInode !== undefined) expect(replacedInode).not.toBe(after.ino); // the replaced private name was never linked
+    const [copy] = await q(sql`SELECT copy_ino FROM photo_publication_copies WHERE operation_id = ${record.id} AND artifact = 'main'`);
+    expect(String(copy.copy_ino)).toBe(String(after.ino));
+    expect(await n("product_photos", `WHERE id = '${record.target_photo_id}'`)).toBe(1);
   });
 
-  it.skipIf(!enabled)("REPRO F2 SECURITY FAIL: stale W2 A publishes while reclaimed B is sealed but has not published", async () => {
-    const token = `stale-before-b-${driver}-001`;
+  /** Runs A until it sealed, lets B reclaim (expired lease) and seal generation 2, then parks B before its T1. */
+  async function staleRace(token: string, afterReclaim: () => Promise<void>, hooks: FencedUploadHooks = {}) {
     let release!: () => void;
     const paused = new Promise<void>((resolve) => { release = resolve; });
-    let winner: Promise<any> | undefined, staleInode = "";
+    let winner: Promise<any> | undefined;
+    const stale = upload(token, front, {
+      ...hooks,
+      afterSeal: async () => {
+        await expire(token);
+        let sealed!: () => void, failed!: (e: unknown) => void;
+        const ready = new Promise<void>((resolve, reject) => { sealed = resolve; failed = reject; });
+        winner = upload(token, front, { afterSeal: async () => { sealed(); await paused; } });
+        winner.catch(failed); // observe rejection immediately, including preparation failures
+        await ready;
+        const record = await op(token);
+        expect([Number(record.generation), record.state]).toEqual([2, "sealed"]);
+        await expect(lstat(path.join(root, "photos", record.main_key))).rejects.toMatchObject({ code: "ENOENT" });
+        await afterReclaim();
+      },
+    });
+    return { stale, release: () => release(), winner: () => winner! };
+  }
+
+  // INVERTED original reproduction (was "REPRO F2 SECURITY FAIL"): the stale owner A is rejected at T1 and never
+  // creates a canonical name; B publishes its own verified copy and commits exactly once.
+  it.skipIf(!enabled)("F2 REMEDIATED: stale W2 A cannot create a canonical name while reclaimed B is sealed but has not published", async () => {
+    const token = `stale-before-b-${driver}-001`;
+    let reachedPublication = false;
+    const race = await staleRace(token, async () => undefined, { afterIntent: () => { reachedPublication = true; }, copyPhase: () => { reachedPublication = true; } });
     try {
-      await expect(upload(token, front, {
-        afterSeal: async () => {
-          await expire(token);
-          let sealed!: () => void, failed!: (e: unknown) => void;
-          const ready = new Promise<void>((resolve, reject) => { sealed = resolve; failed = reject; });
-          winner = upload(token, front, { afterSeal: async () => { sealed(); await paused; } });
-          winner.catch(failed); // observe rejection immediately, including preparation failures
-          await ready;
-          const record = await op(token);
-          expect([Number(record.generation), record.state]).toEqual([2, "sealed"]);
-          await expect(lstat(path.join(root, "photos", record.main_key))).rejects.toMatchObject({ code: "ENOENT" });
-        },
-        afterPublish: async () => {
-          const record = await op(token);
-          expect([Number(record.generation), record.state]).toEqual([2, "sealed"]);
-          const privateA = await lstat(path.join(root, ".product-photo-operations", record.id, "1", "main.webp"), { bigint: true });
-          const canonical = await lstat(path.join(root, "photos", record.main_key), { bigint: true });
-          expect([canonical.dev, canonical.ino]).toEqual([privateA.dev, privateA.ino]);
-          expect(await n("product_photos", `WHERE id = '${record.target_photo_id}'`)).toBe(0);
-          expect(await n("outbox_events", `WHERE aggregate_id = '${record.target_photo_id}'`)).toBe(0);
-          staleInode = String(canonical.ino); // vulnerability: stale actor successfully linked before final CAS
-        },
-      })).rejects.toMatchObject({ status: 503 });
-      expect(staleInode).not.toBe("");
-      release();
-      const recovered = await winner!;
+      await expect(race.stale).rejects.toMatchObject({ status: 503, code: "PHOTO_OPERATION_FENCE_LOST" });
+      expect(reachedPublication).toBe(false);
+      const parked = await op(token);
+      await expect(lstat(path.join(root, "photos", parked.main_key))).rejects.toMatchObject({ code: "ENOENT" }); // A created nothing
+      await expect(lstat(path.join(root, "photos", parked.thumb_key))).rejects.toMatchObject({ code: "ENOENT" });
+      race.release();
+      const recovered = await race.winner();
       const record = await op(token);
       expect([Number(record.generation), record.state]).toEqual([2, "committed"]);
-      expect(String((await lstat(path.join(root, "photos", record.main_key), { bigint: true })).ino)).toBe(staleInode);
+      const canonical = await lstat(path.join(root, "photos", record.main_key), { bigint: true });
+      expect(canonical.nlink).toBe(1n); // publisher-owned copy: no worker/private alias exists
+      const [copy] = await q(sql`SELECT copy_ino FROM photo_publication_copies WHERE operation_id = ${record.id} AND artifact = 'main'`);
+      expect(String(copy.copy_ino)).toBe(String(canonical.ino));
+      const [intent] = await q(sql`SELECT generation, state FROM photo_publication_intents WHERE operation_id = ${record.id}`);
+      expect([Number(intent.generation), intent.state]).toEqual([2, "committed"]);
       expect(await n("product_photos", `WHERE id = '${recovered.id}'`)).toBe(1);
       expect(await n("outbox_events", `WHERE aggregate_id = '${recovered.id}'`)).toBe(1);
-    } finally { release(); if (winner) await winner.catch(() => undefined); }
+    } finally { race.release(); await race.winner()?.catch(() => undefined); }
+  });
+
+  // NEGATIVE CONTROL (sensitivity): the same race with the legacy worker-inode primitive still links the stale private
+  // inode, so the assertions above would detect a regression to it. No runtime owner calls this primitive.
+  it.skipIf(!enabled)("NEGATIVE CONTROL: the legacy publishSealedArtifacts primitive still lets stale A link before B", async () => {
+    const token = `stale-legacy-${driver}-001`;
+    const { publishSealedArtifacts } = await import("../src/services/photoOperationAuthority");
+    let staleInode = "";
+    const race = await staleRace(token, async () => {
+      const record = await op(token);
+      const [g1] = await q(sql`SELECT owner, nonce FROM photo_operation_generations WHERE operation_id = ${record.id} AND generation = 1`);
+      const [seal] = await q(sql`SELECT main_sha256, thumb_sha256, main_bytes, thumb_bytes, main_dev, main_ino, thumb_dev, thumb_ino FROM photo_operation_artifacts WHERE operation_id = ${record.id} AND generation = 1`);
+      const dir = path.join(root, ".product-photo-operations", record.id, "1");
+      const proof = (a: "main" | "thumb") => ({ sha256: seal[a + "_sha256"], bytes: Number(seal[a + "_bytes"]), dev: String(seal[a + "_dev"]), ino: String(seal[a + "_ino"]) });
+      await publishSealedArtifacts(db, driver, { id: record.id, generation: 1, owner: g1.owner, nonce: g1.nonce, photoId: record.target_photo_id, mainKey: record.main_key, thumbKey: record.thumb_key },
+        { main: path.join(dir, "main.webp"), thumb: path.join(dir, "thumb.webp") }, { main: proof("main"), thumb: proof("thumb") }, path.join(root, "photos"));
+      const privateA = await lstat(path.join(dir, "main.webp"), { bigint: true }), canonical = await lstat(path.join(root, "photos", record.main_key), { bigint: true });
+      expect([canonical.dev, canonical.ino]).toEqual([privateA.dev, privateA.ino]); // the vulnerability shape, reproduced
+      staleInode = String(canonical.ino);
+    });
+    try {
+      await expect(race.stale).rejects.toMatchObject({ status: 503 });
+      expect(staleInode).not.toBe("");
+      race.release();
+      // B now meets a canonical name that is not its recorded copy: protected publication refuses it (review).
+      await expect(race.winner()).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_REVIEW" });
+      expect((await op(token)).state).toBe("review");
+      expect(String((await lstat(path.join(root, "photos", (await op(token)).main_key), { bigint: true })).ino)).toBe(staleInode);
+    } finally { race.release(); await race.winner()?.catch(() => undefined); }
   });
 
   it.skipIf(!enabled)("private generation evidence never lives under the public static root", async () => {

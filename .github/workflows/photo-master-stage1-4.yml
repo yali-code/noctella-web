@@ -1,15 +1,18 @@
 name: Photo Master CI — Stage 1–4 evidence
 on:
   pull_request:
-    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424, test/w2-durable-retry-restart-424, test/w2-atomic-lock-contention-424, feat/w2-staged-digest-durable-claim-424, feat/photo-transaction-commit-fence-424, feat/w2-real-transaction-fence-424, feat/w2-live-route-ownership-entry-424, feat/w2-live-fenced-adoption-424, feat/w4-live-fenced-adoption-424, feat/w11-fenced-instagram-424, test/w11-0042-readiness-424, test/fencing-on-harness-gates-424, feat/faz-a-consolidated-424, feat/faz-a-closure-424, fix/admin-photo-upload-idempotency-424, fix/photo-ownership-driver-routing-458, audit/faz-a-f3-f5-recovery-closure, fix/faz-a-stage5-w2-w4-descriptor-proof, fix/stage5-w2-w4-f2-f3-publication, fix/stage5-f2-capability-fenced-publication]
+    branches: [ci/photo-master-stage1-4-424, integration/w3-w4-master-424, test/w2-live-adoption-gate-424, fix/w2-staged-digest-fd-424, feat/w2-durable-intent-schema-424, fix/w2-0040-schema-boundary-424, feat/w2-sqlite-atomic-intent-claim-424, feat/w2-postgres-atomic-intent-424, test/w2-durable-retry-restart-424, test/w2-atomic-lock-contention-424, feat/w2-staged-digest-durable-claim-424, feat/photo-transaction-commit-fence-424, feat/w2-real-transaction-fence-424, feat/w2-live-route-ownership-entry-424, feat/w2-live-fenced-adoption-424, feat/w4-live-fenced-adoption-424, feat/w11-fenced-instagram-424, test/w11-0042-readiness-424, test/fencing-on-harness-gates-424, feat/faz-a-consolidated-424, feat/faz-a-closure-424, fix/admin-photo-upload-idempotency-424, fix/photo-ownership-driver-routing-458, audit/faz-a-f3-f5-recovery-closure, fix/faz-a-stage5-w2-w4-descriptor-proof, fix/stage5-w2-w4-f2-f3-publication, fix/stage5-f2-capability-fenced-publication, feat/f2-wp1-publication-intents, fix/f2-runtime-remediation]
     paths:
       - .github/workflows/photo-master-stage1-4.yml
       - apps/api/**
       - scripts/photo-*/**
+  # Stage 5 F2 (#472) runtime remediation: exact-head evidence on push to the dedicated task branch.
+  push:
+    branches: [fix/f2-runtime-remediation]
 permissions:
   contents: read
 concurrency:
-  group: photo-master-${{ github.event.pull_request.number }}
+  group: photo-master-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   w4-and-typecheck:
@@ -18,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -55,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -88,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -156,7 +159,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -177,7 +180,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -226,7 +229,7 @@ jobs:
             sha: b7285a52fa98e46d869101717c2ed6a14a88f705
             profile: combined-original-source
           - name: integrated-candidate-original-source
-            sha: ${{ github.event.pull_request.head.sha }}
+            sha: ${{ github.event.pull_request.head.sha || github.sha }}
             profile: combined-original-source
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -312,7 +315,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Require actual W3 flag, writer, key recipe and candidate memory scenario
         run: node scripts/photo-w4-fencing-gap/w3-integration-gate.cjs
@@ -367,7 +370,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -385,7 +388,7 @@ jobs:
           echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-landlock-worker" >> "$GITHUB_ENV"
           echo "F2_CAPABILITY_REQUIRE_LINUX=1" >> "$GITHUB_ENV"
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
-        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/photoOperationRecoveryReport.test.ts tests/photoReleasePreflight.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2IdempotencyKeyFencingOff.test.ts tests/photoPublicationRecoveryPolicy.test.ts tests/photoOwnershipSigkillRecovery.test.ts tests/w2PublicationPostgresSigkill468.test.ts tests/ownedPhotoArtifactProof.test.ts tests/publicationCapability470.test.ts tests/f2ContractOneOffline.test.ts tests/photoPublicationIntentSchema.test.ts tests/publicationProcessAuthority472.test.ts tests/publicationByteImmutabilityStep3.test.ts tests/publicationCompositionStep4.test.ts
+        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/photoOperationRecoveryReport.test.ts tests/photoReleasePreflight.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2IdempotencyKeyFencingOff.test.ts tests/photoPublicationRecoveryPolicy.test.ts tests/photoOwnershipSigkillRecovery.test.ts tests/w2PublicationPostgresSigkill468.test.ts tests/ownedPhotoArtifactProof.test.ts tests/publicationCapability470.test.ts tests/f2ContractOneOffline.test.ts tests/photoPublicationIntentSchema.test.ts tests/photoProtectedPublicationRuntime.test.ts tests/photoCanonicalWriterInventory.test.ts tests/photoPreparationConfinement.test.ts tests/publicationProcessAuthority472.test.ts tests/publicationByteImmutabilityStep3.test.ts tests/publicationCompositionStep4.test.ts
       - name: Prove BLOCKED fencing-ON profile needs no Docker image
         run: node --test scripts/photo-upload-linux/fencing-blocked.test.mjs scripts/photo-upload-linux/fencing-on-gates.test.mjs scripts/photo-writer-adoption/fencing-disposition.test.cjs
       - name: Fencing-ON 24MP acceptance readiness (dry run; must report BLOCKED, never fencing-OFF data)

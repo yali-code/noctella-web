@@ -64,7 +64,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     }
     return { productId, intakeId, stagedIds };
   }
-  const ops = (ids: string[]) => q(sql`SELECT subject_id, kind, state, generation, main_key, thumb_key, committed_photo_id FROM photo_operations WHERE subject_id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)}) ORDER BY subject_id`);
+  const ops = (ids: string[]) => q(sql`SELECT id, subject_id, kind, state, generation, main_key, thumb_key, committed_photo_id FROM photo_operations WHERE subject_id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)}) ORDER BY subject_id`);
   const counts = async (productId: string) => [
     await n(sql`SELECT COUNT(*) AS n FROM product_photos WHERE product_id = ${productId}`),
     await n(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id IN (SELECT id FROM product_photos WHERE product_id = ${productId})`),
@@ -78,7 +78,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       // Same pattern as the existing PostgreSQL runtime tests: config validation needs the URL; queries use `db`.
       process.env.DATABASE_DRIVER = "postgres";
       process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
-      const harness = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+      const harness = await createPostgresTestDb("0044_photo_publication_copies.sql");
       db = harness.db; close = () => harness.close();
     } else {
       delete process.env.DATABASE_DRIVER;
@@ -122,19 +122,20 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     expect((await readdir(path.join(root, "photos"))).length).toBe(files);
   });
 
-  it.skipIf(!enabled)("a crash after canonical publication commits nothing, keeps evidence, and a retry after lease expiry finalizes exactly once", async () => {
+  // #472: the crashed execution provably ended in this process, so the retry transfers both durable intents (epoch 2)
+  // and adopts the recorded copies at once; the lease is irrelevant after T1 and no generation is reclaimed.
+  it.skipIf(!enabled)("a crash after canonical publication commits nothing, keeps evidence, and a retry finalizes exactly once by adopting the recorded copies", async () => {
     const { productId, intakeId, stagedIds } = await appliedIntake(2);
     await expect(finalize(intakeId, { hooks: { afterPublish: (id) => { if (id === stagedIds[1]) throw new Error("simulated crash after publish"); } } })).rejects.toThrow("simulated crash");
     expect((await ops(stagedIds)).map((r) => r.state)).toEqual(["sealed", "sealed"]);
     expect(await counts(productId)).toEqual([0, 0]);
     expect(await intakeStatus(intakeId)).toBe(AiProductIntakeStatus.Applied);
     const before = await Promise.all((await ops(stagedIds)).flatMap((r) => [inode(r.main_key), inode(r.thumb_key)]));
-    await expect(finalize(intakeId)).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_IN_PROGRESS" });
-    await expireAll();
-    expect((await listPhotoOperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).toEqual(expect.arrayContaining(stagedIds));
     expect((await finalize(intakeId)).created).toBe(true);
     const rows = await ops(stagedIds);
-    expect(rows.map((r) => [r.state, Number(r.generation)])).toEqual([["committed", 2], ["committed", 2]]);
+    expect(rows.map((r) => [r.state, Number(r.generation)])).toEqual([["committed", 1], ["committed", 1]]);
+    const intents = await Promise.all(rows.map(async (r) => (await q(sql`SELECT state, executor_epoch FROM photo_publication_intents WHERE operation_id = ${r.id}`))[0]));
+    expect(intents.map((i) => [i.state, Number(i.executor_epoch)])).toEqual([["committed", 2], ["committed", 2]]);
     expect(await Promise.all(rows.flatMap((r) => [inode(r.main_key), inode(r.thumb_key)]))).toEqual(before);
     expect(await counts(productId)).toEqual([2, 2]);
   });
@@ -150,15 +151,39 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     expect(await counts(productId)).toEqual([1, 1]);
   });
 
-  it.skipIf(!enabled)("a stale finalizer loses to the reclaiming generation and creates no duplicate effects", async () => {
+  // #472: after T1 an expired lease no longer lets another finalizer reclaim: the publishing executor is alive in this
+  // process, so the second finalizer is refused (BLOCKED) and the original commits exactly once.
+  it.skipIf(!enabled)("an expired lease cannot hand an actively publishing finalization to another finalizer; no duplicate effects", async () => {
     const { productId, intakeId, stagedIds } = await appliedIntake(1);
-    let winner: any;
-    const stale = await finalize(intakeId, { hooks: { afterPublish: async () => { await expireAll(); winner = await finalize(intakeId); } } });
+    let second: unknown;
+    const first = await finalize(intakeId, { hooks: { afterPublish: async () => { await expireAll(); second = await finalize(intakeId).catch((e) => e); } } });
+    expect(second).toMatchObject({ status: 409, code: "PHOTO_OPERATION_IN_PROGRESS" });
+    expect(first.created).toBe(true);
+    const [row] = await ops(stagedIds);
+    expect([row.state, Number(row.generation)]).toEqual(["committed", 1]);
+    expect(await counts(productId)).toEqual([1, 1]);
+  });
+
+  // INVERTED F2 shape for W4: a finalizer stalled after sealing (before T1) is superseded; it is rejected at T1 and
+  // never creates a canonical name. The winner publishes its own recorded copies and finalizes exactly once.
+  it.skipIf(!enabled)("F2 REMEDIATED (W4): a stale finalizer superseded before T1 never creates a canonical name", async () => {
+    const { productId, intakeId, stagedIds } = await appliedIntake(1);
+    let winner: any, publishedByStale = false;
+    await expect(finalize(intakeId, { hooks: {
+      afterSeal: async () => { await expireAll(); winner = await finalize(intakeId); },
+      copyPhase: () => { publishedByStale = true; },
+    } })).rejects.toMatchObject({ status: 503, code: "PHOTO_OPERATION_FENCE_LOST" });
+    expect(publishedByStale).toBe(false);
     expect(winner.created).toBe(true);
-    expect(stale.created).toBe(false); // the stale transaction found the intake already Finalized and committed nothing
     const [row] = await ops(stagedIds);
     expect([row.state, Number(row.generation)]).toEqual(["committed", 2]);
+    for (const artifact of ["main", "thumb"] as const) {
+      const canonical = await lstat(path.join(root, "photos", row[artifact + "_key"]), { bigint: true });
+      const [copy] = await q(sql`SELECT copy_ino FROM photo_publication_copies WHERE operation_id = ${row.id} AND artifact = ${artifact}`);
+      expect([String(copy.copy_ino), canonical.nlink]).toEqual([String(canonical.ino), 1n]);
+    }
     expect(await counts(productId)).toEqual([1, 1]);
+    expect(await intakeStatus(intakeId)).toBe(AiProductIntakeStatus.Finalized);
   });
 
   it.skipIf(!enabled).each(["main", "thumb"] as const)("F3: W4 rejects foreign identical-byte %s canonical inode without finalizing", async (artifact) => {

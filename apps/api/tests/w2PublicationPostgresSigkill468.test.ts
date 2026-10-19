@@ -16,6 +16,7 @@ const { root } = vi.hoisted(() => {
 });
 import { createPostgresTestDb, postgresTestConfigured, type PostgresTestDb } from "./postgresTestDb";
 import { uploadFencedProductPhoto } from "../src/services/w2FencedProductPhotoOwner";
+import { crossProcessExitAuthenticationAvailable } from "../src/services/photoPublicationExecutor";
 import { digestW2StagedInput } from "../src/services/w2StagedInputDigest";
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 const savedDriver = process.env.DATABASE_DRIVER, savedUrl = process.env.DATABASE_URL;
@@ -28,7 +29,7 @@ beforeAll(async () => {
   if (!postgresTestConfigured) return;
   process.env.DATABASE_DRIVER = "postgres";
   process.env.DATABASE_URL = process.env.POSTGRES_TEST_DATABASE_URL;
-  harness = await createPostgresTestDb("0041_photo_w2_upload_intents.sql");
+  harness = await createPostgresTestDb("0044_photo_publication_copies.sql");
   const categoryId = randomUUID(); productId = randomUUID();
   await q(sql`INSERT INTO categories (id, name, slug) VALUES (${categoryId}, 'PG SIGKILL 468', ${"kill-" + categoryId}) RETURNING id`);
   await q(sql`INSERT INTO products (id, sku, title, slug, type, status, category_id) VALUES (${productId}, ${"PG-KILL-" + productId}, 'Synthetic', ${"kill-" + productId}, ${ProductType.UniqueItem}, ${ProductStatus.Draft}, ${categoryId}) RETURNING id`);
@@ -48,7 +49,10 @@ async function recover(token: string) {
     return await uploadFencedProductPhoto(harness.db as any, { productId, actorId: "actor-1", operationToken: token, sha256: await digestW2StagedInput(file, 10 * 1024 * 1024), altText: "", file }, { driver: "postgres", canonicalRoot: path.join(root, "photos") });
   } finally { await rm(workDir, { recursive: true, force: true }); }
 }
-it.skipIf(!postgresTestConfigured).each(["beforeSeal", "afterSeal", "afterPublish", "afterCommit"] as const)("PostgreSQL SIGKILL %s recovers exactly once without overwrite", async (stage) => {
+// #472: after T1 (afterIntent/afterPublish) the dead child holds the durable intent. Recovery needs its authenticated
+// termination (same boot + PID namespace via /proc) and then transfers authority within the SAME generation; without
+// that proof the operation stays BLOCKED even with an expired lease. Before T1 the lease rules are unchanged.
+it.skipIf(!postgresTestConfigured).each(["beforeSeal", "afterSeal", "afterIntent", "afterPublish", "afterCommit"] as const)("PostgreSQL SIGKILL %s recovers exactly once without overwrite", async (stage) => {
   const token = "pg-kill-" + stage + "-" + randomUUID().slice(0, 12);
   const workDir = await mkdtemp(path.join(root, "child-"));
   const url = new URL(process.env.POSTGRES_TEST_DATABASE_URL!);
@@ -75,16 +79,30 @@ it.skipIf(!postgresTestConfigured).each(["beforeSeal", "afterSeal", "afterPublis
   expect(await effects(killed.target_photo_id)).toEqual(stage === "afterCommit" ? [1, 1] : [0, 0]);
   const canonical = path.join(root, "photos", killed.main_key);
   const published = stage === "afterPublish" || stage === "afterCommit";
+  const intentHeld = stage === "afterIntent" || stage === "afterPublish";
   const before = published ? await lstat(canonical, { bigint: true }) : null;
   if (!published) await expect(lstat(canonical)).rejects.toMatchObject({ code: "ENOENT" });
-  if (stage !== "afterCommit") {
+  if (stage === "beforeSeal" || stage === "afterSeal") {
     await expect(recover(token)).rejects.toMatchObject({ code: "PHOTO_OPERATION_IN_PROGRESS" });
     await q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE id = ${killed.id} RETURNING id`);
+  }
+  if (intentHeld && !crossProcessExitAuthenticationAvailable()) {
+    await q(sql`UPDATE photo_operations SET lease_until_ms = 0 WHERE id = ${killed.id} RETURNING id`);
+    await expect(recover(token)).rejects.toMatchObject({ status: 409, code: "PHOTO_OPERATION_IN_PROGRESS" }); // BLOCKED
+    expect([(await op(token)).state, Number((await op(token)).generation)]).toEqual(["sealed", 1]);
+    expect(await effects(killed.target_photo_id)).toEqual([0, 0]);
+    return;
   }
   const photo = await recover(token);
   expect(photo.id).toBe(killed.target_photo_id);
   expect((await op(token)).state).toBe("committed");
-  expect(Number((await op(token)).generation)).toBe(stage === "afterCommit" ? 1 : 2);
+  expect(Number((await op(token)).generation)).toBe(stage === "afterCommit" || intentHeld ? 1 : 2);
+  if (intentHeld) {
+    const [intent] = await q(sql`SELECT state, executor_epoch FROM photo_publication_intents WHERE operation_id = ${killed.id}`);
+    expect([intent.state, Number(intent.executor_epoch)]).toEqual(["committed", 2]);
+    const [exit] = await q(sql`SELECT attested_by FROM photo_executor_exit_records WHERE operation_id = ${killed.id} AND executor_epoch = 1`);
+    expect(String(exit.attested_by)).toMatch(/\|pid \d+ (absent|reused|exited)$/);
+  }
   expect(await effects(photo.id)).toEqual([1, 1]);
   if (before) expect((await lstat(canonical, { bigint: true })).ino).toBe(before.ino);
   expect((await recover(token)).id).toBe(photo.id);
