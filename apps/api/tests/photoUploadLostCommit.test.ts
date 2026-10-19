@@ -95,7 +95,8 @@ describe("legacy upload lost COMMIT acknowledgement (SQLite)", () => {
 describe.skipIf(!postgresTestConfigured)("legacy upload lost COMMIT acknowledgement (PostgreSQL)", () => {
   it("committed row is kept; an unprovable rollback retains files and fails closed", async () => {
     vi.stubEnv("DATABASE_DRIVER", "postgres");
-    const h = await createPostgresTestDb("0038_background_job_claim_fencing.sql");
+    // Composed release candidate: product reads include the released Etsy columns (0039).
+    const h = await createPostgresTestDb("0039_etsy_listing_form_parity.sql");
     try {
       await h.pool.query("INSERT INTO products(id,sku,title,slug,type,status) VALUES('p1','SKU-LC','Lost Commit','lost-commit','unique_item','published')");
       const committedStorage = fileStorage();
