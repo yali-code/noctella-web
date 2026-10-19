@@ -6,7 +6,28 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { inOwnershipTransaction, nowMs, ownershipDriver } from "../src/services/photoOperationAuthority";
+import { inOwnershipTransaction, nowMs, ownershipDriver, uniqueViolation } from "../src/services/photoOperationAuthority";
+
+describe("ownership claim duplicate classification", () => {
+  it("recognizes a PostgreSQL duplicate wrapped by Drizzle", () => {
+    const driverError = Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" });
+    expect(uniqueViolation(new Error("Failed query: INSERT INTO photo_derivative_operations", { cause: driverError }))).toBe(true);
+  });
+
+  it("preserves SQLite duplicate handling without swallowing other constraint failures", () => {
+    expect(uniqueViolation(Object.assign(new Error("UNIQUE constraint failed: photo_operations.subject_id"), { code: "SQLITE_CONSTRAINT_UNIQUE" }))).toBe(true);
+    expect(uniqueViolation(Object.assign(new Error("FOREIGN KEY constraint failed"), { code: "SQLITE_CONSTRAINT_FOREIGNKEY" }))).toBe(false);
+    expect(uniqueViolation(Object.assign(new Error("not null"), { code: "23502" }))).toBe(false);
+    expect(uniqueViolation(new Error("Failed query", { cause: Object.assign(new Error("disk full"), { code: "SQLITE_FULL" }) }))).toBe(false);
+  });
+
+  it("terminates on cyclic causes and ignores unrelated messages", () => {
+    const error: any = new Error("Failed query: SELECT 'UNIQUE constraint failed:'");
+    error.cause = error;
+    expect(uniqueViolation(error)).toBe(false);
+    expect(uniqueViolation(null)).toBe(false);
+  });
+});
 
 const sqlText = (statement: any) => statement.queryChunks.map((c: any) => (typeof c === "string" ? c : c.value?.join?.("") ?? "")).join("");
 

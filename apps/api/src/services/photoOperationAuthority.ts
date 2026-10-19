@@ -41,7 +41,18 @@ export function ownershipDriver(env: NodeJS.ProcessEnv = process.env): Ownership
   throw new Error(`UNSUPPORTED_PHOTO_OWNERSHIP_DRIVER:${driver}`);
 }
 export const nowMs = (driver: OwnershipDriver): SQL => sql.raw(driver === "sqlite" ? "CAST(unixepoch('subsec') * 1000 AS INTEGER)" : "(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint");
-export const uniqueViolation = (error: any) => error?.code === "23505" || /UNIQUE constraint failed|SQLITE_CONSTRAINT/.test(String(error?.message ?? error?.code ?? ""));
+/** Drizzle wraps driver errors in `cause`; inspect that chain without treating other constraints as duplicates. */
+export function uniqueViolation(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: any = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    if (current.code === "23505" || current.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+        current.code === "SQLITE_CONSTRAINT_PRIMARYKEY" || /^UNIQUE constraint failed:/.test(String(current.message ?? ""))) return true;
+    current = current.cause;
+  }
+  return false;
+}
 const rowLock = (driver: OwnershipDriver) => sql.raw(driver === "postgres" ? " FOR UPDATE" : "");
 
 /** Runs generator-expressed SQL steps in one transaction: synchronously on SQLite (never a Promise), awaited on PostgreSQL. */
