@@ -74,7 +74,7 @@ async function seedEligiblePhoto(database: TestDb, productId: string, overrides:
   } as any);
 }
 async function product(database: TestDb, id = "p1", overrides: { photo?: false | Record<string, unknown> } = {}) {
-  await database.insert(schema.products).values({ id, sku: id, title: "Moon", slug: id, type: "single", status: "approved", stockQuantity: 2, priceEur: 10, ebayTitle: "eBay Moon", ebayDescription: "Desc", ebayCategory: "cat", ebayListingPriceEur: 12, etsyTitle: "Etsy Moon", etsyDescription: "Desc", etsyTags: JSON.stringify(["tag"]), etsyListingPriceEur: 13, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  await database.insert(schema.products).values({ id, sku: id, title: "Moon", slug: id, type: "single", status: "approved", stockQuantity: 2, priceEur: 10, ebayTitle: "eBay Moon", ebayDescription: "Desc", ebayCategory: "cat", ebayListingPriceEur: 12, etsyTitle: "Etsy Moon", etsyDescription: "Desc", etsyTags: JSON.stringify(["tag"]), etsyListingPriceEur: 13, etsyTaxonomyId: "1234", etsyWhoMade: "someone_else", etsyIsSupply: false, etsyWhenMade: "1970s", etsyShippingProfileId: "1111", etsyProcessingProfileId: "2222", etsyReturnPolicyId: "3333", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (overrides.photo !== false) await seedEligiblePhoto(database, id, overrides.photo ?? {});
 }
 

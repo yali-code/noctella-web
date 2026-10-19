@@ -1,4 +1,4 @@
-import { ListingStatus, ProductStatus, PublishChannel, type MarketplacePublishPayload, type Product, type ProductImage, type ProductPhoto, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
+import { ETSY_LISTING_LIMITS, EtsyWhoMade, ListingStatus, parseEtsyWhenMade, ProductStatus, PublishChannel, type MarketplacePublishPayload, type Product, type ProductImage, type ProductPhoto, type PublishPreview, type PublishValidation, type PublishValidationIssue } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { getProductById } from "./products";
 import { buildHistoricalPublishPayload } from "../integrations/productPublishingFoundation";
@@ -47,6 +47,55 @@ function hasEligiblePrimaryPhoto(photos: ProductPhoto[] | undefined): boolean {
   return (photos ?? []).some((photo) => photo.isPrimary === true && (photo.processingStatus === "Ready" || photo.processingStatus === "Processing"));
 }
 
+/**
+ * Etsy listing form parity (Phase 1), enforced only here at the publish gate so incomplete drafts
+ * always save. ERRORS are limited to requirements the Etsy listing API is known to enforce
+ * (taxonomy, who/when made, shipping profile for physical items, title and tag limits) plus the
+ * ERP's own inventory rule. Requirements seen in the Etsy web form but NOT yet verified against
+ * Open API v3 are WARNINGS, so an unverified assumption can never block publishing; promote them
+ * to errors only after Phase 4 verification. Nothing is inferred: missing seller facts stay missing.
+ */
+function validateEtsyListingForm(product: Product, errors: PublishValidationIssue[], warnings: PublishValidationIssue[]) {
+  required(product, [
+    ["etsyTaxonomyId", "Etsy category (taxonomy ID)"], ["etsyWhoMade", "Etsy 'Who made it?'"],
+    ["etsyWhenMade", "Etsy 'When was it made?'"], ["etsyShippingProfileId", "Etsy shipping profile"],
+  ], errors);
+  for (const [field, label] of [["etsyIsSupply", "Etsy 'What is it?'"], ["etsyProcessingProfileId", "Etsy processing profile"], ["etsyReturnPolicyId", "Etsy return policy"]] as const) {
+    if (blank(product[field])) warnings.push(issue("missing_required_field", "warning", `${label} is asked for by the Etsy listing form (API requirement to be verified)`, field));
+  }
+  const L = ETSY_LISTING_LIMITS;
+  const limit = (field: string, message: string) => errors.push(issue("marketplace_limit_exceeded", "error", message, field));
+  const unverifiedLimit = (field: string, message: string) => warnings.push(issue("marketplace_limit_exceeded", "warning", `${message} (limit to be verified against the Etsy API)`, field));
+  if (product.etsyTitle && product.etsyTitle.length > L.titleMaxLength) limit("etsyTitle", `Etsy title must be at most ${L.titleMaxLength} characters`);
+  const tags = product.etsyTags ?? [];
+  if (tags.length > L.tagsMax) limit("etsyTags", `Etsy allows at most ${L.tagsMax} tags`);
+  if (tags.some((tag) => tag.length > L.tagMaxLength)) limit("etsyTags", `Each Etsy tag must be at most ${L.tagMaxLength} characters`);
+  const materials = (product.etsyMaterials ?? "").split(",").map((m) => m.trim()).filter(Boolean);
+  if (materials.length > L.materialsMax) unverifiedLimit("etsyMaterials", `Etsy allows at most ${L.materialsMax} materials (comma-separated)`);
+  if (materials.some((m) => m.length > L.materialMaxLength)) unverifiedLimit("etsyMaterials", `Each Etsy material must be at most ${L.materialMaxLength} characters`);
+  const sku = product.etsySku ?? product.sku;
+  if (sku && sku.length > L.skuMaxLength) unverifiedLimit("etsySku", `Etsy SKU must be at most ${L.skuMaxLength} characters`);
+  // Never offer more on Etsy than the ERP holds; the canonical inventory is not changed here.
+  if (product.etsyQuantity != null && product.etsyQuantity > product.stockQuantity) {
+    errors.push(issue("inventory_unavailable", "error", "Etsy quantity cannot exceed available ERP stock", "etsyQuantity"));
+  }
+  // Etsy marketplace policy: items made by someone else must be vintage (20+ years) or supplies.
+  // A seller-policy check, not a verified API validation - warn, do not block.
+  if (product.etsyWhoMade === EtsyWhoMade.SomeoneElse && product.etsyIsSupply === false && product.etsyWhenMade) {
+    const span = parseEtsyWhenMade(product.etsyWhenMade);
+    const latestVintageYear = new Date().getUTCFullYear() - L.vintageMinAgeYears;
+    if (!span || span.toYear === null || span.toYear > latestVintageYear) {
+      warnings.push(issue("invalid_marketplace_value", "warning", `Etsy policy: an item made by someone else must be vintage (made in or before ${latestVintageYear}) unless it is a supply`, "etsyWhenMade"));
+    }
+  }
+  if (product.etsyAdsOptIn) warnings.push(issue("content_warning", "warning", "Etsy Ads is never enabled by the ERP; manage advertising in Etsy directly", "etsyAdsOptIn"));
+  const manufacturer = [product.etsyGpsrManufacturerName, product.etsyGpsrManufacturerAddress, product.etsyGpsrManufacturerContact];
+  const responsible = [product.etsyGpsrResponsiblePersonName, product.etsyGpsrResponsiblePersonAddress, product.etsyGpsrResponsiblePersonContact];
+  if (manufacturer.every(blank)) warnings.push(issue("content_warning", "warning", "GPSR manufacturer information is not provided; add it if EU product-safety rules apply to this item (never inferred)", "etsyGpsrManufacturerName"));
+  else if (manufacturer.some(blank)) warnings.push(issue("content_warning", "warning", "GPSR manufacturer information is incomplete (name, postal address and contact)", "etsyGpsrManufacturerName"));
+  if (responsible.some((v) => !blank(v)) && responsible.some(blank)) warnings.push(issue("content_warning", "warning", "GPSR EU responsible person information is incomplete (name, postal address and contact)", "etsyGpsrResponsiblePersonName"));
+}
+
 export function validatePublish(product: Product & { photos?: ProductPhoto[] }, channel: PublishChannel): PublishValidation {
   const errors: PublishValidationIssue[] = [];
   const warnings: PublishValidationIssue[] = [];
@@ -62,6 +111,7 @@ export function validatePublish(product: Product & { photos?: ProductPhoto[] }, 
     required(product, [["ebayTitle", "eBay title"], ["ebayDescription", "eBay description"], ["ebayCategory", "eBay category"], ["ebayListingPriceEur", "eBay listing price"]], errors);
   } else if (channel === PublishChannel.Etsy) {
     required(product, [["etsyTitle", "Etsy title"], ["etsyDescription", "Etsy description"], ["etsyTags", "Etsy tags"], ["etsyListingPriceEur", "Etsy listing price"]], errors);
+    validateEtsyListingForm(product, errors, warnings);
   } else if (channel === PublishChannel.NoctellaWeb) {
     // Sprint 137: wooListingPriceEur is deliberately NOT in this required list - it is an
     // optional per-channel override, not an independent requirement. The effectivePriceEur

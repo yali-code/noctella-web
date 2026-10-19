@@ -251,6 +251,7 @@ CREATE TABLE products_price_eur_nullable_rebuild (
   woo_listing_status TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+${ETSY_LISTING_FORM_COLUMNS.map((column) => `  ${column.name} ${column.ddl},`).join("\n")}
   FOREIGN KEY (category_id) REFERENCES categories(id),
   FOREIGN KEY (collection_id) REFERENCES collections(id)
 );
@@ -621,13 +622,44 @@ const MARKETPLACE_COLUMNS: Array<{ name: string; ddl: string }> = [
   { name: "woo_listing_status", ddl: "TEXT" },
 ];
 
+/**
+ * Etsy listing form parity (Phase 1): additive, nullable columns applied after MARKETPLACE_COLUMNS, so
+ * ALTER TABLE appends them after updated_at. The Sprint 137 price rebuild (ensureProductPriceEurNullable)
+ * interpolates this same list after updated_at to keep its `INSERT ... SELECT *` column-aligned.
+ */
+const ETSY_LISTING_FORM_COLUMNS: Array<{ name: string; ddl: string }> = [
+  { name: "etsy_taxonomy_id", ddl: "TEXT" },
+  { name: "etsy_shop_section_id", ddl: "TEXT" },
+  { name: "etsy_quantity", ddl: "INTEGER" },
+  { name: "etsy_sku", ddl: "TEXT" },
+  { name: "etsy_who_made", ddl: "TEXT" },
+  { name: "etsy_is_supply", ddl: "INTEGER" },
+  { name: "etsy_when_made", ddl: "TEXT" },
+  { name: "etsy_vintage_year", ddl: "INTEGER" },
+  { name: "etsy_shipping_profile_id", ddl: "TEXT" },
+  { name: "etsy_processing_profile_id", ddl: "TEXT" },
+  { name: "etsy_return_policy_id", ddl: "TEXT" },
+  { name: "etsy_renewal_option", ddl: "TEXT" },
+  { name: "etsy_featured", ddl: "INTEGER" },
+  { name: "etsy_ads_opt_in", ddl: "INTEGER" },
+  { name: "etsy_restock_requests", ddl: "INTEGER" },
+  { name: "etsy_gpsr_manufacturer_name", ddl: "TEXT" },
+  { name: "etsy_gpsr_manufacturer_address", ddl: "TEXT" },
+  { name: "etsy_gpsr_manufacturer_contact", ddl: "TEXT" },
+  { name: "etsy_gpsr_responsible_person_name", ddl: "TEXT" },
+  { name: "etsy_gpsr_responsible_person_address", ddl: "TEXT" },
+  { name: "etsy_gpsr_responsible_person_contact", ddl: "TEXT" },
+  { name: "etsy_gpsr_safety_information", ddl: "TEXT" },
+  { name: "etsy_consumer_guarantee_info", ddl: "TEXT" },
+];
+
 function ensureMarketplaceColumns(sqlite: Database.Database): void {
   const existing = new Set(
     (sqlite.prepare("PRAGMA table_info(products)").all() as Array<{ name: string }>).map(
       (row) => row.name,
     ),
   );
-  for (const column of MARKETPLACE_COLUMNS) {
+  for (const column of [...MARKETPLACE_COLUMNS, ...ETSY_LISTING_FORM_COLUMNS]) {
     if (!existing.has(column.name)) {
       sqlite.exec(`ALTER TABLE products ADD COLUMN ${column.name} ${column.ddl}`);
     }

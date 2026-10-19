@@ -280,6 +280,9 @@ describe("product service", () => {
       etsyTitle: "Updated Etsy Title",
       etsyDescription: "Updated description",
       etsyListingPriceEur: 900,
+      // Etsy listing form parity: the Etsy listing form required fields are part of readiness.
+      etsyTaxonomyId: "1234", etsyWhoMade: "someone_else", etsyIsSupply: false, etsyWhenMade: "1970s",
+      etsyShippingProfileId: "1111", etsyProcessingProfileId: "2222", etsyReturnPolicyId: "3333",
     });
     expect(updated.etsyTitle).toBe("Updated Etsy Title");
     expect(updated.marketplaceReadiness.etsy.ready).toBe(true);
