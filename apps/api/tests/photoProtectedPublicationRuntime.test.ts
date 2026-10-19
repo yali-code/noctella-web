@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { ensureSchema } from "../src/db/migrate";
 import { publishVerifiedCopy, type CopyLedger, type CopyRecord } from "../src/services/photoCopyPublisher";
 import {
-  assertPhotoPublicationReady, authenticateExecutorExit, crossProcessExitAuthenticationAvailable, openPublicationScope, publicationExecutorIdentity, resumeAfterAuthenticatedExit,
+  assertPhotoPublicationReady, authenticateExecutorExit, photoPublicationStorageProblem, crossProcessExitAuthenticationAvailable, openPublicationScope, publicationExecutorIdentity, resumeAfterAuthenticatedExit,
 } from "../src/services/photoPublicationExecutor";
 import { createOperation, inOwnershipTransaction, PHOTO_OPERATION_LEASE_MS, type OwnershipDriver } from "../src/services/photoOperationAuthority";
 import { acquirePublicationIntent } from "../src/services/photoPublicationIntents";
@@ -194,6 +194,23 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
   }
   const q = async (db: any, s: SQL): Promise<any[]> => driver === "sqlite" ? db.all(s) : (await db.execute(s)).rows;
 
+  run("storage readiness reports symlinked, misowned or group-writable roots (misconfiguration detection only)", async () => {
+    const parent = fs.mkdtempSync(path.join(root, "storage-")), canonical = path.join(parent, "photos");
+    expect(photoPublicationStorageProblem(canonical)).toBeNull();
+    if (process.platform === "linux") {
+      fs.chmodSync(path.join(parent, ".product-photo-publication"), 0o770);
+      expect(photoPublicationStorageProblem(canonical)).toBe("staging root is group- or world-writable");
+      fs.chmodSync(path.join(parent, ".product-photo-publication"), 0o700);
+      fs.chmodSync(canonical, 0o777);
+      expect(photoPublicationStorageProblem(canonical)).toBe("canonical root is world-writable");
+      fs.chmodSync(canonical, 0o755);
+      const other = fs.mkdtempSync(path.join(root, "elsewhere-"));
+      fs.rmSync(path.join(parent, ".product-photo-operations"), { recursive: true });
+      fs.symlinkSync(other, path.join(parent, ".product-photo-operations"));
+      expect(photoPublicationStorageProblem(canonical)).toBe("private root is a symbolic link");
+    }
+  });
+
   run("protected publication is NOT READY without its schema or with a non-directory root (fail closed, no fallback)", async () => {
     const h = await database();
     try {
@@ -225,19 +242,29 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
       const scope = openPublicationScope();
       try {
         expect((await resumeAfterAuthenticatedExit(h.db, driver, op.id, scope)).kind).toBe("blocked");
-        expect(() => parseRecoveryArgs(["--attest-exit", "--operation", op.id, "--epoch", "1", "--executor", foreign.executorIdentity, "--operator", "ops"])).toThrow("--confirm-executor-terminated");
-        expect(await attestExecutorExit(h.db, driver, { operationId: op.id, epoch: 2, executorIdentity: foreign.executorIdentity, operator: "ops" })).toMatchObject({ recorded: false });
-        expect(await attestExecutorExit(h.db, driver, { operationId: op.id, epoch: 1, executorIdentity: "someone-else", operator: "ops" })).toMatchObject({ recorded: false });
-        expect((await resumeAfterAuthenticatedExit(h.db, driver, op.id, scope)).kind).toBe("blocked");
-        const args = parseRecoveryArgs(["--attest-exit", "--operation", op.id, "--epoch", "1", "--executor", foreign.executorIdentity, "--operator", "ops", "--confirm-executor-terminated"]);
+        const evidence = "render deploy dep-123: instance srv-old stopped 12:04Z";
+        const base = ["--attest-exit", "--operation", op.id, "--epoch", "1", "--executor", foreign.executorIdentity, "--operator", "ops"];
+        expect(() => parseRecoveryArgs([...base, "--evidence", evidence])).toThrow("--confirm-executor-terminated");
+        expect(() => parseRecoveryArgs([...base, "--confirm-executor-terminated"])).toThrow("missing --evidence");
+        await expect(attestExecutorExit(h.db, driver, { operationId: op.id, epoch: 1, executorIdentity: foreign.executorIdentity, operator: "ops", evidence: "ok" })).rejects.toThrow("PHOTO_ATTESTATION_EVIDENCE_REQUIRED");
+        await expect(attestExecutorExit(h.db, driver, { operationId: op.id, epoch: 1, executorIdentity: foreign.executorIdentity, operator: "ops", evidence: "a|b injected separator" })).rejects.toThrow("PHOTO_ATTESTATION_EVIDENCE_REQUIRED");
+        expect(await attestExecutorExit(h.db, driver, { operationId: op.id, epoch: 2, executorIdentity: foreign.executorIdentity, operator: "ops", evidence })).toMatchObject({ recorded: false, reason: "intent epoch or executor changed" }); // stale/future epoch
+        expect(await attestExecutorExit(h.db, driver, { operationId: op.id, epoch: 1, executorIdentity: "someone-else", operator: "ops", evidence })).toMatchObject({ recorded: false, reason: "intent epoch or executor changed" }); // mismatched executor
+        expect((await resumeAfterAuthenticatedExit(h.db, driver, op.id, scope)).kind).toBe("blocked"); // nothing recorded so far
+        const args = parseRecoveryArgs([...base, "--evidence", evidence, "--confirm-executor-terminated"]);
         if (args.mode !== "attest") throw new Error("expected attest");
         expect(await attestExecutorExit(h.db, driver, args.attestation)).toEqual({ recorded: true });
-        expect(await attestExecutorExit(h.db, driver, args.attestation)).toMatchObject({ recorded: false, reason: "exit already recorded" });
+        expect(await attestExecutorExit(h.db, driver, args.attestation)).toMatchObject({ recorded: false, reason: "exit already recorded" }); // replay
         const resumed = await resumeAfterAuthenticatedExit(h.db, driver, op.id, scope);
         expect(resumed.kind).toBe("own");
         if (resumed.kind === "own") expect([resumed.authority.epoch, resumed.authority.executorIdentity]).toEqual([2, publicationExecutorIdentity()]);
         const [exit] = await q(h.db, sql`SELECT attested_by FROM photo_executor_exit_records WHERE operation_id = ${op.id} AND executor_epoch = 1`);
-        expect(exit.attested_by).toBe("operator:ops");
+        expect(exit.attested_by).toBe(`operator:ops|${evidence}`);
+        // Replaying the old attestation after the transfer is stale; the new executor (this process, still running) is
+        // visibly alive here, so even an exact attestation of epoch 2 is refused.
+        expect(await attestExecutorExit(h.db, driver, args.attestation)).toMatchObject({ recorded: false });
+        expect(await attestExecutorExit(h.db, driver, { ...args.attestation, epoch: 2, executorIdentity: publicationExecutorIdentity() }))
+          .toMatchObject({ recorded: false, reason: "refused: the executor is still running in this process" });
       } finally { scope.close(); }
     } finally { await h.close(); }
   });

@@ -42,17 +42,22 @@ Recovery outcomes:
   - Identity: `px1:<boot_id>:<pid-namespace inode>:<pid>:<start time>:<nonce>`, from Linux `/proc`.
   - On a platform without `/proc`: `px1u:…`, which can never be authenticated.
   - Each T1 gets a fresh token registered in the process's execution registry. The token is released only when the owner's whole execution (publication **and** commit, or failure) has settled.
-- **Preparer lifecycle.** Preparation writes generation-private files that the publisher only reads; worker descriptors and aliases cannot reach published bytes because the canonical inode is the publisher's verified copy (`nlink 1` after commit; before it, the only other link is the publisher anchor).
-  - **In-process (default):** preparation runs inside the API process.
-  - **Confined (`PHOTO_PREPARATION_CONFINEMENT=required` + `PHOTO_PREPARATION_LAUNCHER`, `photoPreparationConfinement.ts`):** each W2/W4 preparation runs in a separate worker started through the Step 2 Landlock launcher (plain mode).
+- **Preparer lifecycle and trust boundary.** Preparation workers are **untrusted**; this is the accepted threat model of Steps 2–4, and it is not narrowed.
+  - A same-UID process that is **not** confined can overwrite published copies in place (they are mode `0600`, owned by the API UID). It can also overwrite the publisher's staging anchors and private files, reopen the API's open canonical descriptors through `/proc/<api>/fd`, and read `/proc/<api>/environ` (credentials).
+  - Copy ownership, `0700` directories and the readiness ownership checks do **not** isolate such a process. The negative control in `photoPreparationConfinement.test.ts` demonstrates every one of these.
+  - **Protected mode therefore REQUIRES confinement:** with fencing ON, publication is NOT READY (503) unless `PHOTO_PREPARATION_CONFINEMENT=required` and `PHOTO_PREPARATION_LAUNCHER` names an executable launcher on Linux.
+  - **In-process preparation** is accepted only as an explicitly **UNPROTECTED** mode for `NODE_ENV=test` or `development`. Here the decoder runs inside the API process, so a decoder compromise **is** an API compromise and nothing is isolated. It is never a production configuration and never a fallback.
+  - **Confined (`photoPreparationConfinement.ts`):** each W2/W4 preparation runs in a separate worker started through the Step 2 Landlock launcher (plain mode).
     - Writes are allowed only beneath its generation directory and a per-job directory.
     - stdio is `/dev/null` + parent sockets, verified by the launcher; every other descriptor is closed.
     - The environment carries no database URL or secret.
     - `LANDLOCK_ENFORCED` must be reported, otherwise 503.
     - The parent waits for the worker's exit (and kills it on timeout or abort) **before** sealing.
     - Descendants inherit the confinement. A surviving descendant can at most alter private bytes, which then fail copy verification (`SNAPSHOT_MISMATCH` → review).
-  - An invalid value, a non-Linux platform or a missing launcher is NOT READY (503); it never falls back to in-process preparation.
-  - Confinement is defence in depth against a decoder compromise. The F2 authority property holds in both modes.
+    - What the confined worker can still do: **read** files (Landlock restricts writes only), for example the SQLite database file, which is a confidentiality limit; signal same-UID processes, which is denial of service; and produce arbitrary image bytes for its own operation, which is inherent to a preparer.
+    - What it cannot do: write canonical, staging, private-of-others or database files; reopen `/proc/<api>/fd`; read `/proc/<api>/environ`; ptrace the API (Landlock's domain hierarchy).
+    - Network: the worker has no credentials in its environment and cannot read the API's environment. Credentials must not be stored in files readable by the API UID; that is a release gate.
+  - An invalid value, a missing value outside test/development, a non-Linux platform or a missing launcher is NOT READY (503). There is no fallback.
 - **Exit authenticator.** Authority moves (epoch n → n+1, `transferAfterAuthenticatedExitSteps`, in one transaction under the row lock) only when one of these holds:
   - (a) an exit record for that exact epoch and identity already exists, written by a trusted caller; or
   - (b) the authenticator proves termination now, and the record is written in the same transaction. Proof means:
@@ -68,7 +73,12 @@ Recovery outcomes:
   - a dead client cannot send new statements.
 - **Operator attestation** (trusted boundary, `npm run photos:publication-intents`):
   - The default is a read-only report of authorized and review intents, with `resumable` and `blockedReason`.
-  - `--attest-exit --operation --epoch --executor --operator --confirm-executor-terminated` records an operator-verified termination for one exact epoch and identity (CAS).
+  - `--attest-exit --operation --epoch --executor --operator --evidence "<platform termination record>" --confirm-executor-terminated` records an operator-verified termination for one exact epoch and identity (CAS).
+  - **Privilege model:** the channel is a shell with the API's database credentials, so its holder can already write any row directly. A token or signature would not stop that actor, so none is added. The tool guards against **operator mistakes**:
+    - a stale epoch, a mismatched identity or a replay is refused;
+    - an executor this host can see alive is refused;
+    - external evidence (8–160 characters, no separators) is mandatory and stored in `attested_by`.
+  - The operator name and the confirmation flag are audit labels, not proof. Without evidence the intent stays BLOCKED.
   - It is required after an instance replacement, because the runtime cannot observe the previous container. The next retry then transfers authority and resumes.
 
 ## 3. All canonical writers (`photoCanonicalWriterInventory.test.ts`)
@@ -149,6 +159,29 @@ Expected results:
 ## 7. Remaining gaps (explicit)
 - **Cross-instance executor loss** is BLOCKED until operator attestation, by design. The availability cost is listed in §3.
 - **Instagram preparation and deletion cleanup** are refused while fencing is ON (§3).
-- **Preparation confinement** is implemented but opt-in (`PHOTO_PREPARATION_CONFINEMENT=required`). Enabling it on Render needs a reviewed build change, compiling `scripts/photo-publication-capability/landlock-worker.c` with `-Wall -Wextra -Werror`, and target Landlock ABI ≥ 3 evidence (§6 probe). The preflight reports the mode: in-process is WARN, invalid is FAIL.
-- **Power-loss durability:** the publisher fsyncs the copy and both directories, but no power-loss test exists.
+- **Preparation confinement is mandatory in protected mode.** Production enablement needs:
+  - a reviewed Render build change compiling `scripts/photo-publication-capability/landlock-worker.c` (`-Wall -Wextra -Werror`) and setting `PHOTO_PREPARATION_LAUNCHER`;
+  - target Landlock ABI ≥ 3 enforcement evidence (§6 probe).
+
+  Until then, fencing ON is NOT READY (uploads and AI finalization are refused). The preflight reports FAIL with fencing ON, and WARN with fencing OFF.
+- **Power-loss durability (documented limit; not part of the accepted requirements, which cover process death):**
+  - The SIGKILL/lost-acknowledgement recovery is tested.
+  - The publisher fsyncs the copy, the staging directory before recording, and the canonical directory after linking.
+  - Not covered:
+    - the generation-private outputs are not fsynced before sealing;
+    - newly created parent directories are not fsynced;
+    - SQLite/PostgreSQL commit durability follows the database configuration.
+  - Every resulting power-loss inconsistency fails closed:
+    - a lost private file or one with changed bytes → `SNAPSHOT_MISMATCH` → review;
+    - a durable link without its durable record, or a lost anchor → `COLLISION` → review.
+  - No power-loss experiment was run or is proposed against production storage.
 - **Closure:** F2 may be marked CLOSED only after exact-head CI, independent review, target verification, authorized staging and production acceptance. None of these is claimed here.
+
+## 8. Independent review resolution (PR #487, reviewed HEAD 9fdcba4)
+| # | Finding | Verdict | Evidence / change |
+| --- | --- | --- | --- |
+| 1 | "An unconfined hostile same-UID preparer can only cause collisions/DoS; integrity remains protected", with confinement optional | **CONFIRMED DEFECT** in the optional-confinement design. The reviewer's integrity claim is **false** | Same-UID code can write the `0600` copies, anchors and private files, reopen `/proc/<api>/fd` and read `/proc/<api>/environ`. The negative control in `photoPreparationConfinement.test.ts` shows all four succeed unconfined and all are denied under the launcher. Fix: confinement is mandatory with fencing ON (`photoPreparationConfinementConfig`, `assertPhotoPublicationReady`); unprotected in-process mode only for test/development; production-mode refusal test for W2 and W4 |
+| 2 | Operator attestation / exit authentication could be bypassed | **DOCUMENTED LIMIT** (no in-scope bypass) + hardening | The channel requires DB credentials, which already allow arbitrary writes. Added: mandatory external evidence, refusal of a visibly live executor, and the existing exact epoch/identity CAS and one-record-per-epoch. Tests cover stale, mismatched, replayed, live-executor and missing-evidence cases. Unprovable termination stays BLOCKED |
+| 3 | Directory readiness | **CONFIRMED DEFECT** (incomplete misconfiguration checks) | `photoPublicationStorageProblem` rejects symlinked or non-directory roots, private/staging roots inside the canonical root, other-owner or group/world-writable private/staging roots, a world-writable canonical root and split filesystems. Stated purpose: misconfiguration detection only, never same-UID isolation |
+| 4 | Power-loss claim | **DOCUMENTED LIMIT** | The accepted requirements cover process death (tested). Power-loss gaps fail closed (§7). No defect within the claimed contract |
+| 5 | Availability | **DOCUMENTED LIMIT + OWNER DECISIONS** | See §3. In protected mode these are refused: Instagram prepare-image, canonical file deletion (W8) and AI-cleanup deletion (W6), legacy W1/W10 uploads (replaced by W2), and cross-instance resume without attestation. Without the launcher build, **all** W2 uploads and W4 finalization are refused. Owner decisions: the W11/0042 approval (Instagram derivatives under authority), a deletion design under authority, the Render launcher build, and the availability policy for restart attestation. These are not security defects and are **not** claimed complete |

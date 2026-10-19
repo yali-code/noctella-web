@@ -128,13 +128,41 @@ export async function assertPhotoPublicationReady(db: DbClient, driver: Ownershi
       yield sql`SELECT operation_id FROM photo_publication_copies WHERE 1 = 0`;
     });
   } catch { throw new PhotoUploadError(503, "PHOTO_PUBLICATION_NOT_READY", "Protected photo publication schema is not installed"); }
+  const problem = photoPublicationStorageProblem(canonicalRoot);
+  if (problem) throw new PhotoUploadError(503, "PHOTO_PUBLICATION_NOT_READY", `Protected photo publication storage is not ready: ${problem}`);
+}
+
+/**
+ * Storage readiness (MISCONFIGURATION DETECTION ONLY). Ownership and mode checks catch a root created by another
+ * account, a world/group-writable directory or a symlinked root; they do NOT exclude another process running under the
+ * API UID. Isolation from untrusted preparers comes only from the mandatory Landlock confinement
+ * (photoPreparationConfinement). Returns the first problem, or null.
+ */
+export function photoPublicationStorageProblem(canonicalRoot: string): string | null {
+  const canonical = path.resolve(canonicalRoot), privateRoot = photoOperationPrivateRoot(canonicalRoot), staging = photoPublicationStagingRoot(canonicalRoot);
+  const inside = (child: string, parent: string) => { const r = path.relative(parent, child); return r === "" || (!r.startsWith("..") && !path.isAbsolute(r)); };
+  // Private and staging roots must never be beneath the publicly served canonical root.
+  if (inside(privateRoot, canonical) || inside(staging, canonical)) return "private or staging root is inside the canonical root";
   try {
-    const roots = [path.resolve(canonicalRoot), photoOperationPrivateRoot(canonicalRoot), photoPublicationStagingRoot(canonicalRoot)];
-    fs.mkdirSync(roots[0], { recursive: true });
-    for (const root of roots.slice(1)) fs.mkdirSync(root, { recursive: true, mode: 0o700 });
-    const devices = new Set(roots.map((root) => { const st = fs.statSync(root, { bigint: true }); if (!st.isDirectory()) throw new Error("not a directory"); return String(st.dev); }));
-    if (devices.size !== 1) throw new Error("roots on different filesystems");
-  } catch { throw new PhotoUploadError(503, "PHOTO_PUBLICATION_NOT_READY", "Protected photo publication storage is not ready"); }
+    fs.mkdirSync(canonical, { recursive: true });
+    for (const root of [privateRoot, staging]) fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  } catch (e: any) { return `roots cannot be created (${e?.code ?? "error"})`; }
+  const uid = typeof process.getuid === "function" ? process.getuid() : null;
+  const devices = new Set<string>();
+  for (const [name, root, privateMode] of [["canonical", canonical, false], ["private", privateRoot, true], ["staging", staging, true]] as const) {
+    let st: fs.BigIntStats;
+    try { st = fs.lstatSync(root, { bigint: true }); } catch (e: any) { return `${name} root unreadable (${e?.code ?? "error"})`; }
+    if (st.isSymbolicLink()) return `${name} root is a symbolic link`;
+    if (!st.isDirectory()) return `${name} root is not a directory`;
+    devices.add(String(st.dev));
+    if (uid !== null && process.platform !== "win32") {
+      if (Number(st.mode & 0o002n)) return `${name} root is world-writable`;
+      if (privateMode && Number(st.uid) !== uid) return `${name} root is owned by another user`;
+      if (privateMode && Number(st.mode & 0o022n)) return `${name} root is group- or world-writable`;
+    }
+  }
+  if (devices.size !== 1) return "roots are on different filesystems (link() of a verified copy would fail)";
+  return null;
 }
 
 const STORAGE_ERRORS = new Set(["ENOSPC", "EDQUOT", "EIO", "EROFS", "EMFILE", "ENFILE", "EACCES", "EPERM", "EXDEV"]);
