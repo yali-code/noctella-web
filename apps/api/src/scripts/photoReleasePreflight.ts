@@ -25,10 +25,13 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
   const fencing = photoOwnershipFencingConfig(env);
   add("flag.fencing", fencing.valid ? "PASS" : "FAIL", fencing.valid ? `PHOTO_OWNERSHIP_FENCING_ENABLED is ${fencing.enabled ? "ON" : "OFF"}` : `invalid PHOTO_OWNERSHIP_FENCING_ENABLED value (treated as ON): ${JSON.stringify(fencing.raw)}`);
   const confinement = photoPreparationConfinementConfig(env);
-  add("flag.preparation-confinement", confinement.mode === "invalid" ? "FAIL" : confinement.mode === "confined" ? "PASS" : "WARN",
-    confinement.mode === "invalid" ? `${confinement.reason} (protected publication refuses: NOT READY)`
-      : confinement.mode === "confined" ? `image preparation runs in Landlock-confined workers (${confinement.launcher})`
-        : "image preparation runs in the API process (defence-in-depth confinement OFF; publication authority unaffected)");
+  // Protected mode requires confined preparation (#472). With fencing OFF the setting is not used yet: WARN, not FAIL,
+  // unless the value itself is malformed.
+  const malformed = confinement.mode === "invalid" && env.PHOTO_PREPARATION_CONFINEMENT !== undefined && env.PHOTO_PREPARATION_CONFINEMENT !== "" && env.PHOTO_PREPARATION_CONFINEMENT !== "required";
+  add("flag.preparation-confinement", confinement.mode === "confined" ? "PASS" : confinement.mode === "invalid" && (fencing.enabled || malformed) ? "FAIL" : "WARN",
+    confinement.mode === "confined" ? `image preparation runs in Landlock-confined workers (${confinement.launcher})`
+      : confinement.mode === "invalid" ? `${confinement.reason}${fencing.enabled ? " (protected publication refuses: NOT READY)" : " (required before fencing is turned ON)"}`
+        : "UNPROTECTED in-process preparation (test/development only): a hostile preparer is not isolated");
   const original = aiIntakeOriginalSourceStagingConfig(env);
   add("flag.w3-original-source", original.valid ? (original.requested && !original.activatable ? "WARN" : "PASS") : "FAIL",
     !original.valid ? "invalid AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED value" : original.requested && !original.activatable ? "requested but not activatable outside test/development (owner retention decision pending)" : `original-source staging ${original.enabled ? "ON" : "OFF"}`);

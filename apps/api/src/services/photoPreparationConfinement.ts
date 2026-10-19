@@ -1,11 +1,16 @@
 /**
- * Stage 5 F2 (#472) optional confinement of untrusted image preparation (defence in depth against a decoder
- * compromise; the F2 publication-authority property does not depend on it, see photoPublicationExecutor).
+ * Stage 5 F2 (#472) MANDATORY confinement of untrusted image preparation in protected mode.
  *
- * PHOTO_PREPARATION_CONFINEMENT: unset/"" -> in-process preparation; "required" -> every W2/W4 preparation runs in a
- * separate worker process started through the Landlock launcher (scripts/photo-publication-capability/landlock-worker.c,
- * plain mode, path in PHOTO_PREPARATION_LAUNCHER). Any other value, a non-Linux platform or a missing/non-executable
- * launcher is NOT READY: protected publication refuses (503), it never falls back to in-process preparation.
+ * Threat model (Steps 2-4, unchanged): preparation workers are UNTRUSTED. A same-UID process that is not confined can
+ * write every published copy (mode 0600, owned by the API UID), the publisher's staging anchors and private files, and
+ * read /proc/<api>/environ and /proc/<api>/fd (credentials, open canonical descriptors). Ownership, 0700 directories
+ * and publisher-owned copies do NOT isolate such a process. Integrity of published bytes and of the authority records
+ * therefore REQUIRES the Landlock boundary: protected mode (PHOTO_OWNERSHIP_FENCING_ENABLED=true) is NOT READY unless
+ * PHOTO_PREPARATION_CONFINEMENT=required and PHOTO_PREPARATION_LAUNCHER names an executable launcher on Linux.
+ *
+ * In-process preparation (the decoder runs inside the API process, so a decoder compromise IS an API compromise; nothing
+ * is isolated) is accepted ONLY as an explicitly UNPROTECTED mode for NODE_ENV=test or development. It is never a
+ * production configuration and never a fallback.
  *
  * Worker lifecycle: writes are allowed only beneath the generation directory and a per-job directory; its environment
  * carries no database URL or secret; stdio is /dev/null + parent sockets (verified by the launcher, which closes every
@@ -19,11 +24,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { PhotoUploadError } from "./photoUploadAdmission";
 
-export type PreparationConfinement = { mode: "in-process" } | { mode: "confined"; launcher: string } | { mode: "invalid"; reason: string };
+export type PreparationConfinement = { mode: "in-process-unprotected" } | { mode: "confined"; launcher: string } | { mode: "invalid"; reason: string };
+const UNPROTECTED_ALLOWED = ["test", "development"];
 
 export function photoPreparationConfinementConfig(env: NodeJS.ProcessEnv = process.env): PreparationConfinement {
   const raw = env.PHOTO_PREPARATION_CONFINEMENT;
-  if (raw === undefined || raw === "") return { mode: "in-process" };
+  if (raw === undefined || raw === "") {
+    return UNPROTECTED_ALLOWED.includes(env.NODE_ENV ?? "") ? { mode: "in-process-unprotected" }
+      : { mode: "invalid", reason: "protected publication requires PHOTO_PREPARATION_CONFINEMENT=required (untrusted preparation must be Landlock-confined)" };
+  }
   if (raw !== "required") return { mode: "invalid", reason: `invalid PHOTO_PREPARATION_CONFINEMENT value ${JSON.stringify(raw)}` };
   if (process.platform !== "linux") return { mode: "invalid", reason: "confined preparation requires Linux (Landlock)" };
   const launcher = env.PHOTO_PREPARATION_LAUNCHER;

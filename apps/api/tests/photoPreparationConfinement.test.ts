@@ -20,6 +20,8 @@ import { uploadFencedProductPhoto } from "../src/services/w2FencedProductPhotoOw
 import { buildFencedAiIntakePhotoFinalizationManifest } from "../src/services/w4FencedFinalizationOwner";
 import { digestW2StagedInput } from "../src/services/w2StagedInputDigest";
 import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
+import { spawn } from "node:child_process";
+import { publishVerifiedCopy, type CopyRecord } from "../src/services/photoCopyPublisher";
 
 const launcher = process.env.F2_CAPABILITY_LAUNCHER;
 const native = process.platform === "linux" && !!launcher;
@@ -31,15 +33,32 @@ it.runIf(process.env.F2_CAPABILITY_REQUIRE_LINUX === "1")("required Linux execut
 });
 
 describe("confinement configuration fails closed", () => {
-  it("unset means in-process; any other value than 'required' or a missing launcher is NOT READY (never ignored)", () => {
-    expect(photoPreparationConfinementConfig({})).toEqual({ mode: "in-process" });
-    expect(photoPreparationConfinementConfig({ PHOTO_PREPARATION_CONFINEMENT: "" })).toEqual({ mode: "in-process" });
-    for (const env of [{ PHOTO_PREPARATION_CONFINEMENT: "true" }, { PHOTO_PREPARATION_CONFINEMENT: "required" }, { PHOTO_PREPARATION_CONFINEMENT: "required", PHOTO_PREPARATION_LAUNCHER: "relative/launcher" },
+  it("protected mode requires confinement: unset is NOT READY outside test/development; malformed values or a missing launcher are never ignored", () => {
+    for (const NODE_ENV of ["test", "development"]) {
+      expect(photoPreparationConfinementConfig({ NODE_ENV })).toEqual({ mode: "in-process-unprotected" });
+      expect(photoPreparationConfinementConfig({ NODE_ENV, PHOTO_PREPARATION_CONFINEMENT: "" })).toEqual({ mode: "in-process-unprotected" });
+    }
+    for (const env of [{}, { NODE_ENV: "production" }, { NODE_ENV: "staging" }, { PHOTO_PREPARATION_CONFINEMENT: "true" }, { PHOTO_PREPARATION_CONFINEMENT: "required" }, { PHOTO_PREPARATION_CONFINEMENT: "required", PHOTO_PREPARATION_LAUNCHER: "relative/launcher" },
       { PHOTO_PREPARATION_CONFINEMENT: "required", PHOTO_PREPARATION_LAUNCHER: path.join(root, "missing-launcher") }]) {
       expect(photoPreparationConfinementConfig(env).mode).toBe("invalid");
       expect(() => assertPreparationConfinementReady(env)).toThrow(expect.objectContaining({ status: 503, code: "PHOTO_PUBLICATION_NOT_READY" }));
     }
-    expect(() => assertPreparationConfinementReady({})).not.toThrow();
+    expect(() => assertPreparationConfinementReady({ NODE_ENV: "test" })).not.toThrow();
+  });
+  it("protected mode outside test/development refuses W2 and W4 before any work when preparation is not confined", async () => {
+    const saved = { env: process.env.NODE_ENV, mode: process.env.PHOTO_PREPARATION_CONFINEMENT };
+    process.env.NODE_ENV = "production"; delete process.env.PHOTO_PREPARATION_CONFINEMENT;
+    try {
+      const file = { path: path.join(root, "never-read"), workDir: root, size: 10, mimetype: "image/jpeg", signal: new AbortController().signal };
+      await expect(uploadFencedProductPhoto({} as any, { productId: "p", actorId: "actor-1", operationToken: "not-reached-0000001", sha256: "a".repeat(64), altText: "", file } as any, { driver: "sqlite", canonicalRoot: path.join(root, "never") }))
+        .rejects.toMatchObject({ status: 503, code: "PHOTO_PUBLICATION_NOT_READY" });
+      await expect(buildFencedAiIntakePhotoFinalizationManifest({} as any, async () => { throw new Error("never read"); }, [{ id: "s1", storageKey: "a.jpg" }] as any, "p", undefined, { driver: "sqlite", canonicalRoot: path.join(root, "never") }))
+        .rejects.toMatchObject({ status: 503, code: "PHOTO_PUBLICATION_NOT_READY" });
+      expect(fs.existsSync(path.join(root, "never"))).toBe(false);
+    } finally {
+      if (saved.env === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved.env;
+      if (saved.mode === undefined) delete process.env.PHOTO_PREPARATION_CONFINEMENT; else process.env.PHOTO_PREPARATION_CONFINEMENT = saved.mode;
+    }
   });
   it.runIf(native)("Linux: an executable launcher makes it confined", () => {
     expect(photoPreparationConfinementConfig({ PHOTO_PREPARATION_CONFINEMENT: "required", PHOTO_PREPARATION_LAUNCHER: launcher })).toEqual({ mode: "confined", launcher });
@@ -79,6 +98,51 @@ describe.runIf(native)("confined worker on Linux (real launcher)", () => {
     expect(report.ownWrite).toBe("WRITTEN");
     expect(report.databaseUrlVisible).toBe(false);
     expect(fs.readdirSync(canonicalDir)).toEqual([]); expect(fs.readdirSync(databaseDir)).toEqual([]);
+  });
+
+  /**
+   * The disputed review claim: "an unconfined hostile same-UID preparer can only cause collisions/DoS". The negative
+   * control shows it can tamper with published bytes and authority material directly; the same code under the
+   * launcher is denied every path. Integrity against hostile preparers therefore requires the confinement boundary.
+   */
+  it("same-UID hostile preparer: unconfined it tampers with published bytes and reads API secrets; confined every attempt is denied", async () => {
+    async function published() {
+      const dir = fs.mkdtempSync(path.join(root, "attack-")), canonicalDir = path.join(dir, "photos"), stagingDir = path.join(dir, ".stage");
+      fs.mkdirSync(canonicalDir); fs.writeFileSync(path.join(dir, "src"), "sealed-bytes");
+      const st = fs.statSync(path.join(dir, "src"), { bigint: true });
+      let rec: CopyRecord | null = null;
+      const seal = { sha256: require("node:crypto").createHash("sha256").update("sealed-bytes").digest("hex"), size: 12, dev: String(st.dev), ino: String(st.ino) };
+      expect((await publishVerifiedCopy({ source: path.join(dir, "src"), seal, canonicalDir, canonicalName: "k.webp", stagingDir, retainStagingLink: true },
+        { read: async () => rec, record: async (c) => { rec = c; } })).kind).toBe("PUBLISHED");
+      const canonicalFile = path.join(canonicalDir, "k.webp"), anchorFile = path.join(stagingDir, fs.readdirSync(stagingDir)[0]);
+      const apiFd = fs.openSync(canonicalFile, "r"); // the API process holds a read descriptor to a published file
+      return { dir, canonicalFile, anchorFile, apiFd, probe: { canonicalFile, anchorFile, apiPid: process.pid, apiFd } };
+    }
+    const fixture = path.join(__dirname, "fixtures", "photoSameUidAttacker.ts");
+    // NEGATIVE CONTROL: same code, same UID, no confinement.
+    const open = await published();
+    try {
+      const child = spawn(process.execPath, ["--import", "tsx", fixture], { cwd: path.resolve(__dirname, ".."), stdio: ["ignore", "pipe", "pipe"],
+        env: { PATH: process.env.PATH, PHOTO_PREPARATION_JOB: Buffer.from(JSON.stringify({ probe: open.probe })).toString("base64") } });
+      let out = ""; child.stdout!.on("data", (d) => { out += d; });
+      await new Promise((resolve) => child.once("exit", resolve));
+      const report = JSON.parse(JSON.parse(out.trim().split("\n").pop()!).message);
+      expect(report).toEqual({ canonicalInPlace: "WRITTEN", stagingAnchor: "WRITTEN", apiDescriptorReopen: "WRITTEN", apiEnvironment: "READ" });
+      expect(fs.readFileSync(open.canonicalFile, "utf8")).not.toBe("sealed-bytes"); // integrity NOT protected unconfined
+    } finally { fs.closeSync(open.apiFd); }
+    // CONFINED: the same attacker through the real launcher.
+    const shut = await published();
+    try {
+      const outDir = path.join(shut.dir, "gen"); fs.mkdirSync(outDir, { mode: 0o700 });
+      let error: any;
+      await withPreparationJobDir(outDir, (jobDir) => prepareInConfinedWorker(launcher!, { kind: "w4", inputPath: shut.canonicalFile, size: 1, mimetype: "image/jpeg", outDir, probe: shut.probe } as any, jobDir,
+        { workerScript: fixture })).catch((e) => { error = e; });
+      expect(error?.code).toBe("ATTACK_REPORT");
+      const report = JSON.parse(error.message);
+      for (const key of ["canonicalInPlace", "stagingAnchor", "apiDescriptorReopen", "apiEnvironment"]) expect(["EACCES", "EPERM"], key).toContain(report[key]);
+      expect(fs.readFileSync(shut.canonicalFile, "utf8")).toBe("sealed-bytes");
+      expect(fs.readFileSync(shut.anchorFile, "utf8")).toBe("sealed-bytes");
+    } finally { fs.closeSync(shut.apiFd); }
   });
 
   it("a launcher that does not confine is refused (fail closed, outputs never returned)", async () => {
