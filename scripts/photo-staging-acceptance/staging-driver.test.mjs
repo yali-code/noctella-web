@@ -18,15 +18,25 @@ test("the lost-ack proxy delivers nothing to the client only after the server co
   } finally { await proxy.close(); await new Promise((r) => server.close(r)); }
 });
 
-test("the driver refuses any host that was not explicitly confirmed", () => {
-  assert.throws(() => guardTarget({ F2_STAGING_API: "https://api.example.test" }), /CONFIRM_HOST/);
-  assert.throws(() => guardTarget({ F2_STAGING_API: "https://api.example.test", F2_STAGING_CONFIRM_HOST: "other.test" }), /CONFIRM_HOST/);
-  assert.equal(guardTarget({ F2_STAGING_API: "https://api.example.test", F2_STAGING_CONFIRM_HOST: "api.example.test" }).host, "api.example.test");
+test("the driver refuses a missing/production/mismatched target identity before any request", () => {
+  const ok = { F2_STAGING_API: "https://f2-staging.example.test", F2_STAGING_CONFIRM_HOST: "f2-staging.example.test", F2_STAGING_TARGET_SERVICE_ID: "srv-abcdef123456", F2_PRODUCTION_HOSTS: "api.example.test" };
+  assert.equal(guardTarget(ok).host, "f2-staging.example.test");
+  assert.throws(() => guardTarget({ ...ok, F2_STAGING_TARGET_SERVICE_ID: undefined }), /TARGET_SERVICE_ID/);
+  assert.throws(() => guardTarget({ ...ok, F2_STAGING_TARGET_SERVICE_ID: "srv-db34390m7kps73cv8l6g" }), /production service/);
+  assert.throws(() => guardTarget({ ...ok, F2_PRODUCTION_HOSTS: "" }), /PRODUCTION_HOSTS/);
+  assert.throws(() => guardTarget({ ...ok, F2_STAGING_API: "https://api.example.test", F2_STAGING_CONFIRM_HOST: "api.example.test" }), /production host/);
+  assert.throws(() => guardTarget({ ...ok, F2_STAGING_CONFIRM_HOST: "other.test" }), /CONFIRM_HOST/);
 });
 
-test("park-at-intent refuses production, a missing explicit flag, and fencing OFF", () => {
-  assert.throws(() => refuseUnlessStaging({ RENDER_SERVICE_ID: PRODUCTION_SERVICE_ID, F2_STAGING_ACCEPTANCE: "enabled", PHOTO_OWNERSHIP_FENCING_ENABLED: "true" }), /production/);
-  assert.throws(() => refuseUnlessStaging({ PHOTO_OWNERSHIP_FENCING_ENABLED: "true" }), /F2_STAGING_ACCEPTANCE/);
-  assert.throws(() => refuseUnlessStaging({ F2_STAGING_ACCEPTANCE: "enabled" }), /fencing/);
-  assert.doesNotThrow(() => refuseUnlessStaging({ F2_STAGING_ACCEPTANCE: "enabled", PHOTO_OWNERSHIP_FENCING_ENABLED: "true", RENDER_SERVICE_ID: "srv-staging" }));
+test("park-at-intent fails closed on absent/production/mismatched identity, fencing OFF, missing confinement or roots", () => {
+  const ok = { F2_STAGING_ACCEPTANCE: "enabled", RENDER_SERVICE_ID: "srv-staging123", F2_STAGING_TARGET_SERVICE_ID: "srv-staging123", PHOTO_OWNERSHIP_FENCING_ENABLED: "true",
+    PHOTO_PREPARATION_CONFINEMENT: "required", PHOTO_PREPARATION_LAUNCHER: "/x/landlock-worker", DATABASE_URL: "/var/data/noctella.sqlite", PRODUCT_PHOTO_DIR: "/var/data/product-photos" };
+  assert.doesNotThrow(() => refuseUnlessStaging(ok));
+  assert.throws(() => refuseUnlessStaging({ ...ok, F2_STAGING_ACCEPTANCE: undefined }), /F2_STAGING_ACCEPTANCE/);
+  assert.throws(() => refuseUnlessStaging({ ...ok, RENDER_SERVICE_ID: undefined }), /absent/);
+  assert.throws(() => refuseUnlessStaging({ ...ok, RENDER_SERVICE_ID: PRODUCTION_SERVICE_ID, F2_STAGING_TARGET_SERVICE_ID: PRODUCTION_SERVICE_ID }), /production/);
+  assert.throws(() => refuseUnlessStaging({ ...ok, F2_STAGING_TARGET_SERVICE_ID: "srv-other" }), /does not match/);
+  assert.throws(() => refuseUnlessStaging({ ...ok, PHOTO_OWNERSHIP_FENCING_ENABLED: "false" }), /fencing/);
+  assert.throws(() => refuseUnlessStaging({ ...ok, PHOTO_PREPARATION_CONFINEMENT: undefined }), /confined/);
+  assert.throws(() => refuseUnlessStaging({ ...ok, DATABASE_URL: undefined }), /DATABASE_URL/);
 });

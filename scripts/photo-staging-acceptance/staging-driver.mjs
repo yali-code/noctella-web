@@ -1,10 +1,17 @@
 // Stage 5 F2 closure Stage 1 — STAGING-ONLY acceptance driver for the real HTTP entry points (W2 upload, W4 finalize).
-// Runs from an operator machine (Node >= 20, no dependencies) against a DISPOSABLE staging API. Never point it at
-// production: it refuses unless F2_STAGING_CONFIRM_HOST equals the API host.
+// Runs from an operator machine (Node >= 20, no dependencies) against a DISPOSABLE staging API.
 //
 //   F2_STAGING_API=https://<staging-host> F2_STAGING_CONFIRM_HOST=<staging-host> \
+//   F2_STAGING_TARGET_SERVICE_ID=<srv-… of the disposable staging service> \
+//   F2_PRODUCTION_HOSTS=<comma-separated production API hosts> \
 //   F2_STAGING_EMAIL=<staging admin> F2_STAGING_PASSWORD=<staging-only password> \
 //   node scripts/photo-staging-acceptance/staging-driver.mjs <command> [args]
+//
+// TARGET IDENTITY (checked locally BEFORE any login or request): the operator must name the disposable staging
+// service id and confirm its host; the driver refuses a missing/malformed identity, the known production service id,
+// any host listed in F2_PRODUCTION_HOSTS (which must be supplied) and any host mismatch. This is an operator /
+// configuration trust boundary, NOT cryptographic proof that the host is the named service: the API exposes no
+// service identity, and none is added. Exit code: 0 only when every acceptance check of the command passed.
 //
 // Commands:
 //   w4 <categoryId> <img1> <img2>          create intake -> stage 2 photos -> mock proposal -> accept title -> stock
@@ -25,10 +32,17 @@ import https from "node:https";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
+export const PRODUCTION_SERVICE_ID = "srv-db34390m7kps73cv8l6g";
 export function guardTarget(env = process.env) {
   const api = env.F2_STAGING_API;
   if (!api) throw new Error("F2_STAGING_API is required");
   const url = new URL(api);
+  const service = env.F2_STAGING_TARGET_SERVICE_ID ?? "";
+  if (!/^srv-[a-z0-9]{8,40}$/.test(service)) throw new Error("refused: F2_STAGING_TARGET_SERVICE_ID (the disposable staging service id) is required");
+  if (service === PRODUCTION_SERVICE_ID) throw new Error("refused: the target is the production service");
+  const production = (env.F2_PRODUCTION_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  if (production.length === 0) throw new Error("refused: F2_PRODUCTION_HOSTS must list the production API host(s) so they can be refused");
+  if (production.includes(url.host.toLowerCase()) || production.includes(url.hostname.toLowerCase())) throw new Error("refused: the API host is a production host");
   if (url.host !== env.F2_STAGING_CONFIRM_HOST) throw new Error("refused: F2_STAGING_CONFIRM_HOST must equal the staging API host");
   return url;
 }
@@ -96,18 +110,33 @@ async function photoCount(api, cookie, productId) {
   return { count: r.json.photos.length, ids: r.json.photos.map((p) => p.id) };
 }
 
-async function main(argv, env) {
-  const api = guardTarget(env);
+/** Runs one command; returns the process exit code (0 only when every acceptance check passed). */
+export async function runDriver(argv, env = process.env, emit = log) {
+  const api = guardTarget(env); // before any login or request
   const [command, ...args] = argv;
+  const known = ["w4", "w2", "w2-expect", "w2-replay", "w2-lost-ack"];
+  if (!known.includes(command)) throw new Error(`unknown command (${known.join(" | ")})`);
   const cookie = await login(api, env);
+  const report = (event, data) => { emit(event, data); return data.pass === true ? 0 : 1; };
   if (command === "w2") {
     const [productId, file, key = `f2-staging-${randomUUID()}`] = args;
-    log("w2", { key, ...(await w2Upload(api, cookie, productId, file, key)) });
-  } else if (command === "w2-replay") {
+    const r = await w2Upload(api, cookie, productId, file, key);
+    return report("w2", { key, status: r.status, id: r.json.id, code: r.json.code, pass: r.status === 201 && !!r.json.id });
+  }
+  if (command === "w2-expect") { // a negative check: the upload must be refused with exactly this status/code
+    const [productId, file, key, status, code] = args;
+    const r = await w2Upload(api, cookie, productId, file, key);
+    return report("w2-expect", { key, status: r.status, code: r.json.code, pass: r.status === Number(status) && r.json.code === code });
+  }
+  if (command === "w2-replay") {
     const [productId, file] = args, key = `f2-replay-${randomUUID()}`;
+    const before = await photoCount(api, cookie, productId);
     const first = await w2Upload(api, cookie, productId, file, key), second = await w2Upload(api, cookie, productId, file, key);
-    log("w2-replay", { key, first: first.status, second: second.status, samePhoto: first.json.id === second.json.id && !!first.json.id });
-  } else if (command === "w2-lost-ack") {
+    const after = await photoCount(api, cookie, productId);
+    return report("w2-replay", { key, first: first.status, second: second.status, samePhoto: first.json.id === second.json.id && !!first.json.id,
+      pass: first.status === 201 && second.status === 201 && first.json.id === second.json.id && !!first.json.id && after.count === before.count + 1 });
+  }
+  if (command === "w2-lost-ack") {
     const [productId, file] = args, key = `f2-lostack-${randomUUID()}`;
     const before = await photoCount(api, cookie, productId);
     const proxy = await startAckDroppingProxy(api);
@@ -120,19 +149,20 @@ async function main(argv, env) {
     const afterLoss = await photoCount(api, cookie, productId);
     const retry = await w2Upload(api, cookie, productId, file, key);
     const afterRetry = await photoCount(api, cookie, productId);
-    log("w2-lost-ack", {
+    return report("w2-lost-ack", {
       key, clientOutcome, upstreamStatus: upstream.status ?? upstream.error, retryStatus: retry.status,
       sameIdAsCommitted: !!committedId && retry.json.id === committedId,
       photosBefore: before.count, photosAfterLoss: afterLoss.count, photosAfterRetry: afterRetry.count,
       pass: clientOutcome.startsWith("ack-lost") && upstream.status === 201 && retry.status === 201 && retry.json.id === committedId
         && afterLoss.count === before.count + 1 && afterRetry.count === afterLoss.count,
     });
-  } else if (command === "w4") {
+  }
+  {
     const [categoryId, img1, img2] = args;
     const intake = await call(api, cookie, "POST", "/api/ai-product-intakes", {});
     if (intake.status !== 201 && intake.status !== 200) throw new Error(`intake create ${intake.status}`);
     const id = intake.json.id;
-    for (const img of [img1, img2]) { const r = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/photos`, photoForm(img)); if (r.status >= 300) throw new Error(`intake photo ${r.status}`); }
+    for (const img of [img1, img2]) { const r = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/photos`, photoForm(img)); if (r.status >= 300) throw new Error(`intake photo ${r.status} ${r.json.code ?? ""} ${r.json.error ?? ""}`); }
     const gen = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/generate`, {});
     if (gen.status >= 300) throw new Error(`generate ${gen.status} (AI_INTAKE_PROVIDER must be unset or mock on staging)`);
     let proposal = await call(api, cookie, "GET", `/api/ai-product-intakes/${id}/proposal`);
@@ -143,13 +173,12 @@ async function main(argv, env) {
     if (stock.status !== 201) throw new Error(`stock acceptance ${stock.status}`);
     const first = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/finalize-photos`, {});
     const second = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/finalize-photos`, {});
-    log("w4", { intakeId: id, productId: stock.json.id, finalize: first.status, photos: first.json.photos?.length, repeat: second.status, repeatPhotos: second.json.photos?.length,
+    return report("w4", { intakeId: id, productId: stock.json.id, finalize: first.status, photos: first.json.photos?.length, repeat: second.status, repeatPhotos: second.json.photos?.length,
       pass: first.status === 201 && first.json.photos?.length === 2 && second.status === 200 && second.json.photos?.length === 2 });
-  } else {
-    throw new Error("unknown command (w4 | w2 | w2-replay | w2-lost-ack)");
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("staging-driver.mjs")) {
-  main(process.argv.slice(2), process.env).catch((e) => { log("error", { message: String(e.message ?? e) }); process.exitCode = 1; });
+if (process.argv[1]?.endsWith("staging-driver.mjs")) {
+  runDriver(process.argv.slice(2), process.env).then((code) => { process.exitCode = code; },
+    (e) => { log("error", { message: String(e.message ?? e) }); process.exitCode = 1; });
 }

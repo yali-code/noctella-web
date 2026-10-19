@@ -158,7 +158,7 @@ No isolated F2 staging environment is verified to exist.
 - **Teardown:** delete the service and its disk.
 
 **Tooling** (`scripts/photo-staging-acceptance/`, self-tested in CI by `staging-driver.test.mjs`):
-- `staging-driver.mjs` (operator machine). Uses the real routes:
+- `staging-driver.mjs` (operator machine). Target identity is checked **before any login**: it requires `F2_STAGING_TARGET_SERVICE_ID` (not the production service), `F2_PRODUCTION_HOSTS` (refused) and a confirmed host. This is an operator/configuration trust boundary; the API exposes no service identity and none is added. Every command exits nonzero unless all its acceptance checks pass. Uses the real routes:
   - `POST /api/auth/login`, which sets the `noctella_admin_session` cookie;
   - `POST /api/products/:id/photos`: multipart field `photo`, optional `altText`, header `Idempotency-Key` (16–128 chars `[A-Za-z0-9_-]`), permission `products.edit`, returns 201;
   - `POST /api/ai-product-intakes`, which takes body `{}`;
@@ -171,7 +171,12 @@ No isolated F2 staging environment is verified to exist.
   No `Origin` header is sent, which the admin CSRF guard accepts for non-browser clients. The driver refuses unless `F2_STAGING_CONFIRM_HOST` equals the API host.
 - `park-at-intent.mjs` (staging service shell, from `apps/api`): **deterministic executor-loss setup.** It forks the existing `tests/fixtures/w2SigkillChild.ts`, which runs the real W2 owner against the service's own database and disk. It prints `PARKED` once the durable intent is authorized and before any canonical name exists.
   - It is not a runtime endpoint and not a production code path.
-  - It refuses the production service ID, a missing `F2_STAGING_ACCEPTANCE=enabled`, and fencing OFF.
+  - It fails closed unless all of these hold:
+    - `F2_STAGING_ACCEPTANCE=enabled`;
+    - Render's injected `RENDER_SERVICE_ID` is present, is not production, and equals `F2_STAGING_TARGET_SERVICE_ID`;
+    - fencing is ON with **mandatory** confinement (`PHOTO_PREPARATION_CONFINEMENT=required` and a launcher);
+    - `DATABASE_URL` and `PRODUCT_PHOTO_DIR` are explicit.
+  - Interrupting it leaves the child parked and never deletes durable state.
 - `sample-cgroup.sh` (staging service shell, read-only): samples cgroup v2 `memory.current/peak/max/swap.max/events` of the container (API + confined preparers) and supplementary RSS.
 
 **Steps:**
@@ -213,7 +218,7 @@ Local tests and CI are **not** staging acceptance. Nothing above has been execut
 | Canonical photo deletion (W8), AI-cleanup canonical deletion (W6) | Refused and dead-lettered; files accumulate on the 1 GB disk | (a) a deletion design under authority: delete only keys whose operation is committed and whose photo row is gone, inside the intent lock; (b) operator-reviewed periodic cleanup |
 | ERP photo upload `POST /api/erp/products/:id/photos/upload` and the legacy upload route | Refused (503), because they use the W1 legacy writer | Route ERP uploads through the W2 owner (Idempotency-Key semantics needed) |
 | Cross-instance executor loss (any restart/deploy during publication) | BLOCKED until operator attestation with evidence | (a) accept attestation; (b) a platform-provided instance-termination signal; (c) drain uploads before planned restarts |
-| Deterministic restart acceptance | No fault hook in production code | A staging-only, env-gated delay hook (needs review because it ships in production code) |
+| Deterministic restart acceptance | Available without any production code path: `park-at-intent.mjs` (staging-only external orchestration over the existing SIGKILL fixture) parks the real owner at `afterIntent`. Same-instance loss is recovered by the API itself; cross-instance loss (service restart) stays BLOCKED until an evidenced attestation | Execute on the isolated staging service (not yet executed) |
 
 None of these is marked complete; W11/0042 is not activated.
 
@@ -228,7 +233,7 @@ Review `release/f2-closure-stage1-packaging` against base `24a16b8e`. Focus on:
    - check that `f2ReleaseCompatibility.test.ts` faithfully reproduces the released schema (fixture copied from `23406f7`);
    - check the SQLite price-rebuild column-list risk for the integration merge.
 3. **Migrations:** 0039 → 0040 → 0041 → 0043 → 0044 ordering, 0042 unused, startup `ensureSchema` semantics, no destructive SQL.
-4. **Rollback:** the intent-resolution precondition, no dropping of state tables, fencing OFF first.
+4. **Rollback order:** stop admission, then quiesce writers, then resolve every authorized intent **under the protected code** (genuine termination evidence where needed), then verify that none remain. **Only then** disable fencing or downgrade. Never drop state tables.
 5. **Staging isolation:** no production credentials or data; synthetic images only; teardown; cost basis.
 6. **Write-effect classification** of each command.
 
