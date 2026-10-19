@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
+import { simulatedPersistentRemount } from "./fixtures/persistentRemount";
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -280,4 +281,15 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       expect(report2.filter((r: any) => r.token === token || stagedIds.includes(r.token))).toEqual([]);
     } finally { await rm(workDir, { recursive: true, force: true }); }
   });
+  for(const phase of ["intent","main","thumb"] as const) it.skipIf(!enabled)("SIMULATED remount W4 recovery at "+phase,async()=>{
+    const simulation=simulatedPersistentRemount();
+    try{const {productId,intakeId,stagedIds}=await appliedIntake(1);const stop=()=>{simulation.replaceInstance();throw Error("simulated instance replacement");};
+      await expect(finalize(intakeId,{hooks:phase==="intent"?{afterIntent:stop}:{copyPhase:(_id,artifact,p)=>{if(artifact===phase&&p==="linked")stop();}}})).rejects.toThrow("simulated instance replacement");
+      expect((await finalize(intakeId)).created).toBe(true);expect((await finalize(intakeId)).created).toBe(false);expect(await counts(productId)).toEqual([1,1]);
+      const rows=await ops(stagedIds);expect(rows[0].state).toBe("committed");expect(Number(rows[0].generation)).toBe(1);
+      const [seal]=await q(sql`SELECT main_dev FROM photo_operation_artifacts WHERE operation_id = ${rows[0].id}`);expect(seal.main_dev).toMatch(/^pfs1:/);
+      const [intent]=await q(sql`SELECT executor_epoch FROM photo_publication_intents WHERE operation_id = ${rows[0].id}`);expect(Number(intent.executor_epoch)).toBe(2);
+    }finally{simulation.restore();}
+  });
+
 });

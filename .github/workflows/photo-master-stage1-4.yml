@@ -9,7 +9,7 @@ on:
   # Stage 5 F2 (#472) runtime remediation: exact-head evidence on push to the dedicated task branch.
   push:
     # Branches whose Draft PR base is not listed above (stacked F2 Stage 1 candidate and its children); #488 uses its PR run.
-    branches: [fix/f2-runtime-remediation, release/f2-stage1-candidate, feat/f2-photo-ingress-parity, feat/f2-instagram-derivative-store, feat/f2-canonical-reclaim, fix/f2-wrapped-claim-conflict]
+    branches: [fix/f2-runtime-remediation, release/f2-stage1-candidate, feat/f2-photo-ingress-parity, feat/f2-instagram-derivative-store, feat/f2-canonical-reclaim, fix/f2-wrapped-claim-conflict, fix/f2-persistent-storage-identity]
 permissions:
   contents: read
 concurrency:

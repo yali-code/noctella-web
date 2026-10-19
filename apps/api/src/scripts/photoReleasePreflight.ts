@@ -9,6 +9,7 @@ import { photoOwnershipFencingConfig } from "../services/photoOwnershipFencing";
 import { aiIntakeOriginalSourceStagingConfig } from "../services/aiIntakeOriginalSourceStaging";
 import { crossProcessExitAuthenticationAvailable } from "../services/photoPublicationExecutor";
 import { photoPreparationConfinementConfig } from "../services/photoPreparationConfinement";
+import { persistentPhotoDevice } from "../services/photoPersistentIdentity";
 import { createHash } from "node:crypto";
 
 export type PreflightStatus = "PASS" | "WARN" | "FAIL" | "MANUAL";
@@ -84,6 +85,17 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
     const free = stats.bavail * stats.bsize;
     add("storage.free-space", free >= PREFLIGHT_MIN_FREE_BYTES ? "PASS" : "WARN", `${Math.floor(free / 1048576)} MiB available (warn below ${PREFLIGHT_MIN_FREE_BYTES / 1048576} MiB)`);
   } catch { add("storage.free-space", "WARN", "free space could not be measured"); }
+
+  if (fencing.enabled && confinement.mode === "confined") {
+    let fd = -1;
+    try {
+      fd = fs.openSync(canonicalRoot, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+      const evidence = persistentPhotoDevice(fd, fs.fstatSync(fd, { bigint: true }), env);
+      add("storage.persistent-identity", "PASS", "descriptor-bound UUID/birth identity available: " + evidence);
+    } catch { add("storage.persistent-identity", "FAIL", "kernel filesystem UUID/birth evidence unavailable; no hash-only or numeric-device fallback"); }
+    finally { if (fd >= 0) fs.closeSync(fd); }
+  }
+  add("storage.legacy-identity", "MANUAL", "numeric legacy seals/copies remain strict same-device only; do not rewrite or adopt across instance replacement; new pfs1 evidence requires this reader, keep older release disabled for unresolved new records");
 
   // Executor-loss recovery (#472): without Linux /proc the runtime cannot prove a terminated executor; such intents stay BLOCKED.
   add("publication.exit-authentication", crossProcessExitAuthenticationAvailable() ? "PASS" : "WARN", crossProcessExitAuthenticationAvailable()

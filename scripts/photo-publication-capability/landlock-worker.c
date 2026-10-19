@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -335,7 +336,24 @@ static int run_reaper(char **cmd) {
     }
 }
 
+/* Read-only descriptor evidence. This branch never execs, writes files or changes confinement.
+ * Linux 6.9 UAPI FS_IOC_GETFSUUID: external on-disk UUID, not st_dev or statfs f_fsid.
+ * Local definition allows older build headers; an unsupported running kernel fails closed. */
+struct photo_fsuuid { unsigned char len; unsigned char uuid[16]; };
+static int storage_proof(void) {
+    struct stat st;
+    struct photo_fsuuid uuid = {0};
+    if (geteuid() == 0 || fstat(3, &st) || (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))) return 125;
+    if (ioctl(3, _IOR(0x15, 0, struct photo_fsuuid), &uuid) || uuid.len != 16) return 125;
+    unsigned int nonzero = 0;
+    for (int n = 0; n < 16; ++n) nonzero |= uuid.uuid[n];
+    if (!nonzero) return 125;
+    for (int n = 0; n < 16; ++n) printf("%02x", uuid.uuid[n]);
+    return printf("\n") < 0 ? 125 : 0;
+}
+
 int main(int argc, char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "--storage-proof")) return storage_proof();
     int i = 1;
     if (i < argc && !strcmp(argv[i], "--supervise")) { mode = SUPERVISE; ++i; }
     else if (i < argc && !strcmp(argv[i], "--reaper")) { mode = REAPER; ++i; }

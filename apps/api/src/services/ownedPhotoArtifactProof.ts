@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { constants, type BigIntStats } from "node:fs";
 import { lstat, open } from "node:fs/promises";
+import { sealedPhotoDevice } from "./photoPersistentIdentity";
 import type { FileProof } from "./photoOperationAuthority";
 
 const sameIdentity = (a: BigIntStats, b: BigIntStats) => a.dev === b.dev && a.ino === b.ino;
@@ -13,7 +14,7 @@ const changed = (): never => { throw new Error("PHOTO_ARTIFACT_CHANGED"); };
  * ancestors/ACLs, atomic publication authority, canonical provenance and durability remain separate contracts.
  * W11 deliberately retains its existing inactive helper pending its separate authorization boundary.
  */
-export async function ownedPhotoArtifactProof(file: string): Promise<FileProof> {
+export async function ownedPhotoArtifactProof(file: string, persistent = false): Promise<FileProof> {
   const before = await lstat(file, { bigint: true });
   if (!before.isFile() || before.isSymbolicLink()) throw new Error("PHOTO_ARTIFACT_NOT_REGULAR");
   const size = Number(before.size);
@@ -36,6 +37,6 @@ export async function ownedPhotoArtifactProof(file: string): Promise<FileProof> 
     }
     const after = await handle.stat({ bigint: true }), named = await lstat(file, { bigint: true });
     if (!unchanged(opened, after) || !unchanged(after, named) || !named.isFile() || named.isSymbolicLink() || BigInt(bytes) !== after.size) changed();
-    return { sha256: hash.digest("hex"), bytes, dev: String(after.dev), ino: String(after.ino) };
+    return { sha256: hash.digest("hex"), bytes, dev: persistent ? sealedPhotoDevice(handle.fd, after) : String(after.dev), ino: String(after.ino) };
   } finally { await handle.close(); }
 }

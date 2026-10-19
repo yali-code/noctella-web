@@ -31,7 +31,8 @@ import {
   type AuthenticatedResume, type ExecutorExitEvidence, type PublicationAuthority, type PublicationCopyRow, type PublicationExecutor,
 } from "./photoPublicationIntents";
 import { publishVerifiedCopy, type CopyOutcome, type CopyPhase } from "./photoCopyPublisher";
-import { assertPreparationConfinementReady } from "./photoPreparationConfinement";
+import { assertPreparationConfinementReady, photoPreparationConfinementConfig } from "./photoPreparationConfinement";
+import { assertPublicationStorage, sealedPhotoDevice, persistentStorageId } from "./photoPersistentIdentity";
 import { readPublishedPhotoDimensions } from "./photoStorage";
 
 interface LinuxProcess { bootId: string; pidNs: string; pid: number; start: string }
@@ -130,6 +131,13 @@ export async function assertPhotoPublicationReady(db: DbClient, driver: Ownershi
   } catch { throw new PhotoUploadError(503, "PHOTO_PUBLICATION_NOT_READY", "Protected photo publication schema is not installed"); }
   const problem = photoPublicationStorageProblem(canonicalRoot);
   if (problem) throw new PhotoUploadError(503, "PHOTO_PUBLICATION_NOT_READY", `Protected photo publication storage is not ready: ${problem}`);
+  const fd = fs.openSync(canonicalRoot, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  try {
+    const evidence = sealedPhotoDevice(fd, fs.fstatSync(fd, { bigint: true }));
+    assertPublicationStorage(photoOperationPrivateRoot(canonicalRoot), evidence);
+    assertPublicationStorage(photoPublicationStagingRoot(canonicalRoot), evidence);
+  } catch { throw new PhotoUploadError(503, "PHOTO_PUBLICATION_NOT_READY", "Persistent storage identity is unavailable or conflicting"); }
+  finally { fs.closeSync(fd); }
 }
 
 /**
@@ -178,6 +186,10 @@ export async function publishAuthorizedArtifacts(db: DbClient, driver: Ownership
     return yield sql`SELECT main_bytes, thumb_bytes FROM photo_operation_artifacts WHERE id = ${a.sealId} AND operation_id = ${a.operationId} AND generation = ${a.generation}`;
   });
   if (!sizes) throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Sealed photo artifact record is missing");
+  if (photoPreparationConfinementConfig().mode === "confined" && (!persistentStorageId(a.identity.main.dev) || !persistentStorageId(a.identity.thumb.dev))) {
+    await inOwnershipTransaction(db, driver, () => reviewPublicationIntentSteps(driver, a, "legacy publication identity requires operator review; no persistent evidence"));
+    throw new PhotoUploadError(409, "PHOTO_OPERATION_REVIEW", "Legacy identity cannot authorize protected publication");
+  }
   const outcomes = {} as Record<"main" | "thumb", CopyOutcome>;
   for (const artifact of ["main", "thumb"] as const) {
     const ledger = {
@@ -197,7 +209,7 @@ export async function publishAuthorizedArtifacts(db: DbClient, driver: Ownership
       }, ledger, (phase) => hook(artifact, phase));
     } catch (error: any) {
       if (error instanceof PhotoUploadError) throw error;
-      if (STORAGE_ERRORS.has(error?.code) || error?.message === "PHOTO_PUBLICATION_STAGING_DEVICE_MISMATCH")
+      if (STORAGE_ERRORS.has(error?.code) || error?.message === "PHOTO_PUBLICATION_STAGING_DEVICE_MISMATCH" || error?.message?.startsWith("PHOTO_PERSISTENT_"))
         throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo storage is unavailable");
       throw error;
     }
@@ -218,7 +230,11 @@ export async function publishedMainDimensions(canonicalRoot: string, mainKey: st
 }
 
 /** Removes this operation's own staging namespace and the committed generation's private files (after T2 only). */
-export async function cleanupCommittedPublication(canonicalRoot: string, a: Pick<PublicationAuthority, "operationId" | "generation">): Promise<void> {
+export async function cleanupCommittedPublication(canonicalRoot: string, a: Pick<PublicationAuthority, "operationId" | "generation"> & Partial<Pick<PublicationAuthority, "identity">>): Promise<void> {
+  if (a.identity) {
+    try { assertPublicationStorage(canonicalRoot, a.identity.main.dev); assertPublicationStorage(photoOperationPrivateRoot(canonicalRoot), a.identity.main.dev); assertPublicationStorage(photoPublicationStagingRoot(canonicalRoot), a.identity.main.dev); }
+    catch { return; } // post-commit ambiguity retains files; never turn an acknowledged commit into cleanup authority
+  }
   await Promise.allSettled([
     fs.promises.rm(operationStagingDir(canonicalRoot, a.operationId), { recursive: true, force: true }),
     fs.promises.unlink(sealedArtifactPath(canonicalRoot, a, "main")),

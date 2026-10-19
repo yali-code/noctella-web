@@ -11,7 +11,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { runPhotoReleasePreflight } from "../src/scripts/photoReleasePreflight";
 
 const script = path.join(__dirname, "..", "scripts", "build-landlock-launcher.mjs");
-const REVIEWED_SOURCE_SHA256 = "ad1d58ec71b28696711d8808bc011eb0ba1fe94984cdf3d7e2947ce5bfe4e47a";
+const REVIEWED_SOURCE_SHA256 = "2e5deabf2848fd53bc57130afd5ed1caf060961bfac28bc2be71568892d01a55";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "noctella-launcher-build-"));
 afterAll(() => { fs.rmSync(root, { recursive: true, force: true }); });
 const linux = process.platform === "linux";
@@ -20,7 +20,7 @@ const build = (out: string, env: NodeJS.ProcessEnv = process.env) => spawnSync(p
 
 it.runIf(process.env.F2_CAPABILITY_REQUIRE_LINUX === "1")("required Linux execution of the launcher build suite", () => { expect(linux).toBe(true); });
 
-it("the reviewed launcher source in this checkout is the pinned, probe-verified source", () => {
+it("the candidate launcher source matches its pinned fingerprint (independent review remains pending)", () => {
   const source = path.join(__dirname, "..", "..", "..", "scripts", "photo-publication-capability", "landlock-worker.c");
   expect(createHash("sha256").update(fs.readFileSync(source, "utf8").replace(/\r\n/g, "\n")).digest("hex")).toBe(REVIEWED_SOURCE_SHA256);
 });

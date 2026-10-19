@@ -11,6 +11,8 @@ const { census, scanText, sources, rel } = require('./scan.cjs');
 
 /** file -> expected counts per category, and what the file is in the writer matrix. */
 const EXPECTED = {
+  'services/photoPersistentIdentity.ts': { child: 2, writers: ['W2/W4 read-only descriptor UUID evidence; invokes reviewed launcher, no filesystem mutation'] },
+
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
   'services/photoOperationAuthority.ts': { mutation: 1, writers: ['W2/W4 shared generation-fenced authority (FAZ A #424, fencing ON only): exclusive private generation dirs; legacy worker-inode link primitive kept only as a negative control (no runtime caller, #472)'] },
   'services/photoPublicationExecutor.ts': { mutation: 4, writers: ['W2/W4 protected publication (Stage 5 F2 #472, fencing ON): readiness mkdir of the canonical/private/staging roots, post-commit cleanup of its own staging namespace and private names'] },

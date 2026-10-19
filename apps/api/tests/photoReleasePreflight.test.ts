@@ -30,7 +30,7 @@ describe("photo release preflight", () => {
     expect(check(result, "storage.publication-staging").status).toBe("PASS");
     expect(["PASS", "WARN"]).toContain(check(result, "publication.exit-authentication").status);
     expect(check(result, "publication.exit-authentication").status).toBe(process.platform === "linux" ? "PASS" : "WARN");
-    expect(result.checks.filter((c) => c.status === "MANUAL").map((c) => c.id)).toEqual(["render.single-instance-drain", "publication.restart-attestation", "backups"]);
+    expect(result.checks.filter((c) => c.status === "MANUAL").map((c) => c.id)).toEqual(["storage.legacy-identity", "render.single-instance-drain", "publication.restart-attestation", "backups"]);
     expect(result.status).toBe("WARN"); // manual platform steps can never be reported as PASS
     expect(readdirSync(root)).toEqual(["photos"]); // read-only: nothing created
   });

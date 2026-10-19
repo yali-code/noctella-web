@@ -20,6 +20,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { assertPublicationStorage, matchesPhotoDevice, persistentPhotoDevice, persistentStorageId } from "./photoPersistentIdentity";
 
 export interface CopySeal { sha256: string; size: number; dev: string; ino: string }
 /** birthNs: the inode birth time, an additional identity check (the staging anchor is the primary reuse guard). */
@@ -36,7 +37,7 @@ export type CopyOutcome =
 
 const DATA_NAME = /^data-[0-9a-f]{16}$/;
 const identity = (st: fs.BigIntStats) => ({ dev: String(st.dev), ino: String(st.ino), birthNs: String(st.birthtimeNs) });
-const sameInode = (st: fs.BigIntStats, r: Pick<CopyRecord, "dev" | "ino" | "birthNs">) => String(st.dev) === r.dev && String(st.ino) === r.ino && String(st.birthtimeNs) === r.birthNs;
+const sameInode = (fd: number, st: fs.BigIntStats, r: Pick<CopyRecord, "dev" | "ino" | "birthNs">) => matchesPhotoDevice(fd, st, r.dev) && String(st.ino) === r.ino && String(st.birthtimeNs) === r.birthNs;
 
 function hashFd(fd: number) {
   const hash = createHash("sha256"), buffer = Buffer.alloc(64 * 1024);
@@ -72,12 +73,13 @@ function anchored(t: CopyTarget, recorded: CopyRecord, st: fs.BigIntStats): bool
 async function resolveExisting(t: CopyTarget, ledger: CopyLedger, canonical: string): Promise<CopyOutcome> {
   const recorded = await ledger.read();
   const st = fs.lstatSync(canonical, { bigint: true });
-  if (recorded && st.isFile() && sameInode(st, recorded) && recorded.sha256 === t.seal.sha256 && anchored(t, recorded, st)) {
-    const fd = fs.openSync(canonical, "r");
+  const sameStorage = persistentStorageId(t.seal.dev) === persistentStorageId(recorded?.dev ?? "");
+  if (recorded && st.isFile() && sameStorage && recorded.sha256 === t.seal.sha256 && recorded.bytes === t.seal.size && anchored(t, recorded, st)) {
+    const fd = fs.openSync(canonical, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
     try {
       const fresh = fs.fstatSync(fd, { bigint: true });
       const current = hashFd(fd);
-      if (sameInode(fresh, recorded) && current.sha256 === t.seal.sha256 && current.bytes === t.seal.size && anchored(t, recorded, fresh)) {
+      if (sameInode(fd, fresh, recorded) && fresh.dev === st.dev && fresh.ino === st.ino && current.sha256 === t.seal.sha256 && current.bytes === t.seal.size && anchored(t, recorded, fresh)) {
         removeOwnStagingData(t.stagingDir, t.retainStagingLink ? recorded.stagingName : undefined);
         return { kind: "ADOPTED", dev: String(fresh.dev), ino: String(fresh.ino) };
       }
@@ -88,15 +90,20 @@ async function resolveExisting(t: CopyTarget, ledger: CopyLedger, canonical: str
 }
 
 export async function publishVerifiedCopy(t: CopyTarget, ledger: CopyLedger, hook: CopyHook = () => {}): Promise<CopyOutcome> {
+  assertPublicationStorage(t.canonicalDir, t.seal.dev);
+  // The staging root is trusted publisher-only storage; validate its nearest existing ancestor before cleanup/mkdir.
+  let stagingAncestor = t.stagingDir;
+  while (!fs.existsSync(stagingAncestor)) { const parent = path.dirname(stagingAncestor); if (parent === stagingAncestor) throw new Error("PHOTO_PERSISTENT_STORAGE_MISMATCH"); stagingAncestor = parent; }
+  assertPublicationStorage(stagingAncestor, t.seal.dev);
   const canonical = path.join(t.canonicalDir, t.canonicalName);
   if (fs.existsSync(canonical)) return resolveExisting(t, ledger, canonical);
   removeOwnStagingData(t.stagingDir); // incomplete or unlinked copies from a crashed attempt are never reused
   let source: number;
-  try { source = fs.openSync(t.source, "r"); } catch (e: any) { if (e?.code === "ENOENT") return { kind: "SOURCE_MISSING", detail: e.code }; throw e; }
+  try { source = fs.openSync(t.source, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)); } catch (e: any) { if (e?.code === "ENOENT") return { kind: "SOURCE_MISSING", detail: e.code }; throw e; }
   let staged = -1, stagedPath = "";
   try {
     const st = fs.fstatSync(source, { bigint: true });
-    if (!st.isFile() || String(st.dev) !== t.seal.dev || String(st.ino) !== t.seal.ino) return { kind: "SOURCE_REPLACED" };
+    if (!st.isFile() || !matchesPhotoDevice(source, st, t.seal.dev) || String(st.ino) !== t.seal.ino) return { kind: "SOURCE_REPLACED" };
     await hook("source-opened");
     fs.mkdirSync(t.stagingDir, { recursive: true, mode: 0o700 });
     const stagingDev = String(fs.statSync(t.stagingDir, { bigint: true }).dev), canonicalDev = String(fs.statSync(t.canonicalDir, { bigint: true }).dev);
@@ -122,7 +129,8 @@ export async function publishVerifiedCopy(t: CopyTarget, ledger: CopyLedger, hoo
       fs.closeSync(staged); staged = -1; removeOwnStagingData(t.stagingDir);
       return { kind: "SNAPSHOT_MISMATCH" };
     }
-    const copy = { stagingName, ...identity(fs.fstatSync(staged, { bigint: true })), sha256: t.seal.sha256, bytes: t.seal.size };
+    const copyStat = fs.fstatSync(staged, { bigint: true });
+    const copy = { stagingName, ...identity(copyStat), dev: persistentStorageId(t.seal.dev) ? persistentPhotoDevice(staged, copyStat) : String(copyStat.dev), sha256: t.seal.sha256, bytes: t.seal.size };
     fs.closeSync(staged); staged = -1; // no write descriptor is retained after verification
     fsyncDir(t.stagingDir);
     await hook("verified");

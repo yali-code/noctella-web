@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
+import { simulatedPersistentRemount } from "./fixtures/persistentRemount";
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -287,4 +288,18 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     expect(await readdir(path.join(root, "photos"))).not.toContain(".product-photo-operations");
     expect((await readdir(root))).toContain(".product-photo-operations");
   });
+  for (const phase of ["intent", "main", "thumb", "commit"] as const) it.skipIf(!enabled)("SIMULATED remount W2 recovery at " + phase, async () => {
+    const simulation = simulatedPersistentRemount(); const token="pfs-"+phase+"-"+driver+"-"+randomUUID();
+    const stop=()=>{simulation.replaceInstance();throw Error("simulated instance replacement");};
+    try {
+      const hooks:FencedUploadHooks=phase==="intent"?{afterIntent:stop}:phase==="commit"?{afterCommit:stop}:{copyPhase:(artifact,p)=>{if(artifact===phase&&p==="linked")stop();}};
+      await expect(upload(token,front,hooks)).rejects.toThrow("simulated instance replacement");
+      const result=await upload(token,front);expect((await upload(token,front)).id).toBe(result.id);
+      expect(await n("product_photos",`WHERE id = '${result.id}'`)).toBe(1);expect(await n("outbox_events",`WHERE aggregate_id = '${result.id}'`)).toBe(1);
+      const row=await op(token);expect(row.state).toBe("committed");expect(Number(row.generation)).toBe(1);
+      const [seal]=await q(sql`SELECT main_dev FROM photo_operation_artifacts WHERE operation_id = ${row.id}`);expect(seal.main_dev).toMatch(/^pfs1:/);
+      const [intent]=await q(sql`SELECT executor_epoch FROM photo_publication_intents WHERE operation_id = ${row.id}`);expect(Number(intent.executor_epoch)).toBe(phase==="commit"?1:2);
+    } finally { simulation.restore(); }
+  });
+
 });

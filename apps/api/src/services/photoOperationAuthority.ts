@@ -152,7 +152,7 @@ export async function createGenerationDirectory(op: OwnedOperation, canonicalRoo
 /** Seals prepared files under the fence; false (nothing published) if this generation lost ownership. */
 export async function sealPreparedArtifacts(db: DbClient, driver: OwnershipDriver, op: OwnedOperation, files: { main: string; thumb: string }) {
   const sealId = randomUUID();
-  const main = await ownedPhotoArtifactProof(files.main), thumb = await ownedPhotoArtifactProof(files.thumb);
+  const main = await ownedPhotoArtifactProof(files.main, true), thumb = await ownedPhotoArtifactProof(files.thumb, true);
   const sealed = await inOwnershipTransaction(db, driver, () => sealSteps(driver, op, sealId, main, thumb));
   return sealed ? { sealId, main, thumb } : null;
 }

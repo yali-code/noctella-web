@@ -14,6 +14,7 @@ const has = (file, text) => read(file).includes(text);
 
 /** file -> { writers, disposition, proof } */
 const DISPOSITION = {
+  'services/photoPersistentIdentity.ts': { writers: 'W2/W4 read-only descriptor identity', disposition: 'NON_MEDIA (read-only reviewed helper FS_IOC_GETFSUUID; no file mutation or worker execution)', proof: () => has('services/photoPersistentIdentity.ts', '["--storage-proof"]') },
   'routes/productPhotoUpload.ts': { writers: 'W2 ingress', disposition: 'ADOPTED (fenced owner injected; refuses without it)', proof: () => has('routes/productPhotoUpload.ts', 'fencingOn && !options.fencedUpload') },
   'services/photoOperationAuthority.ts': { writers: 'W2/W4 authority', disposition: 'ADOPTED (private generation dirs; the legacy worker-inode link primitive has no runtime caller, #472)', proof: () => has('services/photoOperationAuthority.ts', 'LEGACY / NEGATIVE CONTROL ONLY') && !has('services/w2FencedProductPhotoOwner.ts', 'publishSealedArtifacts') && !has('services/w4FencedFinalizationOwner.ts', 'publishSealedArtifacts') },
   'services/photoPublicationExecutor.ts': { writers: 'W2/W4 protected publication', disposition: 'ADOPTED (intent-authorized copy publication; readiness fails closed, #472)', proof: () => has('services/w2FencedProductPhotoOwner.ts', 'publishAuthorizedArtifacts(') && has('services/w4FencedFinalizationOwner.ts', 'publishAuthorizedArtifacts(') && has('services/photoPublicationExecutor.ts', 'PHOTO_PUBLICATION_NOT_READY') },

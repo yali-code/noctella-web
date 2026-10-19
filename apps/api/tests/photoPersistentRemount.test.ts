@@ -1,0 +1,71 @@
+import { afterEach, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createHash } from "node:crypto";
+const kernel = vi.hoisted(() => ({ uuid: "1234567890abcdef1234567890abcdef" }));
+vi.mock("../src/services/photoPersistentIdentity", () => {
+  const token = (st: any) => "pfs1:" + kernel.uuid + ":" + st.birthtimeNs;
+  return {
+    persistentStorageId: (value: string) => /^pfs1:([0-9a-f]{32}):[1-9][0-9]*$/.exec(value)?.[1] ?? null,
+    sealedPhotoDevice: (_fd: number, st: any) => token(st),
+    persistentPhotoDevice: (_fd: number, st: any) => token(st),
+    matchesPhotoDevice: (_fd: number, st: any, expected: string) => expected === token(st),
+    assertPublicationStorage: (_dir: string, expected: string) => { if (!expected.startsWith("pfs1:" + kernel.uuid + ":")) throw Error("PHOTO_PERSISTENT_STORAGE_MISMATCH"); },
+  };
+});
+import { publishVerifiedCopy, type CopyRecord } from "../src/services/photoCopyPublisher";
+afterEach(() => { vi.restoreAllMocks(); kernel.uuid = "1234567890abcdef1234567890abcdef"; });
+const sha = (v: string) => createHash("sha256").update(v).digest("hex");
+function fixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "noctella-remount-"));
+  const source = path.join(root, "source"), canonicalDir = path.join(root, "canonical"), stagingDir = path.join(root, "staging");
+  fs.mkdirSync(canonicalDir); fs.mkdirSync(stagingDir); fs.writeFileSync(source, "synthetic-sealed-photo");
+  const st = fs.statSync(source, { bigint: true });
+  const seal = { dev: "pfs1:" + kernel.uuid + ":" + st.birthtimeNs, ino: String(st.ino), sha256: sha("synthetic-sealed-photo"), size: 22 };
+  seal.size = fs.statSync(source).size;
+  let copy: CopyRecord | null = null;
+  return { root, target: { source, seal, canonicalDir, canonicalName: "photo.webp", stagingDir, retainStagingLink: true }, ledger: { read: async () => copy, record: async (r: CopyRecord) => { copy = r; } }, copy: () => copy };
+}
+function evidence(f: ReturnType<typeof fixture>, name: string) {
+  const row = { name, simulated: true, copy: f.copy(), seal: f.target.seal, files: [f.target.source, path.join(f.target.canonicalDir, f.target.canonicalName), ...fs.readdirSync(f.target.stagingDir).map(n => path.join(f.target.stagingDir, n))].filter(p => fs.existsSync(p)).map(p => { const st = fs.statSync(p, { bigint: true }); return { path: p, dev: String(st.dev), ino: String(st.ino), birthNs: String(st.birthtimeNs), bytes: String(st.size), sha256: createHash("sha256").update(fs.readFileSync(p)).digest("hex") }; }) };
+  fs.writeFileSync(path.join(f.root, "evidence.json"), JSON.stringify(row, null, 2));
+  if (process.env.PHOTO_REMOUNT_EVIDENCE_DIR) { fs.mkdirSync(process.env.PHOTO_REMOUNT_EVIDENCE_DIR, { recursive: true }); fs.cpSync(f.root, path.join(process.env.PHOTO_REMOUNT_EVIDENCE_DIR, path.basename(f.root)), { recursive: true }); }
+}
+for (const checkpoint of ["before", "recorded", "linked"] as const) it("verified same storage recovers with changed numeric device at " + checkpoint, async () => {
+  const f = fixture();
+  if (checkpoint !== "before") await expect(publishVerifiedCopy(f.target, f.ledger, p => { if (p === checkpoint) throw Error("lost executor"); })).rejects.toThrow("lost executor");
+  for (const method of ["fstatSync", "lstatSync", "statSync"] as const) {
+    const original = fs[method].bind(fs) as any;
+    vi.spyOn(fs, method).mockImplementation(((fd: any, options: any) => { const st: any = original(fd, options); return options?.bigint ? Object.assign(Object.create(Object.getPrototypeOf(st)), st, { dev: st.dev + 99n }) : st; }) as any);
+  }
+  const result = await publishVerifiedCopy(f.target, f.ledger);
+  expect(result.kind).toBe(checkpoint === "linked" ? "ADOPTED" : "PUBLISHED");
+  expect((await publishVerifiedCopy(f.target, f.ledger)).kind).toBe("ADOPTED"); evidence(f, checkpoint);
+});
+it("different filesystem UUID refuses before deleting staging evidence", async () => {
+  const f = fixture(); fs.writeFileSync(path.join(f.target.stagingDir, "data-1234567890abcdef"), "retained"); kernel.uuid = "ffffffffffffffffffffffffffffffff";
+  await expect(publishVerifiedCopy(f.target, f.ledger)).rejects.toThrow("PHOTO_PERSISTENT_STORAGE_MISMATCH");
+  expect(fs.readdirSync(f.target.stagingDir)).toEqual(["data-1234567890abcdef"]); evidence(f, "different-storage");
+});
+for (const mutation of ["inode", "birth", "bytes", "size"] as const) it("refuses changed " + mutation, async () => {
+  const f = fixture(); if (mutation === "inode") f.target.seal.ino = "0";
+  if (mutation === "birth") f.target.seal.dev = "pfs1:" + kernel.uuid + ":1";
+  if (mutation === "bytes") fs.writeFileSync(f.target.source, "x".repeat(f.target.seal.size));
+  if (mutation === "size") fs.appendFileSync(f.target.source, "more");
+  expect(["SOURCE_REPLACED", "SNAPSHOT_MISMATCH"]).toContain((await publishVerifiedCopy(f.target, f.ledger)).kind);
+  expect(fs.readdirSync(f.target.canonicalDir)).toEqual([]); evidence(f, mutation);
+});
+for (const mutation of ["foreign-identical", "missing-anchor", "substituted-anchor", "inode-reuse", "missing-proof", "malformed-proof", "conflicting-proof"] as const) it("refuses adoption with " + mutation, async () => {
+  const f = fixture(); await publishVerifiedCopy(f.target, f.ledger); const copy = f.copy()!;
+  const canonical = path.join(f.target.canonicalDir, f.target.canonicalName), anchor = path.join(f.target.stagingDir, copy.stagingName);
+  if (mutation === "foreign-identical") { fs.renameSync(canonical, canonical + ".retained"); fs.copyFileSync(f.target.source, canonical); }
+  if (mutation === "missing-anchor") fs.renameSync(anchor, anchor + ".retained");
+  if (mutation === "substituted-anchor") { fs.renameSync(anchor, anchor + ".retained"); fs.copyFileSync(f.target.source, anchor); }
+  if (mutation === "inode-reuse") copy.birthNs = "1";
+  if (mutation === "missing-proof") copy.dev = "";
+  if (mutation === "malformed-proof") copy.dev = "pfs1:bad:1";
+  if (mutation === "conflicting-proof") copy.dev = "pfs1:ffffffffffffffffffffffffffffffff:" + copy.birthNs;
+  expect((await publishVerifiedCopy(f.target, f.ledger)).kind).toBe("COLLISION");
+  expect(fs.readFileSync(canonical).toString()).toBe("synthetic-sealed-photo"); evidence(f, mutation);
+});
