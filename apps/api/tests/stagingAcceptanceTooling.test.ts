@@ -129,7 +129,8 @@ describe("staging driver against the real API", () => {
         child.stdout!.on("data", (d) => { buf += d; for (const line of buf.split("\n")) { try { const m = JSON.parse(line); if (m.event === "PARKED") resolve(m); if (m.event === "REFUSED") reject(new Error(m.message)); } catch { /* partial */ } } });
         child.once("exit", () => reject(new Error("orchestrator exited: " + buf)));
       });
-      expect(await run(["w2-expect", productId, path.join(root, "small.jpg"), parked.idempotencyKey, "409", "PHOTO_OPERATION_IN_PROGRESS"])).toBe(0);
+      const refused = await run(["w2-expect", productId, path.join(root, "small.jpg"), parked.idempotencyKey, "409", "PHOTO_OPERATION_IN_PROGRESS"]);
+      expect(refused, JSON.stringify(last("w2-expect"))).toBe(0);
       const { reportPublicationIntents, attestExecutorExit } = await import("../src/scripts/photoPublicationIntentRecovery");
       const intent = (await reportPublicationIntents(db, "sqlite")).find((r: any) => r.subjectId === parked.idempotencyKey)!;
       expect(intent).toMatchObject({ state: "authorized", epoch: "1", resumable: false });

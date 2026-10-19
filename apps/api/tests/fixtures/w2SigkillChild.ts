@@ -15,7 +15,13 @@ async function main() {
   const bytes = Buffer.from(process.env.F5_INPUT_BASE64!, "base64");
   await writeFile(path.join(workDir, "input"), bytes);
   const file = { path: path.join(workDir, "input"), workDir, size: bytes.length, mimetype: "image/jpeg", signal: new AbortController().signal };
-  const park = () => { process.send?.(`at:${stage}`); return new Promise<never>(() => undefined); };
+  const park = () => {
+    // A pending Promise does not keep Node alive. Keep a referenced handle until the controller kills this
+    // disposable fixture, so PARKED really means a live executor rather than an already recoverable process.
+    setInterval(() => undefined, 60_000);
+    process.send?.(`at:${stage}`);
+    return new Promise<never>(() => undefined);
+  };
   if (stage === "beforeSeal") {
     const { stagedProductPhotoStorage } = await import("../../src/services/stagedProductPhotoStorage");
     stagedProductPhotoStorage.prepareFencedProductPhoto = park; // test child only: claimed/private directory exists, nothing sealed
