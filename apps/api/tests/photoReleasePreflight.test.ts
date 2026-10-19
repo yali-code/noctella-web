@@ -12,7 +12,7 @@ const check = (result: ReturnType<typeof runPhotoReleasePreflight>, id: string) 
 const migrations = (names: string[]) => { const dir = temp(); for (const name of names) writeFileSync(path.join(dir, name), "-- disposable\n"); return dir; };
 
 describe("photo release preflight", () => {
-  it("passes the real candidate inventory, surfacing the 0039 gap and an unregistered 0042", () => {
+  it("passes the real candidate inventory (released Etsy 0039 present), surfacing the unregistered 0042 gap", () => {
     const root = temp(); mkdirSync(path.join(root, "photos"));
     const result = runPhotoReleasePreflight({ env: {}, canonicalRoot: path.join(root, "photos") });
     expect(check(result, "migrations.unique-numbers").status).toBe("PASS");
@@ -21,7 +21,9 @@ describe("photo release preflight", () => {
     expect(check(result, "migrations.0043").status).toBe("PASS");
     expect(check(result, "migrations.0044").status).toBe("PASS");
     expect(check(result, "migrations.gaps")).toMatchObject({ status: "WARN" });
-    expect(check(result, "migrations.gaps").detail).toContain("0039");
+    // Composed release candidate: 0039 is the released Etsy migration (present); only the reserved W11 0042 is absent.
+    expect(check(result, "migrations.gaps").detail).toContain("0042");
+    expect(check(result, "migrations.gaps").detail).not.toContain("0039,");
     expect(check(result, "migrations.0042-w11")).toMatchObject({ status: "PASS" });
     expect(check(result, "flag.fencing").detail).toContain("OFF");
     expect(check(result, "storage.private-operations").status).toBe("PASS");

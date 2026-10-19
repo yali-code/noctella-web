@@ -34,9 +34,11 @@ it.runIf(process.env.F2C1_REQUIRE_POSTGRES === "1")("required PostgreSQL executi
 
 describe("WP1 migration files (forward-only convention)", () => {
   const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
-  it("uses the next unused number 0043, leaves the reserved 0039/0042 numbers unused and is the only 0043", () => {
+  it("uses the next unused number 0043; 0039 is only the released Etsy migration and the reserved 0042 stays unused", () => {
     expect(files.filter((f) => f.startsWith("0043_"))).toEqual([MIGRATION]);
-    expect(files.filter((f) => f.startsWith("0039_") || f.startsWith("0042_"))).toEqual([]);
+    // 0039 belongs to the released Etsy Phase 1 (23406f7); on the composed release candidate it is that exact file.
+    expect(files.filter((f) => f.startsWith("0039_")).every((f) => f === "0039_etsy_listing_form_parity.sql")).toBe(true);
+    expect(files.filter((f) => f.startsWith("0042_"))).toEqual([]);
     // Only the protected-publication copy registry (0044, #472) follows it.
     expect(files.filter((f) => f.localeCompare(MIGRATION) > 0)).toEqual(["0044_photo_publication_copies.sql"]);
   });

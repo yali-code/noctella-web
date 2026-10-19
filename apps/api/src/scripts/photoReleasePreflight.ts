@@ -61,7 +61,7 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
     add(`migrations.${required.slice(0, 4)}`, files.includes(required) ? "PASS" : "FAIL", files.includes(required) ? `${required} present` : `${required} missing`);
   const max = Math.max(...numbers.map(Number));
   const gaps = Array.from({ length: max }, (_, i) => String(i + 1).padStart(4, "0")).filter((n) => !numbers.includes(n));
-  add("migrations.gaps", gaps.length ? "WARN" : "PASS", gaps.length ? `numbers not present on this candidate: ${gaps.join(", ")} (0039 is the unmerged Etsy migration; resolve order on main)` : "no gaps");
+  add("migrations.gaps", gaps.length ? "WARN" : "PASS", gaps.length ? `numbers not present on this candidate: ${gaps.join(", ")}${gaps.includes("0039") ? " (0039 is the released Etsy migration; the release candidate must include it)" : ""}${gaps.includes("0042") ? " (0042 is reserved for the unapproved W11 proposal)" : ""}` : "no gaps");
   const w11 = files.filter((file) => file.startsWith("0042"));
   add("migrations.0042-w11", w11.length === 0 ? "PASS" : w11.length === 1 && w11[0] === "0042_photo_derivative_operations.sql" ? "WARN" : "FAIL",
     w11.length === 0 ? "W11 0042 not registered (proposal only; owner approval pending)" : w11.length === 1 && w11[0] === "0042_photo_derivative_operations.sql" ? "W11 0042 registered: requires recorded owner approval" : `unexpected 0042 migration(s): ${w11.join(", ")}`);
