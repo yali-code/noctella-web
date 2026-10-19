@@ -115,6 +115,9 @@ const legacyIntakePhotoUpload = async (req: AuthedRequest, res: import("express"
 
 const stagedIntakePhotoUpload = createProductPhotoUploadHandler({
   root: path.join(path.dirname(path.resolve(aiIntakePhotoStagingRoot)), ".ai-intake-upload-ingress"),
+  // Intake staging (W3) writes only the private AI-intake root, never canonical product photos: it stays available
+  // in protected mode (fencing ON), where W4 finalization depends on it (#472 daily-use parity).
+  canonical: false,
   assertProduct: async id => {
     const intake = await getIntakeById(db, id);
     if (intake.status !== AiProductIntakeStatus.Open) throw new BadRequestError("Only an Open intake can receive staged photos");
@@ -125,7 +128,8 @@ const stagedIntakePhotoUpload = createProductPhotoUploadHandler({
   },
 });
 router.post("/:id/photos", requirePermission("ai_product_intakes.manage"),
-  process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? stagedIntakePhotoUpload : [upload.single("photo"), legacyIntakePhotoUpload]);
+  (req, res, next) => (process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? stagedIntakePhotoUpload(req, res, next) : next()),
+  upload.single("photo"), legacyIntakePhotoUpload);
 
 router.get("/:id/photos", requirePermission("ai_product_intakes.view"), async (req, res) => {
   try {

@@ -1,5 +1,6 @@
 import { Router, type RequestHandler } from "express";
 import { createProductPhotoUploadHandler } from "./productPhotoUpload";
+import { photoOwnershipFencingEnabled } from "../services/photoOwnershipFencing";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
@@ -282,7 +283,11 @@ const boundedPhotoUpload = createProductPhotoUploadHandler({
   fencedUpload: command => uploadFencedProductPhoto(db, command),
 });
 // Candidate remains off until independent full-API resource/compatibility acceptance.
-router.post("/:id/photos", requirePermission("products.edit"), process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? boundedPhotoUpload : [upload.single("photo"), legacyPhotoUpload]);
+// #472: with fencing ON every admin upload goes through the bounded handler (W2 protected owner), whatever the staging
+// flag says; the legacy W1 path is reached only with fencing OFF (unchanged compatibility).
+router.post("/:id/photos", requirePermission("products.edit"),
+  (req, res, next) => (photoOwnershipFencingEnabled() || process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? boundedPhotoUpload(req, res, next) : next()),
+  upload.single("photo"), legacyPhotoUpload);
 
 router.put("/:id/photos/:photoId", requirePermission("products.edit"), async (req, res) => {
   try {

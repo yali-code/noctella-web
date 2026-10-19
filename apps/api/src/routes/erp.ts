@@ -9,6 +9,11 @@ import { categories, collections, erpIntegrationAudit, erpIntegrationClients, er
 import { acknowledge, authenticateErp, capabilities, checkpoint, getProductProjection, health, identityCheck, isVersionSupported, listProductProjections, PRODUCT_FIELD_MAPPING, validateCommandEnvelope, versionInfo, audit } from "../services/erpIntegration";
 import { barcode, deleteProductPhoto, executeCreateProduct, executeStockAdjustment, executeUpdateProduct, labelData, reorderProductPhotos, setPrimaryProductPhoto, updateProductPhoto, uploadProductPhoto, workspace } from "../services/erpInventoryBridge";
 import { handleRouteError } from "./errorHandler";
+import { createProductPhotoUploadHandler } from "./productPhotoUpload";
+import { photoOwnershipFencingEnabled } from "../services/photoOwnershipFencing";
+import { PhotoUploadError } from "../services/photoUploadAdmission";
+import { getProductById } from "../services/products";
+import { uploadFencedProductPhoto } from "../services/w2FencedProductPhotoOwner";
 import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchaseEvents, getPurchaseLandedCostSummary, listPurchases, listSuppliers, productPurchaseHistory } from "../services/erpPurchasingBridge";
 import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
 import * as warehouse from "../services/erpWarehouseBridge";
@@ -179,7 +184,19 @@ router.post("/commands/products/:productId/adjust-stock", requireErp, async (req
 router.get("/products/:id/workspace", requireErp, async (req, res) => { try { res.json(await workspace(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
 router.get("/products/:id/barcode", requireErp, async (req, res) => { try { res.json(await barcode(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
 router.get("/products/:id/label-data", requireErp, async (req, res) => { try { res.json(await labelData(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
-router.post("/products/:id/photos/upload", requireErp, upload.single("photo"), async (req:any, res) => { try { if (!req.file) return res.status(400).json({ error:"Photo file is required" }); res.status(201).json(await uploadProductPhoto(db, req.params.id, req.file, typeof req.body.altText === "string" ? req.body.altText : undefined)); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoUpload", "Succeeded", { productId:req.params.id }); } catch (err) { handleRouteError(err, res); } });
+// #472 daily-use parity: with fencing ON, ERP photo uploads go through the protected W2 owner (bounded disk staging,
+// guarded claim, durable intent, copy-owned publication, intent-authorized commit). The ERP client is the actor
+// ("erp:<clientId>"); an optional Idempotency-Key header gives a stable retry identity, and without it every request
+// is a distinct upload (the established W2 server-identity contract; the legacy route had no retry identity at all).
+// With fencing OFF the legacy route below is unchanged.
+const erpProtectedPhotoUpload = createProductPhotoUploadHandler({
+  assertProduct: (id) => getProductById(db, id),
+  upload: async () => { throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "ERP photo upload requires the protected owner"); },
+  fencedUpload: (command) => uploadFencedProductPhoto(db, command),
+  actorId: (req: any) => (typeof req.erp?.clientId === "string" ? `erp:${req.erp.clientId}` : undefined),
+  afterCommit: (req: any) => audit(db, req.erp.clientId, requestId(req), "ErpPhotoUpload", "Succeeded", { productId: req.params.id, protected: true }),
+});
+router.post("/products/:id/photos/upload", requireErp, (req, res, next) => (photoOwnershipFencingEnabled() ? erpProtectedPhotoUpload(req, res, next) : next()), upload.single("photo"), async (req:any, res) => { try { if (!req.file) return res.status(400).json({ error:"Photo file is required" }); res.status(201).json(await uploadProductPhoto(db, req.params.id, req.file, typeof req.body.altText === "string" ? req.body.altText : undefined)); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoUpload", "Succeeded", { productId:req.params.id }); } catch (err) { handleRouteError(err, res); } });
 router.patch("/products/:id/photos/:photoId", requireErp, async (req:any, res) => { try { const out=await updateProductPhoto(db, req.params.id, req.params.photoId, typeof req.body.altText === "string" ? req.body.altText : undefined); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoUpdate", "Succeeded", { productId:req.params.id, photoId:req.params.photoId }); res.json(out); } catch (err) { handleRouteError(err, res); } });
 router.post("/products/:id/photos/:photoId/primary", requireErp, async (req:any, res) => { try { const out=await setPrimaryProductPhoto(db, req.params.id, req.params.photoId); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoPrimary", "Succeeded", { productId:req.params.id, photoId:req.params.photoId }); res.json(out); } catch (err) { handleRouteError(err, res); } });
 router.post("/products/:id/photos/reorder", requireErp, async (req:any, res) => { try { const out=await reorderProductPhotos(db, req.params.id, req.body.photoIds); await audit(db, req.erp.clientId, requestId(req), "ErpPhotoReorder", "Succeeded", { productId:req.params.id, count:req.body.photoIds?.length }); res.json(out); } catch (err) { handleRouteError(err, res); } });

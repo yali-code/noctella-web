@@ -44,6 +44,15 @@ export interface ProductPhotoUploadOptions {
   }) => Promise<unknown>;
   removeDir?: typeof rm;
   inputWriter?: (file: string) => Writable;
+  /**
+   * false for staging routes whose upload() writes only a NON-canonical private root (AI intake W3). Such routes are
+   * not product-photo writers: fencing neither refuses them nor routes them to the W2 owner. Default true.
+   */
+  canonical?: boolean;
+  /** Authenticated actor for the fenced W2 owner (default: the admin session user). */
+  actorId?: (req: Request) => string | undefined;
+  /** Best-effort side effect after a committed 201 response (e.g. the ERP audit trail). */
+  afterCommit?: (req: Request, value: unknown) => Promise<unknown>;
 }
 export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptions): RequestHandler {
   const root = path.resolve(options.root ?? path.join(path.dirname(productPhotoStaticRoot), ".product-photo-upload-staging"));
@@ -121,10 +130,10 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
       try {
         // No legacy-writer fallback when fencing is ON. A verified owning
         // implementation must be injected explicitly before private staging.
-        const fencingOn = photoOwnershipFencingEnabled();
+        const fencingOn = options.canonical !== false && photoOwnershipFencingEnabled();
         if (fencingOn && !options.fencedUpload)
           throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "W2 photo upload requires durable ownership adoption");
-        const actorId = (req as AuthedRequest).adminUser?.id;
+        const actorId = options.actorId ? options.actorId(req) : (req as AuthedRequest).adminUser?.id;
         if (fencingOn && (!actorId || !/^[A-Za-z0-9:_-]{1,128}$/.test(actorId)))
           throw new PhotoUploadError(403, "PHOTO_UPLOAD_ACTOR_REQUIRED", "Authenticated upload actor is required");
         const suppliedToken = req.headers?.["idempotency-key"];
@@ -197,7 +206,7 @@ export function createProductPhotoUploadHandler(options: ProductPhotoUploadOptio
         lease?.release();
       }
       if (res.destroyed || res.writableEnded) return;
-      if (!error) { res.status(201).json(value); return; }
+      if (!error) { res.status(201).json(value); if (options.afterCommit) void options.afterCommit(req, value).catch(() => undefined); return; }
       await discardRejectedBody(req);
       if (res.destroyed || res.writableEnded) return;
       // Raw discard is capped in both bytes and time; the connection now closes after the response.
