@@ -8,7 +8,7 @@ on:
       - scripts/photo-*/**
   # Stage 5 F2 (#472) runtime remediation: exact-head evidence on push to the dedicated task branch.
   push:
-    branches: [fix/f2-runtime-remediation]
+    branches: [fix/f2-runtime-remediation, release/f2-closure-stage1-packaging]
 permissions:
   contents: read
 concurrency:
@@ -170,8 +170,9 @@ jobs:
       - name: Compile unprivileged offline capability proof (no host privilege changes)
         shell: bash
         run: |
-          cc -std=c11 -Wall -Wextra -Werror -O2 scripts/photo-publication-capability/landlock-worker.c -o "$RUNNER_TEMP/noctella-landlock-worker"
-          echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-landlock-worker" >> "$GITHUB_ENV"
+          # The packaged release build entry point (same flags), so every confinement test runs the packaged binary.
+          node apps/api/scripts/build-landlock-launcher.mjs --out "$RUNNER_TEMP/noctella-launcher"
+          echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-launcher/landlock-worker" >> "$GITHUB_ENV"
           echo "F2_CAPABILITY_REQUIRE_LINUX=1" >> "$GITHUB_ENV"
       - run: npm exec -w apps/api -- vitest run
   ext4-disk-budget-enospc:
@@ -384,11 +385,12 @@ jobs:
       - name: Compile unprivileged offline capability proof (no host privilege changes)
         shell: bash
         run: |
-          cc -std=c11 -Wall -Wextra -Werror -O2 scripts/photo-publication-capability/landlock-worker.c -o "$RUNNER_TEMP/noctella-landlock-worker"
-          echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-landlock-worker" >> "$GITHUB_ENV"
+          # The packaged release build entry point (same flags), so every confinement test runs the packaged binary.
+          node apps/api/scripts/build-landlock-launcher.mjs --out "$RUNNER_TEMP/noctella-launcher"
+          echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-launcher/landlock-worker" >> "$GITHUB_ENV"
           echo "F2_CAPABILITY_REQUIRE_LINUX=1" >> "$GITHUB_ENV"
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
-        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/photoOperationRecoveryReport.test.ts tests/photoReleasePreflight.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2IdempotencyKeyFencingOff.test.ts tests/photoPublicationRecoveryPolicy.test.ts tests/photoOwnershipSigkillRecovery.test.ts tests/w2PublicationPostgresSigkill468.test.ts tests/ownedPhotoArtifactProof.test.ts tests/publicationCapability470.test.ts tests/f2ContractOneOffline.test.ts tests/photoPublicationIntentSchema.test.ts tests/photoProtectedPublicationRuntime.test.ts tests/photoCanonicalWriterInventory.test.ts tests/photoPreparationConfinement.test.ts tests/publicationProcessAuthority472.test.ts tests/publicationByteImmutabilityStep3.test.ts tests/publicationCompositionStep4.test.ts
+        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/photoOperationRecoveryReport.test.ts tests/photoReleasePreflight.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2IdempotencyKeyFencingOff.test.ts tests/photoPublicationRecoveryPolicy.test.ts tests/photoOwnershipSigkillRecovery.test.ts tests/w2PublicationPostgresSigkill468.test.ts tests/ownedPhotoArtifactProof.test.ts tests/publicationCapability470.test.ts tests/f2ContractOneOffline.test.ts tests/photoPublicationIntentSchema.test.ts tests/photoProtectedPublicationRuntime.test.ts tests/photoCanonicalWriterInventory.test.ts tests/photoPreparationConfinement.test.ts tests/landlockLauncherBuild.test.ts tests/f2ReleaseCompatibility.test.ts tests/publicationProcessAuthority472.test.ts tests/publicationByteImmutabilityStep3.test.ts tests/publicationCompositionStep4.test.ts
       - name: Prove BLOCKED fencing-ON profile needs no Docker image
         run: node --test scripts/photo-upload-linux/fencing-blocked.test.mjs scripts/photo-upload-linux/fencing-on-gates.test.mjs scripts/photo-writer-adoption/fencing-disposition.test.cjs
       - name: Fencing-ON 24MP acceptance readiness (dry run; must report BLOCKED, never fencing-OFF data)

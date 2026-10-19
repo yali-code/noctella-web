@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-build-asset.mjs src/db/schema.sql dist/db/schema.sql",
     "test:build-copy": "node --test tests/build-copy.test.mjs",
     "start": "node dist/index.js",
+    "build:launcher": "node scripts/build-landlock-launcher.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:postgres": "vitest run tests/postgresRuntimeSprint151.test.ts tests/postgresMarketplaceDuplicatePreflight.test.ts tests/postgresBackgroundJobsSprint152.test.ts tests/postgresStockSyncSprint153.test.ts tests/postgresPublicCatalogSprint154.test.ts tests/postgresCartFreshnessSprint157.test.ts tests/photoTimestampCompatibility.test.ts",

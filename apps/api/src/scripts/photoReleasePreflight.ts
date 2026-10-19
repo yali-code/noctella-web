@@ -9,6 +9,7 @@ import { photoOwnershipFencingConfig } from "../services/photoOwnershipFencing";
 import { aiIntakeOriginalSourceStagingConfig } from "../services/aiIntakeOriginalSourceStaging";
 import { crossProcessExitAuthenticationAvailable } from "../services/photoPublicationExecutor";
 import { photoPreparationConfinementConfig } from "../services/photoPreparationConfinement";
+import { createHash } from "node:crypto";
 
 export type PreflightStatus = "PASS" | "WARN" | "FAIL" | "MANUAL";
 export interface PreflightCheck { id: string; status: PreflightStatus; detail: string }
@@ -32,6 +33,20 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
     confinement.mode === "confined" ? `image preparation runs in Landlock-confined workers (${confinement.launcher})`
       : confinement.mode === "invalid" ? `${confinement.reason}${fencing.enabled ? " (protected publication refuses: NOT READY)" : " (required before fencing is turned ON)"}`
         : "UNPROTECTED in-process preparation (test/development only): a hostile preparer is not isolated");
+  if (confinement.mode === "confined") {
+    // The configured launcher must be the packaged build of the reviewed source (build-landlock-launcher.mjs).
+    const provenanceFile = path.join(path.dirname(confinement.launcher), "landlock-worker.provenance.json");
+    const sourceFile = path.resolve(__dirname, "../../../../scripts/photo-publication-capability/landlock-worker.c");
+    const digest = (file: string) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    try {
+      const provenance = JSON.parse(fs.readFileSync(provenanceFile, "utf8"));
+      const binaryOk = provenance?.binary?.sha256 === digest(confinement.launcher);
+      const sourceOk = !fs.existsSync(sourceFile) || provenance?.source?.sha256 === digest(sourceFile);
+      add("launcher.provenance", binaryOk && sourceOk ? "PASS" : "FAIL", binaryOk && sourceOk
+        ? `launcher binary sha256 ${provenance.binary.sha256} built from source ${provenance.source.sha256} (${provenance.compiler?.version ?? "compiler unknown"})`
+        : !binaryOk ? "launcher binary does not match its provenance record" : "launcher was not built from the reviewed source in this checkout");
+    } catch { add("launcher.provenance", "FAIL", `provenance record missing or unreadable next to ${confinement.launcher}`); }
+  }
   const original = aiIntakeOriginalSourceStagingConfig(env);
   add("flag.w3-original-source", original.valid ? (original.requested && !original.activatable ? "WARN" : "PASS") : "FAIL",
     !original.valid ? "invalid AI_INTAKE_ORIGINAL_SOURCE_STAGING_ENABLED value" : original.requested && !original.activatable ? "requested but not activatable outside test/development (owner retention decision pending)" : `original-source staging ${original.enabled ? "ON" : "OFF"}`);
