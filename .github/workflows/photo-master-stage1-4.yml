@@ -8,7 +8,7 @@ on:
       - scripts/photo-*/**
   # Stage 5 F2 (#472) runtime remediation: exact-head evidence on push to the dedicated task branch.
   push:
-    branches: [fix/f2-runtime-remediation, release/f2-closure-stage1-packaging]
+    branches: [fix/f2-runtime-remediation, release/f2-closure-stage1-packaging, release/f2-stage1-candidate]
 permissions:
   contents: read
 concurrency:
