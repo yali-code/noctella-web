@@ -21,7 +21,7 @@ async function main() {
     stagedProductPhotoStorage.prepareFencedProductPhoto = park; // test child only: claimed/private directory exists, nothing sealed
   }
   await uploadFencedProductPhoto(db as any, {
-    productId: process.env.F5_PRODUCT_ID!, actorId: "actor-1", operationToken: process.env.F5_TOKEN!,
+    productId: process.env.F5_PRODUCT_ID!, actorId: process.env.F5_ACTOR_ID || "actor-1", operationToken: process.env.F5_TOKEN!,
     sha256: await digestW2StagedInput(file, 10 * 1024 * 1024), altText: "", file,
   }, { driver: process.env.F5_DRIVER === "postgres" ? "postgres" : "sqlite", hooks: stage === "beforeSeal" ? {} : { [stage]: park } });
   process.send?.("finished-without-parking");
