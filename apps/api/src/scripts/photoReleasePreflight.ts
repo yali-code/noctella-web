@@ -41,10 +41,13 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
     try {
       const provenance = JSON.parse(fs.readFileSync(provenanceFile, "utf8"));
       const binaryOk = provenance?.binary?.sha256 === digest(confinement.launcher);
-      const sourceOk = !fs.existsSync(sourceFile) || provenance?.source?.sha256 === digest(sourceFile);
+      const sourcePresent = fs.existsSync(sourceFile);
+      const sourceOk = sourcePresent && provenance?.source?.sha256 === digest(sourceFile);
       add("launcher.provenance", binaryOk && sourceOk ? "PASS" : "FAIL", binaryOk && sourceOk
         ? `launcher binary sha256 ${provenance.binary.sha256} built from source ${provenance.source.sha256} (${provenance.compiler?.version ?? "compiler unknown"})`
-        : !binaryOk ? "launcher binary does not match its provenance record" : "launcher was not built from the reviewed source in this checkout");
+        : !binaryOk ? "launcher binary does not match its provenance record"
+          : !sourcePresent ? "reviewed launcher source is missing from this checkout"
+            : "launcher was not built from the reviewed source in this checkout");
     } catch { add("launcher.provenance", "FAIL", `provenance record missing or unreadable next to ${confinement.launcher}`); }
   }
   const original = aiIntakeOriginalSourceStagingConfig(env);

@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { runPhotoReleasePreflight } from "../src/scripts/photoReleasePreflight";
 
 const script = path.join(__dirname, "..", "scripts", "build-landlock-launcher.mjs");
@@ -65,6 +65,19 @@ describe.runIf(linux)("Linux build", () => {
     const canonicalRoot = path.join(root, "photos"); fs.mkdirSync(canonicalRoot, { recursive: true });
     const check = () => runPhotoReleasePreflight({ env, canonicalRoot }).checks.find((c) => c.id === "launcher.provenance")!;
     expect(check()).toMatchObject({ status: "PASS" });
+    // Simulate an incomplete deployed checkout without moving/deleting the real reviewed source.
+    const source = path.resolve(__dirname, "../../../scripts/photo-publication-capability/landlock-worker.c");
+    const exists = fs.existsSync;
+    const missing = vi.spyOn(fs, "existsSync").mockImplementation((file) => String(file) === source ? false : exists(file));
+    try {
+      expect(check()).toMatchObject({ status: "FAIL", detail: "reviewed launcher source is missing from this checkout" });
+    } finally { missing.mockRestore(); }
+    const record = path.join(out, "landlock-worker.provenance.json");
+    const original = fs.readFileSync(record, "utf8");
+    const mismatched = JSON.parse(original); mismatched.source.sha256 = "0".repeat(64);
+    fs.writeFileSync(record, JSON.stringify(mismatched));
+    expect(check()).toMatchObject({ status: "FAIL", detail: "launcher was not built from the reviewed source in this checkout" });
+    fs.writeFileSync(record, original);
     fs.appendFileSync(path.join(out, "landlock-worker"), Buffer.from([0]));
     expect(check()).toMatchObject({ status: "FAIL", detail: "launcher binary does not match its provenance record" });
     fs.rmSync(path.join(out, "landlock-worker.provenance.json"));
