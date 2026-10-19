@@ -28,6 +28,14 @@ At the end it removes exactly that root. Removal happens only if the path matche
 
 The probe makes no network, database, API, environment or service changes, uses no sudo, and installs nothing. Output never contains environment variables.
 
+## Pinned hashes (sha256 of the git blobs, LF)
+| File | sha256 |
+| --- | --- |
+| `landlock-worker.c` | `ad1d58ec71b28696711d8808bc011eb0ba1fe94984cdf3d7e2947ce5bfe4e47a` |
+| `f2-render-probe.sh` | `65807906bea970518c259d5efcfa7e37aa8ac15cb9bc76e4d706bcef3546e857` |
+| `probe-parent.cjs` | `c22917eb3ad64301710235b353609f6c67814253ceae56c1b515d495941b48ec` |
+| `probe-worker.cjs` | `edb038dec4a158a8825ec28de921dc6d23e9dc5044cdef6b87774a5f451ab69c` |
+
 ## Owner-run commands (Render shell of `srv-db34390m7kps73cv8l6g`)
 Replace `<COMMIT>` with the pushed, reviewed commit of this package. The expected hashes are in the table under "Pinned hashes".
 
@@ -41,10 +49,10 @@ for f in scripts/photo-publication-capability/landlock-worker.c scripts/photo-re
   curl -fsSL "$B/$f" -o "$R/pkg/$(basename "$f")"
 done
 ( cd "$R/pkg" && sha256sum -c - <<'EOF'
-<sha256>  landlock-worker.c
-<sha256>  f2-render-probe.sh
-<sha256>  probe-parent.cjs
-<sha256>  probe-worker.cjs
+ad1d58ec71b28696711d8808bc011eb0ba1fe94984cdf3d7e2947ce5bfe4e47a  landlock-worker.c
+65807906bea970518c259d5efcfa7e37aa8ac15cb9bc76e4d706bcef3546e857  f2-render-probe.sh
+c22917eb3ad64301710235b353609f6c67814253ceae56c1b515d495941b48ec  probe-parent.cjs
+edb038dec4a158a8825ec28de921dc6d23e9dc5044cdef6b87774a5f451ab69c  probe-worker.cjs
 EOF
 )                                                  # STOP if any line is not "OK"
 bash "$R/pkg/f2-render-probe.sh" "$R"; echo "exit=$?"
