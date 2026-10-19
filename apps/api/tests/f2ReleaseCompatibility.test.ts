@@ -4,7 +4,9 @@
  * migrate.ts ETSY_LISTING_FORM_COLUMNS and on PostgreSQL by 0039). The fixture 0039 file is copied verbatim from
  * 23406f7. Asserts that the candidate's startup schema step (SQLite ensureSchema) and its additive migrations
  * (PostgreSQL 0040/0041/0043/0044) neither fail nor drop/alter released Etsy data, and are idempotent.
- * It does NOT prove Etsy FUNCTIONALITY on the candidate: the #471 stack does not contain the Etsy code (release blocker).
+ * On the composed candidate (release/f2-stage1-candidate) the Etsy code is integrated: the candidate itself declares the
+ * released Etsy columns and ships the released 0039 byte-for-byte; the Etsy suites (etsyListingFormParity,
+ * etsyPhase1MediaIntegration) prove the functionality.
  */
 import Database from "better-sqlite3";
 import fs from "node:fs";
@@ -28,6 +30,19 @@ const F2_TABLES = ["photo_operations", "photo_operation_generations", "photo_ope
 const files: string[] = [];
 afterAll(() => { for (const f of files) fs.rmSync(f, { force: true }); });
 
+it("the candidate ships the released 0039 byte-for-byte and declares every released Etsy column (SQLite schema and price rebuild)", () => {
+  const shipped = fs.readFileSync(path.join(__dirname, "../src/db/postgres-migrations/0039_etsy_listing_form_parity.sql"), "utf8").replace(/\r\n/g, "\n");
+  expect(shipped).toBe(releasedEtsy0039.replace(/\r\n/g, "\n"));
+  const db = new Database(":memory:");
+  try {
+    ensureSchema(db);
+    const columns = (db.prepare("PRAGMA table_info(products)").all() as Array<{ name: string }>).map((c) => c.name);
+    for (const [name] of RELEASED_SQLITE_ETSY_COLUMNS) expect(columns).toContain(name);
+  } finally { db.close(); }
+  const migrate = fs.readFileSync(path.join(__dirname, "../src/db/migrate.ts"), "utf8");
+  expect(migrate).toMatch(/\$\{ETSY_LISTING_FORM_COLUMNS\.map\(\(column\) => `  \$\{column\.name\} \$\{column\.ddl\},`\)\.join\("\\n"\)\}/); // price-rebuild column list
+});
+
 it("the released 0039 fixture is the 23-column additive Etsy migration (no drops, rewrites or defaults)", () => {
   expect(releasedEtsy0039.match(/ALTER TABLE products ADD COLUMN IF NOT EXISTS etsy_/g)).toHaveLength(23);
   expect(releasedEtsy0039).not.toMatch(/\b(DROP|UPDATE|DELETE|DEFAULT)\b/i);
@@ -42,7 +57,8 @@ describe("SQLite (production driver): candidate ensureSchema over the released E
       // Released production shape: base schema + released Etsy columns (as the released ensureSchema appends them).
       ensureSchema(db);
       for (const t of F2_TABLES.slice().reverse()) db.exec(`DROP TABLE IF EXISTS ${t}`); // the released build had no F2/FAZ A photo tables
-      for (const [name, ddl] of RELEASED_SQLITE_ETSY_COLUMNS) db.exec(`ALTER TABLE products ADD COLUMN ${name} ${ddl}`);
+      const present = new Set((db.prepare("PRAGMA table_info(products)").all() as Array<{ name: string }>).map((c) => c.name));
+      for (const [name, ddl] of RELEASED_SQLITE_ETSY_COLUMNS) if (!present.has(name)) db.exec(`ALTER TABLE products ADD COLUMN ${name} ${ddl}`);
       const category = randomUUID(), product = randomUUID();
       db.prepare("INSERT INTO categories (id, name, slug) VALUES (?, 'Released', ?)").run(category, `released-${category}`);
       db.prepare("INSERT INTO products (id, sku, title, slug, type, status, category_id, price_eur, etsy_taxonomy_id, etsy_quantity, etsy_is_supply, etsy_gpsr_safety_information) VALUES (?, ?, 'Released product', ?, 'UniqueItem', 'Draft', ?, 12.5, '1234', 3, 0, 'safety text')")
@@ -72,7 +88,7 @@ describe.runIf(postgresTestConfigured)("PostgreSQL (supported driver): 0040/0041
         [product, `REL-${product}`, `rel-${product}`, category]);
       const before = (await h.pool.query("SELECT * FROM products WHERE id = $1", [product])).rows[0];
       const dir = path.join(__dirname, "../src/db/postgres-migrations");
-      const candidate = fs.readdirSync(dir).filter((f) => f.endsWith(".sql") && f.localeCompare("0039") > 0).sort();
+      const candidate = fs.readdirSync(dir).filter((f) => f.endsWith(".sql") && f.slice(0, 4) > "0039").sort();
       expect(candidate).toEqual(["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql", "0043_photo_publication_intents.sql", "0044_photo_publication_copies.sql"]);
       for (let pass = 0; pass < 2; pass++) for (const f of candidate) await h.pool.query(fs.readFileSync(path.join(dir, f), "utf8"));
       expect((await h.pool.query("SELECT * FROM products WHERE id = $1", [product])).rows[0]).toEqual(before);
