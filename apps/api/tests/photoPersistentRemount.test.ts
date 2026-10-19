@@ -37,7 +37,7 @@ for (const checkpoint of ["before", "recorded", "linked"] as const) it("verified
   if (checkpoint !== "before") await expect(publishVerifiedCopy(f.target, f.ledger, p => { if (p === checkpoint) throw Error("lost executor"); })).rejects.toThrow("lost executor");
   for (const method of ["fstatSync", "lstatSync", "statSync"] as const) {
     const original = fs[method].bind(fs) as any;
-    vi.spyOn(fs, method).mockImplementation(((fd: any, options: any) => { const st: any = original(fd, options); return options?.bigint ? Object.assign(Object.create(Object.getPrototypeOf(st)), st, { dev: st.dev + 99n }) : st; }) as any);
+    vi.spyOn(fs, method).mockImplementation(((fd: any, options: any) => { const st: any = original(fd, options); return st && options?.bigint ? Object.assign(Object.create(Object.getPrototypeOf(st)), st, { dev: st.dev + 99n }) : st; }) as any);
   }
   const result = await publishVerifiedCopy(f.target, f.ledger);
   expect(result.kind).toBe(checkpoint === "linked" ? "ADOPTED" : "PUBLISHED");
@@ -67,5 +67,6 @@ for (const mutation of ["foreign-identical", "missing-anchor", "substituted-anch
   if (mutation === "malformed-proof") copy.dev = "pfs1:bad:1";
   if (mutation === "conflicting-proof") copy.dev = "pfs1:ffffffffffffffffffffffffffffffff:" + copy.birthNs;
   expect((await publishVerifiedCopy(f.target, f.ledger)).kind).toBe("COLLISION");
-  expect(fs.readFileSync(canonical).toString()).toBe("synthetic-sealed-photo"); evidence(f, mutation);
+  expect(fs.readFileSync(canonical).toString()).toBe("synthetic-sealed-photo");
+  if (mutation !== "missing-anchor") expect(fs.existsSync(anchor)).toBe(true); evidence(f, mutation);
 });

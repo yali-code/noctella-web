@@ -177,6 +177,15 @@ jobs:
           echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-launcher/landlock-worker" >> "$GITHUB_ENV"
           echo "F2_CAPABILITY_REQUIRE_LINUX=1" >> "$GITHUB_ENV"
       - run: npm exec -w apps/api -- vitest run
+        env:
+          PHOTO_REMOUNT_EVIDENCE_DIR: ${{ runner.temp }}/photo-remount-evidence
+      - name: Preserve simulated and native descriptor identity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: photo-persistent-remount
+          path: ${{ runner.temp }}/photo-remount-evidence
+          retention-days: 14
   ext4-disk-budget-enospc:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

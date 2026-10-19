@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
-import { simulatedPersistentRemount } from "./fixtures/persistentRemount";
+import { simulatedPersistentRemount, publicationSnapshot, recordRemountEvidence } from "./fixtures/persistentRemount";
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -294,11 +294,13 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     try {
       const hooks:FencedUploadHooks=phase==="intent"?{afterIntent:stop}:phase==="commit"?{afterCommit:stop}:{copyPhase:(artifact,p)=>{if(artifact===phase&&p==="linked")stop();}};
       await expect(upload(token,front,hooks)).rejects.toThrow("simulated instance replacement");
+      const oldRow=await op(token);const keys=[oldRow.main_key,oldRow.thumb_key];const before=publicationSnapshot(root,oldRow.id,keys);
       const result=await upload(token,front);expect((await upload(token,front)).id).toBe(result.id);
       expect(await n("product_photos",`WHERE id = '${result.id}'`)).toBe(1);expect(await n("outbox_events",`WHERE aggregate_id = '${result.id}'`)).toBe(1);
       const row=await op(token);expect(row.state).toBe("committed");expect(Number(row.generation)).toBe(1);
       const [seal]=await q(sql`SELECT main_dev FROM photo_operation_artifacts WHERE operation_id = ${row.id}`);expect(seal.main_dev).toMatch(/^pfs1:/);
       const [intent]=await q(sql`SELECT executor_epoch FROM photo_publication_intents WHERE operation_id = ${row.id}`);expect(Number(intent.executor_epoch)).toBe(phase==="commit"?1:2);
+      recordRemountEvidence("W2-"+driver+"-"+phase,{before,after:publicationSnapshot(root,row.id,keys),operation:row,intent,seal,copies:await q(sql`SELECT * FROM photo_publication_copies WHERE operation_id = ${row.id}`),photos:await q(sql`SELECT id,storage_key,thumbnail_storage_key FROM product_photos WHERE id = ${result.id}`),outbox:await q(sql`SELECT id,event_type,aggregate_id FROM outbox_events WHERE aggregate_id = ${result.id}`)});
     } finally { simulation.restore(); }
   });
 

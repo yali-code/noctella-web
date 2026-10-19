@@ -6,7 +6,7 @@
  * ledger, and only then linking that inode to the canonical name (never replace). The sealed source inode is never
  * linked, so aliases of or descriptors to the source cannot reach published bytes.
  *
- * - Snapshot integrity: the source must still be the sealed inode (dev, ino) and the copy must equal the seal
+ * - Snapshot integrity: the source must still be the sealed inode (versioned filesystem UUID/birth + ino for new confined records; strict dev + ino for legacy controls) and the copy must equal the seal
  *   (sha256 + size), checked on the publisher's copy, never on the source.
  * - Recovery: an existing canonical name is adopted only when it is exactly the recorded copy inode and still holds the
  *   sealed bytes; anything else is a COLLISION and is never touched (no overwrite, no cleanup of foreign files).
@@ -56,10 +56,10 @@ function fsyncDir(dir: string) {
 }
 
 /** Cleanup ownership: only data-* names inside this artifact's own staging directory (except `keep`). Never canonical or source. */
-export function removeOwnStagingData(stagingDir: string, keep?: string) {
+export function removeOwnStagingData(stagingDir: string, keep?: string, only?: string) {
   let names: string[] = [];
   try { names = fs.readdirSync(stagingDir); } catch (e: any) { if (e?.code === "ENOENT") return; throw e; }
-  for (const name of names) if (DATA_NAME.test(name) && name !== keep) fs.rmSync(path.join(stagingDir, name), { force: true });
+  for (const name of names) if (DATA_NAME.test(name) && name !== keep && (only === undefined || name === only)) fs.rmSync(path.join(stagingDir, name), { force: true });
 }
 
 /** With an anchor, the publisher's own staging name must still be exactly the recorded (and canonical) inode. */
@@ -80,12 +80,12 @@ async function resolveExisting(t: CopyTarget, ledger: CopyLedger, canonical: str
       const fresh = fs.fstatSync(fd, { bigint: true });
       const current = hashFd(fd);
       if (sameInode(fd, fresh, recorded) && fresh.dev === st.dev && fresh.ino === st.ino && current.sha256 === t.seal.sha256 && current.bytes === t.seal.size && anchored(t, recorded, fresh)) {
-        removeOwnStagingData(t.stagingDir, t.retainStagingLink ? recorded.stagingName : undefined);
+        if (!persistentStorageId(t.seal.dev)) removeOwnStagingData(t.stagingDir, t.retainStagingLink ? recorded.stagingName : undefined);
         return { kind: "ADOPTED", dev: String(fresh.dev), ino: String(fresh.ino) };
       }
     } finally { fs.closeSync(fd); }
   }
-  removeOwnStagingData(t.stagingDir); // our own unlinked copies only; the canonical file is never touched
+  if (!persistentStorageId(t.seal.dev)) removeOwnStagingData(t.stagingDir); // new-version ambiguity retains anchors until T2
   return { kind: "COLLISION", detail: "canonical name exists and is not this operation's recorded verified copy" };
 }
 
@@ -97,7 +97,7 @@ export async function publishVerifiedCopy(t: CopyTarget, ledger: CopyLedger, hoo
   assertPublicationStorage(stagingAncestor, t.seal.dev);
   const canonical = path.join(t.canonicalDir, t.canonicalName);
   if (fs.existsSync(canonical)) return resolveExisting(t, ledger, canonical);
-  removeOwnStagingData(t.stagingDir); // incomplete or unlinked copies from a crashed attempt are never reused
+  if (!persistentStorageId(t.seal.dev)) removeOwnStagingData(t.stagingDir); // new-version prior copies are retained, never reused
   let source: number;
   try { source = fs.openSync(t.source, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0)); } catch (e: any) { if (e?.code === "ENOENT") return { kind: "SOURCE_MISSING", detail: e.code }; throw e; }
   let staged = -1, stagedPath = "";
@@ -126,7 +126,7 @@ export async function publishVerifiedCopy(t: CopyTarget, ledger: CopyLedger, hoo
     await hook("copied", { fd: staged });
     const verified = hashFd(staged);
     if (verified.sha256 !== t.seal.sha256 || verified.bytes !== t.seal.size) {
-      fs.closeSync(staged); staged = -1; removeOwnStagingData(t.stagingDir);
+      fs.closeSync(staged); staged = -1; removeOwnStagingData(t.stagingDir, undefined, persistentStorageId(t.seal.dev) ? path.basename(stagedPath) : undefined);
       return { kind: "SNAPSHOT_MISMATCH" };
     }
     const copyStat = fs.fstatSync(staged, { bigint: true });
@@ -142,11 +142,11 @@ export async function publishVerifiedCopy(t: CopyTarget, ledger: CopyLedger, hoo
     await hook("linked");
     if (!t.retainStagingLink) { removeOwnStagingData(t.stagingDir); fsyncDir(t.stagingDir); }
     await hook("cleaned");
-    return { kind: "PUBLISHED", dev: copy.dev, ino: copy.ino };
+    return { kind: "PUBLISHED", dev: String(copyStat.dev), ino: copy.ino };
   } catch (error) {
     // Disk exhaustion or I/O failure: no canonical name was created by this attempt; drop our partial copy only.
     if (staged >= 0) { try { fs.closeSync(staged); } catch { /* already reported */ } staged = -1; }
-    if (stagedPath && !fs.existsSync(canonical)) { try { removeOwnStagingData(t.stagingDir); } catch { /* keep the original failure */ } }
+    if (stagedPath && !fs.existsSync(canonical)) { try { removeOwnStagingData(t.stagingDir, undefined, persistentStorageId(t.seal.dev) ? path.basename(stagedPath) : undefined); } catch { /* keep the original failure */ } }
     throw error;
   } finally {
     if (staged >= 0) fs.closeSync(staged);

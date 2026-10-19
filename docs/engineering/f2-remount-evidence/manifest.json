@@ -1,0 +1,202 @@
+{
+  "base": "32a027dc60b46a35e77352019a6df34e532f1924",
+  "parentBranch": "fix/f2-wrapped-claim-conflict",
+  "preliminarySource": "14afd22da8f19a4390ec70db58f9963286ca922f",
+  "preliminaryRun": 39305858813,
+  "finalHead": "See Draft PR492 metadata; manifest hashes bind tested files without a self-referential commit SHA",
+  "baselinePublisherSha256": "f2274ecd4b338843c1443e65c654f6b9d68a46566748bdb1f355ebcc557215dd",
+  "files": [
+    {
+      "file": ".github/workflows/photo-master-stage1-4.yml",
+      "sha256": "bd50f23ad97f64786e185b0d0742a8562a44022e5bca0598fd3ded7a196e331e",
+      "gitBlob": "b637f89864326a4842143326c32dcb094f39f070"
+    },
+    {
+      "file": "apps/api/src/scripts/photoReleasePreflight.ts",
+      "sha256": "ae93f4e6b83841fc52edc713a69e0c7d4bb4c88be106894134091d9e4163de7d",
+      "gitBlob": "12bcb62faa0194e817f7c28a5e3c24e7903e5326"
+    },
+    {
+      "file": "apps/api/src/services/ownedPhotoArtifactProof.ts",
+      "sha256": "2ea0418698605d778a2e549d938ebf0d40acbc31392d496904fc2a8b26ba89f0",
+      "gitBlob": "5bc88fe9b401faa878fd7aba09c34cdddc26a7fb"
+    },
+    {
+      "file": "apps/api/src/services/photoCopyPublisher.ts",
+      "sha256": "42d3adc3093bd02e2a7172b7552462b4c9d597bb7994fa6821da12f5fb1e2667",
+      "gitBlob": "034a68c7737043dec69b005f7b666d6137bc6922"
+    },
+    {
+      "file": "apps/api/src/services/photoOperationAuthority.ts",
+      "sha256": "f7a272c5bb7afe6f7e6acfbd861b43971c18a929bbb53d3416bcf182cd97b7b7",
+      "gitBlob": "1caeb88af3fc92029a23cee2c59bfc3f143645e3"
+    },
+    {
+      "file": "apps/api/src/services/photoPersistentIdentity.ts",
+      "sha256": "98b8ce7a9076b3a8e045b6a8f19594467d81b5d1c796207f44c38121aaa20321",
+      "gitBlob": "8ee15f024f2c880f1ed3aa9e3a2acc1f0d1b31e8"
+    },
+    {
+      "file": "apps/api/src/services/photoPublicationExecutor.ts",
+      "sha256": "8cfb9490a4d63ab25e792b8ed89d6cb29ffe6d5111835f0cb2a8e5a52ba5e486",
+      "gitBlob": "869422e07e572b386f3b58814c070a277715f5f9"
+    },
+    {
+      "file": "apps/api/tests/fixtures/persistentRemount.ts",
+      "sha256": "544daec5e8ff8190ad2c71a4aa4e1fc3aff585dfd6789ef9ddafbea5581e0b86",
+      "gitBlob": "39981fa8318ff722b6a6127ce3c4fd43aa346ac9"
+    },
+    {
+      "file": "apps/api/tests/landlockLauncherBuild.test.ts",
+      "sha256": "85716331dad5cd8501d14ba589e54a39f8d250f2c5cd6a9678a2b5a7358745fa",
+      "gitBlob": "e4e6daf2403fcd107303fb09ff2714e0a2b3f1b6"
+    },
+    {
+      "file": "apps/api/tests/photoPersistentIdentity.test.ts",
+      "sha256": "d3dc3be347abdac8d54af0f929a12cabf99cc9b4e3bac9a0d86e234d5f247992",
+      "gitBlob": "2043002766c83f38d1ee2ffb33ec5a804a2c7584"
+    },
+    {
+      "file": "apps/api/tests/photoPersistentRemount.test.ts",
+      "sha256": "ddeaf4735f231cc2d077539ea4f63c1fc222294bbe5ac2c72086b824593a04e2",
+      "gitBlob": "eb16fb844fb0f69282a71623b043ce57c5b7a7f2"
+    },
+    {
+      "file": "apps/api/tests/photoReleasePreflight.test.ts",
+      "sha256": "ff4367b9db3d1acb15bc63bd5b704e8480d3b773bcc4ccb9e7c058d7ad7f8ae3",
+      "gitBlob": "a69ff2afb762cf4d2a7b3130905e5389f3877478"
+    },
+    {
+      "file": "apps/api/tests/w2FencedOwnerRecovery.test.ts",
+      "sha256": "9b0d93e541e5c574f175e08b9b32d6e1de0877f4adb9e21591f41c3c17d77928",
+      "gitBlob": "1eb68181c0db28e000cecb5c785b46656ec58154"
+    },
+    {
+      "file": "apps/api/tests/w4FencedFinalizationAcceptance.test.ts",
+      "sha256": "8cd3d93a122be6d54134a63025e1103a4c22e3978d9dc49846670175c968da10",
+      "gitBlob": "7905c728d152740e9e69d591912f48c0e7cbdf96"
+    },
+    {
+      "file": "scripts/photo-publication-capability/landlock-worker.c",
+      "sha256": "91938e4825a8aabf4b73b40af853c5409355e19297f530721a228c8f3016dd18",
+      "gitBlob": "6966a8a5a8930f79b656ba5641eaa811305e8f15"
+    },
+    {
+      "file": "scripts/photo-writer-adoption/census.test.cjs",
+      "sha256": "76dfd11e2a13c2ad043086d706a9771a25de5f381c51ac4717f5b40018c3bffc",
+      "gitBlob": "e0ace6d00233252d708069f36e2240fcb474df11"
+    },
+    {
+      "file": "scripts/photo-writer-adoption/fencing-disposition.test.cjs",
+      "sha256": "b96239aa4eb6af855c4f1a5c9345a59db572b16d9add567f4681322cda9eaa64",
+      "gitBlob": "bb5e5989243b3ad42cccf57ee3d1942b80439443"
+    },
+    {
+      "file": "apps/api/tests/photoPersistentIdentityRefusal.test.ts",
+      "sha256": "6f59d70a4e47bc14bc1a56ecf59a45c5690ff6dd8c8c4b2a9837c65919358c9b",
+      "gitBlob": "6c1a42ccb5d1a6ab8e26171fb2bee85699512567"
+    }
+  ],
+  "raw": [
+    {
+      "file": "local/after-remount.txt",
+      "sha256": "4ec6e27496fa6be209abf5630a3f4db80dd76c3d564298d48c889f888411ea1c",
+      "bytes": 4188
+    },
+    {
+      "file": "local/baseline-exact.txt",
+      "sha256": "e10b149382c660ddb4fb9bf14476d0b34f0ac78fd25b517288a10e5e5d96f775",
+      "bytes": 5308
+    },
+    {
+      "file": "local/baseline-remount.txt",
+      "sha256": "04d55a4cb22ec3f1966114e68516b7f02e0db257038bd7218cffdac1a7d31b7b",
+      "bytes": 7510
+    },
+    {
+      "file": "local/census-delivery.txt",
+      "sha256": "96177a5b28ff61693b9d51206e6b5b8701b9559105648d1de3df55be51964771",
+      "bytes": 1414
+    },
+    {
+      "file": "local/census-final.txt",
+      "sha256": "6e22757a7d74490860b8b515c2c638df3ccf8c1eec3c72d63f28d5492f3a0f94",
+      "bytes": 1412
+    },
+    {
+      "file": "local/census.txt",
+      "sha256": "f056c8b2bd4d51691c2bba1c952dc7005a22afe7d26e2220c938f735e41223e2",
+      "bytes": 6302
+    },
+    {
+      "file": "local/codec-final.txt",
+      "sha256": "09700e6f772a3284deca0f197ec22deb87760757ea9f60c78ccbeefaf4e724d9",
+      "bytes": 532
+    },
+    {
+      "file": "local/final-resource-boundary.txt",
+      "sha256": "980c9e580b5c8084a047c43b0fff80cc29c18f2e59bc46e1e56868e96a4d0097",
+      "bytes": 534
+    },
+    {
+      "file": "local/identity-final.txt",
+      "sha256": "2fd3ff2eb1b1eb331e4dc318d8d28ccd5c63626344057bcdb0bbc49a416424b4",
+      "bytes": 508
+    },
+    {
+      "file": "local/local-corrected.txt",
+      "sha256": "42e589330ccead248560664a9de43fe421d9b1d0233e07ae98fd6efe21bd9996",
+      "bytes": 536
+    },
+    {
+      "file": "local/local-final-provenance.txt",
+      "sha256": "8b79fdeda6f3a17b70680f620c560a4838343c0e0960853121baf491a7286ac2",
+      "bytes": 536
+    },
+    {
+      "file": "local/local-final.txt",
+      "sha256": "11e87b1505645ea9c890335cbd58604734d4d276f815189d89a15360f0e4a7ac",
+      "bytes": 8114
+    },
+    {
+      "file": "local/owners-final.txt",
+      "sha256": "b20f87e5618248a1311b72afa70474ea88d9bf56f4ee31752e4bb498c29f3a17",
+      "bytes": 536
+    },
+    {
+      "file": "local/shared-build.txt",
+      "sha256": "055611106b37eaf4f97be51553af058398ec0aac2bfc9868eed88a3970952afa",
+      "bytes": 98
+    },
+    {
+      "file": "local/simulated-evidence.zip",
+      "sha256": "eb1c299d1d39629ef73554e379f3fc9c6cb9f7ad362cc10424244518a902f9d2",
+      "bytes": 56992
+    },
+    {
+      "file": "local/targeted-final.txt",
+      "sha256": "a0013f45710c317531949a70937574000ff25bb2ca788138876cdc1b55fe6d87",
+      "bytes": 7898
+    },
+    {
+      "file": "local/targeted.txt",
+      "sha256": "caf6bc05722736ce41f8e9c529967f4d2833770799524a608169d200be177519",
+      "bytes": 536
+    },
+    {
+      "file": "local/typecheck-delivery.txt",
+      "sha256": "cb5073b5ba89d2e4c25f710a504a982352d60f01d0cc398b08854aa8672f6e56",
+      "bytes": 118
+    },
+    {
+      "file": "local/typecheck-final.txt",
+      "sha256": "cb5073b5ba89d2e4c25f710a504a982352d60f01d0cc398b08854aa8672f6e56",
+      "bytes": 118
+    },
+    {
+      "file": "local/typecheck.txt",
+      "sha256": "74b9994f8b0bbe93ea1aeac6d1e88d10bbf1dc93914c498de7e80e7cbe2c364c",
+      "bytes": 10610
+    }
+  ]
+}
