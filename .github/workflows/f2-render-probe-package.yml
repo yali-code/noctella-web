@@ -1,0 +1,27 @@
+name: F2 Render probe package — disposable validation
+# Validates the owner-run probe package on a disposable GitHub-hosted Linux runner. This is NOT Render evidence.
+on:
+  push:
+    branches: [chore/f2-render-probe]
+    paths:
+      - .github/workflows/f2-render-probe-package.yml
+      - scripts/photo-render-probe/**
+      - scripts/photo-publication-capability/landlock-worker.c
+  pull_request:
+    paths:
+      - scripts/photo-render-probe/**
+permissions:
+  contents: read
+jobs:
+  probe-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate the probe package in a disposable stand-in /var/data (unprivileged)
+        run: bash scripts/photo-render-probe/ci-validate.sh
