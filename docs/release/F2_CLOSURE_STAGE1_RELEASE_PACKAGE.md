@@ -325,4 +325,22 @@ It is the revision accepted on RC2 (§4.1).
 4. **Review.** The independent review is performed by a separate **agent instance**, not a human reviewer.
 5. **Production.** After CI and the review pass, the §3 production procedure is authorized, without new paid resources, plan changes, teardown, evidence deletion or W11/0042 activation.
 
-**Counters:** F2 closure **2/4**, overall engineering **4/12**. No criterion beyond Stage 2 is met yet.
+**Stage 3 — release-candidate acceptance: CLOSED (20 October 2026).**
+- **Final candidate:** `14f17469ed43fec4e3035d08612ea3b69cf849c3`. Its application code is identical to `84f3938`; the delta is the one-line push-list trigger plus this documentation.
+- **Exact-head CI:** `photo-master-stage1-4` run `39482767093` (push) on `14f1746`, conclusion **success**. All jobs succeeded:
+  - `w4-and-typecheck`
+  - `fenced-storage-and-crash`
+  - `schema-and-writer-census`
+  - `w2-independent-stack-proof`
+  - `api-full-regression`
+  - `ext4-disk-budget-enospc`
+  - `linux-512m-24mp-combined / integrated-candidate-original-source`
+  - `linux-512m-24mp-combined / reference-pr422-original-source`
+  - `w3-candidate-integration-gate`
+  - `w2-live-adoption-gate`
+  - the `photo-master-acceptance` aggregator
+- **Independent review:** separate **agent instance**, not human review. It reviewed `84f3938` (deltas `1dadeb2..84f3938` and `24a16b8e..84f3938`), the release documentation and the trigger change. Verdict **PASS** on all eight required concerns.
+  - Documentation findings M1 (rollback blockers), M2 (W4 precheck limit in rollback), L1 (build-command step) and L2 (staging-flag wording) were fixed, and a focused re-review confirmed them.
+  - L3 (§5 heading wording) is cosmetic.
+
+**Counters:** F2 closure **3/4** (Stage 3, owner-approved grouping), overall engineering **4/12** (advances only when F2 closes). Stage 4 (production) is not started.
