@@ -9,6 +9,7 @@ import { simulatedPersistentRemount, publicationSnapshot, recordRemountEvidence 
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
+import fs from "node:fs";
 import path from "node:path";
 import { sql, type SQL } from "drizzle-orm";
 import { AiProductIntakeStatus, ProductStatus, ProductType } from "@noctella/shared";
@@ -139,6 +140,19 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     expect(intents.map((i) => [i.state, Number(i.executor_epoch)])).toEqual([["committed", 2], ["committed", 2]]);
     expect(await Promise.all(rows.flatMap((r) => [inode(r.main_key), inode(r.thumb_key)]))).toEqual(before);
     expect(await counts(productId)).toEqual([2, 2]);
+  });
+
+  // RC2 #493 retained fixture: a Product that already had a photo was refused only inside the finalization transaction,
+  // after T1 + copy publication, leaving an authorized intent and published copies. The refusal now happens first.
+  it.skipIf(!enabled)("a Product that already has photos is refused before any intent, operation or canonical copy is created", async () => {
+    const { productId, intakeId, stagedIds } = await appliedIntake(1);
+    await q(sql`INSERT INTO product_photos (id, product_id, url, thumbnail_url, filename, mime_type, size_bytes, width, height) VALUES (${randomUUID()}, ${productId}, '/images/product-photos/existing.webp', '/images/product-photos/existing-thumb.webp', 'existing.webp', 'image/webp', 1, 1, 1) RETURNING id`);
+    const before = fs.existsSync(path.join(root, "photos")) ? fs.readdirSync(path.join(root, "photos")).sort() : [];
+    await expect(finalize(intakeId)).rejects.toMatchObject({ name: "AiIntakePhotoFinalizationProductPhotosExistError" });
+    await expect(finalize(intakeId)).rejects.toMatchObject({ name: "AiIntakePhotoFinalizationProductPhotosExistError" }); // retry: no epoch churn
+    expect(await ops(stagedIds)).toEqual([]); // no operation, hence no generation, seal, intent or copy record
+    expect(fs.existsSync(path.join(root, "photos")) ? fs.readdirSync(path.join(root, "photos")).sort() : []).toEqual(before);
+    expect(await intakeStatus(intakeId)).toBe(AiProductIntakeStatus.Applied);
   });
 
   it.skipIf(!enabled)("a crash after sealing (before publication) publishes nothing and recovers exactly once", async () => {
