@@ -209,7 +209,39 @@ No isolated F2 staging environment is verified to exist.
 10. **Disk:** after each step `du -s /var/data/.product-photo-publication` returns to ~0, since anchors are removed after commit. Free space stays above the policy's 256 MiB floor.
 11. Teardown.
 
-Local tests and CI are **not** staging acceptance. Nothing above has been executed.
+Local tests and CI are **not** staging acceptance. Nothing above has been executed. (Results recorded later are in §4.1.)
+
+### 4.1 RC2 acceptance status (recorded 20 October 2026)
+The isolated service is `srv-d9ms1orncjis7390nk5g` (`noctella-rc2-acceptance-api`): SQLite, fencing ON, `PHOTO_PREPARATION_CONFINEMENT=required`, mock AI provider and synthetic images only. The private operational payloads stay on its disk and are not reproduced here. Each result names the revision it was obtained on; evidence is reused across those pinned revisions only where the change in between does not touch the accepted path.
+
+**Owner-approved scope change (20 October 2026).** The minimum scope of this Render acceptance is the existing real-target filesystem-UUID, integrity, restart and recovery evidence. **Real changed-device recovery is UNVERIFIED and OUT OF SCOPE**; it is not passed. Runtime checks are unchanged: device/UUID binding, exit authentication and attestation requirements still fail closed.
+
+| Step | Status | Revision | Basis |
+| --- | --- | --- | --- |
+| 1 Preflight / readiness | PASS | `c52e189`; guards re-checked on `84f3938` | Private target record (provenance, UUID, birth readiness). On `84f3938`: the running commit, fencing ON, confinement `required`, the launcher present and `--storage-proof` UUID readable. |
+| 2 Missing-confinement refusal (503, no file) | PASS | `84f3938` | Owner-approved temporary `PHOTO_PREPARATION_LAUNCHER=/nonexistent/landlock-worker`, with confinement `required` and fencing ON unchanged. Exact-commit deploy. W2 upload returned 503 `PHOTO_PUBLICATION_NOT_READY`. Operations, intents, copies, artifacts, photos, outbox and both file inventories were identical before and after. |
+| 3 W4 setup + finalize/replay | PASS | `c52e189` | Private target record. |
+| 4–5 W2 upload, idempotent replay | PASS | `c52e189` | Private target record. |
+| 6 Lost acknowledgement | PASS | `1dadeb2` | RC2 #493 run. The earlier failed `c52e189` measurement stays failed and is not reclassified. |
+| 7–8 Live refusal, same- and cross-instance recovery | PASS (same device) | `c52e189`, `1dadeb2` | W2 cross-instance recovery with exact attestation, plus the 7-scenario #493 restart matrix. The W4 after-both automatic exit is recorded as a reviewed exception. Device `st_dev` 66328 → 66328. |
+| W4 Product precheck (new) | PASS | `84f3938` | Applied intake whose Product already had a photo: finalize 409. Operations, intents, copies, artifacts, photos, outbox and both file inventories were identical before and after; 0 operations for the staged photo. |
+| Changed-device recovery | **UNVERIFIED — out of scope** | `84f3938` | Single owner-approved suspend→resume. The old instance was terminated (SIGTERM, "Shutdown complete" 17:47:58Z). `st_dev` 66328 → 66328; UUID `c4bb0d0a…f775ee` and source inode/hash/size unchanged. Not repeated. |
+| 9 Protected-mode resources (W2+W4 subset, `policy.mjs` thresholds) | PASS | `84f3938` | Fresh exact-commit restart; `sample-cgroup.sh` running during one W4 (2 photos: 201, repeat 200), one W2 (201) and one W2 lost-ack (same id; photos 3→4→4). `memory.max` 512 MiB, swap 0, `memory.peak` 209,993,728 bytes (≤ 384 MiB; 193 MiB at start), and 0 new `oom`/`oom_kill`/`max`. The peak includes the shell driver processes. Full `combined-fencing-on` 24 MP stays BLOCKED (W11/0042). |
+| 10 Disk returns to baseline, 256 MiB floor | PASS | `84f3938` | Sampled every 1 s during the step 9 workload. Free space: baseline 992,489,472 B, minimum 991,309,824 B (floor 268,435,456). Publication staging: baseline 16,826 B, peak 25,114 B, back to 16,826 B within the 30 s settling interval. The baseline is non-zero because the retained intents' anchors (below) are preserved. `used` rose by 1.18 MB for the committed photos. Preflight `storage.free-space` WARNs structurally on this 1 GB disk (its advisory threshold is 1 GiB free). |
+| 11 Teardown | Deferred | — | RC2 keeps the pending evidence. |
+
+**Platform note:** Render's resume deploys the service branch. The resume started a build of `main` (`7df99ba`), which failed before running. RC2 was restored by a manual deploy of exactly `84f3938`. The service branch is still `main`; that is an owner-controlled configuration setting and was not changed.
+
+**Retained, unchanged:**
+- **Operation `39271b8a-6235-4da7-a918-3e1ac75dd06b`** (W4 before-publication, intake `3aa11579-…`): `authorized`, generation 1, epoch 1, 0 copies, no canonical names. Recovery from the new instance is BLOCKED without exit attestation, and none was recorded.
+- **Fixture `322cf602-e0ca-47d3-b1b7-94707865e2c8`:** `authorized`/`sealed`, unchanged.
+- **Evidence directories:** `/var/data/f2-493-20261020` and `/var/data/f2-84f3938-20261020`.
+
+**Readiness after restoration (`84f3938`):** the launcher is restored to its original value and executable; confinement `required`, fencing ON. Preflight PASS for fencing, confinement, `launcher.provenance`, migrations 0040/0041/0043/0044, 0042-w11 (dormant), the storage roots, `storage.persistent-identity` and `publication.exit-authentication`. WARN for `migrations.gaps` (known) and `storage.free-space` (structural, above). MANUAL items are operator procedures.
+
+**Device observation (not an acceptance result):** across the step 2 and restore deploys, `st_dev` read 66328 → 66315 → 66326, while the filesystem UUID stayed `c4bb0d0a…f775ee`. Changed-device *recovery* was not attempted: it stays UNVERIFIED and out of scope. Operation `39271b8a` is still `authorized`, epoch 1, 0 copies, no canonical file.
+
+**Counters:** Stage 2 is **CLOSED** under the owner-approved revised scope: steps 1–10 are met as above, step 11 teardown is deferred, and changed-device recovery is out of scope. F2 closure moves to **2/4**. Overall engineering stays **4/12**, because it advances only when F2 closes. Protected 24 MP stays BLOCKED. Independent review of this record is not claimed.
 
 ## 5. Daily-use effects with fencing ON (NOT accepted by the owner)
 | Function | Effect | Follow-up options (owner decision) |
