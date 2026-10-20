@@ -183,9 +183,14 @@ describe("PHOTO_OWNERSHIP_FENCING_ENABLED fail-closed refusals", () => {
     } finally { fs.rmSync(canonical, { force: true }); }
   });
 
-  it("W11: Instagram preparation refuses (retryable) without writing into the canonical root", async () => {
+  it("W11: under fencing Instagram preparation never writes the canonical root (#472 parity 4B: separate store; refusal without confinement)", async () => {
     vi.stubEnv("PHOTO_OWNERSHIP_FENCING_ENABLED", "true");
     fs.writeFileSync(path.join(root, "a.webp"), "x");
+    // Invalid source: refused, nothing written anywhere near the canonical root.
+    await expect(prepareInstagramImageAsset({ url: "/images/product-photos/a.webp" }, "https://example.test", process.env, root)).rejects.toMatchObject({ kind: "invalid_media" });
+    expect(fs.readdirSync(root)).toEqual(["a.webp"]);
+    // Outside test/development without confinement: retryable refusal before any read or write.
+    vi.stubEnv("NODE_ENV", "production");
     await expect(prepareInstagramImageAsset({ url: "/images/product-photos/a.webp" }, "https://example.test", process.env, root)).rejects.toMatchObject({ kind: "processing", retryable: true });
     expect(fs.readdirSync(root)).toEqual(["a.webp"]);
   });

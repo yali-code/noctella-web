@@ -24,7 +24,7 @@ const GOVERNED: Record<string, string> = {
   "services/photoStorage.ts": "W1 legacy upload/delete (refused with fencing ON) and generation-private W4 preparation",
   "services/stagedProductPhotoStorage.ts": "W10 staged upload (refused with fencing ON) and generation-private W2 preparation",
   "services/w11FencedInstagramDerivativeOwner.ts": "dormant W11 owner (0042 unregistered; no runtime importer, asserted below)",
-  "integrations/instagram/mediaPreparation.ts": "live Instagram prepare-image derivative writer (refused with fencing ON before any write)",
+  "integrations/instagram/mediaPreparation.ts": "live Instagram prepare-image derivative writer: fencing OFF canonical root (unchanged); fencing ON only the non-canonical instagram-derivatives store with confined rendering",
   "services/productPhotoStorageWorkflow.ts": "W7 promotion / W8 delete / W9 temp cleanup (refused with fencing ON)",
   "services/aiIntakePhotoStorage.ts": "AI intake root only (AI_INTAKE_PHOTO_DIR), never the canonical root",
   "services/mediaPlanner.ts": "MEDIA_ASSET_DIR only; reads canonical photos",
@@ -72,7 +72,9 @@ describe("canonical photo writer inventory (#472)", () => {
       // The guarded mutation must follow its refusal (searched after the guard).
       expect(s.slice(g).search(mutation), `${r}: guarded mutation missing after ${guard}`).toBeGreaterThan(0);
     };
-    before("integrations/instagram/mediaPreparation.ts", /if \(photoOwnershipFencingEnabled\(\)\) throw/, /await link\(temporary, destination\)/);
+    // #472 parity 4B: under fencing the destination is the non-canonical derivative store, never the canonical root.
+    before("integrations/instagram/mediaPreparation.ts", /const store = protectedMode \? \{ root: instagramDerivativeRoot\(root\)/, /const destination = productPhotoStorageSafety\.safeJoin\(store\.root, derivative\)/);
+    before("integrations/instagram/mediaPreparation.ts", /if \(protectedMode\) \{ try \{ assertPreparationConfinementReady\(\); \}/, /await link\(temporary, destination\)/);
     before("services/productPhotoStorageWorkflow.ts", /refuseUnadoptedPhotoWriter\("W7_DISTINCT_ROOT_PROMOTION"\)/, /await copyIdempotent\(/);
     before("services/productPhotoStorageWorkflow.ts", /refuseUnadoptedPhotoWriter\("W8_CANONICAL_DELETE"\)/, /await unlinkIdempotent\(safeJoin\(this\.roots\.permanentRoot/);
     before("services/productPhotoStorageWorkflow.ts", /refuseUnadoptedPhotoWriter\("W9_TEMP_CLEANUP"\)/, /await unlinkIdempotent\(safeJoin\(this\.roots\.tempRoot/);

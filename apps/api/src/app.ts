@@ -43,6 +43,7 @@ import returnsRouter from "./routes/returns";
 import { db } from "./db/client";
 import { getReadiness } from "./services/readiness";
 import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photoStorage";
+import { INSTAGRAM_DERIVATIVE_STATIC_PATH, instagramDerivativeRoot } from "./integrations/instagram/mediaPreparation";
 import { enqueueChannelStockSync, enqueueProductStockSync, STOCK_SYNC_CHANNELS } from "./services/stockSync";
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { createSocialPublishScheduleExecutionService } from "./services/socialPublishScheduleExecutions";
@@ -119,6 +120,8 @@ app.use("/api/webhooks", marketplaceSyncWebhookRouter);
 app.use(express.json());
 // PUBLIC: product photos back both the admin app and the public storefront.
 app.use(productPhotoStaticPath, express.static(productPhotoStaticRoot));
+// #472 parity 4B: protected-mode Instagram derivatives (non-canonical, content-addressed; dotfiles stay unserved).
+app.use(INSTAGRAM_DERIVATIVE_STATIC_PATH, express.static(instagramDerivativeRoot()));
 // PUBLIC: approved Reel assets for Instagram ingestion (see routes/reelAssets.ts).
 app.use(createReelAssetRouter(db));
 

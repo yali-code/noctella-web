@@ -93,7 +93,10 @@ export function selectedScenarios(includeStress = true, profile = "full") {
  */
 export const FENCING_ON_ACCEPTANCE = Object.freeze({
   blocked: true,
-  reason: "W11 Instagram preparation is not adopted: proposed 0042 photo_derivative_operations schema awaits owner approval; instagram.prepare refuses with PHOTO_OWNERSHIP_FENCING_ENABLED=true",
+  // #472 parity 4B: instagram.prepare now succeeds under fencing through a separate non-canonical derivative store
+  // instead of the W11/0042 owner this workload contract expects. That mapping changes the accepted workload and is
+  // unreviewed; it stays BLOCKED until an independent review accepts the mapping (or W11/0042 is approved).
+  reason: "Workload mapping unreviewed: under PHOTO_OWNERSHIP_FENCING_ENABLED=true instagram.prepare uses the non-canonical derivative store (#472 parity 4B), not the W11/0042 owner this contract expects; independent review of the mapping (or owner approval of 0042) is required",
 });
 export const fencingOnBlocked = (scenarios) => scenarios.some((s) => s.photoOwnershipFencing) && FENCING_ON_ACCEPTANCE.blocked;
 
