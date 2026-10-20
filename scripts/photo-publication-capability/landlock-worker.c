@@ -28,6 +28,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <sys/syscall.h>
 #include <sys/sysmacros.h>
 #include <sys/un.h>
@@ -338,13 +339,33 @@ static int run_reaper(char **cmd) {
 
 /* Read-only descriptor evidence. This branch never execs, writes files or changes confinement.
  * Linux 6.9 UAPI FS_IOC_GETFSUUID: external on-disk UUID, not st_dev or statfs f_fsid.
- * Local definition allows older build headers; an unsupported running kernel fails closed. */
+ * On ENOTTY only, ext4 has an older descriptor-bound full UUID ioctl (Linux 6.8 UAPI).
+ * f_type dispatches that ABI; it is never used as identity. Permission/security failures and
+ * malformed successful generic replies never fall back. Unsupported filesystems fail closed.
+ * Both interfaces return the same external on-disk UUID: pfs1 semantics are unchanged. */
 struct photo_fsuuid { unsigned char len; unsigned char uuid[16]; };
+struct photo_ext4_fsuuid_header { uint32_t len; uint32_t flags; };
+struct photo_ext4_fsuuid { struct photo_ext4_fsuuid_header header; unsigned char uuid[16]; };
+_Static_assert(sizeof(struct photo_fsuuid) == 17, "generic UUID ABI");
+_Static_assert(sizeof(struct photo_ext4_fsuuid_header) == 8, "ext4 UUID ioctl header ABI");
+_Static_assert(sizeof(struct photo_ext4_fsuuid) == 24, "ext4 UUID allocation ABI");
 static int storage_proof(void) {
     struct stat st;
     struct photo_fsuuid uuid = {0};
     if (geteuid() == 0 || fstat(3, &st) || (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))) return 125;
-    if (ioctl(3, _IOR(0x15, 0, struct photo_fsuuid), &uuid) || uuid.len != 16) return 125;
+    if (ioctl(3, _IOR(0x15, 0, struct photo_fsuuid), &uuid)) {
+        if (errno != ENOTTY) return 125;
+        struct statfs storage;
+        struct photo_ext4_fsuuid ext4_uuid = {{16, 0}, {0}};
+        /* EXT4_SUPER_MAGIC; EXT4_IOC_GETFSUUID encodes the 8-byte flexible-array header,
+         * not our 24-byte allocation. No block-device opens, mount lookup or privilege change. */
+        if (fstatfs(3, &storage) || storage.f_type != 0xef53 ||
+            ioctl(3, _IOR('f', 44, struct photo_ext4_fsuuid_header), &ext4_uuid) ||
+            ext4_uuid.header.len != 16 || ext4_uuid.header.flags != 0) return 125;
+        uuid.len = 16;
+        memcpy(uuid.uuid, ext4_uuid.uuid, sizeof(uuid.uuid));
+    }
+    if (uuid.len != 16) return 125;
     unsigned int nonzero = 0;
     for (int n = 0; n < 16; ++n) nonzero |= uuid.uuid[n];
     if (!nonzero) return 125;

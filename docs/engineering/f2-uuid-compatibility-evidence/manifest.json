@@ -1,0 +1,51 @@
+{
+  "baselineCommit": "ffbd3a8a65003c3ac8f79072292a3efb6dc3d2e2",
+  "base": "32a027dc60b46a35e77352019a6df34e532f1924",
+  "baselineSha256": "2e5deabf2848fd53bc57130afd5ed1caf060961bfac28bc2be71568892d01a55",
+  "source": [
+    {
+      "file": "scripts/photo-publication-capability/landlock-worker.c",
+      "sha256NormalizedLf": "5d1fcdbc9f315c57286d7e362416964dee99f708e0110e02a55ae4b77d9b1812"
+    },
+    {
+      "file": "apps/api/tests/photoUuidAbiCompatibility.test.ts",
+      "sha256NormalizedLf": "7f8caf00178cadc47ba8a9c28043c45458e8bbe2b56fee0a234bcc3cb4e1a29b"
+    },
+    {
+      "file": "apps/api/tests/photoPersistentIdentity.test.ts",
+      "sha256NormalizedLf": "d5c9cd6a3149e4b53f02da2e348842a27ad10042fd9f220921393ba1797c7448"
+    },
+    {
+      "file": "apps/api/tests/landlockLauncherBuild.test.ts",
+      "sha256NormalizedLf": "d6ef884593c489638a42801e300b8fcbc477e24a7981236f99d83ed4028a4f66"
+    },
+    {
+      "file": ".github/workflows/photo-master-stage1-4.yml",
+      "sha256NormalizedLf": "7c1698a2acc50da471fab393e5a31e2c36865081bdd0ec357be95006c5694bef"
+    }
+  ],
+  "localEvidence": [
+    {
+      "file": "baseline-landlock-worker.c.txt",
+      "sha256": "2e5deabf2848fd53bc57130afd5ed1caf060961bfac28bc2be71568892d01a55",
+      "bytes": 18364
+    },
+    {
+      "file": "local-census.txt",
+      "sha256": "27be0de41ec908dbc8e3bcc75ca22f95cd3e5ced59ef9a3885ad8ed792379dfc",
+      "bytes": 1410
+    },
+    {
+      "file": "local-targeted.txt",
+      "sha256": "b35aaacfa1ecb8f4a6fd950b399c5156ec9dae73a2385be683ef8fc028449ec0",
+      "bytes": 566
+    },
+    {
+      "file": "local-typecheck.txt",
+      "sha256": "cb5073b5ba89d2e4c25f710a504a982352d60f01d0cc398b08854aa8672f6e56",
+      "bytes": 118
+    }
+  ],
+  "targetAcceptance": "BLOCKED: filesystem/legacy ABI prerequisite and candidate runtime not verified; no target access",
+  "nativeCI": "Pending exact-head push; results in Draft PR492 and always-upload artifacts"
+}

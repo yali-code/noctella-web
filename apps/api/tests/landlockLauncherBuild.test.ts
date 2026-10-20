@@ -11,7 +11,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { runPhotoReleasePreflight } from "../src/scripts/photoReleasePreflight";
 
 const script = path.join(__dirname, "..", "scripts", "build-landlock-launcher.mjs");
-const REVIEWED_SOURCE_SHA256 = "2e5deabf2848fd53bc57130afd5ed1caf060961bfac28bc2be71568892d01a55";
+const REVIEWED_SOURCE_SHA256 = "5d1fcdbc9f315c57286d7e362416964dee99f708e0110e02a55ae4b77d9b1812";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "noctella-launcher-build-"));
 afterAll(() => { fs.rmSync(root, { recursive: true, force: true }); });
 const linux = process.platform === "linux";

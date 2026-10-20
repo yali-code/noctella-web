@@ -217,6 +217,8 @@ jobs:
           trap 'sudo umount "$MOUNT" || true' EXIT
           sudo chown "$(id -u):$(id -g)" "$MOUNT"
           df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-before.txt"
+          node apps/api/scripts/build-landlock-launcher.mjs --out "$RUNNER_TEMP/ext4-uuid-launcher"
+          F2_UUID_EXT4_ROOT="$MOUNT" F2_CAPABILITY_LAUNCHER="$RUNNER_TEMP/ext4-uuid-launcher/landlock-worker" PHOTO_REMOUNT_EVIDENCE_DIR="$EVIDENCE/uuid-compatibility" npm exec -w apps/api -- vitest run tests/photoUuidAbiCompatibility.test.ts 2>&1 | tee "$EVIDENCE/uuid-compatibility.txt"
           TMPDIR="$MOUNT" node --import tsx scripts/photo-disk-budget/measure.cjs --quick --out "$EVIDENCE/measure-ext4-loop-quick.json"
           TMPDIR="$MOUNT" NOCTELLA_DISK_BUDGET_ENOSPC=1 node --import tsx --test scripts/photo-disk-budget/budget.test.cjs 2>&1 | tee "$EVIDENCE/test-output.txt"
           df -B1 "$MOUNT" | tee "$EVIDENCE/loop-df-after.txt"

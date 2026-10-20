@@ -18,6 +18,6 @@ it.runIf(linuxRequired)("required Linux descriptor UUID proof and runtime publis
   const seal=await ownedPhotoArtifactProof(file,true);expect(seal.dev).toMatch(/^pfs1:[0-9a-f]{32}:[1-9][0-9]*$/);
   let copy:CopyRecord|null=null;const target={source:file,seal:{...seal,size:seal.bytes},canonicalDir,canonicalName:"photo.webp",stagingDir,retainStagingLink:true};const ledger={read:async()=>copy,record:async(value:CopyRecord)=>{copy=value;}};
   expect((await publishVerifiedCopy(target,ledger)).kind).toBe("PUBLISHED");expect((await publishVerifiedCopy(target,ledger)).kind).toBe("ADOPTED");
-  const fd=fs.openSync(file,"r");try{const proof=persistentPhotoDevice(fd,fs.fstatSync(fd,{bigint:true}));expect(proof).toBe(seal.dev);}finally{fs.closeSync(fd);}
+  const padding=Array.from({length:8},()=>fs.openSync(file,"r"));const fd=fs.openSync(file,"r");expect(fd).toBeGreaterThan(3);try{const proof=persistentPhotoDevice(fd,fs.fstatSync(fd,{bigint:true}));expect(proof).toBe(seal.dev);}finally{fs.closeSync(fd);padding.forEach(value=>fs.closeSync(value));}
   if(process.env.PHOTO_REMOUNT_EVIDENCE_DIR){fs.mkdirSync(process.env.PHOTO_REMOUNT_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(root,"native-proof.json"),JSON.stringify({simulated:false,seal,copy},null,2));fs.cpSync(root,path.join(process.env.PHOTO_REMOUNT_EVIDENCE_DIR,path.basename(root)),{recursive:true});}
 });
