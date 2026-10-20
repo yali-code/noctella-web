@@ -58,6 +58,8 @@ function workerEnvironment(jobDir: string, job: string): NodeJS.ProcessEnv {
 
 export interface PreparedFiles { main: string; thumb: string; width: number; height: number }
 export interface ConfinedJob { kind: "w2" | "w4"; inputPath: string; workDir?: string; size: number; mimetype: string; outDir: string }
+/** Instagram derivative rendering (#472 parity 4B): reads the canonical source, writes only <outDir>/derivative.jpg. */
+export interface ConfinedDerivativeJob { kind: "instagram"; inputPath: string; recipe: string; outDir: string }
 
 const WORKER = path.join(__dirname, "..", "workers", __filename.endsWith(".ts") ? "photoPreparationWorker.ts" : "photoPreparationWorker.js");
 
@@ -67,6 +69,26 @@ const WORKER = path.join(__dirname, "..", "workers", __filename.endsWith(".ts") 
  */
 export async function prepareInConfinedWorker(launcher: string, job: ConfinedJob, jobDir: string,
   options: { signal?: AbortSignal; timeoutMs?: number; workerScript?: string } = {}): Promise<PreparedFiles & { enforced: string }> {
+  const { result, exit, enforced } = await runConfinedJob(launcher, job, jobDir, options);
+  const expected = { main: path.join(job.outDir, "main.webp"), thumb: path.join(job.outDir, "thumb.webp") };
+  if (exit.code !== 0 || result.main !== expected.main || result.thumb !== expected.thumb || !Number.isSafeInteger(result.width) || !Number.isSafeInteger(result.height))
+    throw new PhotoUploadError(503, "PHOTO_PREPARATION_UNAVAILABLE", "Photo preparation worker returned an invalid result");
+  return { ...expected, width: result.width, height: result.height, enforced };
+}
+
+/** Renders one Instagram derivative in a confined worker; returns the bytes it wrote, after the worker has exited. */
+export async function renderDerivativeInConfinedWorker(launcher: string, job: ConfinedDerivativeJob, jobDir: string,
+  options: { timeoutMs?: number; workerScript?: string } = {}): Promise<{ bytes: Buffer; enforced: string }> {
+  const { result, exit, enforced } = await runConfinedJob(launcher, job, jobDir, options);
+  const expected = path.join(job.outDir, "derivative.jpg");
+  if (exit.code !== 0 || result.derivative !== expected) throw new PhotoUploadError(503, "PHOTO_PREPARATION_UNAVAILABLE", "Derivative worker returned an invalid result");
+  const st = fs.lstatSync(expected);
+  if (!st.isFile() || st.isSymbolicLink() || st.size <= 0 || st.size > 8 * 1024 * 1024) throw new PhotoUploadError(503, "PHOTO_PREPARATION_UNAVAILABLE", "Derivative worker output is invalid");
+  return { bytes: fs.readFileSync(expected), enforced };
+}
+
+async function runConfinedJob(launcher: string, job: ConfinedJob | ConfinedDerivativeJob, jobDir: string,
+  options: { signal?: AbortSignal; timeoutMs?: number; workerScript?: string }): Promise<{ result: any; exit: { code: number | null; signal: NodeJS.Signals | null }; enforced: string }> {
   const script = options.workerScript ?? WORKER;
   const node = script.endsWith(".ts") ? [process.execPath, "--import", "tsx", script] : [process.execPath, script];
   const child = spawn(launcher, [job.outDir, jobDir, "--", ...node], {
@@ -94,10 +116,7 @@ export async function prepareInConfinedWorker(launcher: string, job: ConfinedJob
   try { result = JSON.parse(stdout.trim().split("\n").pop() ?? ""); } catch { result = null; }
   if (!result || exit.signal) throw new PhotoUploadError(503, "PHOTO_PREPARATION_UNAVAILABLE", "Photo preparation worker did not complete");
   if (!result.ok) throw new PhotoUploadError(Number(result.status) || 500, String(result.code || "PHOTO_PREPARATION_FAILED"), String(result.message || "Photo preparation failed"));
-  const expected = { main: path.join(job.outDir, "main.webp"), thumb: path.join(job.outDir, "thumb.webp") };
-  if (exit.code !== 0 || result.main !== expected.main || result.thumb !== expected.thumb || !Number.isSafeInteger(result.width) || !Number.isSafeInteger(result.height))
-    throw new PhotoUploadError(503, "PHOTO_PREPARATION_UNAVAILABLE", "Photo preparation worker returned an invalid result");
-  return { ...expected, width: result.width, height: result.height, enforced: `abi=${enforced[1]}` };
+  return { result, exit, enforced: `abi=${enforced[1]}` };
 }
 
 /** Per-job writable directory next to the generation directory (same private root), removed after the worker exits. */

@@ -34,8 +34,9 @@ const evidence = {
   ownersUseProtectedPublication: [owner, w4Owner].every((s) => /assertPhotoPublicationReady\(/.test(s) && /guardedReclaimSteps\(/.test(s) && /acquirePublicationIntent\(/.test(s) && /publishAuthorizedArtifacts\(/.test(s) && !/publishSealedArtifacts/.test(s)),
   w4TransactionCommitsFence: /ctx\.commitPhotoOperation\(/.test(w4UseCase) && /commitPhotoOperation: \(proof\) => commitDrizzlePhotoOperationFenced\(tx, execution, proof\)/.test(w4Capability),
   w4RefusesUnprovenManifest: /entry\.fence\)\)\) refuseUnadoptedPhotoWriter\("W4_AI_FINALIZE"\)/.test(w4UseCase),
-  // W11 is NOT adopted: the live writer still refuses under fencing and the proposal owner is not wired anywhere.
-  w11LiveStillRefusesUnderFencing: w11Live.includes('if (photoOwnershipFencingEnabled()) throw new InstagramClientError("processing", true);'),
+  // W11 is NOT adopted (0042 dormant, proposal owner unwired). #472 parity 4B: under fencing the live writer never
+  // writes the canonical root; it uses the separate non-canonical derivative store with mandatory confinement.
+  w11LiveNeverWritesCanonicalUnderFencing: w11Live.includes('const store = protectedMode ? { root: instagramDerivativeRoot(root)') && w11Live.includes('assertPreparationConfinementReady()'),
   w11ProposalNotWired: importsW11Proposal.length === 0,
 };
 console.log(JSON.stringify({ gate: 'W2_W4_LIVE_ADOPTION_WIRING', evidence }, null, 2));
