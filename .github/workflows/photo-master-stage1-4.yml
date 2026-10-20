@@ -9,7 +9,7 @@ on:
   # Stage 5 F2 (#472) runtime remediation: exact-head evidence on push to the dedicated task branch.
   push:
     # Branches whose Draft PR base is not listed above (stacked F2 Stage 1 candidate and its children); #488 uses its PR run.
-    branches: [fix/f2-runtime-remediation, release/f2-stage1-candidate, feat/f2-photo-ingress-parity, feat/f2-instagram-derivative-store, feat/f2-canonical-reclaim, fix/f2-wrapped-claim-conflict, fix/f2-persistent-storage-identity]
+    branches: [fix/f2-runtime-remediation, release/f2-stage1-candidate, feat/f2-photo-ingress-parity, feat/f2-instagram-derivative-store, feat/f2-canonical-reclaim, fix/f2-wrapped-claim-conflict, fix/f2-persistent-storage-identity, test/f2-guarded-restart-tooling]
 permissions:
   contents: read
 concurrency:
@@ -102,6 +102,7 @@ jobs:
       - run: npm run build -w packages/shared
       - run: node --test scripts/photo-writer-adoption/census.test.cjs
       - run: node --test scripts/photo-staging-acceptance/staging-driver.test.mjs
+      - run: node scripts/photo-staging-acceptance/proxy-regression.mjs
       - run: node --import tsx --test scripts/photo-ownership-schema/ownership.test.cjs
       - run: node --import tsx --test scripts/photo-recovery-reconciliation/recovery.test.cjs
   w2-independent-stack-proof:
@@ -403,7 +404,7 @@ jobs:
           echo "F2_CAPABILITY_LAUNCHER=$RUNNER_TEMP/noctella-launcher/landlock-worker" >> "$GITHUB_ENV"
           echo "F2_CAPABILITY_REQUIRE_LINUX=1" >> "$GITHUB_ENV"
       - name: W2 + W4 live adoption behavioural acceptance (HTTP, SQLite, PostgreSQL, filesystem)
-        run: npm exec -w apps/api -- vitest run tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/photoOperationRecoveryReport.test.ts tests/photoReleasePreflight.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2IdempotencyKeyFencingOff.test.ts tests/photoPublicationRecoveryPolicy.test.ts tests/photoOwnershipSigkillRecovery.test.ts tests/w2PublicationPostgresSigkill468.test.ts tests/ownedPhotoArtifactProof.test.ts tests/publicationCapability470.test.ts tests/f2ContractOneOffline.test.ts tests/photoPublicationIntentSchema.test.ts tests/photoProtectedPublicationRuntime.test.ts tests/photoCanonicalWriterInventory.test.ts tests/photoPreparationConfinement.test.ts tests/landlockLauncherBuild.test.ts tests/f2ReleaseCompatibility.test.ts tests/publicationProcessAuthority472.test.ts tests/publicationByteImmutabilityStep3.test.ts tests/publicationCompositionStep4.test.ts
+        run: npm exec -w apps/api -- vitest run tests/stagingAcceptanceTooling.test.ts tests/stagingParkMatrix.test.ts tests/w2LiveFencedAdoptionRoute.test.ts tests/w2FencedOwnerRecovery.test.ts tests/w4FencedFinalizationAcceptance.test.ts tests/w11FencedInstagramDerivativeProposal.test.ts tests/w11Derivative0042SchemaReview.test.ts tests/photoOperationRecoveryReport.test.ts tests/photoReleasePreflight.test.ts tests/instagramMediaPreparation.test.ts tests/aiIntakePhotoFinalize.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoStagedRoute.test.ts tests/w2LiveRouteOwnershipEntry.test.ts tests/w2LiveAdmissionRefusal.test.ts tests/w2IdempotencyKeyFencingOff.test.ts tests/photoPublicationRecoveryPolicy.test.ts tests/photoOwnershipSigkillRecovery.test.ts tests/w2PublicationPostgresSigkill468.test.ts tests/ownedPhotoArtifactProof.test.ts tests/publicationCapability470.test.ts tests/f2ContractOneOffline.test.ts tests/photoPublicationIntentSchema.test.ts tests/photoProtectedPublicationRuntime.test.ts tests/photoCanonicalWriterInventory.test.ts tests/photoPreparationConfinement.test.ts tests/landlockLauncherBuild.test.ts tests/f2ReleaseCompatibility.test.ts tests/publicationProcessAuthority472.test.ts tests/publicationByteImmutabilityStep3.test.ts tests/publicationCompositionStep4.test.ts
       - name: Prove BLOCKED fencing-ON profile needs no Docker image
         run: node --test scripts/photo-upload-linux/fencing-blocked.test.mjs scripts/photo-upload-linux/fencing-on-gates.test.mjs scripts/photo-writer-adoption/fencing-disposition.test.cjs
       - name: Fencing-ON 24MP acceptance readiness (dry run; must report BLOCKED, never fencing-OFF data)

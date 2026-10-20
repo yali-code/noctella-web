@@ -1,42 +1,33 @@
-// Deterministic checks of the staging tooling's own mechanisms (no staging, no network beyond loopback).
-import { test } from "node:test";
+﻿import {test} from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { guardTarget, startAckDroppingProxy } from "./staging-driver.mjs";
-import { refuseUnlessStaging, PRODUCTION_SERVICE_ID } from "./park-at-intent.mjs";
-
-test("the lost-ack proxy delivers nothing to the client only after the server completed (committed) the request", async () => {
-  let commits = 0;
-  const server = http.createServer((req, res) => { req.resume(); req.on("end", () => { commits += 1; res.writeHead(201, { "content-type": "application/json" }); res.end(JSON.stringify({ id: "photo-1" })); }); });
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const upstream = new URL(`http://127.0.0.1:${server.address().port}`);
-  const proxy = await startAckDroppingProxy(upstream);
-  try {
-    await assert.rejects(fetch(new URL("/api/products/p/photos", proxy.url), { method: "POST", body: "x" }));
-    assert.equal(commits, 1);
-    assert.deepEqual(proxy.captured, [{ status: 201, body: JSON.stringify({ id: "photo-1" }) }]);
-  } finally { await proxy.close(); await new Promise((r) => server.close(r)); }
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {EventEmitter} from "node:events";
+import {guardTarget,startAckDroppingProxy,selectIntendedResponse} from "./staging-driver.mjs";
+import {refuseUnlessStaging,parseCase,startPark,PHASES,PRODUCTION_SERVICE_ID} from "./park-at-intent.mjs";
+const id="12345678-1234-4123-8123-123456789abc", route=`/api/products/${id}/photos`, key="f2-synthetic-key";
+const target={method:"POST",path:route,key};
+const listen=s=>new Promise(r=>s.listen(0,"127.0.0.1",()=>r(new URL(`http://127.0.0.1:${s.address().port}`))));
+const close=s=>new Promise(r=>s.close(r));
+const lost=(p,method="POST",url=route,k=key)=>assert.rejects(fetch(new URL(url,p.url),{method,headers:{"idempotency-key":k,cookie:"SECRET_COOKIE",authorization:"SECRET_AUTH"},...(method==="GET"?{}:{body:"x"})}));
+async function fixture(fn,handler=(req,res)=>{req.resume();req.on("end",()=>res.end(JSON.stringify({id,password:"SECRET_PASSWORD"})));}) {const s=http.createServer(handler),u=await listen(s),p=await startAckDroppingProxy(u,target);try{await fn(p);}finally{await p.close();await close(s);}}
+test("complete upstream response is required before dropping acknowledgement; no secrets captured",async()=>{
+ let finish,started;const received=new Promise(r=>started=r);await fixture(async p=>{let ended=false;const pending=lost(p).then(()=>ended=true);await received;await new Promise(r=>setTimeout(r,30));assert.equal(ended,false);assert.equal(p.captured.length,0);finish();await pending;const r=selectIntendedResponse(p);assert.equal(r.complete,true);assert.equal(r.photoId,id);assert.doesNotMatch(JSON.stringify(p.captured),/SECRET|cookie|authorization|password/i);},(req,res)=>{req.resume();req.on("end",()=>{res.writeHead(201);res.write('{"id":');finish=()=>res.end(JSON.stringify(id)+'}');started();});});
 });
+test("unrelated 401 before and after intended 201 cannot select captured[0]",async()=>fixture(async p=>{await lost(p,"GET","/unrelated");await lost(p);await lost(p,"GET","/later");assert.equal(p.captured[0].status,401);assert.equal(selectIntendedResponse(p).status,201);},(req,res)=>{req.resume();req.on("end",()=>{res.statusCode=req.method==="POST"?201:401;res.end(JSON.stringify({id}));});}));
+for(const [name,method,url,k] of [["method","GET",route,key],["path","POST","/wrong",key],["key","POST",route,"wrong"],["query","POST",route+"?cookie=SECRET",key]])test("refuses wrong "+name,async()=>fixture(async p=>{await lost(p,method,url,k);assert.throws(()=>selectIntendedResponse(p),/missing/);assert.doesNotMatch(JSON.stringify(p.captured),/SECRET/);}));
+test("duplicate matching attempts are ambiguous even when only one succeeds",async()=>fixture(async p=>{await lost(p);await lost(p);assert.throws(()=>selectIntendedResponse(p),/ambiguous/);}));
+test("incomplete upstream response cannot satisfy acceptance",async()=>fixture(async p=>{await lost(p);assert.equal(p.captured[0].complete,false);assert.throws(()=>selectIntendedResponse(p),/incomplete/);},(req,res)=>{req.resume();req.on("end",()=>{res.writeHead(201,{"content-length":200});res.write('{"id":"partial');setImmediate(()=>res.destroy());});}));
+test("unrelated successful response cannot satisfy missing intended request",async()=>fixture(async p=>{await lost(p,"GET","/unrelated");assert.throws(()=>selectIntendedResponse(p),/missing/);}));
+test("W4 correlation uses intake identity in its existing route, no invented production key",async()=>{const s=http.createServer((q,r)=>{q.resume();q.on("end",()=>r.end(JSON.stringify({photos:[{id}]})));}),u=await listen(s),p=await startAckDroppingProxy(u,{method:"POST",path:`/api/ai-product-intakes/${id}/finalize-photos`,intakeId:id});try{await assert.rejects(fetch(new URL(p.expected.path,p.url),{method:"POST",body:"{}"}));assert.deepEqual(selectIntendedResponse(p).photoIds,[id]);assert.equal(p.attempts[0].idempotencyKey,undefined);}finally{await p.close();await close(s);}});
+test("HTTP target guards run before login and reject production, mismatch and embedded credentials",()=>{const ok={F2_STAGING_API:"https://staging.invalid",F2_STAGING_CONFIRM_HOST:"staging.invalid",F2_STAGING_TARGET_SERVICE_ID:"srv-staging123",F2_PRODUCTION_HOSTS:"prod.invalid"};assert.equal(guardTarget(ok).host,"staging.invalid");for(const patch of [{F2_STAGING_TARGET_SERVICE_ID:undefined},{F2_STAGING_TARGET_SERVICE_ID:PRODUCTION_SERVICE_ID},{F2_PRODUCTION_HOSTS:"staging.invalid"},{F2_STAGING_CONFIRM_HOST:"other"},{F2_PRODUCTION_HOSTS:""},{F2_STAGING_API:"https://secret:password@staging.invalid"}])assert.throws(()=>guardTarget({...ok,...patch}));});
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),"f2-guard-unit-"));const db=path.join(dir,"db");fs.writeFileSync(db,"");const image=path.join(dir,"image.jpg");fs.writeFileSync(image,"synthetic");
+const env={F2_STAGING_ACCEPTANCE:"enabled",RENDER_SERVICE_ID:"srv-staging123",F2_STAGING_TARGET_SERVICE_ID:"srv-staging123",PHOTO_OWNERSHIP_FENCING_ENABLED:"true",PHOTO_PREPARATION_CONFINEMENT:"required",PHOTO_PREPARATION_LAUNCHER:"/launcher",DATABASE_URL:db,PRODUCT_PHOTO_DIR:dir,F2_STAGING_SYNTHETIC_CASE:"confirmed",AI_INTAKE_PHOTO_DIR:dir};
+test("park target guards reject production, mismatch, missing explicit DB/storage, flags and drivers",()=>{assert.doesNotThrow(()=>refuseUnlessStaging(env));for(const patch of [{F2_STAGING_ACCEPTANCE:""},{RENDER_SERVICE_ID:undefined},{RENDER_SERVICE_ID:PRODUCTION_SERVICE_ID,F2_STAGING_TARGET_SERVICE_ID:PRODUCTION_SERVICE_ID},{F2_STAGING_TARGET_SERVICE_ID:"srv-other"},{PHOTO_OWNERSHIP_FENCING_ENABLED:"false"},{PHOTO_PREPARATION_CONFINEMENT:"optional"},{DATABASE_URL:"/missing.sqlite"},{DATABASE_URL:undefined},{PRODUCT_PHOTO_DIR:"relative"},{DATABASE_DRIVER:"unexpected"},{DATABASE_DRIVER:"postgres",DATABASE_URL:"file"},{DATABASE_DRIVER:"supabase-postgres",SUPABASE_DATABASE_URL:undefined}])assert.throws(()=>refuseUnlessStaging({...env,...patch}));});
+test("only explicit supported phases, one case, and confirmed synthetic inputs are accepted",()=>{for(const workflow of ["w2","w4"])for(const phase of PHASES)assert.equal(parseCase([workflow,phase,id,id,...(workflow==="w2"?[image]:[])],env).phase,phase);for(const phase of ["afterIntent","lost-cleanup","unknown",undefined])assert.throws(()=>parseCase(["w2",phase,id,id,image],env));assert.throws(()=>parseCase(["w2",PHASES[0],id,id,image],{...env,F2_STAGING_SYNTHETIC_CASE:undefined}));});
+test("failure/timeout/interruption preserve child and state; arbitrary child diagnostics do not leak",async()=>{const events=[],work=[];const fake=()=>{const c=new EventEmitter();c.pid=process.pid;c.connected=true;c.send=()=>{};c.disconnect=()=>c.connected=false;c.unref=()=>{};return c;};const control=startPark(["w2",PHASES[0],id,id,image],{env,deadlineMs:10,emit:e=>events.push(e),forkChild:(_f,_a,o)=>{work.push(JSON.parse(o.env.F2_PARK_CASE).workDir);return fake();}});await new Promise(r=>setTimeout(r,25));control.child.emit("message",{event:"ERROR",message:"SECRET"});control.interrupt();assert(events.filter(e=>e.event!=="CHILD_STARTED").every(e=>e.preserved));assert.doesNotMatch(JSON.stringify(events),/SECRET/);for(const w of work){assert(fs.existsSync(w));fs.rmSync(w,{recursive:true});}});
+test.after(()=>fs.rmSync(dir,{recursive:true}));
 
-test("the driver refuses a missing/production/mismatched target identity before any request", () => {
-  const ok = { F2_STAGING_API: "https://f2-staging.example.test", F2_STAGING_CONFIRM_HOST: "f2-staging.example.test", F2_STAGING_TARGET_SERVICE_ID: "srv-abcdef123456", F2_PRODUCTION_HOSTS: "api.example.test" };
-  assert.equal(guardTarget(ok).host, "f2-staging.example.test");
-  assert.throws(() => guardTarget({ ...ok, F2_STAGING_TARGET_SERVICE_ID: undefined }), /TARGET_SERVICE_ID/);
-  assert.throws(() => guardTarget({ ...ok, F2_STAGING_TARGET_SERVICE_ID: "srv-db34390m7kps73cv8l6g" }), /production service/);
-  assert.throws(() => guardTarget({ ...ok, F2_PRODUCTION_HOSTS: "" }), /PRODUCTION_HOSTS/);
-  assert.throws(() => guardTarget({ ...ok, F2_STAGING_API: "https://api.example.test", F2_STAGING_CONFIRM_HOST: "api.example.test" }), /production host/);
-  assert.throws(() => guardTarget({ ...ok, F2_STAGING_CONFIRM_HOST: "other.test" }), /CONFIRM_HOST/);
-});
-
-test("park-at-intent fails closed on absent/production/mismatched identity, fencing OFF, missing confinement or roots", () => {
-  const ok = { F2_STAGING_ACCEPTANCE: "enabled", RENDER_SERVICE_ID: "srv-staging123", F2_STAGING_TARGET_SERVICE_ID: "srv-staging123", PHOTO_OWNERSHIP_FENCING_ENABLED: "true",
-    PHOTO_PREPARATION_CONFINEMENT: "required", PHOTO_PREPARATION_LAUNCHER: "/x/landlock-worker", DATABASE_URL: "/var/data/noctella.sqlite", PRODUCT_PHOTO_DIR: "/var/data/product-photos" };
-  assert.doesNotThrow(() => refuseUnlessStaging(ok));
-  assert.throws(() => refuseUnlessStaging({ ...ok, F2_STAGING_ACCEPTANCE: undefined }), /F2_STAGING_ACCEPTANCE/);
-  assert.throws(() => refuseUnlessStaging({ ...ok, RENDER_SERVICE_ID: undefined }), /absent/);
-  assert.throws(() => refuseUnlessStaging({ ...ok, RENDER_SERVICE_ID: PRODUCTION_SERVICE_ID, F2_STAGING_TARGET_SERVICE_ID: PRODUCTION_SERVICE_ID }), /production/);
-  assert.throws(() => refuseUnlessStaging({ ...ok, F2_STAGING_TARGET_SERVICE_ID: "srv-other" }), /does not match/);
-  assert.throws(() => refuseUnlessStaging({ ...ok, PHOTO_OWNERSHIP_FENCING_ENABLED: "false" }), /fencing/);
-  assert.throws(() => refuseUnlessStaging({ ...ok, PHOTO_PREPARATION_CONFINEMENT: undefined }), /confined/);
-  assert.throws(() => refuseUnlessStaging({ ...ok, DATABASE_URL: undefined }), /DATABASE_URL/);
-});
+test("attempt budget overflow fails closed",async()=>fixture(async p=>{for(let i=0;i<17;i++)await lost(p,"GET","/unrelated");assert.equal(p.attempts.length,16);assert.throws(()=>selectIntendedResponse(p),/budget/);}));

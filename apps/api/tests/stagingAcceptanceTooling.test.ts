@@ -37,6 +37,8 @@ const driverModule = path.join(__dirname, "..", "..", "..", "scripts", "photo-st
 let server: import("node:http").Server, db: any, env: Record<string, string>, categoryId: string, adminId: string;
 const events: Array<Record<string, any>> = [];
 const run = async (argv: string[], extra: Record<string, string | undefined> = {}) => {
+  // Isolate test cases in the middleware's ordinary per-IP store; production limits are unchanged.
+  (await import("../src/middleware/adminLoginRateLimit")).adminLoginRateLimit.resetKey("127.0.0.1");
   const { runDriver } = await import(driverModule);
   return runDriver(argv, { ...env, ...extra }, (event: string, data: object) => events.push({ event, ...data })) as Promise<number>;
 };
@@ -118,9 +120,26 @@ describe("staging driver against the real API", () => {
     }
   });
 
+
+  it("repeated single-photo W4 setup uses unique reviewed titles without modifying existing products", async () => {
+    const old=db.all(sql`SELECT id,title,slug,sku FROM products ORDER BY id`);
+    const before=count("products");
+    for(let i=0;i<2;i++){expect(await run(["w4-setup",categoryId,path.join(root,"small.jpg")])).toBe(0);expect(last("w4-setup").stagedPhotoIds).toHaveLength(1);}
+    expect(count("products")).toBe(before+2);
+    for(const row of old)expect(db.all(sql`SELECT id,title,slug,sku FROM products WHERE id=${row.id}`)[0]).toEqual(row);
+    const setup=last("w4-setup");
+    expect(await run(["w4-lost-ack",setup.intakeId,setup.stagedPhotoIds.join(",")])).toBe(0);
+    expect(last("w4-lost-ack")).toMatchObject({pass:true,status:200,clientOutcome:"ack-lost"});
+  });
+  it("W4 replay retains original IDs and the complete current list after later W2 photos",async()=>{
+    const original=last("w4"), before=count("product_photos");
+    expect(await run(["w4-replay",original.intakeId,original.originalW4Ids.join(",")])).toBe(0);
+    const evidence=last("w4-replay");expect(evidence.afterIds.length).toBeGreaterThan(2);expect(evidence.beforeIds).toEqual(evidence.afterIds);expect(count("product_photos")).toBe(before);
+  });
+
   it.runIf(!!launcher)("park-at-intent (Linux, confined): live executor refused, attestation of it refused, killed executor recovered once", async () => {
-    const parkEnv = { ...process.env, F2_STAGING_ACCEPTANCE: "enabled", RENDER_SERVICE_ID: "srv-localtooling01", F2_STAGING_TARGET_SERVICE_ID: "srv-localtooling01" };
-    const child: ChildProcess = spawn(process.execPath, [path.join(__dirname, "..", "..", "..", "scripts", "photo-staging-acceptance", "park-at-intent.mjs"), productId, path.join(root, "small.jpg"), adminId],
+    const parkEnv = { ...process.env, F2_STAGING_ACCEPTANCE: "enabled", RENDER_SERVICE_ID: "srv-localtooling01", F2_STAGING_TARGET_SERVICE_ID: "srv-localtooling01", F2_STAGING_SYNTHETIC_CASE:"confirmed" };
+    const child: ChildProcess = spawn(process.execPath, [path.join(__dirname, "..", "..", "..", "scripts", "photo-staging-acceptance", "park-at-intent.mjs"), "w2", "before-publication", productId, adminId, path.join(root, "small.jpg")],
       { cwd: path.resolve(__dirname, ".."), env: parkEnv, stdio: ["ignore", "pipe", "inherit"] });
     let parked: any;
     try {

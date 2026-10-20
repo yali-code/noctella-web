@@ -14,7 +14,7 @@
 // service identity, and none is added. Exit code: 0 only when every acceptance check of the command passed.
 //
 // Commands:
-//   w4 <categoryId> <img1> <img2>          create intake -> stage 2 photos -> mock proposal -> accept title -> stock
+//   w4 <categoryId> <img1> <img2>          create intake -> stage 2 photos -> mock proposal -> edit unique title -> stock
 //                                           acceptance (creates the product) -> finalize-photos (201) -> repeat (200)
 //   w2 <productId> <img> [key]              one protected W2 upload with an explicit Idempotency-Key
 //   w2-replay <productId> <img>             same key twice: identical photo id (idempotent replay)
@@ -44,6 +44,7 @@ export function guardTarget(env = process.env) {
   if (production.length === 0) throw new Error("refused: F2_PRODUCTION_HOSTS must list the production API host(s) so they can be refused");
   if (production.includes(url.host.toLowerCase()) || production.includes(url.hostname.toLowerCase())) throw new Error("refused: the API host is a production host");
   if (url.host !== env.F2_STAGING_CONFIRM_HOST) throw new Error("refused: F2_STAGING_CONFIRM_HOST must equal the staging API host");
+  if (!["http:","https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw Error("refused: API must be a credential-free HTTP(S) origin");
   return url;
 }
 const log = (event, data = {}) => console.log(JSON.stringify({ event, ...data }));
@@ -68,6 +69,7 @@ async function call(api, cookie, method, route, body) {
 }
 
 function photoForm(file, field = "photo") {
+  const st=fs.lstatSync(file);if(!st.isFile() || st.isSymbolicLink() || st.size<1 || st.size>92160) throw Error("one regular synthetic image <=90KiB required");
   const form = new FormData();
   form.append(field, new Blob([fs.readFileSync(file)], { type: file.endsWith(".png") ? "image/png" : "image/jpeg" }), path.basename(file));
   return form;
@@ -82,26 +84,54 @@ async function w2Upload(api, cookie, productId, file, key, viaProxy) {
 }
 
 /**
- * Lost-acknowledgement proxy: forwards ONE request upstream, reads the COMPLETE upstream response (so the server has
+ * Lost-acknowledgement proxy: correlates ONE intended request among bounded loopback traffic forwarded upstream, reads the COMPLETE upstream response (so the server has
  * finished: committed or failed), records it, and then destroys the client socket without sending anything back.
  */
-export function startAckDroppingProxy(upstream) {
-  const captured = [];
+export function selectIntendedResponse(proxy) {
+  if(proxy.overflow) throw Error("proxy attempt budget exceeded");
+  const attempts = proxy.attempts.filter(r => r.matches);
+  if (attempts.length !== 1) throw Error("ambiguous or missing intended request");
+  const results = proxy.captured.filter(r => r.attemptId === attempts[0].attemptId);
+  if (results.length !== 1 || !results[0].complete || results[0].error) throw Error("intended response incomplete or ambiguous");
+  return results[0];
+}
+export function startAckDroppingProxy(upstream, expected) {
+  if (!expected || expected.method !== "POST" || !/^\/api\/(products\/[0-9a-f-]+\/photos|ai-product-intakes\/[0-9a-f-]+\/finalize-photos)$/.test(expected.path) ||
+      (!expected.key && !expected.intakeId) || (expected.intakeId && expected.path !== '/api/ai-product-intakes/'+expected.intakeId+'/finalize-photos')) throw Error("explicit intended request identity required");
+  const captured = [], attempts = [];
+  let overflow=false;
   const agent = upstream.protocol === "https:" ? https : http;
-  const server = http.createServer((req, res) => {
+  const server = http.createServer((req) => {
+    if(attempts.length>=16){overflow=true;req.socket.destroy();return;}
+    const u = new URL(req.url, "http://loopback.invalid");
+    const pathMatches = u.pathname === expected.path && !u.search;
+    const keyMatches = expected.key ? req.headers["idempotency-key"] === expected.key : true;
+    const attempt = { attemptId: attempts.length+1, method: req.method, path: pathMatches ? expected.path : "[unrelated]", pathMatches, keyMatches,
+      ...(expected.key && keyMatches ? { idempotencyKey: expected.key } : {}), ...(expected.intakeId && pathMatches ? { intakeId: expected.intakeId } : {}),
+      matches: req.method === expected.method && pathMatches && keyMatches };
+    attempts.push(attempt);
+    let recorded=false, deadline;
+    const record = data => { clearTimeout(deadline); if(!recorded) { recorded=true; captured.push({ ...attempt, ...data }); } req.socket.destroy(); };
     const out = agent.request({ protocol: upstream.protocol, hostname: upstream.hostname, port: upstream.port || undefined, method: req.method, path: req.url,
-      headers: { ...req.headers, host: upstream.host } }, (up) => {
-      const chunks = [];
-      up.on("data", (c) => chunks.push(c));
+      headers: { ...req.headers, host: upstream.host } }, up => {
+      let bytes=0, chunks=[];
+      up.on("data", chunk => { bytes+=chunk.length; if(bytes<=1048576) chunks.push(chunk); else chunks=[]; });
       up.on("end", () => {
-        captured.push({ status: up.statusCode, body: Buffer.concat(chunks).toString("utf8") });
-        req.socket.destroy(); // the acknowledgement is lost AFTER the server completed the request
+        if(!up.complete) return record({complete:false,error:"INCOMPLETE_RESPONSE"});
+        let value; try { value=JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch {}
+        // Capture only non-secret identifiers, never response bodies, headers or cookies.
+        const id = attempt.matches && typeof value?.id === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value.id) ? value.id : null;
+        const photoIds = attempt.matches && Array.isArray(value?.photos) ? value.photos.map(p=>p.id).filter(id=>typeof id==="string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)) : [];
+        record({complete:true,status:up.statusCode,photoId:id,photoIds,bytes,...(bytes>1048576?{error:"RESPONSE_TOO_LARGE"}:{})});
       });
+      up.on("aborted",()=>record({complete:false,error:"UPSTREAM_ABORTED"}));
+      up.on("error",()=>record({complete:false,error:"UPSTREAM_ERROR"}));
     });
-    out.on("error", (e) => { captured.push({ error: String(e.code ?? e) }); req.socket.destroy(); });
+    deadline=setTimeout(()=>{record({complete:false,error:"UPSTREAM_TIMEOUT"});out.destroy();},30000);
+    out.on("error",()=>record({complete:false,error:"UPSTREAM_ERROR"}));
     req.pipe(out);
   });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ url: new URL(`http://127.0.0.1:${server.address().port}`), captured, close: () => new Promise((r) => server.close(r)) })));
+  return new Promise(resolve => server.listen(0,"127.0.0.1",()=>resolve({url:new URL('http://127.0.0.1:'+server.address().port),expected,attempts,captured,get overflow(){return overflow;},close:()=>new Promise(r=>server.close(r))})));
 }
 
 async function photoCount(api, cookie, productId) {
@@ -114,8 +144,9 @@ async function photoCount(api, cookie, productId) {
 export async function runDriver(argv, env = process.env, emit = log) {
   const api = guardTarget(env); // before any login or request
   const [command, ...args] = argv;
-  const known = ["w4", "w2", "w2-expect", "w2-replay", "w2-lost-ack"];
+  const known = ["w4", "w4-setup", "w4-replay", "w4-lost-ack", "w2", "w2-expect", "w2-replay", "w2-lost-ack"];
   if (!known.includes(command)) throw new Error(`unknown command (${known.join(" | ")})`);
+  if (command === "w4-setup" && args.length !== 2) throw Error("w4-setup requires categoryId and exactly one synthetic image");
   const cookie = await login(api, env);
   const report = (event, data) => { emit(event, data); return data.pass === true ? 0 : 1; };
   if (command === "w2") {
@@ -139,46 +170,73 @@ export async function runDriver(argv, env = process.env, emit = log) {
   if (command === "w2-lost-ack") {
     const [productId, file] = args, key = `f2-lostack-${randomUUID()}`;
     const before = await photoCount(api, cookie, productId);
-    const proxy = await startAckDroppingProxy(api);
+    const proxy = await startAckDroppingProxy(api, {method:"POST",path:`/api/products/${productId}/photos`,key});
     let clientOutcome;
     try { await w2Upload(api, cookie, productId, file, key, proxy.url); clientOutcome = "UNEXPECTED_ACK_DELIVERED"; }
     catch (e) { clientOutcome = `ack-lost (${e.cause?.code ?? e.name})`; }
     finally { await proxy.close(); }
-    const upstream = proxy.captured[0] ?? {};
-    const committedId = (() => { try { return JSON.parse(upstream.body).id; } catch { return null; } })();
+    const upstream = selectIntendedResponse(proxy);
+    const committedId = upstream.photoId;
     const afterLoss = await photoCount(api, cookie, productId);
     const retry = await w2Upload(api, cookie, productId, file, key);
     const afterRetry = await photoCount(api, cookie, productId);
     return report("w2-lost-ack", {
-      key, clientOutcome, upstreamStatus: upstream.status ?? upstream.error, retryStatus: retry.status,
+      key, clientOutcome, correlation: {attemptId:upstream.attemptId,method:upstream.method,path:upstream.path,complete:upstream.complete}, upstreamStatus: upstream.status ?? upstream.error, retryStatus: retry.status,
       sameIdAsCommitted: !!committedId && retry.json.id === committedId,
       photosBefore: before.count, photosAfterLoss: afterLoss.count, photosAfterRetry: afterRetry.count,
       pass: clientOutcome.startsWith("ack-lost") && upstream.status === 201 && retry.status === 201 && retry.json.id === committedId
-        && afterLoss.count === before.count + 1 && afterRetry.count === afterLoss.count,
+        && afterLoss.count === before.count + 1 && afterRetry.count === afterLoss.count
+        && !before.ids.includes(committedId) && before.ids.every(id=>afterLoss.ids.includes(id)) && afterLoss.ids.includes(committedId) && afterLoss.ids.every(id=>afterRetry.ids.includes(id)),
     });
+  }
+  if (command === "w4-replay" || command === "w4-lost-ack") {
+    const [id, originalIdsCsv] = args;
+    const originalIds = (originalIdsCsv ?? "").split(",").filter(Boolean);
+    if (!originalIds.length || new Set(originalIds).size !== originalIds.length) throw Error("explicit original W4 photo IDs required");
+    const intake = await call(api,cookie,"GET",`/api/ai-product-intakes/${id}`);
+    const productId = intake.json.resultProductId;
+    if (intake.status!==200 || !productId) throw Error("intake read failed");
+    const staged=await call(api,cookie,"GET",`/api/ai-product-intakes/${id}/photos`);
+    if(staged.status!==200 || !Array.isArray(staged.json) || staged.json.length!==originalIds.length || !staged.json.every(p=>originalIds.includes(p.id))) throw Error("original W4 IDs do not match this intake staged set");
+    const before = await photoCount(api,cookie,productId);
+    const route = `/api/ai-product-intakes/${id}/finalize-photos`;
+    let upstream, clientOutcome;
+    if(command === "w4-lost-ack") {
+      const proxy=await startAckDroppingProxy(api,{method:"POST",path:route,intakeId:id});
+      try { await call(proxy.url,cookie,"POST",route,{}); clientOutcome="UNEXPECTED_ACK_DELIVERED"; } catch { clientOutcome="ack-lost"; } finally { await proxy.close(); }
+      upstream=selectIntendedResponse(proxy);
+    }
+    const replay=await call(api,cookie,"POST",route,{}), after=await photoCount(api,cookie,productId);
+    const sameList=(a,b)=>a.length===b.length && new Set(a).size===a.length && a.every(id=>b.includes(id));
+    const expectedIds=upstream?.photoIds ?? before.ids;
+    return report(command,{intakeId:id,productId,originalIds,beforeIds:before.ids,afterIds:after.ids,status:replay.status,clientOutcome,correlation:upstream?{attemptId:upstream.attemptId,method:upstream.method,path:upstream.path,complete:upstream.complete}:undefined,
+      pass:replay.status===200 && sameList(after.ids,replay.json.photos?.map(p=>p.id)??[]) && sameList(expectedIds,after.ids) && originalIds.every(id=>after.ids.includes(id)) && (command==="w4-replay" ? sameList(before.ids,after.ids) : clientOutcome==="ack-lost" && upstream.status===201 && after.count===before.count+originalIds.length)});
   }
   {
     const [categoryId, img1, img2] = args;
     const intake = await call(api, cookie, "POST", "/api/ai-product-intakes", {});
     if (intake.status !== 201 && intake.status !== 200) throw new Error(`intake create ${intake.status}`);
     const id = intake.json.id;
-    for (const img of [img1, img2]) { const r = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/photos`, photoForm(img)); if (r.status >= 300) throw new Error(`intake photo ${r.status} ${r.json.code ?? ""} ${r.json.error ?? ""}`); }
+    for (const img of [img1, img2].filter(Boolean)) { const r = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/photos`, photoForm(img)); if (r.status >= 300) throw new Error(`intake photo HTTP ${r.status}`); }
     const gen = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/generate`, {});
     if (gen.status >= 300) throw new Error(`generate ${gen.status} (AI_INTAKE_PROVIDER must be unset or mock on staging)`);
     let proposal = await call(api, cookie, "GET", `/api/ai-product-intakes/${id}/proposal`);
-    const accepted = await call(api, cookie, "PATCH", `/api/ai-product-intakes/${id}/proposal/fields/title`, { decision: "accepted", expectedUpdatedAt: proposal.json.updatedAt });
+    const accepted = await call(api, cookie, "PATCH", `/api/ai-product-intakes/${id}/proposal/fields/title`, { decision: "edited", value: `F2 synthetic ${randomUUID()}`, expectedUpdatedAt: proposal.json.updatedAt });
     if (accepted.status >= 300) throw new Error(`accept title ${accepted.status}`);
     proposal = await call(api, cookie, "GET", `/api/ai-product-intakes/${id}/proposal`);
     const stock = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/stock-acceptance`, { categoryId, type: "unique_item", expectedProposalUpdatedAt: proposal.json.updatedAt });
     if (stock.status !== 201) throw new Error(`stock acceptance ${stock.status}`);
+    const staged = await call(api,cookie,"GET",`/api/ai-product-intakes/${id}/photos`);
+    if (staged.status!==200 || !Array.isArray(staged.json) || staged.json.length !== [img1,img2].filter(Boolean).length) throw Error("staged photo list mismatch");
+    if (command === "w4-setup") return report("w4-setup",{intakeId:id,productId:stock.json.id,stagedPhotoIds:(Array.isArray(staged.json)?staged.json:staged.json.photos??[]).map(p=>p.id),pass:true});
     const first = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/finalize-photos`, {});
     const second = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/finalize-photos`, {});
-    return report("w4", { intakeId: id, productId: stock.json.id, finalize: first.status, photos: first.json.photos?.length, repeat: second.status, repeatPhotos: second.json.photos?.length,
-      pass: first.status === 201 && first.json.photos?.length === 2 && second.status === 200 && second.json.photos?.length === 2 });
+    return report("w4", { intakeId: id, productId: stock.json.id, originalW4Ids:first.json.photos?.map(p=>p.id), finalize: first.status, photos: first.json.photos?.length, repeat: second.status, repeatPhotos: second.json.photos?.length,
+      pass: first.status === 201 && first.json.photos?.length === 2 && second.status === 200 && second.json.photos?.length === 2 && first.json.photos.every(p=>second.json.photos.some(q=>q.id===p.id)) });
   }
 }
 
 if (process.argv[1]?.endsWith("staging-driver.mjs")) {
   runDriver(process.argv.slice(2), process.env).then((code) => { process.exitCode = code; },
-    (e) => { log("error", { message: String(e.message ?? e) }); process.exitCode = 1; });
+    () => { log("error", { message: "guard, correlation or acceptance failed; no secrets emitted" }); process.exitCode = 1; });
 }

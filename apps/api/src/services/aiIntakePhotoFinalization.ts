@@ -98,6 +98,7 @@ export async function finalizeAiIntakePhotos(
     await Promise.allSettled(privateFiles.map((file) => unlink(file)));
     const canonicalRoot = fencedOptions.canonicalRoot ?? productPhotoStaticRoot;
     await Promise.allSettled(publications.map((authority) => cleanupCommittedPublication(canonicalRoot, authority)));
+    if (scope) await fencedOptions.hooks?.afterCommit?.();
   }
   return await finalizedResult(db, result);
   } finally { scope?.close(); }

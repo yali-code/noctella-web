@@ -46,6 +46,8 @@ export interface W4FencedOptions {
     afterSeal?: (stagedPhotoId: string) => void | Promise<void>; afterIntent?: (stagedPhotoId: string) => void | Promise<void>;
     copyPhase?: (stagedPhotoId: string, artifact: "main" | "thumb", phase: CopyPhase) => void | Promise<void>;
     afterPublish?: (stagedPhotoId: string) => void | Promise<void>;
+    /** External staging/test observer after committed cleanup, while the publication scope is still live. */
+    afterCommit?: () => void | Promise<void>;
   };
 }
 type W4Claim = OperationClaim & { operationId?: string };
