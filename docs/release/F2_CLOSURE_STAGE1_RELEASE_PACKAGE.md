@@ -46,7 +46,7 @@ The upgrade path itself is safe for data (§3). Everything else in this package 
    - Risk: if the Render build image lacks a compiler, the whole deploy fails, including Etsy-only deploys.
    - The probe compiled successfully in the runtime shell. The build image is assumed to be the same family, but this is **unverified**.
 2. Environment, set only at activation time:
-   - `PRODUCT_PHOTO_DISK_STAGING_ENABLED=true` (the W2 route requires it)
+   - `PRODUCT_PHOTO_DISK_STAGING_ENABLED=true` (with fencing OFF it routes admin uploads to the bounded handler; it also routes AI-intake photo uploads to staged ingress. With fencing ON, admin uploads use the bounded W2 handler regardless of this flag)
    - `PHOTO_PREPARATION_CONFINEMENT=required`
    - `PHOTO_PREPARATION_LAUNCHER=<checkout>/apps/api/dist/bin/landlock-worker`
    - `PHOTO_OWNERSHIP_FENCING_ENABLED=true` **last**, after §3 quiescence.
@@ -96,7 +96,7 @@ The SQLite price-rebuild path (`INSERT … SELECT *` with a fixed column list) r
 4. The first start of the new code runs `ensureSchema`, which **creates** the F2 tables (§3, top). No photo directories are created while fencing is OFF.
 
 **Quiescence and activation sequence (prepared; not executed):**
-1. Deploy the candidate with fencing OFF and the launcher variables set (unused while OFF). Verify the deploy ordering in the logs as above.
+1. Apply the §2 build-command change (`… && npm run build:launcher -w apps/api`). Then deploy the candidate with fencing OFF and the launcher variables set (unused while OFF). Verify the deploy ordering in the logs as above.
 2. Run `photos:release-preflight`, which is read-only:
    - FAIL for `flag.preparation-confinement` is expected while fencing is OFF only if the launcher variables are missing;
    - `launcher.provenance` must PASS.
@@ -114,9 +114,10 @@ The SQLite price-rebuild path (`INSERT … SELECT *` with a fixed column list) r
 1. **Stop admission** of new photo-writing work (as in activation step 3) and **quiesce** in-flight requests.
 2. **With the protected code still running and fencing still ON**, run `photos:publication-intents`, which is read-only. For every `authorized` intent:
    - **Executor alive or resumable** (`resumable: true`): retry its request (same Idempotency-Key and same file, or re-run the W4 finalization) so the protected code commits it or moves it to review.
+     - **W4 limit:** if the intent's Product has since gained a photo or left Draft, the W4 Product precheck (`aiIntakePhotoFinalization.ts`) refuses the finalization before the authorized intent can resume. That intent then cannot be resolved through the route; it stays BLOCKED (fail-closed), and rollback **stops here** as below.
    - **Executor lost on a previous instance** (`blockedReason` set): attest **only** with genuine termination evidence (the Render event/instance record showing that instance stopped), using the exact `--operation/--epoch/--executor` from the report. Then retry.
    - **Termination cannot be established:** the intent stays BLOCKED, and rollback **stops here**.
-3. Verify `photos:publication-intents` shows **zero `authorized` intents** and `photos:operations-report` shows no live `preparing`/`sealed` operations.
+3. Verify `photos:publication-intents` shows **zero `authorized` intents**, and `photos:operations-report` shows **no rollback blockers**: no `preparing`, `sealed` or `review` operation, live lease or not. This is the code's own guard, `OWNERSHIP_ROLLBACK_BLOCKERS_SQL` in `photoOwnershipFencing.ts`.
 4. **Only then** may fencing be disabled. With fencing OFF, these legacy writers become reachable again:
    - W1 legacy and ERP uploads;
    - the W2 legacy path (when `PRODUCT_PHOTO_DISK_STAGING_ENABLED` is not `true`);
@@ -309,5 +310,19 @@ It is the revision accepted on RC2 (§4.1).
   - the launcher restricts writes only (4B review F3);
   - the RC2 configured branch is still `main`.
 - **Retained records:** `a272b007…`, `322cf602…`, `39271b8a…` (intake `3aa11579…`); `/var/data/f2-493-20261020`, `/var/data/f2-84f3938-20261020`.
+
+**Owner decisions (recorded 20 October 2026, Task 2 authorization):**
+1. **Grouping.** The owner approved this administrative grouping; it is not a historical definition.
+   - **Stage 3:** release-candidate acceptance, meaning exact-head CI plus independent review of the final candidate.
+   - **Stage 4:** production verification, enablement and acceptance per §3.
+2. **Availability limitations accepted for this release.** With fencing ON:
+   - Instagram preparation is refused;
+   - canonical deletion is refused;
+   - cross-instance restart may require exact exit attestation.
+
+   4B (`05dc70f`, `442181b`) and 4C stay separate and parked. Neither is integrated, and W11/0042 stays dormant.
+3. **One exact-head CI run.** The owner authorized a single full `photo-master-stage1-4` run on the final candidate. The trigger follows the established push-list precedent (`684ad2e`): `fix/f2-w4-finalize-precheck` is added to the workflow's push list, and nothing else in the workflow changes.
+4. **Review.** The independent review is performed by a separate **agent instance**, not a human reviewer.
+5. **Production.** After CI and the review pass, the §3 production procedure is authorized, without new paid resources, plan changes, teardown, evidence deletion or W11/0042 activation.
 
 **Counters:** F2 closure **2/4**, overall engineering **4/12**. No criterion beyond Stage 2 is met yet.
