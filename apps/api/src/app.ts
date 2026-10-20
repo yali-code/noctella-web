@@ -120,8 +120,9 @@ app.use("/api/webhooks", marketplaceSyncWebhookRouter);
 app.use(express.json());
 // PUBLIC: product photos back both the admin app and the public storefront.
 app.use(productPhotoStaticPath, express.static(productPhotoStaticRoot));
-// #472 parity 4B: protected-mode Instagram derivatives (non-canonical, content-addressed; dotfiles stay unserved).
-app.use(INSTAGRAM_DERIVATIVE_STATIC_PATH, express.static(instagramDerivativeRoot()));
+// #472 parity 4B: protected-mode Instagram derivatives (non-canonical, content-addressed). Any dot path segment (temp
+// files, in-flight .job-* directories with the private source copy) is never served.
+app.use(INSTAGRAM_DERIVATIVE_STATIC_PATH, express.static(instagramDerivativeRoot(), { dotfiles: "ignore" }));
 // PUBLIC: approved Reel assets for Instagram ingestion (see routes/reelAssets.ts).
 app.use(createReelAssetRouter(db));
 

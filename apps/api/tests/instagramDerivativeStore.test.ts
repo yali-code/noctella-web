@@ -102,5 +102,11 @@ describe("protected-mode Instagram derivatives", () => {
     const hidden = await request(app).get(`${INSTAGRAM_DERIVATIVE_STATIC_PATH}/.hidden`);
     expect(hidden.status).not.toBe(200); // dotfiles (temp/job names) are never served
     expect(hidden.text).not.toBe("x");
+    // In-flight confined job directories (private source copy) are not served either (nested dot segment).
+    fs.mkdirSync(path.join(instagramDerivativeRoot(canonical), ".job-review"), { recursive: true });
+    fs.writeFileSync(path.join(instagramDerivativeRoot(canonical), ".job-review", "source.webp"), "y");
+    const nested = await request(app).get(`${INSTAGRAM_DERIVATIVE_STATIC_PATH}/.job-review/source.webp`);
+    expect(nested.status).not.toBe(200);
+    expect(nested.text).not.toBe("y");
   });
 });
