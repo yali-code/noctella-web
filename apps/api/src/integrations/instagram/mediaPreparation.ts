@@ -175,8 +175,10 @@ async function prepareInstagramImageAssetUnadmitted(
     try { await work; }
     finally { if (inFlight.get(destination) === work) inFlight.delete(destination); }
     return { url, outputPath: `${store.prefix}${derivative}`, sourceFingerprint: hash, recipeVersion: recipeId };
-  } catch {
-    // Never surface Sharp/filesystem errors, paths, or supplied URL credentials.
+  } catch (error) {
+    // Confined-worker unavailability (start failure, no Landlock enforcement, timeout) is infrastructure, not bad media:
+    // retryable, like the pre-check refusal. Never surface Sharp/filesystem errors, paths, or supplied URL credentials.
+    if (error instanceof PhotoUploadError && error.status === 503) throw new InstagramClientError("processing", true);
     throw invalid();
   }
 }

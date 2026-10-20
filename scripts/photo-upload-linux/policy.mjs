@@ -96,7 +96,7 @@ export const FENCING_ON_ACCEPTANCE = Object.freeze({
   // #472 parity 4B: instagram.prepare now succeeds under fencing through a separate non-canonical derivative store
   // instead of the W11/0042 owner this workload contract expects. That mapping changes the accepted workload and is
   // unreviewed; it stays BLOCKED until an independent review accepts the mapping (or W11/0042 is approved).
-  reason: "Workload mapping unreviewed: under PHOTO_OWNERSHIP_FENCING_ENABLED=true instagram.prepare uses the non-canonical derivative store (#472 parity 4B), not the W11/0042 owner this contract expects; independent review of the mapping (or owner approval of 0042) is required",
+  reason: "Workload mapping reviewed (independent review PASS, #472 parity 4B): under PHOTO_OWNERSHIP_FENCING_ENABLED=true instagram.prepare uses the non-canonical derivative store, not the W11/0042 owner this contract expects. Still BLOCKED: clearing requires a reviewed change to this evidence contract and validateFencingOnEvidence (blocked=false currently implies W11 adoption and W11-table derivative evidence the separate store never produces), or owner approval of 0042",
 });
 export const fencingOnBlocked = (scenarios) => scenarios.some((s) => s.photoOwnershipFencing) && FENCING_ON_ACCEPTANCE.blocked;
 
