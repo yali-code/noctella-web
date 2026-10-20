@@ -246,9 +246,9 @@ The isolated service is `srv-d9ms1orncjis7390nk5g` (`noctella-rc2-acceptance-api
 ## 5. Daily-use effects with fencing ON (NOT accepted by the owner)
 | Function | Effect | Follow-up options (owner decision) |
 | --- | --- | --- |
-| Instagram prepare-image (live) | Refused (retryable `processing`); publishing needs a prepared asset | (a) adopt W11 under publication authority, which needs 0042 approval; (b) move Instagram derivatives to a separate non-canonical root and serve them separately |
+| Instagram prepare-image (live) | Refused (retryable `processing`) in the candidate `84f3938`; publishing needs a prepared asset. Option (b) is implemented on the separate parity branch `feat/f2-instagram-derivative-store` (`05dc70f`, `442181b`; independent agent review PASS), **not** in the candidate; its Linux confined-path run is not executed and `instagram.prepare` stays BLOCKED in `policy.mjs` | (a) adopt W11 under publication authority, which needs 0042 approval; (b) move Instagram derivatives to a separate non-canonical root and serve them separately |
 | Canonical photo deletion (W8), AI-cleanup canonical deletion (W6) | Refused and dead-lettered; files accumulate on the 1 GB disk | (a) a deletion design under authority: delete only keys whose operation is committed and whose photo row is gone, inside the intent lock; (b) operator-reviewed periodic cleanup |
-| ERP photo upload `POST /api/erp/products/:id/photos/upload` and the legacy upload route | Refused (503), because they use the W1 legacy writer | Route ERP uploads through the W2 owner (Idempotency-Key semantics needed) |
+| ERP photo upload `POST /api/erp/products/:id/photos/upload` and the legacy upload route | **Updated:** routed through the W2 owner by 4A ingress parity (`9cea862`, merged in `a9fddae`; included in the candidate `84f3938`). The RC2 W2 acceptance exercised the product upload route, not the ERP route on the target | Done in the candidate; no separate ERP target check is recorded |
 | Cross-instance executor loss (any restart/deploy during publication) | BLOCKED until operator attestation with evidence | (a) accept attestation; (b) a platform-provided instance-termination signal; (c) drain uploads before planned restarts |
 | Deterministic restart acceptance | Available without any production code path: `park-at-intent.mjs` (staging-only external orchestration over the existing SIGKILL fixture) parks the real owner at `afterIntent`. Same-instance loss is recovered by the API itself; cross-instance loss (service restart) stays BLOCKED until an evidenced attestation | Execute on the isolated staging service (not yet executed) |
 
@@ -270,3 +270,44 @@ Review `release/f2-closure-stage1-packaging` against base `24a16b8e`. Focus on:
 6. **Write-effect classification** of each command.
 
 No independent review has occurred yet.
+
+## 7. F2 closure status and final review package (recorded 20 October 2026)
+**Source of the closure criteria.** The four-stage counter is not defined in any document. The authoritative criteria are `docs/engineering/STAGE5_F2_RUNTIME_REMEDIATION.md` §6 ("Release acceptance") and §7 ("Closure: F2 may be marked CLOSED only after exact-head CI, independent review, target verification, authorized staging and production acceptance"). The grouping of the remaining criteria into Stages 3 and 4 below is a **proposal**, not a documented definition.
+
+**Candidate.** `84f3938672ab8f79ad0572f0f22b98a50cf6cd08` with documentation on top. It contains:
+- the composed release candidate `dfa3c65`;
+- 4A ingress parity `a9fddae`;
+- fixes #491–#493 (`32a027d`, `c52e189`, `1dadeb2`);
+- the W4 Product precheck.
+
+It is the revision accepted on RC2 (§4.1).
+
+| Criterion (source) | Status | Evidence / gap |
+| --- | --- | --- |
+| Authorized staging (§6, §7) | MET | §4.1; Stage 2 CLOSED under the owner-approved scope (changed-device recovery UNVERIFIED, out of scope) |
+| Target verification, staging (§6 items 1–3) | MET for RC2 only | §4.1 readiness on `84f3938` |
+| Exact-head CI (§6, §7) | **MISSING** | The last recorded run is on `ffbd3a8` (39307647796). Nothing is recorded for `c52e189`, `1dadeb2`, `84f3938` or this documentation head. `fix/f2-w4-finalize-precheck` triggers no workflow. The only legitimate route is `photo-master-stage1-4.yml` (add the branch to its push list, as in `684ad2e`), which runs all 10 jobs. Not launched: broad CI is not authorized |
+| Independent review of the candidate (§6, §7) | **MISSING** | The only review on record is PR #487 at `9fdcba4` (pre-candidate). Agent consultations in this task are not that review |
+| Owner acceptance of availability impacts, or their restoration (§6 bullet 4; §5 table) | **OWNER DECISION** | Instagram preparation refused in the candidate (4B on a separate branch, not integrated); canonical deletion refused (4C not started); cross-instance restart requires attestation unless the local exit is authenticated |
+| Production target verification (§3: instance count, no-overlap ordering, build toolchain, checkout path; production references `f9a61bf`/`23406f7` re-verified) | **MISSING** | Requires production access |
+| Production enablement and acceptance (§6 last bullet, §2 build change, §3 backups/quiescence/activation) | **MISSING** | Explicit owner authorization only |
+| Protected 24 MP `combined-fencing-on` | BLOCKED (not a documented closure gate) | `policy.mjs` `FENCING_ON_ACCEPTANCE.blocked`; open documented limit |
+
+**Proposed grouping (owner to confirm):**
+- **Stage 3 — release-candidate acceptance:** exact-head CI and independent review of the final candidate, plus the owner's availability decision.
+- **Stage 4 — production:** production target verification, then authorized enablement and acceptance per §3.
+
+**Integration note.** `git merge-tree 84f3938 442181b` is clean. Adding 4B changes the candidate head, so it should be decided **before** the single exact-head CI run. It would also need a staging re-acceptance of the changed Instagram path; the accepted W2/W4 evidence would need re-confirmation only where the code changed.
+
+**Final review package (for the independent reviewer):**
+- **Scope:** diff `1dadeb2..84f3938` (W4 precheck) plus this document's §4.1 and §7; the whole candidate `24a16b8e..84f3938` for the release review.
+- **Mandatory points:** confinement mandatory and fail-closed; exit authentication and attestation (including the reviewed W4 after-both automatic exit); UUID/device binding unchanged; no state or evidence deletion; W11/0042 dormant; rollback order in §3.
+- **Residual limits to state, not pass:**
+  - changed-device recovery is UNVERIFIED;
+  - protected 24 MP is BLOCKED;
+  - power-loss durability is a documented limit;
+  - the launcher restricts writes only (4B review F3);
+  - the RC2 configured branch is still `main`.
+- **Retained records:** `a272b007…`, `322cf602…`, `39271b8a…` (intake `3aa11579…`); `/var/data/f2-493-20261020`, `/var/data/f2-84f3938-20261020`.
+
+**Counters:** F2 closure **2/4**, overall engineering **4/12**. No criterion beyond Stage 2 is met yet.
