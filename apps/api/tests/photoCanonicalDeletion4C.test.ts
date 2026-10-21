@@ -13,8 +13,8 @@ import { sql, type SQL } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ensureSchema } from "../src/db/migrate";
 import * as schema from "../src/db/schema.sqlite";
-import type { OwnershipDriver } from "../src/services/photoOperationAuthority";
-import { deleteAuthorizedCanonicalPhoto } from "../src/services/photoCanonicalDeletion";
+import { inOwnershipTransaction, type OwnershipDriver } from "../src/services/photoOperationAuthority";
+import { authorizedCanonicalDeletionSteps, deleteAuthorizedCanonicalPhoto } from "../src/services/photoCanonicalDeletion";
 import { createProductPhotoOutboxDispatcher } from "../src/services/productPhotoOutboxDispatcher";
 import { SqliteOutboxRepository } from "../src/services/outboxRepository";
 import { OutboxEventStatus, OutboxEventType } from "../src/services/outbox";
@@ -43,7 +43,15 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
   beforeAll(async () => { if (configured) h = driver === "sqlite" ? await sqliteHarness() : await postgresHarness(); });
   afterAll(async () => { await h?.close(); });
   beforeEach(() => { root = fs.mkdtempSync(path.join(tmpRoot, "canonical-")); });
-  const del = (photoId: string) => Promise.resolve().then(() => deleteAuthorizedCanonicalPhoto(h.db, driver, root, photoId));
+  // The locked steps on both drivers; the public entry point (asserted below) only enables them on SQLite.
+  const del = (photoId: string) => Promise.resolve().then(() => inOwnershipTransaction(h.db, driver, () => authorizedCanonicalDeletionSteps(driver, root, photoId)));
+
+  run("the public entry point deletes on SQLite and retains on PostgreSQL (unserialized order snapshots)", async () => {
+    const s = await seed();
+    const out = await deleteAuthorizedCanonicalPhoto(h.db, driver, root, s.photoId);
+    if (driver === "sqlite") { expect(out).toEqual({ kind: "deleted", removed: 2 }); expect(present(s)).toEqual([false, false]); }
+    else { expect(out).toEqual({ kind: "retained", code: "PHOTO_DELETE_REFERENCES_UNSERIALIZED" }); expect(present(s)).toEqual([true, true]); }
+  });
 
   async function seed(o: { opState?: string; intentState?: string; copies?: boolean } = {}) {
     const photoId = randomUUID(), opId = randomUUID(), sealId = randomUUID();

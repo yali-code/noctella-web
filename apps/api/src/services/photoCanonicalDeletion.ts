@@ -26,7 +26,8 @@ export type CanonicalDeletionRetention =
   | "PHOTO_DELETE_OWNERSHIP_UNKNOWN"
   | "PHOTO_DELETE_OPERATION_UNRESOLVED"
   | "PHOTO_DELETE_KEY_REFERENCED"
-  | "PHOTO_DELETE_FOREIGN_FILE";
+  | "PHOTO_DELETE_FOREIGN_FILE"
+  | "PHOTO_DELETE_REFERENCES_UNSERIALIZED";
 export type CanonicalDeletionDisposition = { kind: "deleted"; removed: number } | { kind: "retained"; code: CanonicalDeletionRetention };
 
 interface RecordedCopy { dev: string; ino: string; birthNs: string; sha256: string; bytes: number }
@@ -97,6 +98,12 @@ export function* authorizedCanonicalDeletionSteps(driver: OwnershipDriver, canon
   return { kind: "deleted", removed };
 }
 
+/**
+ * PostgreSQL retains: under READ COMMITTED, order creation reads the primary-photo URL before any lock this deleter
+ * takes (use-cases/order/useCases.ts validateProductReferences), so a concurrent order could commit a snapshot of a
+ * deleted file. SQLite serializes it with BEGIN IMMEDIATE. Enabling PostgreSQL needs an order-side serialization contract.
+ */
 export function deleteAuthorizedCanonicalPhoto(db: DbClient, driver: OwnershipDriver, canonicalRoot: string, photoId: string): CanonicalDeletionDisposition | Promise<CanonicalDeletionDisposition> {
+  if (driver !== "sqlite") return Promise.resolve({ kind: "retained", code: "PHOTO_DELETE_REFERENCES_UNSERIALIZED" });
   return inOwnershipTransaction(db, driver, () => authorizedCanonicalDeletionSteps(driver, canonicalRoot, photoId));
 }
