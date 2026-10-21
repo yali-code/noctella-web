@@ -68,51 +68,9 @@ runtime `43b9bc3af4be8ed89be35c95d59c26435485573e`. Stop on a mismatch until
 the owner reconciles it. Never print connection strings or customer paths.
 Windows C: free space (approximately 10 GB) says nothing about Render capacity.
 
-The following aggregate scan reads metadata only; it follows no symlinks,
-imports no application module, creates no files and opens no database. It
-must finish without errors; a changing live tree is only an indicative sample.
-Repeat within the authorized cold interval only if live changes invalidated it.
-
-```bash
-node <<'NODE'
-const fs=require('node:fs'), path=require('node:path');
-const c=path.resolve(process.env.PRODUCT_PHOTO_DIR || 'uploads/product-photos');
-const roots={canonical:c,private:path.join(path.dirname(c),'.product-photo-operations'),publication:path.join(path.dirname(c),'.product-photo-publication')};
-const inodes=new Map();
-for(const [label,root] of Object.entries(roots)) {
-  const top=fs.lstatSync(root,{bigint:true});
-  if(!top.isDirectory() || top.isSymbolicLink()) throw Error('Invalid root');
-  const v=fs.statfsSync(root,{bigint:true});
-  let names=0, dirs=0, logical=0n; const seen=new Set(); let allocated=0n;
-  const walk=p=>{
-    const s=fs.lstatSync(p,{bigint:true});
-    if(s.isSymbolicLink()) throw Error('Symlink: assessment incomplete');
-    if(s.dev!==top.dev) throw Error('Nested mount: assess separately');
-    const k=s.dev+':'+s.ino;
-    if(!seen.has(k)){seen.add(k);allocated+=s.blocks*512n;}
-    let a=inodes.get(k);
-    if(!a){a={bytes:s.blocks*512n,links:s.nlink,names:0,roots:new Set(),file:s.isFile()};inodes.set(k,a);}
-    a.roots.add(label);a.names++;
-    if(s.isDirectory()) {dirs++; const d=fs.opendirSync(p); try {let e;while((e=d.readSync()))walk(path.join(p,e.name));} finally {d.closeSync();}}
-    else if(s.isFile()){names++;logical+=s.size;}
-    else throw Error('Special file: assessment incomplete');
-  };
-  walk(root);
-  const ops=label==='canonical'?null:fs.readdirSync(root,{withFileTypes:true}).filter(e=>e.isDirectory()).length;
-  console.log(JSON.stringify({root:label,device:String(top.dev),filesystemBytes:String(v.blocks*v.bsize),availableBytes:String(v.bavail*v.bsize),allocatedUniqueBytes:String(allocated),logicalBytesAcrossNames:String(logical),fileNames:names,directories:dirs,operationDirectories:ops}));
-}
-let union=0n,shared=0n,external=0;
-for(const a of inodes.values()){union+=a.bytes;if(a.roots.has('canonical')&&a.roots.has('publication'))shared+=a.bytes;if(a.file&&a.links>BigInt(a.names))external++;}
-console.log(JSON.stringify({unionAllocatedBytes:String(union),canonicalPublicationSharedBytes:String(shared),filesWithLinksOutsideInventory:external}));
-NODE
-```
-
-Per-root allocations overlap: use the unique union, not their sum. Linux
-`st_blocks*512` measures allocation; names/logical bytes do not. Shared anchors
-keep publisher bytes allocated after canonical deletion. Directory counts are
-operation-directory counts, **not proof of committed or complete operations**.
-External links, filesystem quotas, reserved space and other application data
-need reconciliation; filesystem available space alone is not a quota guarantee.
+The photo allocation scan is COMPLETE: reuse the owner-supplied measurements
+below. Do not repeat it. Only the guarded remaining-facts block later in this
+package is the next read-only production command.
 
 For DB counts/workload use the confidential standalone snapshot made below,
 not an online mutating DB. Set `SNAPSHOT` to that absolute path. This reads only
@@ -202,6 +160,54 @@ Existing capture limits (128 MiB DB, 16 MiB/file, 512 MiB payload, 4096 files,
 10000 rows/authority table, 2 MiB manifest) must also fit actual inventory;
 free disk does not waive them. No activation recommendation before this review.
 
+## Proposed finite envelope and owner decision table
+
+Proposal ONLY, not accepted capacity: **seven calendar days from authorized
+activation, maximum five new production photos/day manually tallied, at most
+35 new photos, minimum 512 MiB free on the persistent filesystem at projected
+PEAK, and at most TWO local point-sets**. A point-set includes one standalone
+snapshot, its private bundle, request/results/digest; failed/partial sets also
+consume a slot. Use the initial empty-scope point and the post-W2 acceptance
+point; no scheduled/daily bundles or third attempt while both slots exist.
+At seven days OR exhausted budget/slots, stop further photo admission pending
+owner review; no automatic renewal, deletion, age expiry or implemented quota.
+Normal use is still paused: this envelope grants no admission authorization.
+
+Conservative illustrative arithmetic at `P=440 KiB` and 35 photos: source
+canonical/publisher + private growth **30.078125 MiB**; two full private bundles
+each covering all35 would add **60.15625 MiB**, although initial point is empty.
+From measured898.375 MiB free, after proposed512 MiB reserve and these image
+allowances, **296.140625 MiB** remains to cover ALL additional snapshot/DB
+copies, DB/WAL growth, temporary/failed files, directories/metadata, canonical
+backup verification and unrelated workload. Two point-sets can require about
+FOUR DB-sized copies (snapshot + bundle each), plus verification working space;
+their actual sizes must fit that remaining budget. Temporary storage on another
+filesystem needs its OWN measured peak budget. Current DB allocation is already
+inside the measured baseline: budget only added copies/growth, not a second
+charge for the current DB. This arithmetic does NOT prove that peaks fit.
+
+The read-only block settles current DB/sidecar/temp facts but cannot establish
+maximum upload/encoding/backup workspace peaks. Use existing documented bounds
+and the narrow authorized target operation's observed peak evidence, never a
+new benchmark. Do not approve even five/day if these costs cannot be bounded.
+512 MiB is a proposed planning floor, NOT an existing approved reserve and NOT
+a replacement for the unchanged preflight1024 MiB warning.
+
+| Decision | Concrete proposal | Still needed / stop condition |
+| --- | --- | --- |
+| Acceptance | ONE production W2 photo; W4 on RC2 at exact486639e, separate target IDs/bundles; reuse F2/4C | Owner target authorization and RC2 identity/SHA confirmation; no production W4/AI-provider repeat |
+| Destination A | Existing owner-private same-disk directory, owner accepts full sensitive DB/artifact copy; independent digest outside bundle | Explicit confidentiality/scope acceptance and existing private parent verification; counts in two-set/local reserve; NOT off-disk protection or disaster recovery |
+| Destination B | Existing protected off-disk destination, with bounded local staging | Actual provider protection + compatible existing transfer verified and owner approval; no presumed S3 directory upload or new platform |
+| Capacity | Seven days, manual5/day, proposed512MiB peak free reserve, two local point-sets incl. partials | Current DB/WAL/temp facts and bounded peak costs must fit; no approval/indefinite claim until then |
+| Release control | Existing maintenance/cron/private-caller inhibition; old DB/canonical backup → exact deploy → initial new CLI capture → target acceptance | Explicit lifecycle/backup/release authorization; maintain stop/rollback safeguards |
+
+These are the ONLY destination options in this package. Under A the limited
+contract is a confidential same-disk evidence copy, not disaster recovery;
+owner must explicitly accept lack of independent private-artifact loss
+protection. Existing canonical/DB off-disk backups remain their separate scope.
+Under B preserve the independent digest across verified transfer; local staging
+still counts until separately authorized removal. No removal is requested here.
+
 ## Target preflight (future authorization required)
 
 After the exact-commit deployment described below, from built `apps/api`:
@@ -241,7 +247,8 @@ successful outputs are historical and do not cover a new maintenance point.
 Set absolute `PROTECTED`, `EVIDENCE`, `SOURCE_DB`, `OPERATIONS`, `PUBLICATION`,
 `PHOTO_PREPARATION_LAUNCHER`, unique simple `POINT`, and evidence-reference IDs
 `COLD_REF`, `CONFIDENTIAL_REF`. Set `REQUIRED_IDS_JSON` to the owner's reconciled
-JSON array (must include the activation-boundary/test operations). Paths are
+JSON array (must include THIS target's activation-boundary/test operations:
+production W2 or RC2 W4, separately). Paths are
 explicit, never discovered through production connection strings. Both parent
 directories must already exist, be owned by the current UID, have no group/other
 permissions and be non-symlink directories. No chmod/ACL changes are authorized.
@@ -270,11 +277,13 @@ printf '%s\n' "$DIGEST" > "$EVIDENCE/$POINT.manifest.sha256"
 node dist/scripts/privatePhotoColdBackup.js verify "$PROTECTED/$POINT-private" "$DIGEST" > "$EVIDENCE/$POINT.verify.json"
 ```
 
-Use an unused POINT and check evidence output names are absent BEFORE running;
+Use an unused POINT and check evidence output names are absent BEFORE running.
 An empty required-ID array is valid only for the owner-reconciled initial point
 with no retained policy-scope operations, as in the supplied zero-file baseline.
-The later acceptance point must require the new W2/W4 operation IDs.
-shell redirects create confidential result files, not proof of quiescence.
+The production acceptance point must require its new W2 operation ID. RC2
+separately requires its own W4 operation ID at the SAME exact runtime SHA;
+never combine authority inventories or source roots from different targets.
+Shell redirects create confidential result files, not proof of quiescence.
 Preserve outputs on any failure; never overwrite a partial bundle. The SQLite
 backup API includes committed WAL; only the new copy becomes DELETE-mode,
 sidecar-free. Keep all original roots cold through snapshot/capture/verify.
@@ -400,12 +409,24 @@ an HTTP caller does not cancel API work already dispatched.
    This is a LIMITED CODE DEPLOY under blocked admission, not operational
    retention acceptance. No circular requirement for a pre-deploy new CLI.
 6. Once capacity/destination and this point pass, separately authorize only one
-   designated W2 test photo and one W4 test photo (two of that day's five).
+   designated production W2 test photo (one of that day's five).
    Keep public maintenance ON; the named operator alone uses existing private
    API paths with existing authorization. No full F2/4C replay or deletion test.
    Verify committed retention and retry behavior, then stop that allowance,
-   drain again and capture/verify requiring both new operation IDs. Record
+   drain again and capture/verify requiring that new W2 operation ID. Record
    actual allocation/DB/temp peaks and revised headroom, not illustrative sizes.
+   Perform W4 retention acceptance on RC2 at exact runtime
+   `486639e755dca2e1c29c6530e6133f3a07094b89`, with a designated RC2 W4 photo,
+   existing staged disposable input and the same retention/retry/required-ID
+   verification on RC2's OWN cold source. Verify actual RC2 service identity/SHA
+   separately before execution; no target identity is invented here. No
+   production guard below may be reused for RC2. If RC2 is not already at the
+   candidate, obtain explicit RC2 exact-commit deployment authorization first;
+   production deployment authorization does not authorize RC2 lifecycle changes.
+   No
+   production AI-provider call or production W4 repetition is requested. Reuse
+   accepted F2/4C and runtime offline evidence; production/RC2 acceptance stays
+   pending until each target's narrow evidence is recorded.
 7. Restore ONLY owner-approved prior cron states in a controlled order after
    all backup/verification handles exit; check no deferred overlapping run was
    launched. Leave unrelated pre-existing suspensions intact. Maintenance Mode
@@ -454,48 +475,60 @@ Maintenance blocks public traffic only; disk access is runtime-only and not
 available in build/pre-deploy/one-off jobs. Killing/freezing the API is not a
 maintenance mechanism: failed health checks can cause automatic restart.
 
-## Exact read-only fact collection still needed (owner runs; not run here)
+## Single guarded read-only production Shell block (owner runs; not run here)
 
-Do not repeat the supplied complete allocation scan unless stale/changed.
-In the verified API Shell, these commands print only safe target/config facts
-and allocation totals, not values of endpoints, credentials or DB records:
+Run from `apps/api` in the CURRENT production Shell. The subshell exits before
+any collection on a service/commit/driver mismatch. It reads filesystem metadata
+only: no application import, SQLite connection, snapshot, request or scan of
+photo roots. Stop and reconcile a mismatch; do not edit the expected SHA to
+bypass it. Main DB must exist; absent WAL/SHM/journal are reported explicitly.
 
 ```bash
+(
+set -euo pipefail
+test "${RENDER_SERVICE_ID:-}" = srv-db34390m7kps73cv8l6g || { echo 'STOP: wrong service'; exit 1; }
+test "${RENDER_GIT_COMMIT:-}" = 43b9bc3af4be8ed89be35c95d59c26435485573e || { echo 'STOP: wrong current commit'; exit 1; }
+test "${DATABASE_DRIVER:-sqlite}" = sqlite || { echo 'STOP: wrong DB driver'; exit 1; }
 node <<'NODE'
-const fs=require('node:fs'),p=require('node:path');
-console.log({targetMatches:process.env.RENDER_SERVICE_ID==='srv-db34390m7kps73cv8l6g',runtime:process.env.RENDER_GIT_COMMIT,driver:process.env.DATABASE_DRIVER||'sqlite'});
-for(const prefix of ['DATABASE_BACKUP_S3_','PRODUCT_PHOTO_BACKUP_S3_']){
- const present={};for(const k of ['REGION','BUCKET','ACCESS_KEY_ID','SECRET_ACCESS_KEY'])present[k]=Boolean(process.env[prefix+k]?.trim());
- let tls='standard-endpoint-if-config-valid';if(process.env[prefix+'ENDPOINT']){try{tls=new URL(process.env[prefix+'ENDPOINT']).protocol==='https:'?'https':'NOT-HTTPS';}catch{tls='INVALID';}}
- console.log({family:prefix,present,transport:tls});
-}
-if((process.env.DATABASE_DRIVER||'sqlite')!=='sqlite')throw Error('Wrong database driver');
-const db=process.env.DATABASE_URL;if(!db||!p.isAbsolute(db))throw Error('Verified absolute SQLite source required');
-for(const suffix of ['','-wal','-shm','-journal']){try{const s=fs.lstatSync(db+suffix,{bigint:true});console.log({databasePart:suffix||'main',logicalBytes:String(s.size),allocatedBytes:String(s.blocks*512n)});}catch(e){if(e.code!=='ENOENT')throw e;console.log({databasePart:suffix||'main',absent:true});}}
-for(const root of [process.env.PROTECTED,process.env.EVIDENCE].filter(Boolean)){const s=fs.lstatSync(root);const v=fs.statfsSync(root,{bigint:true});console.log({selectedParentPrivate:s.isDirectory()&&!s.isSymbolicLink()&&s.uid===process.getuid()&&(s.mode&0o077)===0,availableBytes:String(v.bavail*v.bsize)});}
-const temp=process.env.TMPDIR||require('node:os').tmpdir();const tv=fs.statfsSync(temp,{bigint:true});console.log({temporaryFilesystemAvailableBytes:String(tv.bavail*tv.bsize)});
-console.log({builtColdCliPresent:fs.existsSync('dist/scripts/privatePhotoColdBackup.js')});
+try {
+ const fs=require('node:fs'),p=require('node:path');
+ const db=process.env.DATABASE_URL;
+ if(!db||!p.isAbsolute(db))throw Error();
+ for(const suffix of ['','-wal','-shm','-journal']){
+  try {const s=fs.lstatSync(db+suffix,{bigint:true});if(!s.isFile()||s.isSymbolicLink())throw Error();console.log(JSON.stringify({databasePart:suffix||'main',logicalBytes:String(s.size),allocatedBytes:String(s.blocks*512n)}));}
+  catch(e){if(suffix&&e.code==='ENOENT')console.log(JSON.stringify({databasePart:suffix,absent:true}));else throw Error();}
+ }
+ const v=fs.statfsSync(process.env.TMPDIR||require('node:os').tmpdir(),{bigint:true});
+ console.log(JSON.stringify({temporaryFilesystemAvailableBytes:String(v.bavail*v.bsize)}));
+ for(const family of ['DATABASE_BACKUP_S3_','PRODUCT_PHOTO_BACKUP_S3_']){
+  const present={};for(const k of ['ENDPOINT','REGION','BUCKET','ACCESS_KEY_ID','SECRET_ACCESS_KEY','PREFIX','FORCE_PATH_STYLE'])present[k]=Boolean(process.env[family+k]?.trim());
+  let transport='SDK-default-endpoint-not-contacted';
+  if(present.ENDPOINT){try{transport=new URL(process.env[family+'ENDPOINT']).protocol==='https:'?'configured-https':'NOT-HTTPS';}catch{transport='INVALID';}}
+  console.log(JSON.stringify({family,present,transport}));
+ }
+} catch {console.error('STOP: metadata collection incomplete; no source paths or credentials printed');process.exitCode=1;}
 NODE
-ps -eo pid,ppid,comm
-for tool in aws rclone tar; do command -v "$tool" || true; done
+for tool in aws rclone scp sftp tar; do
+ if command -v "$tool" >/dev/null 2>&1; then printf '%s: available\n' "$tool"; else printf '%s: absent\n' "$tool"; fi
+done
+)
 ```
 
-If PROTECTED/EVIDENCE are unset, their protection remains unknown; these optional
-inputs name existing owner-selected paths, not new approved directories. In
-Dashboard read-only inspection record Maintenance Mode availability/state,
-current build/start/health settings, auto-deploy, disk mount, all private callers,
-cron actual names/schedules/statuses and active runs. In the EXISTING storage
-provider console record public-access policy, at-rest encryption/protection,
-authorized readers/key scope, TLS endpoint, lifecycle/versioning and whether
-the approved retention scope would expire. Config-presence output is not proof
-of those properties; provider facts cannot be derived from repository config.
-Inspect available transfer-tool help/version without installing anything;
-no full DB/artifacts may be sent until destination and transfer are approved.
-Process names/PIDs are an inventory, not proof that an HTTP mutation is idle.
-Parent-path checks must also exclude symlink ancestors and reconcile actual
-mount protection; do not treat these shallow checks as the CLI's full verifier.
-Use the standalone-copy aggregate queries above for workload once that copy
-exists; don't create a snapshot merely to collect live-read metadata now.
+This establishes guard match, point-in-time DB/sidecar logical/allocation sizes,
+temporary-filesystem available space, tool discovery and config-presence/TLS
+classification. It does NOT measure temporary PEAKS, prove credentials work,
+verify tool/provider compatibility, prove quiescence, or approve a destination.
+No endpoint, bucket, prefix, credential or customer path value is printed.
+SDK-default/HTTPS classification is not a TLS handshake or provider-policy test.
+
+Separately inspect existing provider-console facts (read-only): public-access
+policy, at-rest protection/encryption, authorized readers/key scope, lifecycle
+and versioning, destination's approval for sensitive full DB/private evidence,
+and a compatible already-available transfer method. Presence of `aws` or `rclone`
+is not configuration/permission proof. Inspect existing Mount/Render Dashboard
+settings for actual private callers, cron states/active runs, Maintenance Mode,
+health/build/start settings, disk mount and auto-deploy. No installation,
+permission change or source/destination write is part of this fact collection.
 
 ## Executable stop/recovery plan and minimum release authorization
 
@@ -514,13 +547,15 @@ cannot be controlled; it sacrifices shell access and is NOT the backup path.
 Resume only into an explicitly reviewed safe candidate/maintenance procedure,
 not a promised zero-risk rollback. Runnable restore remains outside scope.
 
-Single next authorization request: approve a finite capacity horizon/reserve
-and backup count after the safe fact collection; confirm existing confidential
-destination/transfer; authorize API Maintenance Mode plus actual cron
+Single next authorization request: approve the proposed seven-day horizon,
+512 MiB minimum free reserve and at most TWO local point-sets only AFTER the
+safe fact collection proves their peak budget fits; explicitly choose/accept
+one of the two destination options below; authorize API Maintenance Mode plus actual cron
 Suspend/Resume/private-caller inhibition, current-point DB/canonical backups,
 exact-commit deployment under blocked admission, new-CLI initial capture,
-two designated W2/W4 test photos/retry verification and subsequent required-ID
-capture/verify, with only the specified scheduler restoration. No merge/push,
+ONE designated production W2 photo/retry and its required-ID capture/verify,
+and RC2 W4 retention acceptance at the SAME exact runtime486639e with its own
+required-ID evidence, with only the specified scheduler restoration. No merge/push,
 normal-use resumption or paid change is implied. If destination/host controls
 remain unverified, code release and operational acceptance remain pending.
 **Entire Photo Stage 5 is not closed; overall remains 5/12.**
