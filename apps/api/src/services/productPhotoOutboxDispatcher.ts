@@ -11,6 +11,7 @@ import {
   type ProductPhotoStorageRoots,
 } from "./productPhotoStorageWorkflow";
 import { PostgresUnitOfWork, type UnitOfWork } from "./unitOfWork";
+import { deleteAuthorizedCanonicalPhoto } from "./photoCanonicalDeletion";
 
 export type ProductPhotoOutboxDriver = "sqlite" | "postgres" | "supabase-postgres";
 
@@ -74,7 +75,8 @@ export function createProductPhotoOutboxDispatcher(
     : new SqliteOutboxRepository((db as unknown as { $client: ConstructorParameters<typeof SqliteOutboxRepository>[0] }).$client);
   const dispatcher = new OutboxDispatcher(repo);
   dispatcher.registerHandler(new ProductPhotoPromotionHandler(unitOfWorkForPromotion(db, driver), roots));
-  dispatcher.registerHandler(new ProductPhotoDeleteHandler(roots, canonicalKeyReferenceCheck(db, isPostgres, roots.publicBase ?? productPhotoStaticPath)));
+  dispatcher.registerHandler(new ProductPhotoDeleteHandler(roots, canonicalKeyReferenceCheck(db, isPostgres, roots.publicBase ?? productPhotoStaticPath),
+    (photoId) => deleteAuthorizedCanonicalPhoto(db, isPostgres ? "postgres" : "sqlite", roots.permanentRoot, photoId)));
   dispatcher.registerHandler(new ProductPhotoCleanupTempHandler(roots));
   return dispatcher;
 }
@@ -89,6 +91,15 @@ export function createProductPhotoOutboxDispatcher(
  * ever mistaking a lock still legitimately in use for stale.
  */
 export const PRODUCT_PHOTO_OUTBOX_STALE_LOCK_MS = 5 * 60 * 1000;
+
+/**
+ * 4C (#424): dispatch exactly one named product-photo event through the same dispatcher, handlers and claim predicate
+ * (due, unlocked, Pending/RetryPending, a product-photo type). It does not release stale locks: that release is not
+ * type-scoped and would touch other rows; a locked event is simply not claimable. undefined = not claimable.
+ */
+export async function dispatchProductPhotoOutboxEventById(db: DbClient, workerId: string, eventId: string) {
+  return createProductPhotoOutboxDispatcher(db).dispatchClaimableEvent(eventId, workerId);
+}
 
 export async function dispatchDueProductPhotoOutboxEvents(db: DbClient, workerId = "scheduler", limit = 10) {
   const dispatcher = createProductPhotoOutboxDispatcher(db);
