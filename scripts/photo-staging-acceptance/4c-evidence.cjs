@@ -34,6 +34,7 @@ if (mode === "due") {
   const before = JSON.parse(fs.readFileSync(a, "utf8")), now = JSON.parse(fs.readFileSync(b, "utf8"));
   const checks = {
     "same photo": before.photoId === now.photoId,
+    "snapshot holds this photo's evidence and canonical files": !!before.evidence && before.evidence.copies?.length === 2 && before.files.length > 0,
     "canonical files unchanged (name, inode, size, mtime)": JSON.stringify(before.files) === JSON.stringify(now.files),
     "operation/intent/copy evidence unchanged": JSON.stringify(before.evidence) === JSON.stringify(now.evidence),
     "all authority rows unchanged": JSON.stringify(before.authority) === JSON.stringify(now.authority),

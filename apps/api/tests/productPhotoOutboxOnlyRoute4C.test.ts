@@ -45,11 +45,12 @@ describe("photo-only scheduler invocation (4C)", () => {
     const route = "/api/background-jobs/product-photo-outbox/dispatch-event", auth = "Bearer test-scheduler-token-4c";
     const event = (id: string, eventType: string, aggregateId: string, extra: object = {}) => outbox.create({ id, eventType, aggregateType: "ProductPhoto", aggregateId, idempotencyKey: id, payload: { photoId: aggregateId, productId: "p" }, maxAttempts: 3, availableAt: "2026-01-01", ...extra } as never);
     await event("older-promote", "product_photo.promote_requested", "other-photo");
+    await event("due-other-promote", "product_photo.promote_requested", "another-photo"); // due, unlocked (the RC2 STOP case)
     await event("target-delete", "product_photo.delete_requested", "target-photo");
     await event("future-delete", "product_photo.delete_requested", "later-photo", { availableAt: "2999-01-01" });
     await event("stock", "stock_sync.requested", "product");
     (db as any).$client.prepare("UPDATE outbox_events SET status='Processing', locked_by='other-worker', locked_at='2026-01-01T00:00:00.000Z' WHERE id='older-promote'").run();
-    const snapshot = () => (db as any).$client.prepare("SELECT id, status, attempt_count, locked_by, locked_at, available_at FROM outbox_events WHERE id <> 'target-delete' ORDER BY id").all();
+    const snapshot = () => (db as any).$client.prepare("SELECT e.id, e.status, e.attempt_count, e.locked_by, e.locked_at, e.available_at, e.updated_at, (SELECT COUNT(*) FROM outbox_attempts a WHERE a.outbox_event_id = e.id) AS attempts FROM outbox_events e WHERE e.id <> 'target-delete' ORDER BY e.id").all();
     const before = snapshot();
 
     expect((await request(app).post(route).send({ eventId: "target-delete" })).status).toBe(401);
