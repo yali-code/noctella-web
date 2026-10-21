@@ -37,6 +37,11 @@ async function postgresHarness(): Promise<Harness> {
   return { db: h.db, q: async (s) => (await h.db.execute(s)).rows as any[], close: () => h.close() };
 }
 
+it("PostgreSQL retains before any database or file access (no PostgreSQL instance needed)", async () => {
+  const db = new Proxy({}, { get: () => { throw new Error("database touched"); } });
+  expect(await deleteAuthorizedCanonicalPhoto(db as never, "postgres", path.join(tmpRoot, "missing-root"), "any-photo")).toEqual({ kind: "retained", code: "PHOTO_DELETE_REFERENCES_UNSERIALIZED" });
+});
+
 describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)("4C authorized W8 deletion on %s", (driver: OwnershipDriver, configured) => {
   let h: Harness, root: string;
   const run = (name: string, fn: () => Promise<void>) => it.skipIf(!configured)(name, fn, 60_000);
