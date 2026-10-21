@@ -25,7 +25,8 @@ const GOVERNED: Record<string, string> = {
   "services/stagedProductPhotoStorage.ts": "W10 staged upload (refused with fencing ON) and generation-private W2 preparation",
   "services/w11FencedInstagramDerivativeOwner.ts": "dormant W11 owner (0042 unregistered; no runtime importer, asserted below)",
   "integrations/instagram/mediaPreparation.ts": "live Instagram prepare-image derivative writer (refused with fencing ON before any write)",
-  "services/productPhotoStorageWorkflow.ts": "W7 promotion / W8 delete / W9 temp cleanup (refused with fencing ON)",
+  "services/productPhotoStorageWorkflow.ts": "W7 promotion / W9 temp cleanup (refused with fencing ON); W8 delete only through the authorized deleter with fencing ON",
+  "services/photoCanonicalDeletion.ts": "4C authorized W8 deletion: a committed operation's recorded copy names, verified and unlinked under its row lock",
   "services/aiIntakePhotoStorage.ts": "AI intake root only (AI_INTAKE_PHOTO_DIR), never the canonical root",
   "services/mediaPlanner.ts": "MEDIA_ASSET_DIR only; reads canonical photos",
   "routes/productPhotoUpload.ts": "request upload staging (.product-photo-upload-staging) only",
@@ -74,7 +75,17 @@ describe("canonical photo writer inventory (#472)", () => {
     };
     before("integrations/instagram/mediaPreparation.ts", /if \(photoOwnershipFencingEnabled\(\)\) throw/, /await link\(temporary, destination\)/);
     before("services/productPhotoStorageWorkflow.ts", /refuseUnadoptedPhotoWriter\("W7_DISTINCT_ROOT_PROMOTION"\)/, /await copyIdempotent\(/);
-    before("services/productPhotoStorageWorkflow.ts", /refuseUnadoptedPhotoWriter\("W8_CANONICAL_DELETE"\)/, /await unlinkIdempotent\(safeJoin\(this\.roots\.permanentRoot/);
+    // W8 (4C): fencing ON leaves before the legacy keyed unlink; the fenced path never unlinks itself and still refuses
+    // without the injected authorized deleter, which the production dispatcher wires.
+    {
+      const s = read("services/productPhotoStorageWorkflow.ts"), fenced = s.indexOf("if (photoOwnershipFencingEnabled()) return this.handleFenced(event);");
+      expect(fenced, "W8 fenced branch missing").toBeGreaterThan(0);
+      expect(s.indexOf("await unlinkIdempotent(safeJoin(this.roots.permanentRoot", fenced)).toBeGreaterThan(fenced);
+      const body = s.slice(s.indexOf("private async handleFenced("), s.indexOf("export class ProductPhotoCleanupTempHandler"));
+      expect(body).toMatch(/if \(!this\.authorizedDelete\) refuseUnadoptedPhotoWriter\("W8_CANONICAL_DELETE"\);/);
+      expect(body).not.toMatch(/unlink|rm\(/);
+      expect(read("services/productPhotoOutboxDispatcher.ts")).toMatch(/deleteAuthorizedCanonicalPhoto\(db, isPostgres \? "postgres" : "sqlite", roots\.permanentRoot, photoId\)/);
+    }
     before("services/productPhotoStorageWorkflow.ts", /refuseUnadoptedPhotoWriter\("W9_TEMP_CLEANUP"\)/, /await unlinkIdempotent\(safeJoin\(this\.roots\.tempRoot/);
     before("services/aiIntakeCleanup.ts", /refuseUnadoptedPhotoWriter\("W6_AI_CLEANUP_CANONICAL_DELETE"\)/, /deleteManagedFile\(productPhotoStaticRoot/);
     for (const fn of ["uploadProductPhoto", "uploadStagedProductPhoto"]) {

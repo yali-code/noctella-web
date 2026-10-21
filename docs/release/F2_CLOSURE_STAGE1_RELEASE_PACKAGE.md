@@ -325,4 +325,77 @@ It is the revision accepted on RC2 (§4.1).
 4. **Review.** The independent review is performed by a separate **agent instance**, not a human reviewer.
 5. **Production.** After CI and the review pass, the §3 production procedure is authorized, without new paid resources, plan changes, teardown, evidence deletion or W11/0042 activation.
 
-**Counters:** F2 closure **2/4**, overall engineering **4/12**. No criterion beyond Stage 2 is met yet.
+**Stage 3 — release-candidate acceptance: CLOSED (20 October 2026).**
+- **Final candidate:** `14f17469ed43fec4e3035d08612ea3b69cf849c3`. Its application code is identical to `84f3938`; the delta is the one-line push-list trigger plus this documentation.
+- **Exact-head CI:** `photo-master-stage1-4` run `39482767093` (push) on `14f1746`, conclusion **success**. All jobs succeeded:
+  - `w4-and-typecheck`
+  - `fenced-storage-and-crash`
+  - `schema-and-writer-census`
+  - `w2-independent-stack-proof`
+  - `api-full-regression`
+  - `ext4-disk-budget-enospc`
+  - `linux-512m-24mp-combined / integrated-candidate-original-source`
+  - `linux-512m-24mp-combined / reference-pr422-original-source`
+  - `w3-candidate-integration-gate`
+  - `w2-live-adoption-gate`
+  - the `photo-master-acceptance` aggregator
+- **Independent review:** separate **agent instance**, not human review. It reviewed `84f3938` (deltas `1dadeb2..84f3938` and `24a16b8e..84f3938`), the release documentation and the trigger change. Verdict **PASS** on all eight required concerns.
+  - Documentation findings M1 (rollback blockers), M2 (W4 precheck limit in rollback), L1 (build-command step) and L2 (staging-flag wording) were fixed, and a focused re-review confirmed them.
+  - L3 (§5 heading wording) is cosmetic.
+
+**Counters (after Stage 3):** F2 closure **3/4**, overall engineering **4/12**.
+
+### 7.1 Stage 4: production verification, enablement and acceptance (20 October 2026)
+- **Target:** service `srv-db34390m7kps73cv8l6g` (`api.noctella.com`), working directory `/opt/render/project/src`, SQLite, `PRODUCT_PHOTO_DIR=/var/data/product-photos`. Auto-Deploy **OFF**.
+  - Previous revision: `f9a61bf5a79e2cf182c04b5434c61bbe32fcfb32` (deploy `dep-dba9m5ijnfac73et5km0`).
+  - Production was operated through the Render Dashboard and Shell by the owner. The agent's production reads and actions were refused by the automatic approval reviewer.
+- **Backups (§3 prerequisites 1–2):**
+  - `db:backup` and `photos:backup` succeeded.
+  - The database backup key was recovered read-only with S3 `ListObjectsV2`: `database-backups/noctella-sqlite-20261020T194623019Z-4010d51fd397fe37.sqlite`.
+  - `db:restore-verify` on that key: byteSize 2,830,336, sha256 `4010d51fd397fe37b1071c4ec1660be356079fdbc6d588d904f3737e5dd6dc3a`, integrity **ok**.
+- **Disk snapshot (§3 prerequisite 3):** latest snapshot 20 October 2026 at 03:16, as displayed by the Dashboard (timezone not specified).
+- **Rollback baseline (`f9a61bf`, `/var/data/f2-prod-20261020/00-baseline.json`):**
+  - 18 products and 156 product photos; 316 photo files (listing sha `86d27a73a9771e97`);
+  - all 156 photo outbox events `Succeeded`;
+  - `quick_check` ok; 942,546,944 bytes free.
+- **Launcher build and confinement (§2):**
+  - The build command appends `npm run build:launcher -w apps/api`.
+  - `PHOTO_PREPARATION_CONFINEMENT=required`, and `PHOTO_PREPARATION_LAUNCHER=/opt/render/project/src/apps/api/dist/bin/landlock-worker`.
+  - Provenance: launcher sha256 `e77d9088b277051d761cff902da55f89ebcf2142ef0945559c5d985d7fcc8032`, built from source `5d1fcdbc9f315c57286d7e362416964dee99f708e0110e02a55ae4b77d9b1812` with `cc (Debian 12.2.0-14+deb12u1) 12.2.0`.
+- **Deploy with fencing OFF (§3 activation step 1):** `dep-dbbsl7ei0phs73e3402g`, commit `14f17469ed43fec4e3035d08612ea3b69cf849c3`, instance `-dsnxc`.
+  - No-overlap order **PASS**: old instance shutdown 20:11:22Z, new instance start 20:11:57Z.
+  - Preflight PASS for confinement, `launcher.provenance`, migrations 0040/0041/0043/0044, 0042-w11 dormant, the four storage roots and exit authentication. WARN for `migrations.gaps` (known) and `storage.free-space` (advisory 1 GiB; the measured 256 MiB floor is met).
+  - No intents and no photo operations.
+- **Quiescence (§3 activation steps 3–4):** photo admission stopped; no photo operations or intents; no pending photo outbox events.
+- **Fencing ON (§3 activation step 5):** `PRODUCT_PHOTO_DISK_STAGING_ENABLED=true` and `PHOTO_OWNERSHIP_FENCING_ENABLED=true`. Exact-commit deploy `dep-dbbsrunavr4c73dggma0`, commit `14f17469…`, instance `-vkx9j`.
+  - No-overlap order **PASS**: old instance shutdown 20:25:31Z, new instance start 20:26:18Z.
+- **Minimum production acceptance (§3 activation step 6) on `-vkx9j`: PASS.**
+  - One test-product photo upload through the Admin UI. It committed exactly one `product_upload` operation (state `committed`, intent `committed`), and `product_photos` went 156 → 157.
+  - The HTTP status (201) was **not captured**; success is evidenced by the committed records only.
+  - Preflight (`/var/data/f2-prod-20261020/31-preflight-fencing-on.txt`): `flag.fencing` ON PASS, confinement PASS, `launcher.provenance` PASS, all migration checks PASS, 0042-w11 dormant PASS, the four storage roots PASS, `storage.persistent-identity` PASS (`pfs1:fe08a63b591a40b7bcfdf4b2d0d9d670:…`), `publication.exit-authentication` PASS.
+  - WARN only for `migrations.gaps` and `storage.free-space` (898 MiB free).
+  - `photos:publication-intents`: zero `authorized` intents.
+- **Resume admission (§3 activation step 7): DEFERRED by owner decision.** It was not executed and is not a PASS. Normal use remains paused by explicit owner decision until overall engineering reaches 12/12. Production technical acceptance passed; no resumption timestamp exists.
+- **Closure assessment** (`STAGE5_F2_RUNTIME_REMEDIATION.md` §7: exact-head CI, independent review, target verification, authorized staging, production acceptance):
+  - exact-head CI: run `39482767093` on `14f1746` (§7 Stage 3);
+  - independent review: agent instance, not human (§7 Stage 3);
+  - target verification and authorized staging: RC2 (§4.1), plus production target verification above;
+  - production acceptance: above.
+
+  All are met. Resuming admission is a procedural activation step, not a §7 closure criterion; it is deferred, not waived.
+- **Stage 4: CLOSED. F2: CLOSED.**
+- **Owner-accepted limitations with fencing ON:**
+  - Instagram preparation is refused;
+  - canonical deletion is refused;
+  - cross-instance restart may require exact exit attestation.
+- **Residuals:**
+  - changed-device recovery is UNVERIFIED (outside the approved Stage 2 scope);
+  - protected full 24 MP stays BLOCKED;
+  - the power-loss durability limit (§7 of the runtime remediation);
+  - the shared launcher restricts writes only;
+  - 4B and 4C are parked;
+  - W11/0042 is dormant;
+  - the test photo cannot be deleted while fencing is ON;
+  - RC2 retains its records and evidence, and its configured branch is still `main`.
+
+**Counters:** F2 closure **4/4 — CLOSED**. Overall engineering **5/12** (advances when F2 closes).

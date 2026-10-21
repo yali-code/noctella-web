@@ -55,6 +55,55 @@ describe("photo release preflight", () => {
     expect(check(result, "flag.w3-original-source").status).toBe("WARN");
   });
 
+  it("fails closed when canonical photos is a separate mounted filesystem from its private staging parent", () => {
+    const parent = temp(), canonicalRoot = path.join(parent, "photos");
+    mkdirSync(canonicalRoot);
+    // Simulate a mount point without requiring privileges, real mounts or any customer data.
+    const device = (dir: string) => dir === canonicalRoot ? 42 : dir === parent ? 7 : undefined;
+    const result = runPhotoReleasePreflight({ env: {}, canonicalRoot, device });
+    expect(check(result, "storage.canonical-root")).toMatchObject({ status: "FAIL" });
+    expect(check(result, "storage.canonical-root").detail).toContain("EXDEV");
+    expect(check(result, "storage.private-operations").status).toBe("FAIL");
+    expect(check(result, "storage.upload-staging").status).toBe("FAIL");
+    expect(check(result, "storage.publication-staging").status).toBe("FAIL");
+    expect(result.status).toBe("FAIL");
+    expect(readdirSync(parent)).toEqual(["photos"]); // preflight remains strictly read-only
+  });
+
+  it("accepts a same-device canonical root, parent and not-yet-created private paths", () => {
+    const parent = temp(), canonicalRoot = path.join(parent, "photos");
+    mkdirSync(canonicalRoot);
+    const device = (dir: string) => dir === canonicalRoot || dir === parent ? 7 : undefined;
+    const result = runPhotoReleasePreflight({ env: {}, canonicalRoot, device });
+    for (const id of ["storage.canonical-root", "storage.private-operations", "storage.publication-staging", "storage.upload-staging"])
+      expect(check(result, id).status).toBe("PASS");
+    expect(readdirSync(parent)).toEqual(["photos"]);
+  });
+
+  it.each(["postgres", "supabase-postgres"])("does not mislabel SQLite backup commands as a database backup for %s", (driver) => {
+    const root = temp(); mkdirSync(path.join(root, "photos"));
+    const result = runPhotoReleasePreflight({ env: { DATABASE_DRIVER: driver }, canonicalRoot: path.join(root, "photos") });
+    expect(check(result, "database.driver").status).toBe("PASS");
+    expect(check(result, "backups")).toMatchObject({ status: "MANUAL" });
+    expect(check(result, "backups").detail).toContain("SQLite-only");
+    expect(check(result, "backups").detail).toContain("PostgreSQL-native backup and restore evidence");
+    expect(check(result, "backups").detail).toContain("photos:backup");
+    expect(result.status).toBe("WARN"); // manual gate is never completed offline
+    expect(readdirSync(root)).toEqual(["photos"]);
+  });
+
+  it("keeps the established SQLite backup instructions unchanged and refuses unknown drivers", () => {
+    const root = temp(); mkdirSync(path.join(root, "photos"));
+    const sqlite = runPhotoReleasePreflight({ env: { DATABASE_DRIVER: "sqlite" }, canonicalRoot: path.join(root, "photos") });
+    expect(check(sqlite, "database.driver").status).toBe("PASS");
+    expect(check(sqlite, "backups")).toMatchObject({ status: "MANUAL", detail: "run db:backup, photos:backup and db:restore-verify before deploying; record hashes" });
+    const unknown = runPhotoReleasePreflight({ env: { DATABASE_DRIVER: "unrecognized-db" }, canonicalRoot: path.join(root, "photos") });
+    expect(check(unknown, "database.driver").status).toBe("FAIL");
+    expect(unknown.status).toBe("FAIL");
+    expect(check(unknown, "backups").detail).not.toContain("db:restore-verify");
+    expect(readdirSync(root)).toEqual(["photos"]);
+  });
+
   it("reports low free space and a missing canonical parent", () => {
     const root = temp();
     const low = runPhotoReleasePreflight({ env: {}, canonicalRoot: path.join(root, "photos"), statfs: () => ({ bavail: 10, bsize: 4096 }) });

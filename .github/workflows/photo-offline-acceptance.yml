@@ -1,0 +1,58 @@
+name: Photo offline integration acceptance
+
+on:
+  pull_request:
+    branches: [fix/f2-w4-finalize-precheck]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/photo-offline-acceptance.yml
+      - apps/api/src/scripts/photoReleasePreflight.ts
+      - apps/api/tests/photoReleasePreflight.test.ts
+      - apps/api/tests/photoOwnershipRestoreRecovery.test.ts
+      - apps/api/tests/productPhotoMetadataStripping.test.ts
+      - apps/api/tests/w2FencedStorageExhaustion.test.ts
+      - apps/api/tests/f2ReleaseCompatibility.test.ts
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photo-offline-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scoped-postgres-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_ci
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: noctella_photo_offline_test
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_ci -d noctella_photo_offline_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_ci:disposable_ci_only@127.0.0.1:5432/noctella_photo_offline_test
+      W2_LIVE_REQUIRE_POSTGRES: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Changed preflight and transplanted offline suites (SQLite and required PostgreSQL)
+        run: npm exec -w apps/api -- vitest run tests/photoReleasePreflight.test.ts tests/photoOwnershipRestoreRecovery.test.ts tests/productPhotoMetadataStripping.test.ts tests/w2FencedStorageExhaustion.test.ts
+      - name: Added migration order and dependency-refusal cases only
+        run: npm exec -w apps/api -- vitest run tests/f2ReleaseCompatibility.test.ts -t "reconcile historical"

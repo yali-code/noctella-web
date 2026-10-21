@@ -49,6 +49,64 @@ it("the released 0039 fixture is the 23-column additive Etsy migration (no drops
   expect(RELEASED_SQLITE_ETSY_COLUMNS).toHaveLength(23);
 });
 
+// #475's missing order/catalog checks, adapted to the released fixture and the full current F2 schema.
+// No historical down.sql is executed: current publication intent/copy evidence must remain intact.
+describe.runIf(postgresTestConfigured)("PostgreSQL: reconcile historical photo-first migration order without dropping evidence", () => {
+  const dir = path.join(__dirname, "../src/db/postgres-migrations");
+  const photoMigrations = ["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql", "0043_photo_publication_intents.sql", "0044_photo_publication_copies.sql"];
+  type Harness = Awaited<ReturnType<typeof createPostgresTestDb>>;
+  async function apply(h: Harness, name: string) { await h.pool.query(fs.readFileSync(path.join(dir, name), "utf8")); }
+  async function catalog(h: Harness) {
+    const tables = ["products", "product_photos", ...F2_TABLES];
+    const columns = (await h.pool.query(`SELECT table_name, column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns WHERE table_schema = $1 AND table_name = ANY($2) ORDER BY table_name, column_name`, [h.schemaName, tables])).rows;
+    const constraints = (await h.pool.query(`SELECT conrelid::regclass::text AS rel, conname, pg_get_constraintdef(oid) AS def
+      FROM pg_constraint WHERE connamespace = $1::regnamespace ORDER BY rel, conname`, [h.schemaName])).rows;
+    // Disposable schema names differ; object definitions and defaults must otherwise agree exactly.
+    const normalize = (value: unknown) => JSON.parse(JSON.stringify(value).split(h.schemaName + ".").join(""));
+    return normalize({ columns, constraints });
+  }
+  // Fresh schemas replay the migration chain over local Docker. Use the historical PostgreSQL compatibility
+  // suite's bounded 180-second budget instead of Vitest's five-second unit-test default; assertions are unchanged.
+  it("photo-first and Etsy-first orders yield the same catalog, preserve business rows and keep all 23 declared columns nullable", async () => {
+    const catalogs: unknown[] = [];
+    for (const photoFirst of [false, true]) {
+      const h = await createPostgresTestDb("0038_background_job_claim_fencing.sql");
+      try {
+        const category = randomUUID(), product = randomUUID();
+        await h.pool.query("INSERT INTO categories (id, name, slug) VALUES ($1, 'Order test', $2)", [category, `order-${category}`]);
+        await h.pool.query("INSERT INTO products (id, sku, title, slug, type, status, category_id) VALUES ($1, $2, 'Existing', $3, 'UniqueItem', 'Draft', $4)", [product, `ORDER-${product}`, `order-${product}`, category]);
+        const before = (await h.pool.query("SELECT id, sku, title, slug, type, status, category_id FROM products WHERE id = $1", [product])).rows[0];
+        if (!photoFirst) await h.pool.query(releasedEtsy0039);
+        for (const name of photoMigrations) await apply(h, name);
+        if (photoFirst) await h.pool.query(releasedEtsy0039);
+        expect((await h.pool.query("SELECT id, sku, title, slug, type, status, category_id FROM products WHERE id = $1", [product])).rows[0]).toEqual(before);
+        const columns = (await h.pool.query("SELECT column_name, is_nullable FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'products'", [h.schemaName])).rows;
+        const declared = [...releasedEtsy0039.matchAll(/ALTER TABLE products ADD COLUMN IF NOT EXISTS (etsy_[a-z0-9_]+)/g)].map((m) => m[1]);
+        expect(new Set(declared).size).toBe(23);
+        for (const name of declared) expect(columns.find((c) => c.column_name === name)?.is_nullable).toBe("YES");
+        for (const table of F2_TABLES) expect((await h.pool.query("SELECT to_regclass($1) AS t", [table])).rows[0].t).not.toBeNull();
+        catalogs.push(await catalog(h));
+      } finally { await h.close(); }
+    }
+    expect(catalogs[0]).toEqual(catalogs[1]);
+  }, 180_000);
+
+  it("a dependency-unsafe rollback attempt fails atomically and retains the current publication schema", async () => {
+    const h = await createPostgresTestDb("0044_photo_publication_copies.sql");
+    try {
+      const before = await catalog(h);
+      const client = await h.pool.connect();
+      try {
+        await client.query("BEGIN");
+        await expect(client.query("DROP TABLE photo_operations")).rejects.toMatchObject({ code: "2BP01" });
+      } finally { await client.query("ROLLBACK"); client.release(); }
+      expect(await catalog(h)).toEqual(before);
+      for (const table of F2_TABLES) expect((await h.pool.query("SELECT to_regclass($1) AS t", [table])).rows[0].t).not.toBeNull();
+    } finally { await h.close(); }
+  }, 180_000);
+});
+
 describe("SQLite (production driver): candidate ensureSchema over the released Etsy database", () => {
   it("starts without error, preserves every released Etsy value and existing row, adds the F2 tables, and is idempotent", () => {
     const file = path.join(require("node:os").tmpdir(), `f2-release-${randomUUID()}.sqlite`); files.push(file);

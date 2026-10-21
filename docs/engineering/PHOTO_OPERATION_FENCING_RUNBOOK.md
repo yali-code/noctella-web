@@ -1,7 +1,18 @@
 # Generation-fenced photo operations (W2 + W4): operator runbook and release preparation (#424 FAZ A)
 
-Status: **prepared, not executed.** Nothing in this document has been run against staging or production.
-`PHOTO_OWNERSHIP_FENCING_ENABLED` defaults OFF; with it OFF, W2 uploads and W4 finalization are unchanged.
+## Current operator guidance (21 October 2026)
+
+**Sections 1–4 below are historical design evidence, not current operating instructions.** They describe the pre-publication-intent implementation. Do not use their lease-only recovery table, SQL example, publication sequence or release blockers to operate the accepted F2 revision.
+
+Use [F2 release package §3](../release/F2_CLOSURE_STAGE1_RELEASE_PACKAGE.md#3-migration-backup-and-rollback) for the current backup, quiescence, recovery and rollback procedure, and [§7.1](../release/F2_CLOSURE_STAGE1_RELEASE_PACKAGE.md#71-stage-4-production-verification-enablement-and-acceptance-20-october-2026) for the latest recorded acceptance. The [runtime remediation §7](STAGE5_F2_RUNTIME_REMEDIATION.md#7-remaining-gaps-explicit) states the remaining limits. These are local records, not a fresh live-state check.
+
+The latest closure record reports **F2 CLOSED, 4/4; overall engineering 5/12**, with production technical acceptance on `14f17469ed43fec4e3035d08612ea3b69cf849c3`. Normal use remains paused by owner decision until 12/12; this document does not authorize resumption or any target action.
+
+**Database-driver backup qualification:** `db:backup` and `db:restore-verify` prove SQLite backup recovery only. A future PostgreSQL or supabase-postgres release requires separately owner-approved consistent PostgreSQL-native backup and verified restore evidence, `photos:backup`, and a compatible database/photo recovery point. The read-only preflight now distinguishes these drivers and refuses unknown drivers; it does not perform backups or establish their acceptance.
+
+**Rollback order:** stop admission and quiesce writers. Keep protected code running with fencing ON while resolving every `authorized` publication intent through the existing recovery procedure. Cross-instance executor loss requires genuine termination evidence and exact exit attestation; elapsed leases alone do not establish safe recovery. If termination cannot be established, or W4's Product precheck prevents an authorized intent from resuming, STOP rollback. Before disabling fencing, require zero `authorized` intents and zero `preparing`, `sealed` or `review` operations, regardless of lease state. Only then may an authorized rollback disable fencing or downgrade code. Never drop or truncate authority/evidence tables or delete private/staging evidence directories. Follow §3 for the complete procedure.
+
+Historical status at authoring: **prepared, not executed**; the statements below do not supersede the later closure record.
 
 ## 1. What fencing ON does
 
@@ -55,11 +66,7 @@ ORDER BY created_ms;
    migration. Resolve the Etsy 0039 / photo 0040 ordering on `main`; never renumber an applied file. Back up first
    (`db:backup`, `photos:backup`).
 3. **Rollback limitations.**
-   - Turning fencing OFF returns W2/W4 to the legacy path at once.
-   - Committed photos are ordinary rows and files.
-   - Operations still in `preparing`/`sealed` keep their private evidence. Legacy code ignores them and they stay
-     visible to the recovery listing after re-enabling.
-   - Dropping 0040/0041 tables is allowed only when `ownershipRollbackBlockers` reports `safe`.
+   - **Superseded:** use the current rollback order above and release package §3. The earlier advice to disable fencing while unfinished operations remain, or to drop ownership tables after a rollback check, is not valid for the accepted F2 revision. Preserve all authority state and evidence.
 4. **Storage roots.**
    - `.product-photo-operations/` must be on the same filesystem as `PRODUCT_PHOTO_DIR`; `link()` fails closed on
      EXDEV.

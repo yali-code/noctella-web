@@ -39,7 +39,7 @@ const DATA_NAME = /^data-[0-9a-f]{16}$/;
 const identity = (st: fs.BigIntStats) => ({ dev: String(st.dev), ino: String(st.ino), birthNs: String(st.birthtimeNs) });
 const sameInode = (fd: number, st: fs.BigIntStats, r: Pick<CopyRecord, "dev" | "ino" | "birthNs">) => matchesPhotoDevice(fd, st, r.dev) && String(st.ino) === r.ino && String(st.birthtimeNs) === r.birthNs;
 
-function hashFd(fd: number) {
+export function hashFd(fd: number) {
   const hash = createHash("sha256"), buffer = Buffer.alloc(64 * 1024);
   let position = 0;
   for (;;) {

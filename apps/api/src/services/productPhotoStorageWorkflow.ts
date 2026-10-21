@@ -7,7 +7,8 @@ import type { UnitOfWork } from "./unitOfWork";
 import { OutboxEventType, type OutboxEvent, type OutboxHandler } from "./outbox";
 import { ProductPhotoProcessingStatus } from "./productPhotoOutboxWorkflow";
 import { createProductWriteRepositoryBundleForDb } from "../repositories/product-write/factory";
-import { refuseUnadoptedPhotoWriter } from "./photoOwnershipFencing";
+import { photoOwnershipFencingEnabled, refuseUnadoptedPhotoWriter } from "./photoOwnershipFencing";
+import type { CanonicalDeletionDisposition, CanonicalDeletionRetention } from "./photoCanonicalDeletion";
 
 export interface ProductPhotoStorageRoots { tempRoot: string; permanentRoot: string; publicBase?: string }
 export class UnsafeStoragePathError extends Error { permanent = true; code = "UNSAFE_STORAGE_PATH"; }
@@ -83,20 +84,24 @@ export class ProductPhotoPromotionHandler implements OutboxHandler {
   }
 }
 /** Permanent outcomes are dead-lettered for operator review; the event is never acknowledged as performed. */
-export class PhotoDeletionNotPerformedError extends Error { permanent = true; constructor(readonly code: "PHOTO_DELETE_KEYS_ABSENT" | "PHOTO_DELETE_REFERENCE_UNKNOWN" | "PHOTO_DELETE_KEY_REFERENCED" | "PHOTO_TEMP_ROOT_IS_CANONICAL") { super(`Photo file deletion was not performed (${code})`); } }
+export class PhotoDeletionNotPerformedError extends Error { permanent = true; constructor(readonly code: "PHOTO_DELETE_KEYS_ABSENT" | "PHOTO_DELETE_REFERENCE_UNKNOWN" | "PHOTO_TEMP_ROOT_IS_CANONICAL" | CanonicalDeletionRetention) { super(`Photo file deletion was not performed (${code})`); } }
 /** Authoritative check: is this canonical key still referenced by any photo row or ownership operation? */
 export type CanonicalKeyReferenceCheck = (key: string) => Promise<boolean>;
+/** 4C: the authorized deleter (photoCanonicalDeletion.ts) for one deleted photo, used only with fencing ON. */
+export type AuthorizedCanonicalDelete = (photoId: string) => CanonicalDeletionDisposition | Promise<CanonicalDeletionDisposition>;
 /**
  * W8. The production emitter (deleteProductPhoto) sends only { photoId, productId }; such events are
  * kept for operator review instead of being acknowledged as a deletion that never happened. Keyed
  * (historical/synthetic) events delete only keys an authoritative check proves unreferenced; an
  * unknown reference state never deletes (a failing check is retried, a missing checker refuses).
+ * With fencing ON (4C), payload keys are ignored: only the authorized deleter may delete, deriving the keys from the
+ * photo's committed operation under its row lock; without it the writer stays refused. Retention is dead-lettered.
  */
 export class ProductPhotoDeleteHandler implements OutboxHandler {
   eventType = OutboxEventType.ProductPhotoDeleteRequested;
-  constructor(private readonly roots: ProductPhotoStorageRoots, private readonly isReferenced?: CanonicalKeyReferenceCheck) {}
+  constructor(private readonly roots: ProductPhotoStorageRoots, private readonly isReferenced?: CanonicalKeyReferenceCheck, private readonly authorizedDelete?: AuthorizedCanonicalDelete) {}
   async handle(event: OutboxEvent) {
-    refuseUnadoptedPhotoWriter("W8_CANONICAL_DELETE");
+    if (photoOwnershipFencingEnabled()) return this.handleFenced(event);
     const p: any = event.payload;
     const keys = [p.storageKey, p.thumbnailStorageKey].filter((key): key is string => typeof key === "string");
     if (keys.length === 0) {
@@ -106,6 +111,13 @@ export class ProductPhotoDeleteHandler implements OutboxHandler {
     if (!this.isReferenced) throw new PhotoDeletionNotPerformedError("PHOTO_DELETE_REFERENCE_UNKNOWN");
     for (const key of keys) { safeJoin(this.roots.permanentRoot, key); if (await this.isReferenced(key)) throw new PhotoDeletionNotPerformedError("PHOTO_DELETE_KEY_REFERENCED"); }
     for (const key of keys) await unlinkIdempotent(safeJoin(this.roots.permanentRoot, key));
+  }
+  private async handleFenced(event: OutboxEvent) {
+    if (!this.authorizedDelete) refuseUnadoptedPhotoWriter("W8_CANONICAL_DELETE");
+    const photoId = (event.payload as any)?.photoId;
+    if (typeof photoId !== "string" || !photoId || (event.aggregateId && event.aggregateId !== photoId)) throw new PhotoDeletionNotPerformedError("PHOTO_DELETE_OWNERSHIP_UNKNOWN");
+    const disposition = await this.authorizedDelete!(photoId);
+    if (disposition.kind !== "deleted") throw new PhotoDeletionNotPerformedError(disposition.code);
   }
 }
 /** W9. Never deletes in the canonical root (production temp root == canonical root). */

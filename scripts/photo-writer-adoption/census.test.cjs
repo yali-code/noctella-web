@@ -25,6 +25,7 @@ const EXPECTED = {
   'services/aiIntakePhotoStorage.ts': { mutation: 11, handle: 1, writers: ['W3', 'W5', 'W3 original-source (#390, flag OFF by default; private staging writes only)'] },
   'services/managedFileDeletion.ts': { mutation: 1, writers: ['W5', 'W6'] },
   'services/productPhotoStorageWorkflow.ts': { mutation: 2, writers: ['W7', 'W8', 'W9'] },
+  'services/photoCanonicalDeletion.ts': { mutation: 1, writers: ['W8 authorized canonical deletion (4C #424, fencing ON): unlinks only a committed operation\'s recorded copy names, verified under the operation row lock'] },
   'integrations/instagram/mediaPreparation.ts': { mutation: 3, writers: ['W11'] },
   'services/w11FencedInstagramDerivativeOwner.ts': { mutation: 3, writers: ['W11 INACTIVE PROPOSAL (FAZ A #424): not imported by production code; needs owner-approved 0042 schema; private generation dir, wx write, no-overwrite link'] },
   'integrations/media/reelRenderer.ts': { mutation: 3, child: 1, writers: ['W12 (FFmpeg subprocess writes the partial MP4)'] },
