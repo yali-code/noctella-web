@@ -1,7 +1,10 @@
-# 4C production release proposal (#424): NOT AUTHORIZED, NOT EXECUTED
+# 4C production release proposal (#424): AUTHORIZED AND EXECUTED BY THE OWNER (21 October 2026)
 
-Audience: the repository owner. Acceptance evidence is in `docs/engineering/4C_RC2_ACCEPTANCE_RECORD.md`. Nothing here
-has been executed, and no production read or action was performed by the agent except read-only Render deploy metadata.
+Audience: the repository owner. Acceptance evidence is in `docs/engineering/4C_RC2_ACCEPTANCE_RECORD.md`.
+- §1–§6 below are the **proposal as written before authorization**, kept unchanged as history.
+- What actually happened is in the **Execution record** at the end. Every runtime action and result there was performed
+  and reported by the owner.
+- The agent performed no production read or action except read-only Render deploy metadata.
 
 ## 1. Exact release
 
@@ -114,3 +117,26 @@ decides. Do not run b–g across a deploy. Production retains its evidence under
 
 Normal-use resumption is **not** included and remains a separate owner decision. 4C closes only after §4 PASS and item 1.
 F2 stays CLOSED 4/4; overall stays 5/12.
+
+## Execution record (owner-executed, 21 October 2026; owner-reported results)
+
+| Proposal item | Completed action and result |
+| --- | --- |
+| §6.1 residuals and replacing the W8 refusal | **Accepted** by the owner: the documented SQLite/fencing-ON limits, production deletion activation and the test-photo deletion |
+| §3.1 backups | `db:backup` and `photos:backup` HTTP 200. `db:restore-verify` on key `database-backups/noctella-sqlite-20261021T153435624Z-5a3b13df3f2b4a7c.sqlite`: bytes 2,953,216, sha256 `5a3b13df3f2b4a7c65aaa06d7af152f77cfbbc833d44e7f1f76397ff78ecae73`, integrity **ok**. Disk snapshot 21 October 2026 at 3:41 AM (display timezone unspecified). |
+| §3.2 quiescence | no due or Processing photo events, no attention or rollback blockers, publication-intents report empty |
+| §3.3 exact-commit deploy | `dep-dbcdqo3ncjis7396qv80` live at `43b9bc3af4be8ed89be35c95d59c26435485573e`. No-overlap **PASS**: old instance shutdown complete 2026-10-21 15:44:41.104929342Z; new instance `tmkj8` Running 15:45:24Z (the owner's screenshot displayed 06:45:24 PM local time). |
+| §3.4 target check and preflight | correct commit, SQLite, fencing ON, Landlock confinement, `pfs1:` PASS, no FAIL |
+| §4 test-photo acceptance | target confirmed by the owner: product `aa61360f-45ee-46b6-8079-c7a62ee83e83` (NOC-000013), photo `0594af1a-68ad-4286-8286-8daa5e9ab9f8`, operation `38829870-5b8a-47f5-bdae-540d174e2ccc`, delete event `0867bdf8-f697-4f9b-8ab1-10bd94c91c06`. Steps and results: <br>• deleted through Admin <br>• `due-event` 4/4 PASS <br>• dispatch HTTP 200, `photoOutboxProcessed=1`, `Succeeded`, `attempts=1` <br>• `results` PASS <br>• `compare` 9/9 PASS: exactly its two canonical files removed, all other files unchanged, none added, all operation/intent/copy evidence and authority rows unchanged <br>• file inventory 318 → 316 |
+| Evidence location | `/var/data/4c-prod-20261021/` (`before.json`, `dispatch-response.json`, `after.json`). The proposal had suggested `/var/data/f2-4c-prod-<date>`; the owner used this directory. |
+| §3.5 rollback | not needed; not executed |
+| §6.4 #494/#495 merge | not part of this execution; still a separate decision |
+
+**Outcome:** production acceptance of fenced W8 deletion PASS. **4C CLOSED** within SQLite, fencing ON, confinement
+`required` and a single instance (closure table in `docs/engineering/4C_RC2_ACCEPTANCE_RECORD.md`).
+- Production now runs `43b9bc3`. Canonical deletion is active under fencing, including through the hourly
+  background-jobs cron.
+- Normal-use resumption remains deferred.
+- PostgreSQL deletion stays fail-closed, and the PostgreSQL JSONB outbox `parse()` defect remains unfixed. No PostgreSQL
+  runtime acceptance exists or is implied.
+- F2 stays CLOSED 4/4; overall stays 5/12.
