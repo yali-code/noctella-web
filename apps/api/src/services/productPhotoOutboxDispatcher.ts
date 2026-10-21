@@ -92,6 +92,15 @@ export function createProductPhotoOutboxDispatcher(
  */
 export const PRODUCT_PHOTO_OUTBOX_STALE_LOCK_MS = 5 * 60 * 1000;
 
+/**
+ * 4C (#424): dispatch exactly one named product-photo event through the same dispatcher, handlers and claim predicate
+ * (due, unlocked, Pending/RetryPending, a product-photo type). It does not release stale locks: that release is not
+ * type-scoped and would touch other rows; a locked event is simply not claimable. undefined = not claimable.
+ */
+export async function dispatchProductPhotoOutboxEventById(db: DbClient, workerId: string, eventId: string) {
+  return createProductPhotoOutboxDispatcher(db).dispatchClaimableEvent(eventId, workerId);
+}
+
 export async function dispatchDueProductPhotoOutboxEvents(db: DbClient, workerId = "scheduler", limit = 10) {
   const dispatcher = createProductPhotoOutboxDispatcher(db);
   await dispatcher.releaseStaleLocks(PRODUCT_PHOTO_OUTBOX_STALE_LOCK_MS);

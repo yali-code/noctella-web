@@ -5,6 +5,11 @@
 //     POST /api/background-jobs/product-photo-outbox/run would find no product-photo event due except this photo's
 //     promote/delete and no stale non-photo lock would be released; other domains are listed for information)
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs results <photoId> route-response.json
+//   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs recheck before.json now.json   (before reusing a snapshot
+//     across a deploy: files, evidence and authority rows unchanged)
+//   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs due-event <photoId> <eventId>   (exact-event route
+//     POST /api/background-jobs/product-photo-outbox/dispatch-event: exit 0 only if that event is this photo's own delete
+//     event and claimable now; the route claims nothing else, so other due rows are listed for information only)
 const fs = require("fs"), p = require("path");
 const [mode, a, b] = process.argv.slice(2);
 const openDb = () => new (require(require.resolve("better-sqlite3", { paths: [process.cwd()] })))(process.env.DATABASE_URL, { readonly: true, fileMustExist: true }); // the app's module (run from apps/api)
@@ -23,6 +28,32 @@ if (mode === "due") {
   const clear = unexpectedPhoto.length === 0 && staleOther.length === 0;
   console.log(clear ? "PASS no other product-photo event due and no stale lock to release" : `STOP ${unexpectedPhoto.length ? "another product-photo event is due" : "a stale non-photo lock would be released"}`);
   process.exitCode = clear ? 0 : 1;
+} else if (mode === "recheck") {
+  // Reusing a pre-DELETE snapshot across a deploy: the canonical files (name, inode, size, mtime), this photo's
+  // operation/intent/copy evidence and all authority rows must be exactly unchanged; only the photo row and outbox differ.
+  const before = JSON.parse(fs.readFileSync(a, "utf8")), now = JSON.parse(fs.readFileSync(b, "utf8"));
+  const checks = {
+    "same photo": before.photoId === now.photoId,
+    "canonical files unchanged (name, inode, size, mtime)": JSON.stringify(before.files) === JSON.stringify(now.files),
+    "operation/intent/copy evidence unchanged": JSON.stringify(before.evidence) === JSON.stringify(now.evidence),
+    "all authority rows unchanged": JSON.stringify(before.authority) === JSON.stringify(now.authority),
+  };
+  for (const [k, v] of Object.entries(checks)) console.log(`${v ? "PASS" : "FAIL"} ${k}`);
+  process.exitCode = Object.values(checks).every(Boolean) ? 0 : 1;
+} else if (mode === "due-event") {
+  const db = openDb(), now = new Date().toISOString();
+  const e = db.prepare("SELECT id, event_type, aggregate_id, payload, status, available_at, locked_by FROM outbox_events WHERE id = ?").get(b);
+  let payloadPhoto = null; try { payloadPhoto = JSON.parse(e?.payload ?? "{}").photoId ?? null; } catch { /* unreadable payload fails below */ }
+  const checks = {
+    "event exists": !!e,
+    "is a product-photo delete event": e?.event_type === "product_photo.delete_requested",
+    "aggregate and payload name this photo": e?.aggregate_id === a && payloadPhoto === a,
+    "claimable now (Pending/RetryPending, due, unlocked)": ["Pending", "RetryPending"].includes(e?.status) && e?.available_at <= now && e?.locked_by == null,
+  };
+  const others = db.prepare("SELECT event_type, status, COUNT(*) AS n FROM outbox_events WHERE id <> ? AND ((status IN ('Pending', 'RetryPending') AND available_at <= ?) OR status = 'Processing') GROUP BY event_type, status ORDER BY event_type").all(b, now);
+  console.log(JSON.stringify({ now, event: e && { ...e, payload: undefined }, informationOnlyOtherDueRows: others }, null, 1));
+  for (const [k, v] of Object.entries(checks)) console.log(`${v ? "PASS" : "FAIL"} ${k}`);
+  process.exitCode = Object.values(checks).every(Boolean) ? 0 : 1;
 } else if (mode === "results") {
   // Checks the photo-only route's JSON response: every dispatched event belongs to this photo and is a promote/delete.
   const db = openDb(), response = JSON.parse(fs.readFileSync(b, "utf8"));

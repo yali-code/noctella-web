@@ -46,7 +46,7 @@ import { productPhotoStaticPath, productPhotoStaticRoot } from "./services/photo
 import { enqueueChannelStockSync, enqueueProductStockSync, STOCK_SYNC_CHANNELS } from "./services/stockSync";
 import { enqueueJob, runDueJobs } from "./services/backgroundJobs";
 import { createSocialPublishScheduleExecutionService } from "./services/socialPublishScheduleExecutions";
-import { dispatchDueProductPhotoOutboxEvents } from "./services/productPhotoOutboxDispatcher";
+import { dispatchDueProductPhotoOutboxEvents, dispatchProductPhotoOutboxEventById } from "./services/productPhotoOutboxDispatcher";
 import { dispatchDueSalesInvoiceOutboxEvents } from "./services/salesInvoiceOutbox";
 import { dispatchDueAiSalesPreparationOutboxEvents } from "./services/aiSalesPreparationOutbox";
 import { dispatchDueStockSyncOutboxEvents } from "./services/stockSyncOutbox";
@@ -239,6 +239,26 @@ app.post("/api/background-jobs/product-photo-outbox/run", requireSchedulerAuth, 
   try {
     const results = await dispatchDueProductPhotoOutboxEvents(db, workerId, batchSize);
     res.json({ photoOutboxProcessed: results.length, results });
+  } catch (e) {
+    next(e);
+  }
+});
+// MACHINE AUTHENTICATED (4C #424): exactly one named product-photo outbox event, claimed only if due, unlocked and
+// Pending/RetryPending; nothing else is claimed, requeued or dispatched.
+app.post("/api/background-jobs/product-photo-outbox/dispatch-event", requireSchedulerAuth, async (req, res, next) => {
+  const workerId = String(req.body?.workerId ?? "scheduler");
+  const eventId = req.body?.eventId;
+  if (typeof eventId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) {
+    res.status(400).json({ error: "eventId is required" });
+    return;
+  }
+  try {
+    const result = await dispatchProductPhotoOutboxEventById(db, workerId, eventId);
+    if (!result) {
+      res.status(409).json({ error: "Event is not claimable", code: "OUTBOX_EVENT_NOT_CLAIMABLE" });
+      return;
+    }
+    res.json({ photoOutboxProcessed: 1, results: [result] });
   } catch (e) {
     next(e);
   }
