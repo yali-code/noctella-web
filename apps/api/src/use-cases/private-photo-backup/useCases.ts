@@ -254,6 +254,35 @@ async function privateDestination(directoryPath: string) {
   return root;
 }
 
+/** SQLite's backup API consumes WAL correctly; normalize only the NEW snapshot to standalone DELETE mode.
+ * Caller must already have stopped all DB/filesystem writers for the whole snapshot + capture interval.
+ */
+export async function snapshotPrivatePhotoColdDatabase(sourcePathValue: string, destinationPath: string) {
+  if (!path.isAbsolute(sourcePathValue) || !path.isAbsolute(destinationPath)) fail();
+  const sourceParent = await directory(path.dirname(sourcePathValue));
+  const source = path.join(sourceParent, path.basename(sourcePathValue));
+  const info = await lstat(source);
+  if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_DB) fail();
+  const parent = await privateDestination(path.dirname(destinationPath));
+  const destination = path.join(parent, path.basename(destinationPath));
+  // Reserve exclusively: better-sqlite3 backup otherwise accepts an existing destination.
+  const reserved = await open(destination, "wx", 0o600); await reserved.close();
+  const input = new Database(source, { readonly: true, fileMustExist: true });
+  try {
+    const pageSize = Number(input.pragma("page_size", { simple: true }));
+    await input.backup(destination, { progress: ({ totalPages }) => { if (totalPages * pageSize > MAX_DB) fail(); return 32; } });
+  } finally { input.close(); }
+  const snapshot = new Database(destination, { fileMustExist: true });
+  try { if (String(snapshot.pragma("journal_mode = DELETE", { simple: true })).toLowerCase() !== "delete") fail(); }
+  finally { snapshot.close(); }
+  for (const suffix of ["-wal", "-shm", "-journal"]) {
+    try { await lstat(destination + suffix); fail(); } catch (e: any) { if (e?.code !== "ENOENT") throw e; }
+  }
+  authority(destination); // same integrity/FK/authority-table inspection as capture
+  const proof = await ownedPhotoArtifactProof(destination);
+  return { sha256: proof.sha256, bytes: proof.bytes, journalMode: "delete" as const, sidecars: false as const, sourcePrerequisite: "operator-evidence-not-machine-proven" as const };
+}
+
 /** Owner-operated cold input only. Evidence references are audit prerequisites, NEVER machine proof of quiescence/encryption. */
 export async function capturePrivatePhotoColdBackup(request: ColdBackupRequest) {
   if (!request || !component(request.recoveryPointId) || !component(request.quiescenceEvidenceRef) || !component(request.confidentialityEvidenceRef) || !Array.isArray(request.requiredRetainedOperationIds) || !request.source) fail();

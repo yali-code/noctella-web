@@ -13,6 +13,18 @@ on:
       - apps/api/src/services/photoPersistentIdentity.ts
       - apps/api/src/services/photoPreparationConfinement.ts
       - apps/api/src/db/schema.sql
+      - apps/api/src/db/migrate.ts
+      - apps/api/src/services/w2FencedProductPhotoOwner.ts
+      - apps/api/src/services/w4FencedFinalizationOwner.ts
+      - apps/api/src/services/aiIntakePhotoFinalization.ts
+      - apps/api/src/services/photoPublicationExecutor.ts
+      - apps/api/src/services/photoPublicationIntents.ts
+      - apps/api/src/services/photoCopyPublisher.ts
+      - apps/api/src/services/photoOperationAuthority.ts
+      - apps/api/src/services/photoProcessingRecipe.ts
+      - apps/api/src/workers/photoPreparationWorker.ts
+      - apps/api/tsconfig.json
+      - packages/shared/**
       - apps/api/scripts/build-landlock-launcher.mjs
       - scripts/photo-publication-capability/landlock-worker.c
       - apps/api/package.json
@@ -45,6 +57,10 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - name: Build shared dependency and candidate API (including the actual CLI and preparation worker)
+        run: |
+          npm run build -w packages/shared
+          npm run build -w apps/api
       - name: Build existing descriptor identity helper only
         run: node apps/api/scripts/build-landlock-launcher.mjs --out "$RUNNER_TEMP/gate5-launcher"
       - name: Actual CLI against quiesced synthetic ext4 source and real private POSIX destination

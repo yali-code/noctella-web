@@ -1,7 +1,7 @@
 /** Explicit owner-operated cold evidence export. No runtime DB import, env discovery, network or restore/replay. */
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
-import { capturePrivatePhotoColdBackup, verifyPrivatePhotoColdBundle, type ColdBackupRequest } from "../use-cases/private-photo-backup/useCases";
+import { capturePrivatePhotoColdBackup, verifyPrivatePhotoColdBundle, snapshotPrivatePhotoColdDatabase, type ColdBackupRequest } from "../use-cases/private-photo-backup/useCases";
 
 async function requestFile(file: string): Promise<ColdBackupRequest> {
   const handle = await open(file, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK));
@@ -19,9 +19,10 @@ async function requestFile(file: string): Promise<ColdBackupRequest> {
 }
 
 export async function runPrivatePhotoColdBackupCommand(args: string[]) {
+  if (args.length === 3 && args[0] === "snapshot") return snapshotPrivatePhotoColdDatabase(args[1], args[2]);
   if (args.length === 2 && args[0] === "capture") return capturePrivatePhotoColdBackup(await requestFile(args[1]));
   if (args.length === 3 && args[0] === "verify") return verifyPrivatePhotoColdBundle(args[1], args[2]);
-  throw new Error("Usage: privatePhotoColdBackup capture <operator-request.json> | verify <bundle-directory> <expected-manifest-sha256>");
+  throw new Error("Usage: privatePhotoColdBackup snapshot <cold-source.sqlite> <new-snapshot.sqlite> | capture <operator-request.json> | verify <bundle-directory> <expected-manifest-sha256>");
 }
 
 if (require.main === module) {
