@@ -1,11 +1,24 @@
 // 4C (#424) RC2 acceptance evidence: READ-ONLY (readonly SQLite handle, lstat only). Run from apps/api on the RC2 shell.
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs snapshot <photoId> > before.json   (and again > after.json)
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs compare before.json after.json
+//   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs due <photoId>   (exit 0 only if POST /api/background-jobs/run
+//     would find nothing due except this photo's promote/delete events: no jobs, other outbox events, social schedules or cleanup)
 const fs = require("fs"), p = require("path");
 const [mode, a, b] = process.argv.slice(2);
-if (mode === "snapshot") {
-  const D = require(require.resolve("better-sqlite3", { paths: [process.cwd()] })); // the app's module (run from apps/api)
-  const db = new D(process.env.DATABASE_URL, { readonly: true, fileMustExist: true }), dir = process.env.PRODUCT_PHOTO_DIR;
+const openDb = () => new (require(require.resolve("better-sqlite3", { paths: [process.cwd()] })))(process.env.DATABASE_URL, { readonly: true, fileMustExist: true }); // the app's module (run from apps/api)
+if (mode === "due") {
+  const db = openDb(), now = new Date().toISOString();
+  const jobs = db.prepare("SELECT type, status, COUNT(*) AS n FROM background_jobs WHERE (status IN ('pending', 'retry_pending') AND run_after <= ?) OR status = 'processing' GROUP BY type, status ORDER BY type, status").all(now);
+  const outbox = db.prepare("SELECT event_type, status, aggregate_id, COUNT(*) AS n FROM outbox_events WHERE (status IN ('Pending', 'RetryPending') AND available_at <= ?) OR status = 'Processing' GROUP BY event_type, status, aggregate_id ORDER BY event_type, aggregate_id").all(now);
+  const social = db.prepare("SELECT COUNT(*) AS n FROM social_publish_schedules s LEFT JOIN social_publish_schedule_executions e ON e.schedule_id = s.id WHERE s.requested_publication_at <= ? AND e.background_job_id IS NULL").get(now).n;
+  const cleanupEnabled = process.env.AI_INTAKE_CLEANUP_EXECUTION_ENABLED === "true";
+  const unexpectedOutbox = outbox.filter((r) => !(r.aggregate_id === a && ["product_photo.promote_requested", "product_photo.delete_requested"].includes(r.event_type)));
+  console.log(JSON.stringify({ now, jobs, outbox, dueSocialSchedules: social, cleanupEnabled }, null, 1));
+  const clear = jobs.length === 0 && unexpectedOutbox.length === 0 && social === 0 && !cleanupEnabled;
+  console.log(clear ? "PASS nothing else due" : "STOP other scheduler work is due");
+  process.exitCode = clear ? 0 : 1;
+} else if (mode === "snapshot") {
+  const db = openDb(), dir = process.env.PRODUCT_PHOTO_DIR;
   const op = db.prepare("SELECT id, state, committed_photo_id, main_key, thumb_key, generation, seal_id FROM photo_operations WHERE target_photo_id = ?").get(a);
   const evidence = op && {
     op,
