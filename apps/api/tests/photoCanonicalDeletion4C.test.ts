@@ -144,7 +144,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
       const event = (id: string, photoId: string, extra: object = {}) => outbox.create({ id, eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: photoId, idempotencyKey: id, payload: { photoId, productId: "p1", ...extra }, maxAttempts: 3, availableAt: "2026-01-01" } as never);
       await event("authorized", s.photoId);
       await event("legacy", "legacy-photo", { storageKey: "legacy.webp", thumbnailStorageKey: "legacy.webp" });
+      const mismatched = await seed();
+      await outbox.create({ id: "mismatched", eventType: OutboxEventType.ProductPhotoDeleteRequested, aggregateType: "ProductPhoto", aggregateId: "other-photo", idempotencyKey: "mismatched", payload: { photoId: mismatched.photoId }, maxAttempts: 3, availableAt: "2026-01-01" } as never);
       await createProductPhotoOutboxDispatcher(h.db, "sqlite", { tempRoot: root, permanentRoot: root }).dispatchDueEvents("w", 5);
+      expect(await outbox.getById("mismatched")).toMatchObject({ status: OutboxEventStatus.DeadLetter, lastErrorCode: "PHOTO_DELETE_OWNERSHIP_UNKNOWN" });
+      expect(present(mismatched)).toEqual([true, true]);
       expect((await outbox.getById("authorized"))?.status).toBe(OutboxEventStatus.Succeeded);
       expect(present(s)).toEqual([false, false]);
       expect(await outbox.getById("legacy")).toMatchObject({ status: OutboxEventStatus.DeadLetter, lastErrorCode: "PHOTO_DELETE_OWNERSHIP_UNKNOWN" });
