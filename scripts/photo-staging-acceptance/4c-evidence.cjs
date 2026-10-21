@@ -1,8 +1,9 @@
 // 4C (#424) RC2 acceptance evidence: READ-ONLY (readonly SQLite handle, lstat only). Run from apps/api on the RC2 shell.
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs snapshot <photoId> > before.json   (and again > after.json)
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs compare before.json after.json
-//   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs due <photoId>   (exit 0 only if POST /api/background-jobs/run
-//     would find nothing due except this photo's promote/delete events: no jobs, other outbox events, social schedules or cleanup)
+//   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs due <photoId>   (exit 0 only if the photo-only route
+//     POST /api/background-jobs/product-photo-outbox/run would find no product-photo event due except this photo's
+//     promote/delete; other domains are listed for information and are never run by that route)
 const fs = require("fs"), p = require("path");
 const [mode, a, b] = process.argv.slice(2);
 const openDb = () => new (require(require.resolve("better-sqlite3", { paths: [process.cwd()] })))(process.env.DATABASE_URL, { readonly: true, fileMustExist: true }); // the app's module (run from apps/api)
@@ -12,10 +13,11 @@ if (mode === "due") {
   const outbox = db.prepare("SELECT event_type, status, aggregate_id, COUNT(*) AS n FROM outbox_events WHERE (status IN ('Pending', 'RetryPending') AND available_at <= ?) OR status = 'Processing' GROUP BY event_type, status, aggregate_id ORDER BY event_type, aggregate_id").all(now);
   const social = db.prepare("SELECT COUNT(*) AS n FROM social_publish_schedules s LEFT JOIN social_publish_schedule_executions e ON e.schedule_id = s.id WHERE s.requested_publication_at <= ? AND e.background_job_id IS NULL").get(now).n;
   const cleanupEnabled = process.env.AI_INTAKE_CLEANUP_EXECUTION_ENABLED === "true";
-  const unexpectedOutbox = outbox.filter((r) => !(r.aggregate_id === a && ["product_photo.promote_requested", "product_photo.delete_requested"].includes(r.event_type)));
-  console.log(JSON.stringify({ now, jobs, outbox, dueSocialSchedules: social, cleanupEnabled }, null, 1));
-  const clear = jobs.length === 0 && unexpectedOutbox.length === 0 && social === 0 && !cleanupEnabled;
-  console.log(clear ? "PASS nothing else due" : "STOP other scheduler work is due");
+  const photoDomain = outbox.filter((r) => r.event_type.startsWith("product_photo."));
+  const unexpectedPhoto = photoDomain.filter((r) => !(r.aggregate_id === a && ["product_photo.promote_requested", "product_photo.delete_requested"].includes(r.event_type)));
+  console.log(JSON.stringify({ now, photoDomain, informationOnlyOtherDomains: { jobs, outbox: outbox.filter((r) => !photoDomain.includes(r)), dueSocialSchedules: social, cleanupEnabled } }, null, 1));
+  const clear = unexpectedPhoto.length === 0;
+  console.log(clear ? "PASS no other product-photo event due" : "STOP another product-photo event is due");
   process.exitCode = clear ? 0 : 1;
 } else if (mode === "snapshot") {
   const db = openDb(), dir = process.env.PRODUCT_PHOTO_DIR;

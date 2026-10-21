@@ -225,6 +225,24 @@ app.post("/api/background-jobs/run", requireSchedulerAuth, async (req, res, next
     next(e);
   }
 });
+// MACHINE AUTHENTICATED (4C #424): only the product-photo outbox domain, with the same auth, batch bound, claim,
+// stale-lock release and handlers as /api/background-jobs/run - no jobs, other outboxes, schedules or cleanup.
+app.post("/api/background-jobs/product-photo-outbox/run", requireSchedulerAuth, async (req, res, next) => {
+  const workerId = String(req.body?.workerId ?? "scheduler");
+  let batchSize: number;
+  try {
+    batchSize = parseSchedulerBatchSize(req.body?.batchSize);
+  } catch (e) {
+    handleRouteError(e, res);
+    return;
+  }
+  try {
+    const results = await dispatchDueProductPhotoOutboxEvents(db, workerId, batchSize);
+    res.json({ photoOutboxProcessed: results.length, results });
+  } catch (e) {
+    next(e);
+  }
+});
 app.use("/api/background-jobs/database-backup", createDatabaseBackupRouter(() => runDatabaseBackup(db)));
 // MACHINE AUTHENTICATED (Analytics Phase 1G): daily, idempotent internal analytics snapshot -
 // writes only analytics_runs / analytics_metric_snapshots. Triggered by scripts/runAnalyticsSnapshot.ts.
