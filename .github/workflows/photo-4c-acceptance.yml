@@ -14,6 +14,12 @@ on:
       - apps/api/src/services/photoCopyPublisher.ts
       - apps/api/src/services/productPhotoOutboxDispatcher.ts
       - apps/api/src/services/productPhotoStorageWorkflow.ts
+      - apps/api/src/services/outbox.ts
+      - apps/api/src/services/outboxRepository.ts
+      - apps/api/src/validation/backgroundJobs.ts
+      - apps/api/src/auth/machineAuth.ts
+      - apps/api/tests/photoOwnershipFencingSwitch.test.ts
+      - apps/api/tests/productPhotoOutboxWorkflow.test.ts
       - apps/api/tests/photoCanonicalDeletion4C.test.ts
       - apps/api/tests/productPhotoOutboxOnlyRoute4C.test.ts
       - apps/api/tests/photoCanonicalWriterInventory.test.ts

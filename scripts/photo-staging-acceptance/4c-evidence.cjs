@@ -3,7 +3,8 @@
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs compare before.json after.json
 //   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs due <photoId>   (exit 0 only if the photo-only route
 //     POST /api/background-jobs/product-photo-outbox/run would find no product-photo event due except this photo's
-//     promote/delete; other domains are listed for information and are never run by that route)
+//     promote/delete and no stale non-photo lock would be released; other domains are listed for information)
+//   node ../../scripts/photo-staging-acceptance/4c-evidence.cjs results <photoId> route-response.json
 const fs = require("fs"), p = require("path");
 const [mode, a, b] = process.argv.slice(2);
 const openDb = () => new (require(require.resolve("better-sqlite3", { paths: [process.cwd()] })))(process.env.DATABASE_URL, { readonly: true, fileMustExist: true }); // the app's module (run from apps/api)
@@ -16,9 +17,22 @@ if (mode === "due") {
   const photoDomain = outbox.filter((r) => r.event_type.startsWith("product_photo."));
   const unexpectedPhoto = photoDomain.filter((r) => !(r.aggregate_id === a && ["product_photo.promote_requested", "product_photo.delete_requested"].includes(r.event_type)));
   console.log(JSON.stringify({ now, photoDomain, informationOnlyOtherDomains: { jobs, outbox: outbox.filter((r) => !photoDomain.includes(r)), dueSocialSchedules: social, cleanupEnabled } }, null, 1));
-  const clear = unexpectedPhoto.length === 0;
-  console.log(clear ? "PASS no other product-photo event due" : "STOP another product-photo event is due");
+  // The route's stale-lock release (as /run's) is not type-scoped: it would requeue any domain's Processing row > 5 min.
+  const staleCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const staleOther = db.prepare("SELECT event_type, COUNT(*) AS n FROM outbox_events WHERE status = 'Processing' AND locked_at < ? AND event_type NOT LIKE 'product_photo.%' GROUP BY event_type").all(staleCutoff);
+  const clear = unexpectedPhoto.length === 0 && staleOther.length === 0;
+  console.log(clear ? "PASS no other product-photo event due and no stale lock to release" : `STOP ${unexpectedPhoto.length ? "another product-photo event is due" : "a stale non-photo lock would be released"}`);
   process.exitCode = clear ? 0 : 1;
+} else if (mode === "results") {
+  // Checks the photo-only route's JSON response: every dispatched event belongs to this photo and is a promote/delete.
+  const db = openDb(), response = JSON.parse(fs.readFileSync(b, "utf8"));
+  const ids = (response.results ?? []).map((r) => r.eventId);
+  const rows = ids.map((id) => db.prepare("SELECT id, event_type, aggregate_id, status FROM outbox_events WHERE id = ?").get(id));
+  const ok = ids.length >= 1 && rows.every((r) => r && r.aggregate_id === a && ["product_photo.promote_requested", "product_photo.delete_requested"].includes(r.event_type))
+    && rows.some((r) => r.event_type === "product_photo.delete_requested" && r.status === "Succeeded");
+  console.log(JSON.stringify(rows, null, 1));
+  console.log(ok ? "PASS only this photo's events were dispatched; its delete event Succeeded" : "FAIL unexpected dispatched events or delete not Succeeded");
+  process.exitCode = ok ? 0 : 1;
 } else if (mode === "snapshot") {
   const db = openDb(), dir = process.env.PRODUCT_PHOTO_DIR;
   const op = db.prepare("SELECT id, state, committed_photo_id, main_key, thumb_key, generation, seal_id FROM photo_operations WHERE target_photo_id = ?").get(a);
