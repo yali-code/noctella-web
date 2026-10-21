@@ -66,6 +66,8 @@ describe.runIf(postgresTestConfigured)("PostgreSQL: reconcile historical photo-f
     const normalize = (value: unknown) => JSON.parse(JSON.stringify(value).split(h.schemaName + ".").join(""));
     return normalize({ columns, constraints });
   }
+  // Fresh schemas replay the migration chain over local Docker. Use the historical PostgreSQL compatibility
+  // suite's bounded 180-second budget instead of Vitest's five-second unit-test default; assertions are unchanged.
   it("photo-first and Etsy-first orders yield the same catalog, preserve business rows and keep all 23 declared columns nullable", async () => {
     const catalogs: unknown[] = [];
     for (const photoFirst of [false, true]) {
@@ -88,7 +90,7 @@ describe.runIf(postgresTestConfigured)("PostgreSQL: reconcile historical photo-f
       } finally { await h.close(); }
     }
     expect(catalogs[0]).toEqual(catalogs[1]);
-  });
+  }, 180_000);
 
   it("a dependency-unsafe rollback attempt fails atomically and retains the current publication schema", async () => {
     const h = await createPostgresTestDb("0044_photo_publication_copies.sql");
@@ -102,7 +104,7 @@ describe.runIf(postgresTestConfigured)("PostgreSQL: reconcile historical photo-f
       expect(await catalog(h)).toEqual(before);
       for (const table of F2_TABLES) expect((await h.pool.query("SELECT to_regclass($1) AS t", [table])).rows[0].t).not.toBeNull();
     } finally { await h.close(); }
-  });
+  }, 180_000);
 });
 
 describe("SQLite (production driver): candidate ensureSchema over the released Etsy database", () => {
