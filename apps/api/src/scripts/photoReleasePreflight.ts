@@ -16,7 +16,7 @@ export type PreflightStatus = "PASS" | "WARN" | "FAIL" | "MANUAL";
 export interface PreflightCheck { id: string; status: PreflightStatus; detail: string }
 export const PREFLIGHT_MIN_FREE_BYTES = 1024 * 1024 * 1024;
 
-export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; migrationsDir?: string; canonicalRoot?: string; statfs?: (dir: string) => { bavail: number; bsize: number } } = {}) {
+export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; migrationsDir?: string; canonicalRoot?: string; statfs?: (dir: string) => { bavail: number; bsize: number }; device?: (dir: string) => number | undefined } = {}) {
   const env = options.env ?? process.env;
   const migrationsDir = options.migrationsDir ?? path.resolve(__dirname, "../db/postgres-migrations");
   const canonicalRoot = path.resolve(options.canonicalRoot ?? env.PRODUCT_PHOTO_DIR ?? path.resolve(process.cwd(), "uploads/product-photos"));
@@ -72,13 +72,21 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
 
   // Storage roots: link() publication requires one filesystem; nothing is created here.
   const parent = path.dirname(canonicalRoot);
-  const device = (dir: string) => { try { return fs.statSync(dir).dev; } catch { return undefined; } };
+  const device = options.device ?? ((dir: string) => { try { return fs.statSync(dir).dev; } catch { return undefined; } });
   const parentDevice = device(parent);
-  add("storage.canonical-root", device(canonicalRoot) !== undefined ? "PASS" : "WARN", device(canonicalRoot) !== undefined ? `canonical root exists: ${canonicalRoot}` : `canonical root does not exist yet: ${canonicalRoot}`);
+  const canonicalDevice = device(canonicalRoot);
+  // A mount at canonicalRoot can differ from its private/staging parent even when all siblings match the parent.
+  const sameFilesystem = parentDevice !== undefined && (canonicalDevice === undefined || canonicalDevice === parentDevice);
+  add("storage.canonical-root", canonicalDevice === undefined ? "WARN" : sameFilesystem ? "PASS" : "FAIL",
+    canonicalDevice === undefined ? `canonical root does not exist yet: ${canonicalRoot}`
+      : sameFilesystem ? `canonical root exists on parent filesystem: ${canonicalRoot}`
+        : "canonical root and its parent are on different filesystems: hard-link publication would fail (EXDEV)");
   for (const [id, dir] of [["storage.private-operations", path.join(parent, ".product-photo-operations")], ["storage.publication-staging", path.join(parent, ".product-photo-publication")], ["storage.upload-staging", path.join(parent, ".product-photo-upload-staging")]] as const) {
     const dev = device(dir);
-    if (dev === undefined) add(id, parentDevice === undefined ? "FAIL" : "PASS", parentDevice === undefined ? `parent of the canonical root is missing: ${parent}` : `${dir} will be created under the canonical parent (same filesystem)`);
-    else add(id, dev === parentDevice ? "PASS" : "FAIL", dev === parentDevice ? `${dir} is on the canonical filesystem` : `${dir} is on a different filesystem: hard-link publication would fail closed`);
+    const compatible = sameFilesystem && (dev === undefined || dev === (canonicalDevice ?? parentDevice));
+    add(id, compatible ? "PASS" : "FAIL", compatible
+      ? dev === undefined ? `${dir} will be created under the canonical parent (same filesystem)` : `${dir} is on the canonical filesystem`
+      : `${dir} cannot be proven on the canonical filesystem: hard-link publication would fail (EXDEV)`);
   }
   try {
     const stats = (options.statfs ?? ((dir) => fs.statfsSync(dir)))(parentDevice === undefined ? process.cwd() : parent);
@@ -102,10 +110,19 @@ export function runPhotoReleasePreflight(options: { env?: NodeJS.ProcessEnv; mig
     ? "same-instance executor termination is provable (Linux /proc, boot id, PID namespace)"
     : "this platform cannot prove executor termination: intents of a lost executor stay BLOCKED until operator attestation");
 
+  // Built-in database backup/restore commands are SQLite-only; they cannot establish PostgreSQL recovery.
+  const databaseDriver = env.DATABASE_DRIVER ?? "sqlite";
+  const postgresDriver = databaseDriver === "postgres" || databaseDriver === "supabase-postgres";
+  add("database.driver", databaseDriver === "sqlite" || postgresDriver ? "PASS" : "FAIL",
+    databaseDriver === "sqlite" || postgresDriver ? `supported database driver: ${databaseDriver}` : "unsupported DATABASE_DRIVER; release must stop");
   // Platform facts that offline code cannot verify.
   add("render.single-instance-drain", "MANUAL", "confirm in Render that the old instance stopped before the new one started and no worker/cron can reach PRODUCT_PHOTO_DIR");
   add("publication.restart-attestation", "MANUAL", "after any deploy or instance replacement run photos:publication-intents; authorized intents of the previous instance stay BLOCKED until an operator verifies its termination and attests (--attest-exit)");
-  add("backups", "MANUAL", "run db:backup, photos:backup and db:restore-verify before deploying; record hashes");
+  add("backups", "MANUAL", postgresDriver
+    ? "PostgreSQL: db:backup and db:restore-verify are SQLite-only and do NOT prove PostgreSQL recovery; require owner-approved consistent PostgreSQL-native backup and restore evidence, photos:backup and a compatible point-in-time plan before deployment; record integrity hashes"
+    : databaseDriver === "sqlite"
+      ? "run db:backup, photos:backup and db:restore-verify before deploying; record hashes"
+      : "unsupported database driver: backup and restore procedure must be resolved before deployment");
 
   const status: PreflightStatus = checks.some((c) => c.status === "FAIL") ? "FAIL" : checks.some((c) => c.status === "WARN" || c.status === "MANUAL") ? "WARN" : "PASS";
   return { generatedAt: new Date().toISOString(), readOnly: true, status, checks };
