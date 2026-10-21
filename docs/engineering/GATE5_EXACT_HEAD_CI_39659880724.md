@@ -57,4 +57,9 @@ No PostgreSQL database acceptance is claimed.
 
 See [production package](../release/GATE5_PRODUCTION_RELEASE_PACKAGE.md) for artifact hashes,
 supported-platform evidence, production prerequisites and rollback constraints.
-Final Claude/Copilot independent sign-off: PENDING.
+Final reviews: Claude PASS and Copilot PASS, supplied by the owner during the
+subsequent readiness consolidation for runtime candidate
+`486639e755dca2e1c29c6530e6133f3a07094b89` / PR #496. This records owner
+attribution; raw review links/embedded SHA attestations were not supplied or
+independently fetched. No claim that later documentation was reviewed by them.
+Production acceptance remains PENDING; entire Photo Stage 5 is not closed.
