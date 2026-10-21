@@ -11,6 +11,7 @@ import {
   type ProductPhotoStorageRoots,
 } from "./productPhotoStorageWorkflow";
 import { PostgresUnitOfWork, type UnitOfWork } from "./unitOfWork";
+import { deleteAuthorizedCanonicalPhoto } from "./photoCanonicalDeletion";
 
 export type ProductPhotoOutboxDriver = "sqlite" | "postgres" | "supabase-postgres";
 
@@ -74,7 +75,8 @@ export function createProductPhotoOutboxDispatcher(
     : new SqliteOutboxRepository((db as unknown as { $client: ConstructorParameters<typeof SqliteOutboxRepository>[0] }).$client);
   const dispatcher = new OutboxDispatcher(repo);
   dispatcher.registerHandler(new ProductPhotoPromotionHandler(unitOfWorkForPromotion(db, driver), roots));
-  dispatcher.registerHandler(new ProductPhotoDeleteHandler(roots, canonicalKeyReferenceCheck(db, isPostgres, roots.publicBase ?? productPhotoStaticPath)));
+  dispatcher.registerHandler(new ProductPhotoDeleteHandler(roots, canonicalKeyReferenceCheck(db, isPostgres, roots.publicBase ?? productPhotoStaticPath),
+    (photoId) => deleteAuthorizedCanonicalPhoto(db, isPostgres ? "postgres" : "sqlite", roots.permanentRoot, photoId)));
   dispatcher.registerHandler(new ProductPhotoCleanupTempHandler(roots));
   return dispatcher;
 }
