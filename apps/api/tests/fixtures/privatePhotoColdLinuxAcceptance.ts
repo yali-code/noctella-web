@@ -4,7 +4,7 @@ import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const digest = (file: string) => createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 function insert(db: Database.Database, table: string, row: Record<string, unknown>) {
@@ -53,6 +53,13 @@ async function prepare(root: string) {
     fs.writeFileSync(path.join(root, "required-operations.json"), JSON.stringify(operations.map(o => o.id)), { flag: "wx", mode: 0o600 });
     assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
     assert.deepEqual(db.pragma("foreign_key_check"), []);
+    // Parent holds an old READ transaction before this last committed WAL-only record is written.
+    // This prevents close-time checkpointing from making a loose main-file copy appear sufficient.
+    await new Promise<void>(resolve => {
+      process.once("message", message => { assert.equal(message, "read-guard-open"); resolve(); });
+      process.send!({ ready: true });
+    });
+    db.exec("CREATE TABLE cold_wal_commit (value TEXT); INSERT INTO cold_wal_commit VALUES ('committed-in-wal')");
   } finally { db.close(); } // every file descriptor above is closed; writer exits before controller captures
 }
 
@@ -69,13 +76,41 @@ async function acceptance(root: string, evidence: string) {
   assert.ok(path.isAbsolute(root) && path.isAbsolute(evidence));
   assert.equal(fs.statSync(root).uid, process.getuid!());
   assert.equal(fs.statSync(root).mode & 0o077, 0);
-  const writer = child(__filename, ["prepare", root], true, true);
-  assert.equal(writer.signal, null); // synchronous child completion proves this sole fixture writer has ended
   const source = path.join(root, "source"), dbPath = path.join(source, "database.sqlite");
   const cli = path.resolve("apps/api/dist/scripts/privatePhotoColdBackup.js");
+  const writer = spawn(process.execPath, ["--import", "tsx", __filename, "prepare", root], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
+  let writerError = "";
+  writer.stderr!.on("data", chunk => { if (writerError.length < 64 * 1024) writerError += chunk; });
+  const exited = new Promise<void>((resolve, reject) => {
+    writer.once("error", reject);
+    writer.once("exit", (code, signal) => code === 0 && signal === null ? resolve() : reject(new Error(`Fixture writer failed: ${writerError}`)));
+  });
+  const timer = setTimeout(() => writer.kill("SIGKILL"), 180_000);
+  let guard: Database.Database | undefined;
+  let snapshot: any;
+  try {
+    await Promise.race([
+      new Promise<void>(resolve => writer.once("message", message => { assert.deepEqual(message, { ready: true }); resolve(); })),
+      exited.then(() => { throw new Error("Fixture writer exited before cold handoff"); }),
+    ]);
+    guard = new Database(path.join(source, "writer.sqlite"), { readonly: true, fileMustExist: true });
+    guard.exec("BEGIN"); guard.prepare("SELECT count(*) FROM sqlite_master").get();
+    writer.send("read-guard-open");
+    await exited; // all actual W2/W4/preparation writers are now gone; guard is read-only, not a writer
+    assert.ok(fs.statSync(path.join(source, "writer.sqlite-wal")).size > 32);
+    const mainOnly = path.join(root, "main-only-negative-control.sqlite");
+    fs.copyFileSync(path.join(source, "writer.sqlite"), mainOnly); // DB-only negative control, never copied inode evidence
+    const loose = new Database(mainOnly, { readonly: true, fileMustExist: true });
+    try { assert.equal(loose.prepare("SELECT count(*) FROM sqlite_master WHERE name='cold_wal_commit'").pluck().get(), 0); }
+    finally { loose.close(); }
+    snapshot = JSON.parse(child(cli, ["snapshot", path.join(source, "writer.sqlite"), dbPath]).stdout);
+  } finally {
+    clearTimeout(timer);
+    if (writer.exitCode === null && writer.signalCode === null) writer.kill("SIGKILL");
+    if (guard) { guard.exec("ROLLBACK"); guard.close(); }
+  }
   assert.deepEqual([...fs.readFileSync(path.join(source, "writer.sqlite")).subarray(18, 20)], [2, 2]);
   // Same built command as the operator procedure, AFTER every real owner/preparation writer has exited.
-  const snapshot = JSON.parse(child(cli, ["snapshot", path.join(source, "writer.sqlite"), dbPath]).stdout);
   assert.equal(snapshot.journalMode, "delete"); assert.equal(snapshot.sidecars, false);
   assert.deepEqual([...fs.readFileSync(dbPath).subarray(18, 20)], [1, 1]);
   for (const suffix of ["-wal", "-shm", "-journal"]) assert.equal(fs.existsSync(dbPath + suffix), false);
@@ -101,6 +136,7 @@ async function acceptance(root: string, evidence: string) {
   const recoveredDb = new Database(path.join(request.destination, "payload/database.sqlite"), { readonly: true, fileMustExist: true });
   try {
     assert.equal(recoveredDb.prepare("SELECT value FROM cold_acceptance_sentinel").pluck().get(), "synthetic-only");
+    assert.equal(recoveredDb.prepare("SELECT value FROM cold_wal_commit").pluck().get(), "committed-in-wal");
     assert.equal(recoveredDb.prepare("SELECT count(*) FROM photo_publication_intents WHERE state='committed'").pluck().get(), 2);
     assert.equal(recoveredDb.prepare("SELECT count(*) FROM photo_publication_copies").pluck().get(), 4);
   } finally { recoveredDb.close(); }
@@ -133,7 +169,7 @@ async function acceptance(root: string, evidence: string) {
   child(cli, ["verify", request.destination, wrongDigest], false);
   fs.writeFileSync(path.join(request.destination, "payload/operations", request.requiredRetainedOperationIds[0], "1/main.webp"), "disposable-corruption");
   child(cli, ["verify", request.destination, expected], false);
-  fs.writeFileSync(path.join(evidence, "acceptance.json"), JSON.stringify({ sourceSha: process.env.GATE5_SOURCE_SHA, platform: process.platform, identity: "real-confined-W2-and-W4-publisher-pfs1", writer: "real-owners-and-preparation-children-ended-before-snapshot", snapshot, capture: captured, verify: verified, refusals: ["public-posix-destination", "wrong-independent-digest", "corrupted-materialized-artifact"], limits: "synthetic ext4/POSIX only; no production confidentiality, encryption, capacity or replay acceptance" }, null, 2) + "\n", { flag: "wx", mode: 0o600 });
+  fs.writeFileSync(path.join(evidence, "acceptance.json"), JSON.stringify({ sourceSha: process.env.GATE5_SOURCE_SHA, platform: process.platform, identity: "real-confined-W2-and-W4-publisher-pfs1", writer: "real-owners-and-preparation-children-ended-before-snapshot", wal: "committed record absent from loose main-file control, present in standalone snapshot and recovered DB; read-only guard prevented checkpoint", snapshot, capture: captured, verify: verified, refusals: ["public-posix-destination", "wrong-independent-digest", "corrupted-materialized-artifact"], limits: "synthetic ext4/POSIX only; no production confidentiality, encryption, capacity or replay acceptance" }, null, 2) + "\n", { flag: "wx", mode: 0o600 });
   console.log("Gate 5 Linux cold capture/verify and scoped refusals PASS");
 }
 

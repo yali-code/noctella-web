@@ -7,6 +7,12 @@ on:
     paths:
       - .github/workflows/gate5-cold-backup.yml
       - apps/api/tests/fixtures/privatePhotoColdLinuxAcceptance.ts
+      - apps/api/tests/w2FencedOwnerRecovery.test.ts
+      - apps/api/tests/w4FencedFinalizationAcceptance.test.ts
+      - apps/api/tests/photoCanonicalDeletion4C.test.ts
+      - apps/api/tests/privatePhotoOfflineBackup.test.ts
+      - apps/api/tests/photoColorEvidence.test.ts
+      - apps/api/tests/fixtures/retainedPublication.ts
       - apps/api/src/scripts/privatePhotoColdBackup.ts
       - apps/api/src/use-cases/private-photo-backup/**
       - apps/api/src/services/ownedPhotoArtifactProof.ts
@@ -61,6 +67,8 @@ jobs:
         run: |
           npm run build -w packages/shared
           npm run build -w apps/api
+      - name: API typecheck at exact PR head
+        run: npm run typecheck -w apps/api
       - name: Build existing descriptor identity helper only
         run: node apps/api/scripts/build-landlock-launcher.mjs --out "$RUNNER_TEMP/gate5-launcher"
       - name: Actual CLI against quiesced synthetic ext4 source and real private POSIX destination
@@ -83,6 +91,29 @@ jobs:
           sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$mountpoint/acceptance"
           export PHOTO_PREPARATION_LAUNCHER="$RUNNER_TEMP/gate5-launcher/landlock-worker"
           node --import tsx apps/api/tests/fixtures/privatePhotoColdLinuxAcceptance.ts accept "$mountpoint/acceptance" "$RUNNER_TEMP/gate5-cold-evidence"
+      - name: Five requested scoped suites only (no PostgreSQL service or URL)
+        env:
+          NODE_ENV: test
+          POSTGRES_TEST_DATABASE_URL: ''
+          W2_LIVE_REQUIRE_POSTGRES: ''
+        run: >-
+          npm exec -w apps/api -- vitest run
+          tests/w2FencedOwnerRecovery.test.ts
+          tests/w4FencedFinalizationAcceptance.test.ts
+          tests/photoCanonicalDeletion4C.test.ts
+          tests/privatePhotoOfflineBackup.test.ts
+          tests/photoColorEvidence.test.ts
+          --reporter=default --reporter=json
+          --outputFile="$RUNNER_TEMP/gate5-cold-evidence/scoped-tests.json"
+      - name: Report all skips explicitly, including intentionally unavailable PostgreSQL cases
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$RUNNER_TEMP/gate5-cold-evidence/scoped-tests.json"; then
+            node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const skipped=r.testResults.flatMap(t=>t.assertionResults||[]).filter(t=>["pending","skipped","todo"].includes(t.status)).map(t=>({name:t.fullName,status:t.status}));console.log(JSON.stringify({passed:r.numPassedTests,failed:r.numFailedTests,skipped,postgres:"NOT RUN: no disposable PostgreSQL configured"},null,2));' "$RUNNER_TEMP/gate5-cold-evidence/scoped-tests.json"
+          else
+            echo 'Scoped test report unavailable: earlier step did not complete; no test PASS claimed.'
+          fi
       - name: Retain synthetic result and independently stored digest
         if: always()
         uses: actions/upload-artifact@v4
