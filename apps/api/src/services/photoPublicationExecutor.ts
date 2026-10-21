@@ -229,15 +229,13 @@ export async function publishedMainDimensions(canonicalRoot: string, mainKey: st
   return dimensions;
 }
 
-/** Removes this operation's own staging namespace and the committed generation's private files (after T2 only). */
+/** Historical cleanup hook, after T2 only. Owner-approved Gate 5 policy retains private derivatives and anchors.
+ * Keep the existing identity verification and ambiguity handling; no deletion, purge or new publication authority.
+ */
 export async function cleanupCommittedPublication(canonicalRoot: string, a: Pick<PublicationAuthority, "operationId" | "generation"> & Partial<Pick<PublicationAuthority, "identity">>): Promise<void> {
   if (a.identity) {
     try { assertPublicationStorage(canonicalRoot, a.identity.main.dev); assertPublicationStorage(photoOperationPrivateRoot(canonicalRoot), a.identity.main.dev); assertPublicationStorage(photoPublicationStagingRoot(canonicalRoot), a.identity.main.dev); }
     catch { return; } // post-commit ambiguity retains files; never turn an acknowledged commit into cleanup authority
   }
-  await Promise.allSettled([
-    fs.promises.rm(operationStagingDir(canonicalRoot, a.operationId), { recursive: true, force: true }),
-    fs.promises.unlink(sealedArtifactPath(canonicalRoot, a, "main")),
-    fs.promises.unlink(sealedArtifactPath(canonicalRoot, a, "thumb")),
-  ]);
+  // Retain both sealed worker-private derivatives and publisher-owned staging links, including after canonical deletion.
 }

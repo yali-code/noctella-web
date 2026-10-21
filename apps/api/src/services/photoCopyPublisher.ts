@@ -10,11 +10,10 @@
  *   (sha256 + size), checked on the publisher's copy, never on the source.
  * - Recovery: an existing canonical name is adopted only when it is exactly the recorded copy inode and still holds the
  *   sealed bytes; anything else is a COLLISION and is never touched (no overwrite, no cleanup of foreign files).
- * - Anchor (runtime owners, `retainStagingLink`): the verified copy keeps its staging name as a second link until the
- *   operation commits. While that name exists the inode cannot be freed, so its number cannot be reused by a later file;
- *   adoption requires the canonical name and the staging anchor to be the same inode. The owner removes the staging
- *   namespace only after commit.
- * - Cleanup: only `data-*` names inside this artifact's own staging directory.
+ * - Anchor (runtime owners, `retainStagingLink`): the verified copy keeps its staging name as a second link, retained
+ *   after commit under Gate 5 policy. While that name exists the inode cannot be freed, so its number cannot be reused;
+ *   adoption still requires the canonical name and staging anchor to be the same inode plus current authority.
+ * - Precommit failure/legacy cleanup: only `data-*` names inside this artifact's own staging directory.
  * - Descriptors: every descriptor is closed before returning; none is retained after verification.
  */
 import { createHash, randomBytes } from "node:crypto";

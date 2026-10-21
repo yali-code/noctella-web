@@ -7,6 +7,14 @@ import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { createPrivatePhotoOfflineBackupUseCase, verifyPrivatePhotoOfflineBundle } from "../src/use-cases/private-photo-backup/useCases";
 import * as proofs from "../src/services/ownedPhotoArtifactProof";
+import * as fsPromises from "node:fs/promises";
+import { capturePrivatePhotoColdBackup, verifyPrivatePhotoColdBundle } from "../src/use-cases/private-photo-backup/useCases";
+import { runPrivatePhotoColdBackupCommand } from "../src/scripts/privatePhotoColdBackup";
+
+vi.mock("node:fs/promises", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
 
 const roots: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -137,4 +145,53 @@ it("rejects a sealed operation's missing seal even without a publication intent"
   f.edit(db => db.exec("DELETE FROM photo_publication_copies; DELETE FROM photo_executor_exit_records; DELETE FROM photo_publication_intents; UPDATE photo_operations SET seal_id='missing'"));
   await rm(path.join(f.source, "publication"), { recursive: true });
   await expect(capture(f.root)).rejects.toThrow();
+});
+
+// Simulated POSIX destination metadata only; this does not establish Windows ACLs, encryption or target readiness.
+async function withPrivateDestination(root: string, run: () => Promise<void>) {
+  const descriptor = Object.getOwnPropertyDescriptor(process, "getuid"), original = (await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises")).lstat;
+  Object.defineProperty(process, "getuid", { configurable: true, value: () => 0 });
+  vi.spyOn(fsPromises, "lstat").mockImplementation((async (name: any, options: any) => {
+    const value = await original(name, options);
+    if (![root, path.join(root, "operational-bundle"), path.join(root, "source/operations")].includes(String(name))) return value;
+    return Object.assign(Object.create(value), { uid: 0, mode: 0o40700 });
+  }) as typeof fsPromises.lstat);
+  try { await run(); } finally {
+    vi.restoreAllMocks();
+    if (descriptor) Object.defineProperty(process, "getuid", descriptor); else Reflect.deleteProperty(process, "getuid");
+  }
+}
+
+it("owner command includes committed retained derivatives/anchors from explicit cold roots and verifies without replay", async () => {
+  const f = await fixture();
+  f.edit(db => db.exec("UPDATE photo_operations SET state='committed', committed_photo_id='photo'; UPDATE photo_operation_generations SET state='committed'; UPDATE photo_publication_intents SET state='committed'"));
+  await withPrivateDestination(f.root, async () => {
+    const request = { source: { database: path.join(f.source, "database.sqlite"), operations: path.join(f.source, "operations"), publication: path.join(f.source, "publication") }, destination: path.join(f.root, "operational-bundle"), recoveryPointId: "cold-1", quiescenceEvidenceRef: "operator-cold-record-1", confidentialityEvidenceRef: "operator-storage-record-1", requiredRetainedOperationIds: ["op"] };
+    const file = path.join(f.root, "operator.json"); await writeFile(file, JSON.stringify(request));
+    const result = await runPrivatePhotoColdBackupCommand(["capture", file]) as Awaited<ReturnType<typeof capturePrivatePhotoColdBackup>>;
+    expect(result).toMatchObject({ files: 5, scope: "owner-operated-cold-evidence-only", sourcePrerequisite: "operator-evidence-not-machine-proven", runnableRecovery: false });
+    expect(await runPrivatePhotoColdBackupCommand(["verify", request.destination, result.manifestSha256])).toEqual({ integrity: "ok", files: 5, runnableRecovery: false });
+    expect(JSON.parse(await readFile(path.join(request.destination, "manifest.json"), "utf8")).operatorPrerequisite.requiredRetainedOperationIds).toEqual(["op"]);
+    await expect(capturePrivatePhotoColdBackup({ ...request, destination: path.join(f.source, "operations", "bad-output") })).rejects.toThrow();
+    await writeFile(path.join(request.destination, "payload/operations/op/1/main.webp"), "tampered");
+    await expect(verifyPrivatePhotoColdBundle(request.destination, result.manifestSha256)).rejects.toThrow();
+  });
+}, 60000);
+
+it("required committed retention cannot use the historical-absence exception", async () => {
+  const f = await fixture();
+  f.edit(db => db.exec("UPDATE photo_operations SET state='committed', committed_photo_id='photo'; UPDATE photo_operation_generations SET state='committed'; UPDATE photo_publication_intents SET state='committed'"));
+  await rm(path.join(f.source, "operations/op/1/main.webp")); await rm(path.join(f.source, "operations/op/1/thumb.webp"));
+  await withPrivateDestination(f.root, async () => {
+    await expect(capturePrivatePhotoColdBackup({ source: { database: path.join(f.source, "database.sqlite"), operations: path.join(f.source, "operations"), publication: path.join(f.source, "publication") }, destination: path.join(f.root, "operational-bundle"), recoveryPointId: "cold-2", quiescenceEvidenceRef: "cold-record", confidentialityEvidenceRef: "storage-record", requiredRetainedOperationIds: ["op"] })).rejects.toThrow();
+  });
+});
+
+it("rejects absent operator prerequisites, unprotected local destinations and invalid CLI invocation", async () => {
+  await expect(capturePrivatePhotoColdBackup({} as any)).rejects.toThrow();
+  await expect(runPrivatePhotoColdBackupCommand(["capture"])).rejects.toThrow("Usage:");
+  if (process.platform === "win32") {
+    const f = await fixture();
+    await expect(capturePrivatePhotoColdBackup({ source: { database: path.join(f.source, "database.sqlite"), operations: path.join(f.source, "operations"), publication: path.join(f.source, "publication") }, destination: path.join(f.root, "operational-bundle"), recoveryPointId: "cold-3", quiescenceEvidenceRef: "cold-record", confidentialityEvidenceRef: "storage-record", requiredRetainedOperationIds: ["op"] })).rejects.toThrow("PRIVATE_BACKUP_DESTINATION_CONFIDENTIALITY_UNVERIFIED");
+  }
 });

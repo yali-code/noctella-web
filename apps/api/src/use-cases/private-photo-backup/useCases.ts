@@ -1,5 +1,5 @@
 /**
- * Disposable OFFLINE proof only. No live DB/config/root discovery, route, scheduler or remote storage wiring.
+ * OFFLINE evidence only. No live DB/config/root discovery, route, scheduler or remote storage wiring.
  * A cold source must already exist; this module does not establish application quiescence.
  * Preserve full DB authority unchanged. A verified bundle is evidence, never permission to resume publication.
  */
@@ -18,13 +18,28 @@ const TABLES = ["photo_storage_roots", "photo_operations", "photo_operation_gene
 type Row = Record<string, any>;
 type Binding = { path: string; sha256: string; bytes: number; dev: string; ino: string; birthNs?: string };
 type Entry = { path: string; sha256: string; bytes: number };
-type Manifest = { version: 1; scope: "disposable-offline-evidence-only"; recoveryPointId: string; entries: Entry[]; originalBindings: Binding[] };
+type ColdSource = { database: string; operations: string; publication: string };
+type Source = string | ColdSource;
+export type ColdBackupRequest = {
+  source: ColdSource; destination: string; recoveryPointId: string;
+  quiescenceEvidenceRef: string; confidentialityEvidenceRef: string;
+  /** Explicit expected retained operations from the operator's cold-source inventory; not publication authority. */
+  requiredRetainedOperationIds: string[];
+};
+type Manifest = { version: 1; scope: "disposable-offline-evidence-only" | "owner-operated-cold-evidence-only"; recoveryPointId: string; entries: Entry[]; originalBindings: Binding[]; operatorPrerequisite?: Pick<ColdBackupRequest, "quiescenceEvidenceRef" | "confidentialityEvidenceRef" | "requiredRetainedOperationIds"> };
 function fail(): never { throw new Error("PRIVATE_PHOTO_OFFLINE_EVIDENCE_INVALID"); }
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const component = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const positive = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
 const comparePath = (value: string) => process.platform === "win32" ? value.toLowerCase() : value;
+function sourcePath(root: Source, name: string) {
+  if (typeof root === "string") return path.join(root, name);
+  if (name === "database.sqlite") return root.database;
+  const [kind, ...parts] = name.split("/");
+  if (kind !== "operations" && kind !== "publication") fail();
+  return path.join(root[kind], ...parts);
+}
 
 async function directory(value: string) {
   const absolute = path.resolve(value), info = await lstat(absolute);
@@ -40,24 +55,34 @@ async function disposableWorkspace(workspace: string) {
 }
 
 /** Fixed-depth, bounded inventory. Every ancestor is checked; no symlinks or unrelated root content accepted. */
-async function inventory(root: string) {
+async function inventory(root: Source) {
   const files: string[] = [], directories: string[] = [];
   let nodes = 0;
   async function visit(relative: string, depth: number) {
-    const current = relative ? path.join(root, relative) : root;
+    const current = relative ? sourcePath(root, relative) : root as string;
     await directory(current);
     for await (const item of await opendir(current)) {
       if (++nodes > MAX_FILES * 3 || depth > 3) fail();
       const name = relative ? `${relative}/${item.name}` : item.name;
       if (!/^[A-Za-z0-9_.\/-]+$/.test(name) || item.name === "." || item.name === "..") fail();
-      const info = await lstat(path.join(root, name));
+      const info = await lstat(sourcePath(root, name));
       if (info.isSymbolicLink()) fail();
       if (info.isDirectory()) { directories.push(name); await visit(name, depth + 1); }
       else if (info.isFile()) { files.push(name); if (files.length > MAX_FILES) fail(); }
       else fail();
     }
   }
-  await visit("", 0);
+  if (typeof root === "string") await visit("", 0);
+  else {
+    await directory(path.dirname(root.database));
+    const db = await lstat(root.database);
+    if (!db.isFile() || db.isSymbolicLink()) fail();
+    for (const suffix of ["-wal", "-shm", "-journal"]) {
+      try { await lstat(root.database + suffix); fail(); } catch (e: any) { if (e?.code !== "ENOENT") throw e; }
+    }
+    files.push("database.sqlite");
+    for (const kind of ["operations", "publication"] as const) { directories.push(kind); await visit(kind, 1); }
+  }
   return { files: files.sort(), directories: directories.sort() };
 }
 
@@ -75,12 +100,13 @@ function authority(databasePath: string) {
   } finally { db.close(); }
 }
 
-function bindings(t: ReturnType<typeof authority>, present: Set<string>, dirs: Set<string>) {
+function bindings(t: ReturnType<typeof authority>, present: Set<string>, dirs: Set<string>, required: string[] = []) {
   const allowedDirs = new Set(["operations", "publication"]), expected = new Map<string, Binding>();
   const operations = new Map(t.photo_operations.map(o => [o.id, o]));
   const generations = new Map(t.photo_operation_generations.map(g => [`${g.operation_id}/${g.generation}`, g]));
   const seals = new Map(t.photo_operation_artifacts.map(a => [a.id, a]));
   const intents = new Map(t.photo_publication_intents.map(i => [i.operation_id, i]));
+  if (required.length > MAX_ROWS || new Set(required).size !== required.length || required.some(id => !component(id) || !operations.has(id))) fail();
   for (const op of operations.values()) {
     if (!component(op.id)) fail();
     const current = generations.get(`${op.id}/${op.generation}`);
@@ -111,7 +137,7 @@ function bindings(t: ReturnType<typeof authority>, present: Set<string>, dirs: S
     const names = ["main", "thumb"].map(role => `operations/${relative}/${role}.webp`);
     // Existing T2 cleanup can remove a committed generation's pair. Never infer loss for a nonterminal seal.
     const absent = names.every(name => !present.has(name));
-    if (absent && terminal) continue;
+    if (absent && terminal && !required.includes(seal.operation_id)) continue;
     for (const [index, role] of ["main", "thumb"].entries()) add({ path: names[index], sha256: seal[`${role}_sha256`], bytes: seal[`${role}_bytes`], dev: seal[`${role}_dev`], ino: seal[`${role}_ino`] });
   }
   for (const intent of intents.values()) {
@@ -127,7 +153,7 @@ function bindings(t: ReturnType<typeof authority>, present: Set<string>, dirs: S
     const seal = seals.get(intent.seal_id)!;
     if (copy.bytes !== seal[`${role}_bytes`]) fail();
     const name = `publication/${copy.operation_id}/${role}/${copy.staging_name}`;
-    if (!present.has(name) && intent.state === "committed") continue;
+    if (!present.has(name) && intent.state === "committed" && !required.includes(copy.operation_id)) continue;
     add({ path: name, sha256: copy.sha256, bytes: copy.bytes, dev: copy.copy_dev, ino: copy.copy_ino, birthNs: copy.copy_birth_ns });
   }
   if ([...dirs].some(dir => !allowedDirs.has(dir))) fail();
@@ -136,31 +162,38 @@ function bindings(t: ReturnType<typeof authority>, present: Set<string>, dirs: S
   return [...expected.values()].sort((a, b) => a.path.localeCompare(b.path));
 }
 
-async function inspect(root: string, original: boolean) {
+async function inspect(root: Source, original: boolean, required: string[] = []) {
   const listing = await inventory(root);
   if (!listing.files.includes("database.sqlite") || listing.files.some(name => name.startsWith("database.sqlite-"))) fail();
-  const dbInfo = await lstat(path.join(root, "database.sqlite"));
+  const databasePath = sourcePath(root, "database.sqlite");
+  const dbInfo = await lstat(databasePath);
   if (dbInfo.size > MAX_DB) fail();
-  const header = await open(path.join(root, "database.sqlite"), "r");
+  const header = await open(databasePath, "r");
   try {
     const bytes = Buffer.alloc(20); await header.read(bytes, 0, bytes.length, 0);
     // WAL snapshots need a separate capture protocol; never let read-only SQLite create sidecars here.
     if (bytes[18] !== 1 || bytes[19] !== 1) fail();
   } finally { await header.close(); }
-  const database = await ownedPhotoArtifactProof(path.join(root, "database.sqlite"));
-  const records = authority(path.join(root, "database.sqlite"));
-  const bound = bindings(records, new Set(listing.files), new Set(listing.directories));
+  const database = await ownedPhotoArtifactProof(databasePath);
+  const records = authority(databasePath);
+  const bound = bindings(records, new Set(listing.files), new Set(listing.directories), required);
+  for (const id of required) {
+    if (!bound.some(b => b.path.startsWith(`operations/${id}/`))) fail();
+    // A retained committed publication must have both recorded anchors, not just a private byte copy.
+    const op = records.photo_operations.find(o => o.id === id)!;
+    if (op.state === "committed" && ["main", "thumb"].some(role => !bound.some(b => b.path.startsWith(`publication/${id}/${role}/`)))) fail();
+  }
   const entries: Entry[] = [{ path: "database.sqlite", sha256: database.sha256, bytes: database.bytes }];
   let total = database.bytes;
   for (const b of bound) {
-    const file = path.join(root, b.path), info = await lstat(file);
+    const file = sourcePath(root, b.path), info = await lstat(file);
     if (info.size !== b.bytes || (total += info.size) > MAX_TOTAL) fail();
     const proof = await ownedPhotoArtifactProof(file, original && b.dev.startsWith("pfs1:"));
     if (proof.sha256 !== b.sha256 || proof.bytes !== b.bytes) fail();
     if (original && (proof.dev !== b.dev || proof.ino !== b.ino || (b.birthNs && String((await lstat(file, { bigint: true })).birthtimeNs) !== b.birthNs))) fail();
     entries.push({ path: b.path, sha256: proof.sha256, bytes: proof.bytes });
   }
-  if (!same(listing, await inventory(root)) || !same(database, await ownedPhotoArtifactProof(path.join(root, "database.sqlite")))) fail();
+  if (!same(listing, await inventory(root)) || !same(database, await ownedPhotoArtifactProof(databasePath))) fail();
   return { entries, bound, listing };
 }
 
@@ -190,28 +223,61 @@ export function createPrivatePhotoOfflineBackupUseCase() {
       const root = await disposableWorkspace(workspace);
       if (!component(recoveryPointId)) fail();
       const source = await directory(path.join(root, "source"));
-      const before = await inspect(source, true);
       const destination = path.join(root, "bundle");
+      return capture(source, destination, recoveryPointId);
+    },
+  };
+}
+
+async function capture(source: Source, destination: string, recoveryPointId: string, operatorPrerequisite?: Manifest["operatorPrerequisite"]) {
+      const required = operatorPrerequisite?.requiredRetainedOperationIds ?? [];
+      const before = await inspect(source, true, required);
       // Exclusive destination. Failures retain partial evidence; no automatic removal or overwrite.
       await mkdir(destination, { mode: 0o700 });
       await mkdir(path.join(destination, "payload"), { mode: 0o700 });
       for (const dir of before.listing.directories) await mkdir(path.join(destination, "payload", dir), { recursive: true, mode: 0o700 });
-      for (const entry of before.entries) await copyExclusive(path.join(source, entry.path), path.join(destination, "payload", entry.path), entry);
-      if (!same(before, await inspect(source, true))) fail();
-      const recovered = await inspect(path.join(destination, "payload"), false);
+      for (const entry of before.entries) await copyExclusive(sourcePath(source, entry.path), path.join(destination, "payload", entry.path), entry);
+      if (!same(before, await inspect(source, true, required))) fail();
+      const recovered = await inspect(path.join(destination, "payload"), false, required);
       if (!same(before.entries, recovered.entries) || !same(before.bound, recovered.bound)) fail();
-      const manifest: Manifest = { version: 1, scope: "disposable-offline-evidence-only", recoveryPointId, entries: before.entries, originalBindings: before.bound };
+      const manifest: Manifest = { version: 1, scope: operatorPrerequisite ? "owner-operated-cold-evidence-only" : "disposable-offline-evidence-only", recoveryPointId, entries: before.entries, originalBindings: before.bound, ...(operatorPrerequisite ? { operatorPrerequisite } : {}) };
       const content = `${JSON.stringify(manifest)}\n`;
       if (Buffer.byteLength(content) > MAX_MANIFEST) fail();
       await writeFile(path.join(destination, "manifest.json"), content, { flag: "wx", mode: 0o600 });
       return { manifestSha256: hash(content), files: before.entries.length, scope: manifest.scope };
-    },
-  };
+}
+
+/** Check existing local protection only. No chmod/ACL/security settings or encryption platform changes. */
+async function privateDestination(directoryPath: string) {
+  const root = await directory(directoryPath), st = await lstat(root);
+  if (typeof process.getuid !== "function" || st.uid !== process.getuid() || (st.mode & 0o077) !== 0) throw new Error("PRIVATE_BACKUP_DESTINATION_CONFIDENTIALITY_UNVERIFIED");
+  return root;
+}
+
+/** Owner-operated cold input only. Evidence references are audit prerequisites, NEVER machine proof of quiescence/encryption. */
+export async function capturePrivatePhotoColdBackup(request: ColdBackupRequest) {
+  if (!request || !component(request.recoveryPointId) || !component(request.quiescenceEvidenceRef) || !component(request.confidentialityEvidenceRef) || !Array.isArray(request.requiredRetainedOperationIds) || !request.source) fail();
+  for (const value of [request.destination, request.source.database, request.source.operations, request.source.publication]) if (typeof value !== "string" || !path.isAbsolute(value)) fail();
+  const parent = await privateDestination(path.dirname(request.destination));
+  const destination = path.join(parent, path.basename(request.destination));
+  const source = { database: path.resolve(request.source.database), operations: await directory(request.source.operations), publication: await directory(request.source.publication) };
+  const overlaps = (a: string, b: string) => { const r = path.relative(comparePath(a), comparePath(b)); return r === "" || (!r.startsWith("..") && !path.isAbsolute(r)); };
+  for (const input of [source.operations, source.publication, source.database]) if (overlaps(input, destination) || overlaps(destination, input)) fail();
+  const result = await capture(source, destination, request.recoveryPointId, { quiescenceEvidenceRef: request.quiescenceEvidenceRef, confidentialityEvidenceRef: request.confidentialityEvidenceRef, requiredRetainedOperationIds: request.requiredRetainedOperationIds });
+  return { ...result, sourcePrerequisite: "operator-evidence-not-machine-proven" as const, runnableRecovery: false as const };
 }
 
 /** External expected digest is mandatory; no self-authenticating mutable manifest. No live materialization. */
 export async function verifyPrivatePhotoOfflineBundle(workspace: string, expectedManifestSha256: string) {
   const root = await disposableWorkspace(workspace), bundle = await directory(path.join(root, "bundle"));
+  return verifyBundle(bundle, expectedManifestSha256);
+}
+
+export async function verifyPrivatePhotoColdBundle(bundlePath: string, expectedManifestSha256: string) {
+  return verifyBundle(await privateDestination(bundlePath), expectedManifestSha256);
+}
+
+async function verifyBundle(bundle: string, expectedManifestSha256: string) {
   if (!/^[a-f0-9]{64}$/.test(expectedManifestSha256)) fail();
   const name = path.join(bundle, "manifest.json"), info = await lstat(name);
   if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_MANIFEST) fail();
@@ -229,8 +295,9 @@ export async function verifyPrivatePhotoOfflineBundle(workspace: string, expecte
   } finally { await handle.close(); }
   if (hash(bytes) !== expectedManifestSha256) fail();
   const manifest = JSON.parse(bytes.toString("utf8")) as Manifest;
-  if (manifest.version !== 1 || manifest.scope !== "disposable-offline-evidence-only" || !component(manifest.recoveryPointId)) fail();
-  const recovered = await inspect(await directory(path.join(bundle, "payload")), false);
+  if (manifest.version !== 1 || !["disposable-offline-evidence-only", "owner-operated-cold-evidence-only"].includes(manifest.scope) || !component(manifest.recoveryPointId)) fail();
+  if (manifest.scope === "owner-operated-cold-evidence-only" && (!manifest.operatorPrerequisite || !component(manifest.operatorPrerequisite.quiescenceEvidenceRef) || !component(manifest.operatorPrerequisite.confidentialityEvidenceRef) || !Array.isArray(manifest.operatorPrerequisite.requiredRetainedOperationIds))) fail();
+  const recovered = await inspect(await directory(path.join(bundle, "payload")), false, manifest.operatorPrerequisite?.requiredRetainedOperationIds);
   if (!same(manifest.entries, recovered.entries) || !same(manifest.originalBindings, recovered.bound)) fail();
   return { integrity: "ok" as const, files: recovered.entries.length, runnableRecovery: false as const };
 }

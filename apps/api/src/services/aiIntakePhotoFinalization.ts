@@ -19,7 +19,6 @@ import {
   type AiIntakePhotoFinalizationManifestEntry,
 } from "../use-cases/ai-intake-photo-finalize/useCases";
 import type { FinalizeAiIntakePhotosInput as FinalizeAiIntakePhotosRequestInput } from "../validation/aiIntakePhotoFinalize";
-import { unlink } from "node:fs/promises";
 import { photoOwnershipFencingEnabled } from "./photoOwnershipFencing";
 import { buildFencedAiIntakePhotoFinalizationManifest, type W4FencedOptions } from "./w4FencedFinalizationOwner";
 import { cleanupCommittedPublication, openPublicationScope } from "./photoPublicationExecutor";
@@ -68,7 +67,6 @@ export async function finalizeAiIntakePhotos(
   const precheckIntake = await getIntakeById(db, intakeId); // throws NotFoundError if missing
 
   let manifest: AiIntakePhotoFinalizationManifestEntry[] | null = null;
-  let privateFiles: string[] = [];
   let publications: PublicationAuthority[] = [];
   // #472: the publication executions of this request stay registered until the finalization transaction settled.
   const scope = photoOwnershipFencingEnabled() ? openPublicationScope() : null;
@@ -88,7 +86,6 @@ export async function finalizeAiIntakePhotos(
       // finalization transaction below. The unfenced builder still refuses with fencing ON.
       const fenced = await runImageScope(() => buildFencedAiIntakePhotoFinalizationManifest(db, manifestDeps.readStagedPhotoBytes, staged, resultProductId, input.primaryIntakePhotoId, { ...fencedOptions, scope: fencedOptions.scope ?? scope! }));
       manifest = fenced.manifest;
-      privateFiles = fenced.privateFiles;
       publications = fenced.publications;
     } else {
       manifest = await runImageScope(() => buildAiIntakePhotoFinalizationManifest(manifestDeps, staged, resultProductId, input.primaryIntakePhotoId));
@@ -99,9 +96,8 @@ export async function finalizeAiIntakePhotos(
   const capability = createAiIntakePhotoFinalizeTransactionCapabilityForDb(db, driver);
 
   const result = await finalizeAiIntakePhotosUseCase(capability, { intakeId, actorId, manifest });
-  // Committed: canonical names hold publisher-owned copies; the private names and staging namespaces are ours.
+  // Committed: retain private derivatives and publication anchors under the owner-approved Gate 5 policy.
   if (result.created) {
-    await Promise.allSettled(privateFiles.map((file) => unlink(file)));
     const canonicalRoot = fencedOptions.canonicalRoot ?? productPhotoStaticRoot;
     await Promise.allSettled(publications.map((authority) => cleanupCommittedPublication(canonicalRoot, authority)));
     if (scope) await fencedOptions.hooks?.afterCommit?.();

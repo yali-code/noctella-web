@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
+import { expectRetainedPublication } from "./fixtures/retainedPublication";
 import { simulatedPersistentRemount, publicationSnapshot, recordRemountEvidence } from "./fixtures/persistentRemount";
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
@@ -120,6 +121,7 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     const [exit] = await q(sql`SELECT attested_by FROM photo_executor_exit_records WHERE operation_id = ${record.id} AND executor_epoch = 1`);
     expect(String(exit.attested_by)).toMatch(/^self-ended:/);
     expect((await listW2OperationsRequiringRecovery(db, driver)).map((r: any) => r.token)).not.toContain(token);
+    await expectRetainedPublication(root, record, q);
   });
 
   it.skipIf(!enabled)("a lost commit acknowledgement does not duplicate the photo on retry", async () => {
@@ -127,10 +129,12 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
     await expect(upload(token, front, { afterCommit: () => { throw new Error("acknowledgement lost"); } })).rejects.toThrow("acknowledgement lost");
     const committed = await op(token);
     expect(committed.state).toBe("committed");
+    await expectRetainedPublication(root, committed, q);
     const retried = await upload(token, front);
     expect(retried.id).toBe(committed.committed_photo_id);
     expect(await n("product_photos", `WHERE id = '${retried.id}'`)).toBe(1);
     expect(await n("outbox_events", `WHERE aggregate_id = '${retried.id}'`)).toBe(1);
+    await expectRetainedPublication(root, committed, q);
   });
 
   it.skipIf(!enabled)("concurrent duplicates of one identity produce exactly one photo", async () => {
@@ -245,7 +249,7 @@ describe.each(drivers)("W2 fenced owner on %s", (driver, enabled) => {
       const record = await op(token);
       expect([Number(record.generation), record.state]).toEqual([2, "committed"]);
       const canonical = await lstat(path.join(root, "photos", record.main_key), { bigint: true });
-      expect(canonical.nlink).toBe(1n); // publisher-owned copy: no worker/private alias exists
+      await expectRetainedPublication(root, record, q); // anchor survives; worker/private inode stays distinct
       const [copy] = await q(sql`SELECT copy_ino FROM photo_publication_copies WHERE operation_id = ${record.id} AND artifact = 'main'`);
       expect(String(copy.copy_ino)).toBe(String(canonical.ino));
       const [intent] = await q(sql`SELECT generation, state FROM photo_publication_intents WHERE operation_id = ${record.id}`);
