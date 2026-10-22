@@ -15,11 +15,11 @@ const EXPECTED = {
 
   'routes/productPhotoUpload.ts': { mutation: 2, writers: ['W2'] },
   'services/photoOperationAuthority.ts': { mutation: 1, writers: ['W2/W4 shared generation-fenced authority (FAZ A #424, fencing ON only): exclusive private generation dirs; legacy worker-inode link primitive kept only as a negative control (no runtime caller, #472)'] },
-  'services/photoPublicationExecutor.ts': { mutation: 4, writers: ['W2/W4 protected publication (Stage 5 F2 #472, fencing ON): readiness mkdir of the canonical/private/staging roots, post-commit cleanup of its own staging namespace and private names'] },
+  'services/photoPublicationExecutor.ts': { mutation: 1, writers: ['W2/W4 protected publication (Stage 5 F2 #472, fencing ON): readiness mkdir of the canonical/private/staging roots only; no post-commit cleanup (Gate 5 retains private derivatives and publication anchors)'] },
   'services/w4FencedFinalizationOwner.ts': { mutation: 1, writers: ['W4 confined preparation input (Stage 5 F2 #472, PHOTO_PREPARATION_CONFINEMENT=required only): exclusive wx write of the staged source into its private job directory'] },
   'services/photoCopyPublisher.ts': { mutation: 2, writers: ['W2/W4 protected publication (Stage 5 F2 #472): publisher-owned verified copy, recorded before a no-overwrite canonical link; removes only its own data-* staging names'] },
   'services/photoPreparationConfinement.ts': { mutation: 1, child: 2, writers: ['W2/W4 confined preparation (Stage 5 F2 #472, PHOTO_PREPARATION_CONFINEMENT=required only): Landlock launcher worker writing only its generation/job directories; job directory removal'] },
-  'services/aiIntakePhotoFinalization.ts': { mutation: 1, writers: ['W4 generation-fenced finalization (FAZ A #424, fencing ON only): post-commit unlink of its generations private names'] },
+  'use-cases/private-photo-backup/useCases.ts': { mutation: 3, handle: 1, writers: ['NON_MEDIA (Gate 5 owner-operated cold-evidence CLI: reads the operations/publication roots and the snapshot DB; writes only a new exclusive owner-private destination that must not overlap any source root)'] },
   'services/stagedProductPhotoStorage.ts': { mutation: 4, writers: ['W2', 'W10'] },
   'services/photoStorage.ts': { mutation: 6, writers: ['W1', 'W4', 'W10', 'W4 fenced prepare (FAZ A #424): exclusive wx writes into a generation-private directory only'] },
   'services/aiIntakePhotoStorage.ts': { mutation: 11, handle: 1, writers: ['W3', 'W5', 'W3 original-source (#390, flag OFF by default; private staging writes only)'] },

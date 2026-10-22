@@ -22,7 +22,8 @@ import { createPostgresTestDb, postgresTestConfigured } from "./postgresTestDb";
 import { uploadFencedProductPhoto } from "../src/services/w2FencedProductPhotoOwner";
 import { digestW2StagedInput } from "../src/services/w2StagedInputDigest";
 import { buildFencedAiIntakePhotoFinalizationManifest } from "../src/services/w4FencedFinalizationOwner";
-import { photoPublicationStagingRoot } from "../src/services/photoPublicationExecutor";
+import { photoPublicationStagingRoot, sealedArtifactPath } from "../src/services/photoPublicationExecutor";
+import { fileProof } from "../src/services/photoOperationAuthority";
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 const launcher = process.env.F2_CAPABILITY_LAUNCHER;
@@ -141,16 +142,24 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
         await expect(lstat(path.join(canonical, "forbidden-direct.webp"))).rejects.toMatchObject({ code: "ENOENT" });
         await afterRevocation(a.kill(), () => release.resolve()); // exact child reaped before publication resumes
         await bounded(b, "trusted authority progress");
-        const [seal] = await q(sql`SELECT main_dev, main_ino FROM photo_operation_artifacts WHERE operation_id=${row.id} AND generation=2`);
-        const [copy] = await q(sql`SELECT copy_dev, copy_ino FROM photo_publication_copies WHERE operation_id=${row.id} AND artifact='main'`);
+        const [seal] = await q(sql`SELECT main_dev, main_ino, main_sha256 FROM photo_operation_artifacts WHERE operation_id=${row.id} AND generation=2`);
+        const [copy] = await q(sql`SELECT copy_dev, copy_ino, staging_name FROM photo_publication_copies WHERE operation_id=${row.id} AND artifact='main'`);
         const published = await lstat(path.join(canonical, row.main_key), { bigint: true });
-        // Publisher-owned verified copy: never the worker's sealed inode, no alias (nlink 1), durably recorded.
+        // Publisher-owned verified copy: never the worker's sealed inode, durably recorded.
         expect([String(published.dev), String(published.ino)]).toEqual([String(copy.copy_dev), String(copy.copy_ino)]);
         expect(String(published.ino)).not.toBe(String(seal.main_ino));
-        // nlink 1 after commit (W2); before the W4 finalization commits, the only other link is the publisher's anchor.
-        expect(published.nlink).toBe(kind === "w2" ? 1n : 2n);
+        // Gate 5 retention: the canonical name and the publisher's recorded anchor are the same inode (nlink 2), both
+        // before the W4 finalization commits and after the W2 commit; the anchor is never removed after commit.
+        expect(published.nlink).toBe(2n);
+        const anchor = await lstat(path.join(photoPublicationStagingRoot(canonical), row.id, "main", copy.staging_name), { bigint: true });
+        expect([anchor.dev, anchor.ino]).toEqual([published.dev, published.ino]);
         if (kind === "w2") {
           expect((await op(token)).state).toBe("committed");
+          // Gate 5 retention: the sealed worker-private main is retained after commit as its own inode with the sealed bytes.
+          const privateMain = sealedArtifactPath(canonical, { operationId: row.id, generation: 2 }, "main");
+          const retained = await lstat(privateMain, { bigint: true });
+          expect([String(retained.ino), retained.nlink]).toEqual([String(seal.main_ino), 1n]);
+          expect((await fileProof(privateMain)).sha256).toBe(seal.main_sha256);
           expect(Number((await q(sql`SELECT COUNT(*) AS n FROM outbox_events WHERE aggregate_id=${row.target_photo_id}`))[0].n)).toBe(1);
           await upload(kind, token); // lost response / retry: committed identity, no new generation
           expect(Number((await op(token)).generation)).toBe(2);
