@@ -1,0 +1,179 @@
+{
+  "driver": "sqlite",
+  "boundary": "instagram-temp",
+  "death": {
+    "checkpoint": {
+      "phase": "instagram-temp-written-before-link",
+      "boundary": "instagram-temp",
+      "driver": "sqlite",
+      "syntheticOnly": true
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "linux"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [
+      {
+        "id": "instagram-source",
+        "filename": "instagram-source.webp",
+        "url": "/images/product-photos/instagram-source.webp",
+        "thumbnailUrl": "/images/product-photos/instagram-source.webp",
+        "storageKey": "instagram-source.webp",
+        "thumbnailStorageKey": "instagram-source.webp",
+        "processingStatus": "Ready"
+      }
+    ],
+    "aiPhotos": [],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "8daa6813-f187-4d2a-ae01-ac904a845675",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": ".instagram-f26fa2fc-9771-4bcb-93c9-616537fb258a.tmp",
+        "kind": "file",
+        "size": 10770,
+        "dev": 2049,
+        "ino": 4801427,
+        "nlink": 1,
+        "sha256": "bf53c2b9d04a9b3ee20cef49abc69dbbf6d6570f5dd2216de25107c94437183a"
+      },
+      {
+        "root": "canonical",
+        "key": "instagram-source.webp",
+        "kind": "file",
+        "size": 74,
+        "dev": 2049,
+        "ino": 4801421,
+        "nlink": 1,
+        "sha256": "074bd24e8c53f067d1597cb03d1f83a74c80d64c4efe07a0f4fa8c6f242dc2c5"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801419,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [
+      {
+        "id": "instagram-source",
+        "filename": "instagram-source.webp",
+        "url": "/images/product-photos/instagram-source.webp",
+        "thumbnailUrl": "/images/product-photos/instagram-source.webp",
+        "storageKey": "instagram-source.webp",
+        "thumbnailStorageKey": "instagram-source.webp",
+        "processingStatus": "Ready"
+      }
+    ],
+    "aiPhotos": [],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "8daa6813-f187-4d2a-ae01-ac904a845675",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": ".instagram-f26fa2fc-9771-4bcb-93c9-616537fb258a.tmp",
+        "kind": "file",
+        "size": 10770,
+        "dev": 2049,
+        "ino": 4801427,
+        "nlink": 1,
+        "sha256": "bf53c2b9d04a9b3ee20cef49abc69dbbf6d6570f5dd2216de25107c94437183a"
+      },
+      {
+        "root": "canonical",
+        "key": "instagram-source.webp",
+        "kind": "file",
+        "size": 74,
+        "dev": 2049,
+        "ino": 4801421,
+        "nlink": 1,
+        "sha256": "074bd24e8c53f067d1597cb03d1f83a74c80d64c4efe07a0f4fa8c6f242dc2c5"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801419,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": ".instagram-f26fa2fc-9771-4bcb-93c9-616537fb258a.tmp",
+        "size": 10770,
+        "sha256": "bf53c2b9d04a9b3ee20cef49abc69dbbf6d6570f5dd2216de25107c94437183a",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "instagram-source.webp",
+        "size": 74,
+        "sha256": "074bd24e8c53f067d1597cb03d1f83a74c80d64c4efe07a0f4fa8c6f242dc2c5",
+        "owners": [
+          "photo:instagram-source"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      }
+    ]
+  },
+  "sourceSha": "253b74c77addf5ab662f9d757b719d3553b7bc4f",
+  "runtimeSha256": "6bdcbadfdc2207344e51eb4324bee8ad29557a55aac796d9aea93b737d3a1ddc",
+  "retainedRoot": "/tmp/noctella-photo-crash-sTBWW5"
+}

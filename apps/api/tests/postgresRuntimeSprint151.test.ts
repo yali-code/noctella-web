@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import { buildEtsyMediaPlan } from "../../admin/src/lib/etsyMediaPlan";
+import fs from "node:fs";
+import path from "node:path";
 import { and, asc, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { MarketplaceOrderStatus, MarketplaceWebhookEventType, ProductStatus, ProductType, PublishChannel, StockMovementType } from "@noctella/shared";
@@ -36,6 +39,55 @@ async function photo(h:PostgresTestDb,productId="p1"){const t=now();await h.db.i
 const order=(overrides:Record<string,unknown>={})=>({externalOrderId:"external-1",externalOrderNumber:"1001",status:"pending",currency:"EUR",subtotal:10,shipping:0,tax:0,total:10,buyerEmail:"buyer@example.test",buyerName:"Buyer",orderedAt:new Date().toISOString(),items:[{externalOrderItemId:"item-1",externalListingId:"listing-1",sku:"SKU-1",title:"Marketplace title",quantity:1,unitPrice:10,lineTotal:10}],raw:{native:true},...overrides} as any);
 
 suite("Sprint 151 real PostgreSQL runtime", () => {
+  it("keeps legacy rows intact when additive Etsy 0039 is applied twice, without Photo 0040–0042", async () => {
+    const h = await createPostgresTestDb("0038_background_job_claim_fencing.sql");
+    try {
+      await h.pool.query("INSERT INTO products (id,sku,title,slug,type,status,stock_quantity,price_eur,etsy_title) VALUES ('legacy-etsy','LEGACY-ETSY','Legacy','legacy-etsy','lot_item','draft',3,100,'Legacy Etsy')");
+      const migration = fs.readFileSync(path.resolve(__dirname, "../src/db/postgres-migrations/0039_etsy_listing_form_parity.sql"), "utf8");
+      const columns = [...migration.matchAll(/ADD COLUMN IF NOT EXISTS (etsy_\w+)/g)].map(match => match[1]);
+      expect(columns).toHaveLength(23);
+      for (let i = 0; i < 2; i++) await h.pool.query(migration);
+      const row = (await h.pool.query("SELECT * FROM products WHERE id = 'legacy-etsy'")).rows[0];
+      expect(row).toMatchObject({ sku: "LEGACY-ETSY", etsy_title: "Legacy Etsy", stock_quantity: 3 });
+      for (const column of columns) expect(row[column], column).toBeNull();
+      const metadata = await h.pool.query("SELECT column_name,is_nullable,column_default FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='products' AND column_name=ANY($1)", [columns]);
+      expect(metadata.rows).toHaveLength(23);
+      for (const column of metadata.rows) expect(column).toMatchObject({ is_nullable: "YES", column_default: null });
+      expect(await productsService.getProductById(h.db as any, "legacy-etsy")).toMatchObject({ sku: "LEGACY-ETSY", stockQuantity: 3, priceEur: 100, etsyTitle: "Legacy Etsy", photos: [] });
+      await h.pool.query("UPDATE products SET etsy_taxonomy_id='1234', etsy_quantity=2 WHERE id='legacy-etsy'");
+      expect(await productsService.getProductById(h.db as any, "legacy-etsy")).toMatchObject({ etsyTaxonomyId: "1234", etsyQuantity: 2, stockQuantity: 3 });
+      await photo(h, "legacy-etsy");
+      const withPhoto = await productsService.getProductById(h.db as any, "legacy-etsy");
+      expect(buildEtsyMediaPlan(withPhoto.photos)).toMatchObject({ ready: true, eligibleCount: 1, media: [{ photoId: "photo-legacy-etsy", etsyRank: 1 }] });
+    } finally { await h.close(); }
+  });
+
+  it("applies Etsy listing parity fields in the default PostgreSQL test harness", async () => {
+    const h = await createPostgresTestDb();
+    try {
+      const column = await h.pool.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'products' AND column_name = 'etsy_taxonomy_id'"
+      );
+      expect(column.rows).toHaveLength(1);
+      await h.db.insert(schema.products).values({
+        id: "etsy-schema-regression",
+        sku: "ETSY-SCHEMA-REGRESSION",
+        title: "Etsy schema regression",
+        slug: "etsy-schema-regression",
+        type: ProductType.UniqueItem,
+        status: ProductStatus.Draft,
+        stockQuantity: 1,
+        etsyTaxonomyId: "123",
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      const saved = await h.pool.query("SELECT etsy_taxonomy_id FROM products WHERE id = $1", ["etsy-schema-regression"]);
+      expect(saved.rows[0]?.etsy_taxonomy_id).toBe("123");
+    } finally {
+      await h.close();
+    }
+  });
+
   it("applies the migration chain through 0023 twice and enforces all four marketplace unique indexes", async()=>{const h=await createPostgresTestDb("0023_sprint151_orders_shipping_snapshot_parity.sql");try{const again=await h.migrateAgain();expect(again.at(-1)).toBe("0023_sprint151_orders_shipping_snapshot_parity.sql");const indexes=await h.pool.query("SELECT indexname FROM pg_indexes WHERE schemaname=current_schema() AND indexname = ANY($1)",[["idx_marketplace_connections_channel_account","idx_external_listings_channel_external","idx_webhook_channel_external","idx_marketplace_orders_channel_external"]]);expect(indexes.rows.map(r=>r.indexname).sort()).toEqual(["idx_external_listings_channel_external","idx_marketplace_connections_channel_account","idx_marketplace_orders_channel_external","idx_webhook_channel_external"].sort());}finally{await h.close();}});
 
   it("atomically pauses, round-trips lifecycle JSONB/timestamptz, and reuses the idempotency key",async()=>{const h=await createPostgresTestDb();try{await product(h);await connection(h);await listing(h);const first=await lifecycle.pauseProduct(h.db as any,{productId:"p1",actorAdminUserId:"admin",idempotencyKey:"pause-idem"},()=>({endListing:async()=>({externalListingId:"listing-1",externalStatus:"ended"}),normalizeError:()=>({type:"Temporary",message:"temporary",retryable:true})} as any));expect(first.operation.status).toBe("succeeded");const replay=await lifecycle.pauseProduct(h.db as any,{productId:"p1",actorAdminUserId:"admin",idempotencyKey:"pause-idem"},()=>({} as any));expect(replay.operation.id).toBe(first.operation.id);expect((await h.db.select().from(schema.productLifecycleOperations))).toHaveLength(1);const raw=(await h.pool.query("SELECT target_snapshot,created_at FROM product_lifecycle_operations")).rows[0];expect(Array.isArray(raw.target_snapshot)).toBe(true);expect(raw.created_at).toBeInstanceOf(Date);expect(first.operation.createdAt).toMatch(/Z$/);}finally{await h.close();}});

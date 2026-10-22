@@ -1,0 +1,15 @@
+{
+  "phase": "persistence-error-after-service-handler",
+  "boundary": "ai-rollback-error",
+  "driver": "sqlite",
+  "syntheticOnly": true,
+  "code": "PHOTO_STORAGE_UNAVAILABLE",
+  "admission": {
+    "held": 0,
+    "active": 0,
+    "waiting": 0,
+    "closed": true
+  },
+  "enabledWorkRejected": true,
+  "legacyBypass": true
+}

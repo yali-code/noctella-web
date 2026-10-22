@@ -1,0 +1,1360 @@
+{
+  "implementation": "23b85b79eec53dc8cac8642c01daebc60e884039",
+  "ci": 572,
+  "run": 38554494946,
+  "tests": 37,
+  "passed": 37,
+  "failed": 0,
+  "skipped": 0,
+  "actualWorkflowCases": 30,
+  "additionalPostgresFixtures": 4,
+  "plannerTests": 3,
+  "cases": [
+    {
+      "driver": "postgres",
+      "boundary": "ai-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "commit-complete-before-response",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "2b544ec3-e2aa-4f8a-ba81-f6c960ba270a.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "ai-encoded-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "encoded-output-before-db",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "2fcdc4d1-2cbf-4e78-bdeb-118423a089bd.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "ai-lost-ack",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "persistence-error-after-service-handler",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "32418ef1-b393-4800-bc28-bc3f99ffa405.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "ai-reserved-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "reserved-output-before-encode",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "c15d2e78-1443-4a46-a644-98270dfd98e1.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "ai-rollback-error",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "persistence-error-after-service-handler",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "637a9676-d327-47eb-9618-1e067be5eeba.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "ai-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "rows-and-outbox-before-commit",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "65742e6e-4a80-4dfa-a6dd-5ca8ee1a780e.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "finalize-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "commit-complete-before-response",
+      "retries": [
+        {
+          "ok": true,
+          "created": false
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ],
+      "photos": 1,
+      "privatePhotos": 1,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-1e3d9e19-2dd4-4f0b-a8d6-f9bffd9e9d2f-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "synthetic-product-1e3d9e19-2dd4-4f0b-a8d6-f9bffd9e9d2f.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "46fa62d7-968f-473d-bb58-4922bc31730b.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "finalize-first-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "first-deterministic-output-before-thumbnail",
+      "retries": [
+        {
+          "ok": true,
+          "created": true
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ],
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-98e0b12c-2c9c-4480-8937-8cf026bdbaea.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "ee48af15-9693-4f1c-8701-add6e3946b3d.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "finalize-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "rows-and-outbox-before-commit",
+      "retries": [
+        {
+          "ok": true,
+          "created": true
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ],
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-a6dffa37-6cbe-477d-8829-083807017db2-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "synthetic-product-a6dffa37-6cbe-477d-8829-083807017db2.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "02200dab-1caa-473c-a131-d290c9d051f2.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "finalize-zero-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "injected-open-before-first-write",
+      "retries": [
+        {
+          "ok": false,
+          "name": "AiIntakePhotoFinalizationDestinationConflictError"
+        },
+        {
+          "ok": false,
+          "name": "AiIntakePhotoFinalizationDestinationConflictError"
+        }
+      ],
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-1a53ae12-bab3-4159-abc7-49c0ceec4193.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "root": "intake",
+          "key": "ddb12f9c-2961-4e85-81c7-fc9dec9a25c4.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "instagram-temp",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "instagram-temp-written-before-link",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": ".instagram-e2b6b89b-de4a-4e5d-a401-f30e6deed12f.tmp",
+          "size": 10770,
+          "sha256": "bf53c2b9d04a9b3ee20cef49abc69dbbf6d6570f5dd2216de25107c94437183a"
+        },
+        {
+          "root": "canonical",
+          "key": "instagram-source.webp",
+          "size": 74,
+          "sha256": "074bd24e8c53f067d1597cb03d1f83a74c80d64c4efe07a0f4fa8c6f242dc2c5"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-ai-persistence-error",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "actual-ai-rejected-source-retained",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "091de877-ce54-4821-9475-cb6c634b3084.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-protocol-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "protocol-rows-after-commit",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 1,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976264193-580c35ef-d738-4b89-961f-2688cfe45c7f-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976264193-580c35ef-d738-4b89-961f-2688cfe45c7f.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "11f7ee33-88c2-4d30-8aae-07f6874a993c.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-protocol-outbox-only",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "protocol-outbox-only-after-commit",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976265305-08408b4f-1a6f-4ac8-80e2-7cefe9d087a1-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976265305-08408b4f-1a6f-4ac8-80e2-7cefe9d087a1.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "3180fa53-ffab-4f41-af24-b4f0999eaaa8.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "pg-protocol-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "protocol-rows-before-commit",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976263092-f39cb4b7-b226-4ccf-af49-931569267aaa-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976263092-f39cb4b7-b226-4ccf-af49-931569267aaa.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "f7f2d2a5-ac40-49de-8ce7-f714cb65bdab.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-protocol/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "product-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "commit-complete-before-response",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 0,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976250799-0af46f62-db92-4bcf-bad2-125c72ebec26-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976250799-0af46f62-db92-4bcf-bad2-125c72ebec26.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "product-lost-ack",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "persistence-error-after-service-handler",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 0,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976252042-41d67ec5-b2e6-4e72-bca7-047d09067e7d-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976252042-41d67ec5-b2e6-4e72-bca7-047d09067e7d.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "product-one-link",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "first-canonical-link-before-second",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976248368-b5724514-4fea-4016-86a6-bf3636308afb.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "postgres",
+      "boundary": "product-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "rows-and-outbox-before-commit",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976249568-4dbd5b43-110a-4f69-8d29-c23c19fb6b3f-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976249568-4dbd5b43-110a-4f69-8d29-c23c19fb6b3f.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "commit-complete-before-response",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "25c8ac53-d67c-49b9-bbf1-ced2f0055ef4.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-encoded-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "encoded-output-before-db",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "81d6043b-eab0-4a7a-b129-2219718cb581.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-lost-ack",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "persistence-error-after-service-handler",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "07fffbd1-e15f-42f8-bd31-e74e71560d74.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-reserved-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "reserved-output-before-encode",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "f913a2ee-8fe7-43dc-ba9a-b680409427b5.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-rollback-error",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "persistence-error-after-service-handler",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "4c6dcf37-f831-40a1-85b1-061aa9c5ac1b.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "ai-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "rows-and-outbox-before-commit",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "intake",
+          "key": "9ff87dc4-df46-462e-b7a5-a2659d5db384.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "commit-complete-before-response",
+      "retries": [
+        {
+          "ok": true,
+          "created": false
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ],
+      "photos": 1,
+      "privatePhotos": 1,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-0dff3e61-855e-4e61-b0ea-bec7b8fa8256-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "synthetic-product-0dff3e61-855e-4e61-b0ea-bec7b8fa8256.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "c716f50a-e3d5-48bf-8a06-cad0acd65f96.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-first-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "first-deterministic-output-before-thumbnail",
+      "retries": [
+        {
+          "ok": true,
+          "created": true
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ],
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-f43af3ec-bb7d-4058-aeff-5c8090e2ca85.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "bdbc7a6d-7102-47f4-8516-7b5e8a1f1bc2.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "rows-and-outbox-before-commit",
+      "retries": [
+        {
+          "ok": true,
+          "created": true
+        },
+        {
+          "ok": true,
+          "created": false
+        }
+      ],
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-24872948-3a05-4b8f-b06d-85931d87be7e-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "synthetic-product-24872948-3a05-4b8f-b06d-85931d87be7e.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "intake",
+          "key": "8f04b784-9d1f-400e-bebe-0f04e6f975f8.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "finalize-zero-output",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "injected-open-before-first-write",
+      "retries": [
+        {
+          "ok": false,
+          "name": "AiIntakePhotoFinalizationDestinationConflictError"
+        },
+        {
+          "ok": false,
+          "name": "AiIntakePhotoFinalizationDestinationConflictError"
+        }
+      ],
+      "photos": 0,
+      "privatePhotos": 1,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "synthetic-product-65600616-1781-4a16-b255-7e3c32b42380.webp",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "root": "intake",
+          "key": "3d6f1f46-5c37-4785-9b86-e2e0ec765317.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "instagram-temp",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "instagram-temp-written-before-link",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": ".instagram-47e0100e-b36c-4761-9262-299baf2cfc67.tmp",
+          "size": 10770,
+          "sha256": "bf53c2b9d04a9b3ee20cef49abc69dbbf6d6570f5dd2216de25107c94437183a"
+        },
+        {
+          "root": "canonical",
+          "key": "instagram-source.webp",
+          "size": 74,
+          "sha256": "074bd24e8c53f067d1597cb03d1f83a74c80d64c4efe07a0f4fa8c6f242dc2c5"
+        },
+        {
+          "root": "ai-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-committed",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "commit-complete-before-response",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 0,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976232591-13784a70-8302-4b51-b0cd-1d82781fb9ed-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976232591-13784a70-8302-4b51-b0cd-1d82781fb9ed.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-lost-ack",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "persistence-error-after-service-handler",
+      "retries": null,
+      "photos": 1,
+      "privatePhotos": 0,
+      "outbox": 1,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976233278-8956c9eb-3780-42e6-92dc-b38c9f6ebc39-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976233278-8956c9eb-3780-42e6-92dc-b38c9f6ebc39.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-one-link",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "first-canonical-link-before-second",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976231197-0fb73652-87f3-4cee-b7ce-9c0341e3fca5.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    },
+    {
+      "driver": "sqlite",
+      "boundary": "product-uncommitted",
+      "sourceSha": "23b85b79eec53dc8cac8642c01daebc60e884039",
+      "termination": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "checkpoint": "rows-and-outbox-before-commit",
+      "retries": null,
+      "photos": 0,
+      "privatePhotos": 0,
+      "outbox": 0,
+      "retainedFiles": [
+        {
+          "root": "canonical",
+          "key": "1791976231864-9847df02-0da2-437b-a794-e93043d31486-thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        },
+        {
+          "root": "canonical",
+          "key": "1791976231864-9847df02-0da2-437b-a794-e93043d31486.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/input",
+          "size": 126,
+          "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/main.webp",
+          "size": 72,
+          "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+        },
+        {
+          "root": "product-ingress",
+          "key": "request-synthetic/thumb.webp",
+          "size": 72,
+          "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+        }
+      ],
+      "safeToMutate": false
+    }
+  ]
+}

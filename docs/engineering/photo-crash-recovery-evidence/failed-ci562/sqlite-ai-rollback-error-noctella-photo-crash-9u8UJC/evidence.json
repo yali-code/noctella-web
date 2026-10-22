@@ -1,0 +1,137 @@
+{
+  "driver": "sqlite",
+  "boundary": "ai-rollback-error",
+  "death": {
+    "checkpoint": {
+      "phase": "persistence-error-after-service-handler",
+      "boundary": "ai-rollback-error",
+      "driver": "sqlite",
+      "syntheticOnly": true,
+      "code": "PHOTO_STORAGE_UNAVAILABLE",
+      "admission": {
+        "held": 0,
+        "active": 0,
+        "waiting": 0,
+        "closed": true
+      },
+      "enabledWorkRejected": true,
+      "legacyBypass": true
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "linux"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [],
+    "aiPhotos": [],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "41de72d4-0227-4346-9cea-a02a5bb7139e",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "intake",
+        "key": "1dd68135-3be8-433f-a888-3b6a7d35c4c1.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801280,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801278,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [],
+    "aiPhotos": [],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "41de72d4-0227-4346-9cea-a02a5bb7139e",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "intake",
+        "key": "1dd68135-3be8-433f-a888-3b6a7d35c4c1.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801280,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801278,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "intake",
+        "key": "1dd68135-3be8-433f-a888-3b6a7d35c4c1.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      }
+    ]
+  },
+  "sourceSha": "253b74c77addf5ab662f9d757b719d3553b7bc4f",
+  "runtimeSha256": "6bdcbadfdc2207344e51eb4324bee8ad29557a55aac796d9aea93b737d3a1ddc",
+  "retainedRoot": "/tmp/noctella-photo-crash-9u8UJC"
+}

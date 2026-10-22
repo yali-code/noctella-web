@@ -1,0 +1,10 @@
+{
+  "memory": {
+    "rss": 167501824,
+    "heapTotal": 49213440,
+    "heapUsed": 44457440,
+    "external": 4898850,
+    "arrayBuffers": 93350
+  },
+  "cgroupCurrent": 135081984
+}

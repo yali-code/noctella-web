@@ -20,11 +20,12 @@ import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
 import { AiChannelSuggestionsSection } from "./AiChannelSuggestionsSection";
 import { CanonicalProductAiSuggestionsSection } from "./CanonicalProductAiSuggestionsSection";
+import { EtsyListingFormFields, etsyFormValuesFromProduct, etsyLimitMessage, etsyPayloadFromValues, type EtsyListingFormValues } from "./EtsyListingFormFields";
 import { MarketingTagsSection } from "./MarketingTagsSection";
 import { PublishActions } from "./PublishActions";
 import { ProductLifecycleActions } from "./ProductLifecycleActions";
 
-export interface ProductFormValues {
+export interface ProductFormValues extends EtsyListingFormValues {
   sku: string;
   title: string;
   slug?: string;
@@ -187,6 +188,7 @@ export function productToFormValues(product: ProductDetail): ProductFormValues {
     etsyOccasion: product.etsyOccasion,
     etsyListingPriceEur: product.etsyListingPriceEur?.toString(),
     etsyListingStatus: product.etsyListingStatus,
+    ...etsyFormValuesFromProduct(product),
     wooProductName: product.wooProductName,
     wooShortDescription: product.wooShortDescription,
     wooLongDescription: product.wooLongDescription,
@@ -286,6 +288,7 @@ function toApiPayload(values: ProductFormValues, initialValues: ProductFormValue
     etsyOccasion: values.etsyOccasion || undefined,
     etsyListingPriceEur: num(values.etsyListingPriceEur),
     etsyListingStatus: values.etsyListingStatus || undefined,
+    ...etsyPayloadFromValues(values),
     wooProductName: values.wooProductName || undefined,
     wooShortDescription: values.wooShortDescription || undefined,
     wooLongDescription: values.wooLongDescription || undefined,
@@ -1045,7 +1048,7 @@ export function ProductForm({
       </Section>
 
       <Section title="Etsy (optional — not published or synced yet)">
-        <Field label="Title">
+        <Field label="Title" error={etsyLimitMessage("etsyTitle", values.etsyTitle)}>
           <input style={inputStyle} value={values.etsyTitle ?? ""} onChange={(e) => set("etsyTitle", e.target.value)} />
         </Field>
         <Field label="Description">
@@ -1055,10 +1058,10 @@ export function ProductForm({
             onChange={(e) => set("etsyDescription", e.target.value)}
           />
         </Field>
-        <Field label="Tags (comma-separated)">
+        <Field label="Tags (comma-separated)" error={etsyLimitMessage("etsyTags", values.etsyTags)}>
           <input style={inputStyle} value={values.etsyTags ?? ""} onChange={(e) => set("etsyTags", e.target.value)} />
         </Field>
-        <Field label="Materials">
+        <Field label="Materials" error={etsyLimitMessage("etsyMaterials", values.etsyMaterials)}>
           <input
             style={inputStyle}
             value={values.etsyMaterials ?? ""}
@@ -1096,6 +1099,8 @@ export function ProductForm({
             ))}
           </select>
         </Field>
+        {/* Etsy listing form parity (Phase 1): * = required before publishing; drafts always save. */}
+        <EtsyListingFormFields values={values} set={set} Field={Field} inputStyle={inputStyle} />
         {productId && (
           <AiChannelSuggestionsSection
             productId={productId}

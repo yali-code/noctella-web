@@ -1,3 +1,8 @@
+import type { DevelopmentPrivatePhotoRoot } from "./developmentPhotoStorageCapability";
+import os from "node:os";
+import { realpathSync } from "node:fs";
+import { runImageOperation } from "./photoUploadAdmission";
+import { productPhotoImage, productPhotoDerivative } from "./photoProcessingRecipe";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -71,12 +76,12 @@ interface ProcessedProductPhoto {
  */
 async function processProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<ProcessedProductPhoto> {
   validateUpload(file);
-  const image = sharp(file.buffer, { failOn: "error" }).rotate();
+  const image = productPhotoImage(file.buffer);
   const metadata = await image.metadata();
   if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
 
-  const mainBytes = await image.clone().resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true }).webp({ quality: 86 }).toBuffer();
-  const thumbBytes = await image.clone().resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+  const mainBytes = await productPhotoDerivative(image).toBuffer();
+  const thumbBytes = await productPhotoDerivative(image, true).toBuffer();
   const output = await sharp(mainBytes).metadata();
   return { mainBytes, thumbBytes, width: output.width ?? metadata.width, height: output.height ?? metadata.height };
 }
@@ -135,14 +140,14 @@ export interface DeterministicProductPhotoResult {
  * writeIdempotent for safe, non-destructive retry behavior. Never touches
  * the staged intake-photo source file.
  */
-export async function writeDeterministicProductPhoto(input: DeterministicProductPhotoInput): Promise<DeterministicProductPhotoResult> {
+async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProductPhotoInput, destinationRoot = uploadRoot): Promise<DeterministicProductPhotoResult> {
   assertSafeDeterministicKey(input.mainStorageKey);
   assertSafeDeterministicKey(input.thumbnailStorageKey);
   const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
-  await mkdir(uploadRoot, { recursive: true });
+  await mkdir(destinationRoot, { recursive: true });
 
-  const mainPath = path.join(uploadRoot, input.mainStorageKey);
-  const thumbPath = path.join(uploadRoot, input.thumbnailStorageKey);
+  const mainPath = path.join(destinationRoot, input.mainStorageKey);
+  const thumbPath = path.join(destinationRoot, input.thumbnailStorageKey);
   await writeIdempotent(mainPath, mainBytes, input.mainStorageKey);
   await writeIdempotent(thumbPath, thumbBytes, input.thumbnailStorageKey);
 
@@ -158,8 +163,43 @@ export async function writeDeterministicProductPhoto(input: DeterministicProduct
   };
 }
 
+export const writeDeterministicProductPhoto: (input: DeterministicProductPhotoInput) => Promise<DeterministicProductPhotoResult> = input =>
+  runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input));
+
+/** Width/height of an already published (publisher-verified) derivative; metadata only, bounded like the recipe. */
+export async function readPublishedPhotoDimensions(file: string): Promise<{ width: number; height: number } | null> {
+  const meta = await sharp(file, { limitInputPixels: 24_000_000 }).metadata();
+  return meta.width && meta.height ? { width: meta.width, height: meta.height } : null;
+}
+
+/**
+ * FAZ A / #424 fenced W4: the exact writeDeterministicProductPhoto recipe (processProductPhoto), written exclusively
+ * into a generation-private directory instead of the canonical root. Publication is the fenced owner's job.
+ */
+export function prepareDeterministicProductPhotoFiles(input: { buffer: Buffer; mimetype: string; size: number }, outDir: string): Promise<{ main: string; thumb: string; width: number; height: number }> {
+  return runImageOperation(async () => {
+    const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
+    const main = path.join(outDir, "main.webp"), thumb = path.join(outDir, "thumb.webp");
+    await writeFile(main, mainBytes, { flag: "wx", mode: 0o600 });
+    await writeFile(thumb, thumbBytes, { flag: "wx", mode: 0o600 });
+    return { main, thumb, width, height };
+  });
+}
+
+/** Explicit test/development private-root producer; existing exports retain their default root. */
+export function writeDeterministicProductPhotoInPrivateRoot(input: DeterministicProductPhotoInput, permit: DevelopmentPrivatePhotoRoot) {
+  if (!["test", "development"].includes(process.env.NODE_ENV ?? "") || process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED !== "true") throw new Error("PHOTO_DEVELOPMENT_CAPABILITY_DISABLED");
+  const privateRoot = (require("./developmentPhotoStorageCapability") as typeof import("./developmentPhotoStorageCapability")).resolvePrivatePhotoRootPermit(permit);
+  const resolved = path.resolve(privateRoot);
+  if (!resolved.startsWith(path.join(os.tmpdir(), "noctella-photo-fence-")) || path.basename(resolved) !== "raw" || realpathSync(resolved) !== resolved) throw new Error("PHOTO_DISPOSABLE_PRIVATE_ROOT_REQUIRED");
+  return runImageOperation(() => writeDeterministicProductPhotoUnadmitted(input, resolved));
+}
+
 export class LocalPhotoStorage implements PhotoStorage {
   async saveProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredProductPhoto> {
+    return runImageOperation(() => this.#saveProductPhotoUnadmitted(file));
+  }
+  async #saveProductPhotoUnadmitted(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredProductPhoto> {
     const { mainBytes, thumbBytes, width, height } = await processProductPhoto(file);
     await mkdir(uploadRoot, { recursive: true });
 

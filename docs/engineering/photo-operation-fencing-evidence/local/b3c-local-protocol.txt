@@ -1,0 +1,36 @@
+✔ sqlite intent-idempotency-and-history (856.7924ms)
+✔ sqlite lease-expiry-renewal-and-aba (409.7589ms)
+✔ sqlite preflight-race-and-generation-namespaces (548.2034ms)
+✔ sqlite atomic-domain-rollback-and-lost-ack (354.5089ms)
+✔ sqlite abort-shutdown-and-zero-byte-retention (393.9649ms)
+✔ sqlite outbox-only-historical-reference (352.0741ms)
+✔ sqlite independent concurrent claimers (1048.6401ms)
+✔ sqlite SIGKILL restart intent (815.8698ms)
+✔ sqlite SIGKILL restart reserved (741.9664ms)
+✔ sqlite SIGKILL restart materialized (1091.9974ms)
+✔ sqlite SIGKILL restart prepared (1237.1014ms)
+✔ sqlite SIGKILL restart uncommitted (834.2338ms)
+✔ sqlite SIGKILL restart committed (1002.5429ms)
+✔ sqlite database outage fails before file callback (419.4394ms)
+﹣ postgres intent-idempotency-and-history (0.6828ms) # SKIP
+﹣ postgres lease-expiry-renewal-and-aba (0.1504ms) # SKIP
+﹣ postgres preflight-race-and-generation-namespaces (0.1167ms) # SKIP
+﹣ postgres atomic-domain-rollback-and-lost-ack (0.2163ms) # SKIP
+﹣ postgres abort-shutdown-and-zero-byte-retention (0.1494ms) # SKIP
+﹣ postgres outbox-only-historical-reference (0.1157ms) # SKIP
+﹣ postgres independent concurrent claimers (0.1121ms) # SKIP
+﹣ postgres SIGKILL restart intent (0.1689ms) # SKIP
+﹣ postgres SIGKILL restart reserved (0.1891ms) # SKIP
+﹣ postgres SIGKILL restart materialized (0.1784ms) # SKIP
+﹣ postgres SIGKILL restart prepared (0.1722ms) # SKIP
+﹣ postgres SIGKILL restart uncommitted (0.1368ms) # SKIP
+﹣ postgres SIGKILL restart committed (0.1884ms) # SKIP
+﹣ postgres database outage fails before file callback (0.1329ms) # SKIP
+ℹ tests 28
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 14
+ℹ todo 0
+ℹ duration_ms 10694.1528

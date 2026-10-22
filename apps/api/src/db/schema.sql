@@ -105,6 +105,31 @@ CREATE TABLE IF NOT EXISTS products (
   woo_listing_status TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  -- Etsy listing form parity (Phase 1): appended last so fresh and ALTER-migrated databases share one
+  -- physical column order (see db/migrate.ts ETSY_LISTING_FORM_COLUMNS and the Sprint 137 rebuild).
+  etsy_taxonomy_id TEXT,
+  etsy_shop_section_id TEXT,
+  etsy_quantity INTEGER,
+  etsy_sku TEXT,
+  etsy_who_made TEXT,
+  etsy_is_supply INTEGER,
+  etsy_when_made TEXT,
+  etsy_vintage_year INTEGER,
+  etsy_shipping_profile_id TEXT,
+  etsy_processing_profile_id TEXT,
+  etsy_return_policy_id TEXT,
+  etsy_renewal_option TEXT,
+  etsy_featured INTEGER,
+  etsy_ads_opt_in INTEGER,
+  etsy_restock_requests INTEGER,
+  etsy_gpsr_manufacturer_name TEXT,
+  etsy_gpsr_manufacturer_address TEXT,
+  etsy_gpsr_manufacturer_contact TEXT,
+  etsy_gpsr_responsible_person_name TEXT,
+  etsy_gpsr_responsible_person_address TEXT,
+  etsy_gpsr_responsible_person_contact TEXT,
+  etsy_gpsr_safety_information TEXT,
+  etsy_consumer_guarantee_info TEXT,
   FOREIGN KEY (category_id) REFERENCES categories(id),
   FOREIGN KEY (collection_id) REFERENCES collections(id)
 );
@@ -1014,3 +1039,136 @@ CREATE TABLE IF NOT EXISTS media_plan_items (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_media_plan_items_plan_index ON media_plan_items(plan_id, item_index);
+
+-- Photo-operation ownership (#396/#403/#407, P2-2B3D5 contract, registered in P2 production completion).
+-- Additive only: new tables, no change to existing tables, keys, URLs or rows; no backfill.
+-- SQLite: applied by ensureSchema (CREATE TABLE IF NOT EXISTS) on fresh and existing databases.
+-- Rollback discards ownership evidence: never drop while any operation is preparing/sealed/review
+-- (see services/photoOwnershipFencing.ts ownershipRollbackBlockers).
+-- Physical storage-root identity, registered once per (private, canonical) root pair.
+CREATE TABLE IF NOT EXISTS photo_storage_roots (
+  id TEXT PRIMARY KEY,
+  identity TEXT NOT NULL,
+  created_ms BIGINT NOT NULL
+);
+
+-- One row per logical photo write. Identity and canonical binding are immutable after insert.
+CREATE TABLE IF NOT EXISTS photo_operations (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('ai_finalize', 'product_upload')),
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  target_photo_id TEXT NOT NULL,
+  main_key TEXT NOT NULL UNIQUE,
+  thumb_key TEXT NOT NULL UNIQUE,
+  input_sha256 TEXT NOT NULL,
+  generation BIGINT NOT NULL CHECK (generation > 0),
+  owner TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('preparing', 'sealed', 'committed', 'review')),
+  lease_until_ms BIGINT NOT NULL,
+  seal_id TEXT,
+  committed_photo_id TEXT,
+  committed_event_id TEXT,
+  review_reason TEXT,
+  created_ms BIGINT NOT NULL,
+  updated_ms BIGINT NOT NULL,
+  UNIQUE (subject_type, subject_id),
+  UNIQUE (target_photo_id),
+  CHECK (main_key <> thumb_key)
+);
+
+-- Append-only generation history; a nonce can never be reused within an operation (ABA).
+CREATE TABLE IF NOT EXISTS photo_operation_generations (
+  operation_id TEXT NOT NULL REFERENCES photo_operations(id),
+  generation BIGINT NOT NULL CHECK (generation > 0),
+  owner TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('active', 'superseded', 'committed', 'review')),
+  created_ms BIGINT NOT NULL,
+  updated_ms BIGINT NOT NULL,
+  PRIMARY KEY (operation_id, generation),
+  UNIQUE (operation_id, nonce)
+);
+
+-- Sealed private artifacts (exact inode identity as decimal strings; sizes for retained accounting).
+CREATE TABLE IF NOT EXISTS photo_operation_artifacts (
+  id TEXT PRIMARY KEY,
+  operation_id TEXT NOT NULL,
+  generation BIGINT NOT NULL,
+  relative_path TEXT NOT NULL UNIQUE,
+  main_sha256 TEXT NOT NULL,
+  thumb_sha256 TEXT NOT NULL,
+  main_bytes BIGINT NOT NULL CHECK (main_bytes > 0),
+  thumb_bytes BIGINT NOT NULL CHECK (thumb_bytes > 0),
+  main_dev TEXT NOT NULL,
+  main_ino TEXT NOT NULL,
+  thumb_dev TEXT NOT NULL,
+  thumb_ino TEXT NOT NULL,
+  created_ms BIGINT NOT NULL,
+  FOREIGN KEY (operation_id, generation) REFERENCES photo_operation_generations(operation_id, generation)
+);
+
+CREATE INDEX IF NOT EXISTS idx_photo_operations_state ON photo_operations(state);
+CREATE INDEX IF NOT EXISTS idx_photo_operation_artifacts_operation ON photo_operation_artifacts(operation_id, generation);
+
+-- Stage 5 #424: additive W2 durable intent registry. No writer adoption by itself.
+-- Globally unique tokens reject cross-tenant token reuse; entire intent is immutable.
+CREATE TABLE IF NOT EXISTS photo_w2_upload_intents (
+  token TEXT PRIMARY KEY CHECK (length(token) BETWEEN 16 AND 128),
+  tenant_id TEXT NOT NULL CHECK (length(tenant_id) BETWEEN 1 AND 128),
+  actor_id TEXT NOT NULL CHECK (length(actor_id) BETWEEN 1 AND 128),
+  product_id TEXT NOT NULL CHECK (length(product_id) BETWEEN 1 AND 128),
+  input_sha256 TEXT NOT NULL CHECK (length(input_sha256) = 64),
+  alt_text TEXT NOT NULL CHECK (length(alt_text) <= 500),
+  operation_id TEXT UNIQUE REFERENCES photo_operations(id),
+  created_ms BIGINT NOT NULL CHECK (created_ms >= 0),
+  CHECK (operation_id IS NULL OR operation_id <> '')
+);
+CREATE INDEX IF NOT EXISTS idx_photo_w2_upload_intents_product ON photo_w2_upload_intents(tenant_id, product_id);
+
+-- Stage 5 F2 WP1 (#472): durable publication intent and executor exit records (PostgreSQL 0043). No wiring.
+CREATE TABLE IF NOT EXISTS photo_publication_intents (
+  operation_id TEXT PRIMARY KEY REFERENCES photo_operations(id),
+  generation BIGINT NOT NULL CHECK (generation > 0),
+  owner TEXT NOT NULL CHECK (length(owner) BETWEEN 1 AND 128),
+  nonce TEXT NOT NULL CHECK (length(nonce) BETWEEN 1 AND 128),
+  seal_id TEXT NOT NULL UNIQUE REFERENCES photo_operation_artifacts(id),
+  main_key TEXT NOT NULL CHECK (length(main_key) BETWEEN 1 AND 512),
+  thumb_key TEXT NOT NULL CHECK (length(thumb_key) BETWEEN 1 AND 512),
+  main_sha256 TEXT NOT NULL CHECK (length(main_sha256) = 64),
+  main_dev TEXT NOT NULL,
+  main_ino TEXT NOT NULL,
+  thumb_sha256 TEXT NOT NULL CHECK (length(thumb_sha256) = 64),
+  thumb_dev TEXT NOT NULL,
+  thumb_ino TEXT NOT NULL,
+  executor_epoch BIGINT NOT NULL CHECK (executor_epoch >= 1),
+  executor_token TEXT NOT NULL UNIQUE CHECK (length(executor_token) BETWEEN 1 AND 256),
+  executor_identity TEXT NOT NULL CHECK (length(executor_identity) BETWEEN 1 AND 256),
+  state TEXT NOT NULL CHECK (state IN ('authorized', 'committed', 'review')),
+  created_ms BIGINT NOT NULL CHECK (created_ms >= 0),
+  updated_ms BIGINT NOT NULL CHECK (updated_ms >= 0)
+);
+CREATE TABLE IF NOT EXISTS photo_executor_exit_records (
+  operation_id TEXT NOT NULL REFERENCES photo_publication_intents(operation_id),
+  executor_epoch BIGINT NOT NULL CHECK (executor_epoch >= 1),
+  executor_identity TEXT NOT NULL CHECK (length(executor_identity) BETWEEN 1 AND 256),
+  attested_by TEXT NOT NULL CHECK (length(attested_by) BETWEEN 1 AND 256),
+  exit_observed_ms BIGINT NOT NULL CHECK (exit_observed_ms >= 0),
+  PRIMARY KEY (operation_id, executor_epoch)
+);
+
+-- Stage 5 F2 (#472) WP2: publisher-owned verified copy identities (PostgreSQL 0044).
+CREATE TABLE IF NOT EXISTS photo_publication_copies (
+  operation_id TEXT NOT NULL REFERENCES photo_publication_intents(operation_id),
+  artifact TEXT NOT NULL CHECK (artifact IN ('main', 'thumb')),
+  executor_epoch BIGINT NOT NULL CHECK (executor_epoch >= 1),
+  staging_name TEXT NOT NULL CHECK (length(staging_name) BETWEEN 1 AND 128),
+  copy_dev TEXT NOT NULL CHECK (length(copy_dev) BETWEEN 1 AND 64),
+  copy_ino TEXT NOT NULL CHECK (length(copy_ino) BETWEEN 1 AND 64),
+  copy_birth_ns TEXT NOT NULL CHECK (length(copy_birth_ns) BETWEEN 1 AND 32),
+  sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+  bytes BIGINT NOT NULL CHECK (bytes > 0),
+  recorded_ms BIGINT NOT NULL CHECK (recorded_ms >= 0),
+  PRIMARY KEY (operation_id, artifact)
+);

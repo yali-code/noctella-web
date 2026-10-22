@@ -1,3 +1,4 @@
+import { PhotoUploadError } from "../services/photoUploadAdmission";
 import type { Response } from "express";
 import { ZodError } from "zod";
 import { formatZodError } from "../validation/common";
@@ -54,6 +55,12 @@ const INVENTORY_ERROR_STATUS: Record<InventoryErrorCategory, number> = {
 };
 
 export function handleRouteError(err: unknown, res: Response): void {
+  if (err instanceof PhotoUploadError) {
+    if (err.status === 503) res.setHeader("Retry-After", "1");
+    res.status(err.status).json({ error: err.message, code: err.code });
+    return;
+  }
+
   if (err instanceof SocialGenerationProviderError) {
     res.status(502).json({ error: err.message, code: "SOCIAL_GENERATION_PROVIDER_FAILED" });
     return;

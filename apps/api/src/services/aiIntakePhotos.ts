@@ -1,3 +1,5 @@
+import { imageAdmissionEnabled, imageProcessingAdmission, PhotoUploadError } from "./photoUploadAdmission";
+import type { StagedProductPhotoInput } from "./stagedProductPhotoStorage";
 import { randomUUID } from "node:crypto";
 import { AiProductIntakeStatus, type AiIntakePhoto } from "@noctella/shared";
 import type { DbClient } from "../db/client";
@@ -43,6 +45,9 @@ function repositoryFor(db: DbClient): AiIntakePhotoRepository {
  * deleted before the error propagates. No queue, no outbox, mirroring the
  * try/catch shape already established by services/products.ts's
  * uploadProductPhoto, but fully independent of it.
+ * With disk staging enabled, persistence errors instead retain the new source
+ * and close shared image admission: an error cannot establish rollback after
+ * a lost commit acknowledgement. Recovery must inspect authoritative DB state.
  */
 export async function uploadIntakePhoto(
   db: DbClient,
@@ -52,12 +57,27 @@ export async function uploadIntakePhoto(
   createdByAdminUserId: string,
   storage: AiIntakePhotoStorage = defaultStorage,
 ): Promise<AiIntakePhoto> {
+  return uploadPhotoWithStorage(db, intakeId, originalFilename, createdByAdminUserId, storage, () => storage.saveIntakePhoto(file));
+}
+
+/** Server-only staged input, with the same precheck/locked insert/compensation as Buffer callers. */
+export async function uploadStagedIntakePhoto(
+  db: DbClient, intakeId: string, file: StagedProductPhotoInput,
+  originalFilename: string, createdByAdminUserId: string,
+): Promise<AiIntakePhoto> {
+  return uploadPhotoWithStorage(db, intakeId, originalFilename, createdByAdminUserId, defaultStorage, () => defaultStorage.saveStagedIntakePhoto(file));
+}
+
+async function uploadPhotoWithStorage(
+  db: DbClient, intakeId: string, originalFilename: string, createdByAdminUserId: string,
+  storage: AiIntakePhotoStorage, save: () => Promise<{ storageKey: string }>,
+): Promise<AiIntakePhoto> {
   const intake = await getIntakeById(db, intakeId); // throws NotFoundError if missing
   if (intake.status !== AiProductIntakeStatus.Open) {
     throw new BadRequestError(`Only an Open intake can receive staged photos (current status: "${intake.status}")`);
   }
 
-  const stored = await storage.saveIntakePhoto(file);
+  const stored = await save();
   try {
     const row = await createAiIntakePhotoLockedUseCase(repositoryFor(db), {
       id: randomUUID(),
@@ -68,6 +88,11 @@ export async function uploadIntakePhoto(
     });
     return toIntakePhoto(row);
   } catch (err) {
+    // Commit acknowledgement may be lost after the row became durable.
+    if (imageAdmissionEnabled()) {
+      imageProcessingAdmission.close();
+      throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "AI photo persistence requires recovery");
+    }
     await storage.deleteIntakePhoto(stored.storageKey);
     throw err;
   }

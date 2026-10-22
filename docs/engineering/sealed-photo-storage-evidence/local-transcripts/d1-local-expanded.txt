@@ -1,0 +1,41 @@
+✔ sqlite product-private-seal-and-stale-compensation (764.9246ms)
+✔ sqlite deterministic-stale-writer-and-immutable-source (751.1591ms)
+✔ sqlite sealed-inode-detaches-native-writer-and-idempotency (519.0465ms)
+✔ sqlite no-overwrite-foreign-output-and-zero-byte (443.2905ms)
+✔ sqlite lease-aba-and-database-outage (424.4544ms)
+✔ sqlite marker-aba-never-removes-replacement (489.0564ms)
+✔ sqlite SIGKILL intent (1000.4894ms)
+✔ sqlite SIGKILL raw (1249.6593ms)
+✔ sqlite SIGKILL seal (1475.6436ms)
+✔ sqlite SIGKILL registered (1034.6861ms)
+✔ sqlite SIGKILL first-link (1203.8261ms)
+✔ sqlite SIGKILL published (1064.2095ms)
+﹣ postgres product-private-seal-and-stale-compensation (0.3177ms) # SKIP
+﹣ postgres deterministic-stale-writer-and-immutable-source (0.134ms) # SKIP
+﹣ postgres sealed-inode-detaches-native-writer-and-idempotency (0.1056ms) # SKIP
+﹣ postgres no-overwrite-foreign-output-and-zero-byte (0.0945ms) # SKIP
+﹣ postgres lease-aba-and-database-outage (0.086ms) # SKIP
+﹣ postgres marker-aba-never-removes-replacement (0.0843ms) # SKIP
+﹣ postgres SIGKILL intent (0.0867ms) # SKIP
+﹣ postgres SIGKILL raw (0.082ms) # SKIP
+﹣ postgres SIGKILL seal (0.0814ms) # SKIP
+﹣ postgres SIGKILL registered (0.094ms) # SKIP
+﹣ postgres SIGKILL first-link (0.0843ms) # SKIP
+﹣ postgres SIGKILL published (0.0869ms) # SKIP
+✔ actual SQLite rejected callback cannot escape into protected publication (950.408ms)
+✔ feature OFF refuses disposable capability before filesystem mutation (331.1527ms)
+✔ sqlite independent publication workers (1267.4525ms)
+﹣ postgres independent publication workers (0.3351ms) # SKIP
+✔ SQLite asynchronous authority continuation is revoked before later filesystem action (576.4798ms)
+✔ ENOSPC marker failure remains review-required without inferring abandonment (365.5377ms)
+﹣ PostgreSQL connection loss cannot release the filesystem publication fence early (0.3698ms) # SKIP
+✔ sqlite caller mutation and sealed inode replacement cannot retarget publication (490.1982ms)
+﹣ postgres caller mutation and sealed inode replacement cannot retarget publication (0.2678ms) # SKIP
+ℹ tests 33
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 15
+ℹ todo 0
+ℹ duration_ms 15116.47

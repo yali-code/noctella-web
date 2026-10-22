@@ -1,3 +1,4 @@
+import { imageProcessingAdmission } from "./services/photoUploadAdmission";
 import { createGracefulShutdown, resolvePort } from "./serverLifecycle";
 import { ProductionConfigurationError, validateProductionApiConfig } from "./config/productionConfig";
 
@@ -20,8 +21,8 @@ async function start(): Promise<void> {
   });
 
   const shutdown = createGracefulShutdown({ server, dbRuntime });
-  process.on("SIGTERM", () => { void shutdown("SIGTERM"); });
-  process.on("SIGINT", () => { void shutdown("SIGINT"); });
+  process.on("SIGTERM", () => { imageProcessingAdmission.close(); void shutdown("SIGTERM"); });
+  process.on("SIGINT", () => { imageProcessingAdmission.close(); void shutdown("SIGINT"); });
 }
 
 void start().catch((error: unknown) => {

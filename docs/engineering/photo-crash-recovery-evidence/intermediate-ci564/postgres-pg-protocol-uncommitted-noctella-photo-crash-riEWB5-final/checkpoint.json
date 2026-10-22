@@ -1,0 +1,7 @@
+{
+  "phase": "protocol-rows-before-commit",
+  "boundary": "pg-protocol-uncommitted",
+  "driver": "postgres",
+  "syntheticOnly": true,
+  "scope": "native-postgresql-transaction-fixture-not-photo-service"
+}

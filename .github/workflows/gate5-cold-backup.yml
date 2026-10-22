@@ -1,0 +1,124 @@
+name: Gate 5 Linux cold backup acceptance
+
+on:
+  pull_request:
+    branches: [fix/f2-w4-finalize-precheck]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/gate5-cold-backup.yml
+      - apps/api/tests/fixtures/privatePhotoColdLinuxAcceptance.ts
+      - apps/api/tests/w2FencedOwnerRecovery.test.ts
+      - apps/api/tests/w4FencedFinalizationAcceptance.test.ts
+      - apps/api/tests/photoCanonicalDeletion4C.test.ts
+      - apps/api/tests/privatePhotoOfflineBackup.test.ts
+      - apps/api/tests/photoColorEvidence.test.ts
+      - apps/api/tests/fixtures/retainedPublication.ts
+      - apps/api/src/scripts/privatePhotoColdBackup.ts
+      - apps/api/src/use-cases/private-photo-backup/**
+      - apps/api/src/services/ownedPhotoArtifactProof.ts
+      - apps/api/src/services/photoPersistentIdentity.ts
+      - apps/api/src/services/photoPreparationConfinement.ts
+      - apps/api/src/db/schema.sql
+      - apps/api/src/db/migrate.ts
+      - apps/api/src/services/w2FencedProductPhotoOwner.ts
+      - apps/api/src/services/w4FencedFinalizationOwner.ts
+      - apps/api/src/services/aiIntakePhotoFinalization.ts
+      - apps/api/src/services/photoPublicationExecutor.ts
+      - apps/api/src/services/photoPublicationIntents.ts
+      - apps/api/src/services/photoCopyPublisher.ts
+      - apps/api/src/services/photoOperationAuthority.ts
+      - apps/api/src/services/photoProcessingRecipe.ts
+      - apps/api/src/workers/photoPreparationWorker.ts
+      - apps/api/tsconfig.json
+      - packages/shared/**
+      - apps/api/scripts/build-landlock-launcher.mjs
+      - scripts/photo-publication-capability/landlock-worker.c
+      - apps/api/package.json
+      - package.json
+      - package-lock.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate5-cold-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  linux-cold-cli:
+    if: github.head_ref == 'feat/gate5-private-operation-backup-20261021' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Require exact PR head
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Build shared dependency and candidate API (including the actual CLI and preparation worker)
+        run: |
+          npm run build -w packages/shared
+          npm run build -w apps/api
+      - name: API typecheck at exact PR head
+        run: npm run typecheck -w apps/api
+      - name: Build existing descriptor identity helper only
+        run: node apps/api/scripts/build-landlock-launcher.mjs --out "$RUNNER_TEMP/gate5-launcher"
+      - name: Actual CLI against quiesced synthetic ext4 source and real private POSIX destination
+        shell: bash
+        env:
+          NODE_ENV: test
+          PHOTO_PREPARATION_CONFINEMENT: required
+          GATE5_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          umask 022
+          image="$RUNNER_TEMP/gate5-cold.img"
+          mountpoint="$RUNNER_TEMP/gate5-cold-mount"
+          mkdir "$mountpoint"
+          truncate -s 128M "$image"
+          mkfs.ext4 -q -F -m 0 "$image"
+          sudo mount -o loop,nodev,nosuid,noexec "$image" "$mountpoint"
+          trap 'sudo umount "$mountpoint"' EXIT
+          # Create only new disposable fixture storage; change no existing host security settings.
+          sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$mountpoint/acceptance"
+          export PHOTO_PREPARATION_LAUNCHER="$RUNNER_TEMP/gate5-launcher/landlock-worker"
+          node --import tsx apps/api/tests/fixtures/privatePhotoColdLinuxAcceptance.ts accept "$mountpoint/acceptance" "$RUNNER_TEMP/gate5-cold-evidence"
+      - name: Five requested scoped suites only (no PostgreSQL service or URL)
+        env:
+          NODE_ENV: test
+          POSTGRES_TEST_DATABASE_URL: ''
+          W2_LIVE_REQUIRE_POSTGRES: ''
+        run: >-
+          npm exec -w apps/api -- vitest run
+          tests/w2FencedOwnerRecovery.test.ts
+          tests/w4FencedFinalizationAcceptance.test.ts
+          tests/photoCanonicalDeletion4C.test.ts
+          tests/privatePhotoOfflineBackup.test.ts
+          tests/photoColorEvidence.test.ts
+          --reporter=default --reporter=json
+          --outputFile="$RUNNER_TEMP/gate5-cold-evidence/scoped-tests.json"
+      - name: Report all skips explicitly, including intentionally unavailable PostgreSQL cases
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$RUNNER_TEMP/gate5-cold-evidence/scoped-tests.json"; then
+            node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const skipped=r.testResults.flatMap(t=>t.assertionResults||[]).filter(t=>["pending","skipped","todo"].includes(t.status)).map(t=>({name:t.fullName,status:t.status}));console.log(JSON.stringify({passed:r.numPassedTests,failed:r.numFailedTests,skipped,postgres:"NOT RUN: no disposable PostgreSQL configured"},null,2));' "$RUNNER_TEMP/gate5-cold-evidence/scoped-tests.json"
+          else
+            echo 'Scoped test report unavailable: earlier step did not complete; no test PASS claimed.'
+          fi
+      - name: Retain synthetic result and independently stored digest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate5-cold-cli-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/gate5-cold-evidence/
+          retention-days: 14
+          if-no-files-found: warn

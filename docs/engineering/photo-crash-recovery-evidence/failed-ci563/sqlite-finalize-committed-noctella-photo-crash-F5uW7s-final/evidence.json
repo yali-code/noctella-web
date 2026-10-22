@@ -1,0 +1,253 @@
+{
+  "driver": "sqlite",
+  "boundary": "finalize-committed",
+  "death": {
+    "checkpoint": {
+      "phase": "commit-complete-before-response",
+      "boundary": "finalize-committed",
+      "driver": "sqlite",
+      "syntheticOnly": true,
+      "journalMode": "wal"
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "linux"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [
+      {
+        "id": "044757e0-b196-4f31-820f-61e340b8d573",
+        "filename": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "url": "/images/product-photos/synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "thumbnailUrl": "/images/product-photos/synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "storageKey": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "thumbnailStorageKey": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "processingStatus": "Processing"
+      }
+    ],
+    "aiPhotos": [
+      {
+        "id": "044757e0-b196-4f31-820f-61e340b8d573",
+        "intakeId": "ce96d481-1e2a-43f2-93bf-3e2db2b84104",
+        "storageKey": "b168a16e-78e3-40f0-91c8-16c895ee7788.webp"
+      }
+    ],
+    "outbox": [
+      {
+        "id": "86a83ea5-9e47-438f-903c-f9e1ebddc571",
+        "eventType": "product_photo.promote_requested",
+        "aggregateId": "044757e0-b196-4f31-820f-61e340b8d573",
+        "status": "Pending",
+        "payload": "{\"photoId\":\"044757e0-b196-4f31-820f-61e340b8d573\",\"productId\":\"synthetic-product\"}"
+      }
+    ],
+    "intakes": [
+      {
+        "id": "ce96d481-1e2a-43f2-93bf-3e2db2b84104",
+        "status": "finalized",
+        "resultProductId": "synthetic-product"
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801389,
+        "nlink": 1,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801388,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "intake",
+        "key": "b168a16e-78e3-40f0-91c8-16c895ee7788.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801386,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801384,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [
+      {
+        "id": "044757e0-b196-4f31-820f-61e340b8d573",
+        "filename": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "url": "/images/product-photos/synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "thumbnailUrl": "/images/product-photos/synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "storageKey": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "thumbnailStorageKey": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "processingStatus": "Processing"
+      }
+    ],
+    "aiPhotos": [
+      {
+        "id": "044757e0-b196-4f31-820f-61e340b8d573",
+        "intakeId": "ce96d481-1e2a-43f2-93bf-3e2db2b84104",
+        "storageKey": "b168a16e-78e3-40f0-91c8-16c895ee7788.webp"
+      }
+    ],
+    "outbox": [
+      {
+        "id": "86a83ea5-9e47-438f-903c-f9e1ebddc571",
+        "eventType": "product_photo.promote_requested",
+        "aggregateId": "044757e0-b196-4f31-820f-61e340b8d573",
+        "status": "Pending",
+        "payload": "{\"photoId\":\"044757e0-b196-4f31-820f-61e340b8d573\",\"productId\":\"synthetic-product\"}"
+      }
+    ],
+    "intakes": [
+      {
+        "id": "ce96d481-1e2a-43f2-93bf-3e2db2b84104",
+        "status": "finalized",
+        "resultProductId": "synthetic-product"
+      }
+    ],
+    "files": [
+      {
+        "root": "canonical",
+        "key": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801389,
+        "nlink": 1,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801388,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "intake",
+        "key": "b168a16e-78e3-40f0-91c8-16c895ee7788.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801386,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801384,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573-thumb.webp",
+        "size": 72,
+        "sha256": "8833cfc68a307c20f1e8dd183869131f3fbc66258a9af634d3166bcc38892003",
+        "owners": [
+          "ai-finalization:044757e0-b196-4f31-820f-61e340b8d573",
+          "photo:044757e0-b196-4f31-820f-61e340b8d573"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      },
+      {
+        "root": "canonical",
+        "key": "synthetic-product-044757e0-b196-4f31-820f-61e340b8d573.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [
+          "ai-finalization:044757e0-b196-4f31-820f-61e340b8d573",
+          "photo:044757e0-b196-4f31-820f-61e340b8d573"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      },
+      {
+        "root": "intake",
+        "key": "b168a16e-78e3-40f0-91c8-16c895ee7788.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [
+          "ai:044757e0-b196-4f31-820f-61e340b8d573"
+        ],
+        "state": "protected-reference",
+        "action": "retain"
+      }
+    ]
+  },
+  "retries": [
+    {
+      "ok": true,
+      "created": false
+    },
+    {
+      "ok": true,
+      "created": false
+    }
+  ],
+  "sourceSha": "2fc5edc259f98a74b6b4b0ec69b711045d6a0be2",
+  "runtimeSha256": "6bdcbadfdc2207344e51eb4324bee8ad29557a55aac796d9aea93b737d3a1ddc",
+  "retainedRoot": "/tmp/noctella-photo-crash-F5uW7s"
+}

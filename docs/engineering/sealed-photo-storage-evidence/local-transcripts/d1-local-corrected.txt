@@ -1,0 +1,34 @@
+✔ sqlite product-private-seal-and-stale-compensation (658.3644ms)
+✔ sqlite deterministic-stale-writer-and-immutable-source (601.5419ms)
+✔ sqlite sealed-inode-detaches-native-writer-and-idempotency (531.6839ms)
+✔ sqlite no-overwrite-foreign-output-and-zero-byte (456.1224ms)
+✔ sqlite lease-aba-and-database-outage (596.7638ms)
+✔ sqlite marker-aba-never-removes-replacement (423.2591ms)
+✔ sqlite SIGKILL intent (1007.2204ms)
+✔ sqlite SIGKILL raw (1067.5018ms)
+✔ sqlite SIGKILL seal (954.0374ms)
+✔ sqlite SIGKILL registered (1022.9384ms)
+✔ sqlite SIGKILL first-link (1061.037ms)
+✔ sqlite SIGKILL published (1100.8712ms)
+﹣ postgres product-private-seal-and-stale-compensation (0.4303ms) # SKIP
+﹣ postgres deterministic-stale-writer-and-immutable-source (0.1949ms) # SKIP
+﹣ postgres sealed-inode-detaches-native-writer-and-idempotency (0.1096ms) # SKIP
+﹣ postgres no-overwrite-foreign-output-and-zero-byte (0.1512ms) # SKIP
+﹣ postgres lease-aba-and-database-outage (0.1111ms) # SKIP
+﹣ postgres marker-aba-never-removes-replacement (0.0974ms) # SKIP
+﹣ postgres SIGKILL intent (0.0942ms) # SKIP
+﹣ postgres SIGKILL raw (0.1009ms) # SKIP
+﹣ postgres SIGKILL seal (0.0894ms) # SKIP
+﹣ postgres SIGKILL registered (0.0959ms) # SKIP
+﹣ postgres SIGKILL first-link (0.0902ms) # SKIP
+﹣ postgres SIGKILL published (0.0843ms) # SKIP
+✔ actual SQLite rejected callback cannot escape into protected publication (1312.3408ms)
+✔ feature OFF refuses disposable capability before filesystem mutation (331.4244ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 12
+ℹ todo 0
+ℹ duration_ms 11850.6406

@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "7c6ab55237e996fef041c60bb06f45b7d0fc2061",
+  "harnessSha": "fa3adb600ebd2add451b9fd3f230be6140cda514",
+  "runUrl": "https://github.com/yali-code/noctella-web/actions/runs/38430085616",
+  "startedAt": "2026-10-13T16:26:17.444Z",
+  "scope": "gated real product HTTP route; synthetic SQLite and in-process streaming client; not final API acceptance",
+  "cases": [
+    {
+      "scenario": {
+        "name": "linux-webp-c4",
+        "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+        "fixtures": [
+          "webp-near-limit"
+        ],
+        "ops": 4,
+        "concurrency": 4,
+        "path": "upload"
+      },
+      "exitCode": 0,
+      "timedOut": false,
+      "diskStopped": false,
+      "cleanup": true,
+      "samples": 110,
+      "observedProcessRss": 337002496,
+      "observedProcessHwm": 337383424,
+      "observedGroupRss": 355516416,
+      "diskPeak": {
+        "logical": 35860051,
+        "allocated": 35876864,
+        "files": 11
+      },
+      "isolation": {
+        "network": "none",
+        "memory": 536870912,
+        "memorySwap": 536870912,
+        "readOnlyRoot": true,
+        "cpuNano": 1000000000,
+        "pidsLimit": 128,
+        "mounts": [
+          {
+            "destination": "/fixtures",
+            "rw": false
+          },
+          {
+            "destination": "/work",
+            "rw": true
+          },
+          {
+            "destination": "/evidence",
+            "rw": true
+          }
+        ]
+      },
+      "preflight": {
+        "node": "v20.20.0",
+        "sharp": {
+          "aom": "3.13.1",
+          "archive": "3.8.2",
+          "cairo": "1.18.4",
+          "cgif": "0.5.0",
+          "exif": "0.6.25",
+          "expat": "2.7.3",
+          "ffi": "3.5.2",
+          "fontconfig": "2.17.1",
+          "freetype": "2.14.1",
+          "fribidi": "1.0.16",
+          "glib": "2.86.1",
+          "harfbuzz": "12.1.0",
+          "heif": "1.20.2",
+          "highway": "1.3.0",
+          "imagequant": "2.4.1",
+          "lcms": "2.17",
+          "mozjpeg": "0826579",
+          "pango": "1.57.0",
+          "pixman": "0.46.4",
+          "png": "1.6.50",
+          "proxy-libintl": "0.5",
+          "rsvg": "2.61.2",
+          "spng": "0.7.4",
+          "tiff": "4.7.1",
+          "vips": "8.17.3",
+          "webp": "1.6.0",
+          "xml2": "2.15.1",
+          "zlib-ng": "2.2.5",
+          "sharp": "0.34.5"
+        },
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "6.17.0-1022-azure",
+        "cpus": 4,
+        "sharpConcurrency": 1,
+        "cache": {
+          "memory": {
+            "current": 0,
+            "high": 0,
+            "max": 50
+          },
+          "files": {
+            "current": 0,
+            "max": 20
+          },
+          "items": {
+            "current": 0,
+            "max": 100
+          }
+        },
+        "networkNames": [
+          "lo"
+        ],
+        "limits": {
+          "max": 536870912,
+          "swapMax": 0,
+          "current": 59920384,
+          "peak": 59920384,
+          "events": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0
+          }
+        }
+      },
+      "before": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 1277952,
+        "peak": 59920384,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "startedMs": 1791908777903,
+      "lastSample": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 291213312,
+        "peak": 304963584,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "after": {
+        "max": 536870912,
+        "swapMax": 0,
+        "current": 8310784,
+        "peak": 304963584,
+        "events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "dockerState": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 4433,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-10-13T16:26:17.505181751Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+      },
+      "oomKilled": false,
+      "result": {
+        "scenario": {
+          "name": "linux-webp-c4",
+          "description": "Candidate product HTTP pipeline; four near-limit webp operations",
+          "fixtures": [
+            "webp-near-limit"
+          ],
+          "ops": 4,
+          "concurrency": 4,
+          "path": "upload"
+        },
+        "operations": [
+          {
+            "index": 3,
+            "fixture": "webp-near-limit",
+            "status": 503,
+            "code": "PHOTO_CAPACITY_BUSY",
+            "ok": false,
+            "asExpected": true,
+            "durationMs": 289
+          },
+          {
+            "index": 0,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 1656
+          },
+          {
+            "index": 1,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 2980
+          },
+          {
+            "index": 2,
+            "fixture": "webp-near-limit",
+            "status": 201,
+            "ok": true,
+            "asExpected": true,
+            "durationMs": 4250
+          }
+        ],
+        "baseline": {
+          "memory": {
+            "rss": 159580160,
+            "heapTotal": 49475584,
+            "heapUsed": 43972128,
+            "external": 4898890,
+            "arrayBuffers": 93350
+          },
+          "cgroupCurrent": 124702720
+        },
+        "peak": {
+          "rss": 337383424,
+          "heapTotal": 51048448,
+          "heapUsed": 45538352,
+          "external": 30933682,
+          "arrayBuffers": 26129646
+        },
+        "peakMaxRss": 337383424,
+        "totalDurationMs": 4254,
+        "leftovers": {
+          "photoDirFiles": 6,
+          "expectedPhotoDirFiles": 6,
+          "tmpDirFiles": []
+        },
+        "scope": "real authenticated product route and isolated SQLite; in-process streaming client; not soak or shared Sharp acceptance"
+      },
+      "finalDisk": {
+        "logical": 4050415,
+        "allocated": 4071424,
+        "files": 8
+      },
+      "assessment": {
+        "status": "PASS",
+        "reason": "HTTP smoke target satisfied; not final full-API acceptance",
+        "delta": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      }
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "webp-near-limit",
+      "mimetype": "image/webp",
+      "sizeBytes": 9831282,
+      "width": 6000,
+      "height": 4000,
+      "megapixels": 24,
+      "format": "webp",
+      "quality": 80,
+      "sha256": "dab8de194ad8b80b516ef52b4d6cbc059e752e1feb29777f3ad7111d91961a8d",
+      "tags": [
+        "near-limit",
+        "landscape"
+      ],
+      "expectValid": true
+    }
+  ],
+  "host": {
+    "platform": "linux",
+    "kernel": "6.17.0-1022-azure",
+    "cpuModel": "AMD EPYC 9V45 96-Core Processor",
+    "logicalCpus": 4,
+    "totalMemory": 16766414848,
+    "dockerVersion": "28.0.4",
+    "image": "sha256:6e2ed694812ca4d76b013e7baffb4a591b72fb40e30f48fd5ff1c8935ae172f6"
+  },
+  "finishedAt": "2026-10-13T16:26:23.469Z",
+  "expectedCases": 1,
+  "status": "PASS"
+}

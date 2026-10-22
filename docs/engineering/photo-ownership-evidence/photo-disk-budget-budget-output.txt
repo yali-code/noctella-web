@@ -1,0 +1,21 @@
+✔ profiles: the 42 MiB B1 constant and 74 MiB D1 bound both under-count real allocation (2.7818ms)
+✔ 42-versus-74: a budget sized for one B1 attempt admits B1 and rejects D1 whole, writing nothing (53.1888ms)
+✔ retained inventory: hardlinks count once, zero-byte placeholders count an inode, retained bytes shrink admission (15.6667ms)
+✔ free-space and inode floors reject before any record is written; accounting failure fails closed (47.6565ms)
+﹣ unsafe inventory and malformed records fail closed (0.7663ms) # symlink creation needs privilege on Windows
+✔ malformed or tampered reservation records are retained and fail closed (23.5731ms)
+✔ close() is persistent across instances and has no reopen path (35.9311ms)
+✔ constructor refuses non-development environments and non-disposable roots (2.1566ms)
+✔ cross-process race: concurrent writers never over-commit the shared logical budget (8221.6237ms)
+✔ cross-process race: real statfs free space is never over-committed (8197.0379ms)
+✔ SIGKILL while holding a reservation retains its record and keeps counting it (538.5131ms)
+✔ SIGKILL inside the exclusive ledger section leaves every process BUSY until review (619.5451ms)
+﹣ real filesystem: statfs-based admission and an actual ENOSPC fail closed without deleting bytes (0.9855ms) # set NOCTELLA_DISK_BUDGET_ENOSPC=1 with TMPDIR on a small dedicated filesystem
+ℹ tests 13
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 18191.5925

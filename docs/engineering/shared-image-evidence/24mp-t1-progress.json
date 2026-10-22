@@ -1,0 +1,38 @@
+{
+  "operations": [
+    {
+      "index": 0,
+      "kind": "product.setup",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 802
+    },
+    {
+      "index": 1,
+      "kind": "ai.upload.setup",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 4659
+    },
+    {
+      "index": 2,
+      "kind": "instagram.prepare",
+      "status": 200,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 408
+    },
+    {
+      "index": 3,
+      "kind": "product.upload.wave1",
+      "status": 201,
+      "ok": true,
+      "asExpected": true,
+      "durationMs": 1225
+    }
+  ],
+  "nativePeak": 1,
+  "nativeCalls": 12
+}

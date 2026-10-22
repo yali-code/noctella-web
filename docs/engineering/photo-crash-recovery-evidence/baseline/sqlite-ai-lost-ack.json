@@ -1,0 +1,107 @@
+{
+  "driver": "sqlite",
+  "boundary": "ai-lost-ack",
+  "death": {
+    "checkpoint": {
+      "phase": "lost-commit-ack-after-service-compensation",
+      "boundary": "ai-lost-ack",
+      "driver": "sqlite",
+      "syntheticOnly": true
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "win32"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "photos": [],
+    "aiPhotos": [
+      {
+        "id": "ece3c228-c381-46bd-bc94-197be6a3a3c4",
+        "intakeId": "74c04b1b-0779-464e-91f3-f7a7cd92417d",
+        "storageKey": "fccd65be-89ad-447d-8cd5-a2b5a5086ec2.webp"
+      }
+    ],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "74c04b1b-0779-464e-91f3-f7a7cd92417d",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "photos": [],
+    "aiPhotos": [
+      {
+        "id": "ece3c228-c381-46bd-bc94-197be6a3a3c4",
+        "intakeId": "74c04b1b-0779-464e-91f3-f7a7cd92417d",
+        "storageKey": "fccd65be-89ad-447d-8cd5-a2b5a5086ec2.webp"
+      }
+    ],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "74c04b1b-0779-464e-91f3-f7a7cd92417d",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "kind": "file",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-synthetic/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "intake",
+        "key": "fccd65be-89ad-447d-8cd5-a2b5a5086ec2.webp",
+        "owners": [
+          "ai:ece3c228-c381-46bd-bc94-197be6a3a3c4"
+        ],
+        "state": "missing-reference",
+        "action": "retain"
+      }
+    ]
+  },
+  "sourceSha": "local",
+  "retainedRoot": "C:\\Users\\Admin\\AppData\\Local\\Temp\\noctella-photo-crash-FTFjd5"
+}

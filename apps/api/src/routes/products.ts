@@ -1,8 +1,10 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import { createProductPhotoUploadHandler } from "./productPhotoUpload";
+import { photoOwnershipFencingEnabled } from "../services/photoOwnershipFencing";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
-import { archiveProduct, createProduct, deleteProductPhoto, getProductArchiveSafety, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto } from "../services/products";
+import { archiveProduct, createProduct, deleteProductPhoto, getProductArchiveSafety, getProductById, listPendingPublishQueue, listProducts, reorderProductPhotos, setPrimaryProductPhoto, updateProduct, updateProductPhoto, uploadProductPhoto, uploadStagedProductPhoto } from "../services/products";
 import { createProductSchema, productListQuerySchema, updateProductRequestSchema } from "../validation/product";
 import { generateDraft } from "../services/aiDrafts";
 import { generateDraftSchema } from "../validation/aiDraft";
@@ -18,6 +20,7 @@ import { acceptCanonicalProductProposal, generateCanonicalProductProposal, getCu
 import { acceptCanonicalProductProposalSchema, generateCanonicalProductProposalSchema } from "../validation/canonicalProductProposal";
 import { z } from "zod";
 import { getProductLifecycleState, pauseProduct, relistProduct, retryLifecycleOperation } from "../services/productLifecycle";
+import { uploadFencedProductPhoto } from "../services/w2FencedProductPhotoOwner";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -261,7 +264,7 @@ router.put("/:id", requirePermission("products.edit"), async (req, res) => {
 });
 
 
-router.post("/:id/photos", requirePermission("products.edit"), upload.single("photo"), async (req, res) => {
+const legacyPhotoUpload: RequestHandler = async (req, res) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: "Photo file is required" });
@@ -272,7 +275,19 @@ router.post("/:id/photos", requirePermission("products.edit"), upload.single("ph
   } catch (err) {
     handleRouteError(err, res);
   }
+};
+const boundedPhotoUpload = createProductPhotoUploadHandler({
+  assertProduct: id => getProductById(db, id),
+  upload: (id, file, altText) => uploadStagedProductPhoto(db, id, file, altText),
+  // FAZ A / #424: the generation-fenced W2 owner; the handler uses it only when PHOTO_OWNERSHIP_FENCING_ENABLED=true.
+  fencedUpload: command => uploadFencedProductPhoto(db, command),
 });
+// Candidate remains off until independent full-API resource/compatibility acceptance.
+// #472: with fencing ON every admin upload goes through the bounded handler (W2 protected owner), whatever the staging
+// flag says; the legacy W1 path is reached only with fencing OFF (unchanged compatibility).
+router.post("/:id/photos", requirePermission("products.edit"),
+  (req, res, next) => (photoOwnershipFencingEnabled() || process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? boundedPhotoUpload(req, res, next) : next()),
+  upload.single("photo"), legacyPhotoUpload);
 
 router.put("/:id/photos/:photoId", requirePermission("products.edit"), async (req, res) => {
   try {

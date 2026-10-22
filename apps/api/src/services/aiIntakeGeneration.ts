@@ -7,7 +7,7 @@ import { createIntakeScopedPhotoStorageKeyResolver } from "./aiIntakePhotoStorag
 import { toProposalReview } from "./aiIntakeProposals";
 import { listCategories } from "./categories";
 import { categoryListQuerySchema } from "../validation/category";
-import { LocalAiIntakePhotoReader } from "../ai-intake/photoReader";
+import { LocalAiIntakePhotoPreviewReader } from "../ai-intake/photoReader";
 import { createAiIntakeGenerationProvider } from "../ai-intake/providerFactory";
 import type { AiIntakeAllowedCategory, AiIntakeGenerationProvider } from "../ai-intake/types";
 import { createAiIntakeProposalRepository } from "../repositories/ai-intake-proposal/factory";
@@ -55,7 +55,8 @@ export async function generateIntakeProposal(
   }
 
   const photos = await listIntakePhotos(db, intakeId);
-  const photoReader = new LocalAiIntakePhotoReader(createIntakeScopedPhotoStorageKeyResolver(db, intakeId));
+  // #390: providers only ever receive exposure-safe bytes (raw original-source uploads are never forwarded).
+  const photoReader = new LocalAiIntakePhotoPreviewReader(createIntakeScopedPhotoStorageKeyResolver(db, intakeId));
   const driver = (process.env.DATABASE_DRIVER as string) || "sqlite";
   const repository = createAiIntakeProposalRepository(driver, db);
 

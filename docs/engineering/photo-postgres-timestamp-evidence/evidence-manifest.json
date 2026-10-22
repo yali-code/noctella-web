@@ -1,0 +1,75 @@
+{
+  "issue": 401,
+  "parent": "f89d3a1d430948c0ed165da7fcd624251bbdb46d",
+  "testedImplementation": "23b85b79eec53dc8cac8642c01daebc60e884039",
+  "sourceRun": 38554494946,
+  "implementationGitBlobs": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "sha256": "387759bf49ebb85f0d579e17c7b5cd188e8ad9c13c6d0252689c267d812838c0"
+    },
+    {
+      "file": "apps/api/package.json",
+      "sha256": "560287f5dd437752b91e177a7ebbc982ae5ef3becf15e213d1f64929a1594d2e"
+    },
+    {
+      "file": "apps/api/src/repositories/ai-intake-photo/drizzle.ts",
+      "sha256": "61c594d89debd99e69a7353c4ca14db9ccba3d22a620093fe71f07cdac600b32"
+    },
+    {
+      "file": "apps/api/src/repositories/ai-product-intake/drizzle.ts",
+      "sha256": "ac19c4b86b603325c4f7c27a282099c606c01d496cdd22e643f00e83c42b45f9"
+    },
+    {
+      "file": "apps/api/src/repositories/photoTimestamps.ts",
+      "sha256": "1e8a10b65c44dfdd46c90ddd2ac53f0191f2ccfff9695514764cb63048b3502e"
+    },
+    {
+      "file": "apps/api/src/repositories/product-write/drizzle.ts",
+      "sha256": "44fb920b5c1b1e1cedf7e5ecc27714338cab22f9f3f0c853b2e999a452be44cf"
+    },
+    {
+      "file": "apps/api/tests/photoTimestampCompatibility.test.ts",
+      "sha256": "b51c676ebfeda5c9ea008a7fd81f623c186fabb89d18d5e98dd3110187f4fcf0"
+    },
+    {
+      "file": "scripts/photo-crash-recovery/crash-worker.cjs",
+      "sha256": "b54b330dfaec812eadfa9d009eb65b665c6c84ad22ab342749bd0cb2f602c45e"
+    },
+    {
+      "file": "scripts/photo-crash-recovery/recovery.test.cjs",
+      "sha256": "de1218a6a233021d6e6399ea8ef1fa71bac05cbc1e145a04703b39b26d631931"
+    },
+    {
+      "file": "scripts/photo-crash-recovery/snapshot-worker.cjs",
+      "sha256": "a16c96553e64159e7b2fe4d7ecea165fb95c3aca5fe8e9efceadda95a3a20348"
+    }
+  ],
+  "archives": [
+    {
+      "name": "ci568-before.zip",
+      "bytes": 3903771,
+      "sha256": "a1b180a0c809bc998000c7f9f5bef21d5eb356f984812d892941fc2e856a82ac"
+    },
+    {
+      "name": "ci569-intermediate.zip",
+      "bytes": 3967777,
+      "sha256": "555b21ea88cf3f849d0a2f0e976d312babd8c53a99fa8b84ef2481581bfc96ca"
+    },
+    {
+      "name": "ci570-intermediate.zip",
+      "bytes": 3973880,
+      "sha256": "54e94832f225b6dd54f55b926d6fbd9796a6f798421e6d36ac3a8d8765d3b344"
+    },
+    {
+      "name": "ci571-intermediate.zip",
+      "bytes": 3976854,
+      "sha256": "632bd443ba9c6119ff1e8e419322e4d3cb2c3eb5f6f4166d50ca53f9d2d82cd3"
+    },
+    {
+      "name": "ci572-after.zip",
+      "bytes": 4016187,
+      "sha256": "52f96bad6314930c1913367287be269df580ca8e0be716400c935b14d2a00d41"
+    }
+  ]
+}

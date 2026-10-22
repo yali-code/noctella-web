@@ -1,9 +1,13 @@
+import path from "node:path";
+import { AiProductIntakeStatus } from "@noctella/shared";
+import { createProductPhotoUploadHandler } from "./productPhotoUpload";
+import { aiIntakePhotoStagingRoot } from "../services/aiIntakePhotoStorage";
 import { Router } from "express";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
 import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../services/aiProductIntakes";
-import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntakePhoto } from "../services/aiIntakePhotos";
+import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntakePhoto, uploadStagedIntakePhoto } from "../services/aiIntakePhotos";
 import { generateIntakeProposal } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
@@ -95,7 +99,7 @@ router.post("/:id/cancel", requirePermission("ai_product_intakes.manage"), async
 
 // Sprint 91: AI Intake Photo foundation - nested under the owning intake.
 // Actor identity always comes from req.adminUser.id, never the request body.
-router.post("/:id/photos", requirePermission("ai_product_intakes.manage"), upload.single("photo"), async (req: AuthedRequest, res) => {
+const legacyIntakePhotoUpload = async (req: AuthedRequest, res: import("express").Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: "Photo file is required" });
@@ -106,7 +110,26 @@ router.post("/:id/photos", requirePermission("ai_product_intakes.manage"), uploa
   } catch (err) {
     handleRouteError(err, res);
   }
+};
+
+
+const stagedIntakePhotoUpload = createProductPhotoUploadHandler({
+  root: path.join(path.dirname(path.resolve(aiIntakePhotoStagingRoot)), ".ai-intake-upload-ingress"),
+  // Intake staging (W3) writes only the private AI-intake root, never canonical product photos: it stays available
+  // in protected mode (fencing ON), where W4 finalization depends on it (#472 daily-use parity).
+  canonical: false,
+  assertProduct: async id => {
+    const intake = await getIntakeById(db, id);
+    if (intake.status !== AiProductIntakeStatus.Open) throw new BadRequestError("Only an Open intake can receive staged photos");
+  },
+  upload: async (id, file) => {
+    if (!file.actorAdminUserId) throw new BadRequestError("Authenticated actor is required");
+    return uploadStagedIntakePhoto(db, id, file, file.originalname ?? "photo", file.actorAdminUserId);
+  },
 });
+router.post("/:id/photos", requirePermission("ai_product_intakes.manage"),
+  (req, res, next) => (process.env.PRODUCT_PHOTO_DISK_STAGING_ENABLED === "true" ? stagedIntakePhotoUpload(req, res, next) : next()),
+  upload.single("photo"), legacyIntakePhotoUpload);
 
 router.get("/:id/photos", requirePermission("ai_product_intakes.view"), async (req, res) => {
   try {

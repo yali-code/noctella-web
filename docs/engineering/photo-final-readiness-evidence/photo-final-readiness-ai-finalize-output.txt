@@ -1,0 +1,16 @@
+✔ sqlite: additive upgrade over existing rows, then end-to-end fenced AI finalization with recipe parity (998.6287ms)
+✔ sqlite: crash after publication before finalize, reclaim, stale token rejection and recovery classification (627.5896ms)
+✔ sqlite: legacy writer at the same canonical key is preserved; the operation moves to review and recovery requires review (437.5809ms)
+✔ sqlite: retained generations accumulate and conservative admission refuses the next attempt whole (635.8113ms)
+﹣ postgres: additive upgrade over existing rows, then end-to-end fenced AI finalization with recipe parity (1.2403ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: crash after publication before finalize, reclaim, stale token rejection and recovery classification (0.4097ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: legacy writer at the same canonical key is preserved; the operation moves to review and recovery requires review (0.7929ms) # POSTGRES_TEST_DATABASE_URL not configured
+﹣ postgres: retained generations accumulate and conservative admission refuses the next attempt whole (0.699ms) # POSTGRES_TEST_DATABASE_URL not configured
+ℹ tests 8
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 3493.9348

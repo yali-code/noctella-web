@@ -1,0 +1,64 @@
+{
+  "base": "c52e18968f6abb8354002a343c65edf7f446e347",
+  "branch": "test/f2-guarded-restart-tooling",
+  "baselineExact": true,
+  "files": [
+    {
+      "file": "baseline-staging-driver.mjs.txt",
+      "sha256": "7e96677d59c60da5d72be0a583c9a36270396bde6635adc18e5a2ece9cdce1df",
+      "bytes": 12566
+    },
+    {
+      "file": "local-census.txt",
+      "sha256": "95eefa592ebe72a68c4574b9dc8592b21b484bb37fb08e10271ab9eb4dff8056",
+      "bytes": 1408
+    },
+    {
+      "file": "local-compatibility.txt",
+      "sha256": "ba25e57504ed7459bca86d32257925f23f9cc5fa9ae71bce0bc49ce0e0bbd0e9",
+      "bytes": 532
+    },
+    {
+      "file": "local-http-final.txt",
+      "sha256": "294d6bdba98c20a96a39784ef1e0d6b6195e5c474641cc8687bb5543ff2ec122",
+      "bytes": 530
+    },
+    {
+      "file": "local-http.txt",
+      "sha256": "16f7855d7adaf83eb02479de60b3c20c9064c868827e79b0d9c1b26b1986db7e",
+      "bytes": 558
+    },
+    {
+      "file": "local-typecheck.txt",
+      "sha256": "cb5073b5ba89d2e4c25f710a504a982352d60f01d0cc398b08854aa8672f6e56",
+      "bytes": 118
+    },
+    {
+      "file": "local-unit-final.txt",
+      "sha256": "d329d30803ba518e3dc9f00537e12e8517b7777d9b1a2cfd1c45ce28df393345",
+      "bytes": 2512
+    },
+    {
+      "file": "local-unit-initial-failure.txt",
+      "sha256": "d5222da6b43a648532190feb06f9601adfd2496468f4651305fe53858a3acf54",
+      "bytes": 3968
+    },
+    {
+      "file": "local-unit.txt",
+      "sha256": "a9880c0fc15494af18b05de209e04994567855db281fbaf010e3ad6fd84eab99",
+      "bytes": 2410
+    },
+    {
+      "file": "proxy-before-after-final.txt",
+      "sha256": "13daefa5da99f49b91aec4b03ea0bf7af5be1f69c6494851bc7ab22eba71ec2c",
+      "bytes": 756
+    },
+    {
+      "file": "proxy-before-after.txt",
+      "sha256": "13daefa5da99f49b91aec4b03ea0bf7af5be1f69c6494851bc7ab22eba71ec2c",
+      "bytes": 756
+    }
+  ],
+  "targetExecution": "NOT PERFORMED; supplied target evidence is a separate private record",
+  "nativeAcceptance": "Exact-head CI results and native artifacts recorded in Draft PR; Windows skips native execution"
+}

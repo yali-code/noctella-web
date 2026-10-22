@@ -1,0 +1,41 @@
+✔ sqlite intent-idempotency-and-history (701.9238ms)
+✔ sqlite lease-expiry-renewal-and-aba (438.1437ms)
+✔ sqlite preflight-race-and-generation-namespaces (385.8282ms)
+✔ sqlite atomic-domain-rollback-and-lost-ack (528.3604ms)
+✔ sqlite abort-shutdown-and-zero-byte-retention (550.178ms)
+✔ sqlite outbox-only-historical-reference (384.6234ms)
+✔ sqlite independent concurrent claimers (1145.0081ms)
+✔ sqlite SIGKILL restart intent (1303.2168ms)
+✔ sqlite SIGKILL restart reserved (1362.6714ms)
+✔ sqlite SIGKILL restart materialized (1194.0548ms)
+✔ sqlite SIGKILL restart prepared (1087.3709ms)
+✔ sqlite SIGKILL restart uncommitted (1326.1941ms)
+✔ sqlite SIGKILL restart committed (1028.7331ms)
+✔ sqlite database outage fails before file callback (477.6689ms)
+﹣ postgres intent-idempotency-and-history (0.3497ms) # SKIP
+﹣ postgres lease-expiry-renewal-and-aba (0.2744ms) # SKIP
+﹣ postgres preflight-race-and-generation-namespaces (0.1824ms) # SKIP
+﹣ postgres atomic-domain-rollback-and-lost-ack (1.6388ms) # SKIP
+﹣ postgres abort-shutdown-and-zero-byte-retention (0.3846ms) # SKIP
+﹣ postgres outbox-only-historical-reference (0.3161ms) # SKIP
+﹣ postgres independent concurrent claimers (0.3907ms) # SKIP
+﹣ postgres SIGKILL restart intent (1.0023ms) # SKIP
+﹣ postgres SIGKILL restart reserved (0.4789ms) # SKIP
+﹣ postgres SIGKILL restart materialized (0.402ms) # SKIP
+﹣ postgres SIGKILL restart prepared (1.3612ms) # SKIP
+﹣ postgres SIGKILL restart uncommitted (0.9612ms) # SKIP
+﹣ postgres SIGKILL restart committed (0.4637ms) # SKIP
+﹣ postgres database outage fails before file callback (0.3917ms) # SKIP
+✔ sqlite database lock prevents reclaim during sealed publication (1936.8035ms)
+✔ sqlite COUNTEREXAMPLE existing compensation ignores newer journal generation (1099.1327ms)
+﹣ postgres database lock prevents reclaim during sealed publication (0.4835ms) # SKIP
+﹣ postgres COUNTEREXAMPLE existing compensation ignores newer journal generation (0.2708ms) # SKIP
+✔ SQLite COUNTEREXAMPLE rejecting an async transaction callback does not cancel it (1667.0412ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 16
+ℹ todo 0
+ℹ duration_ms 17468.929

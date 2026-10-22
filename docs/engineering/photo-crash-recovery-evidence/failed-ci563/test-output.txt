@@ -1,0 +1,340 @@
+TAP version 13
+# Subtest: planner protects all referenced zero-byte, canonical and private files; never grants mutation
+ok 1 - planner protects all referenced zero-byte, canonical and private files; never grants mutation
+  ---
+  duration_ms: 15.292443
+  ...
+# Subtest: outbox delete/cleanup payloads protect bytes after photo-row disappearance regardless of status
+ok 2 - outbox delete/cleanup payloads protect bytes after photo-row disappearance regardless of status
+  ---
+  duration_ms: 0.594901
+  ...
+# Subtest: unknown ownership, malformed outbox, DB outages, live writers and unsafe paths never authorize cleanup
+ok 3 - unknown ownership, malformed outbox, DB outages, live writers and unsafe paths never authorize cleanup
+  ---
+  duration_ms: 0.401397
+  ...
+# Subtest: sqlite restart ai-reserved-output
+ok 4 - sqlite restart ai-reserved-output
+  ---
+  duration_ms: 1146.266198
+  ...
+# Subtest: sqlite restart ai-encoded-output
+ok 5 - sqlite restart ai-encoded-output
+  ---
+  duration_ms: 961.537517
+  ...
+# Subtest: sqlite restart ai-uncommitted
+ok 6 - sqlite restart ai-uncommitted
+  ---
+  duration_ms: 983.085028
+  ...
+# Subtest: sqlite restart ai-committed
+ok 7 - sqlite restart ai-committed
+  ---
+  duration_ms: 1003.777193
+  ...
+# Subtest: sqlite restart ai-lost-ack
+ok 8 - sqlite restart ai-lost-ack
+  ---
+  duration_ms: 983.182586
+  ...
+# Subtest: sqlite restart ai-rollback-error
+ok 9 - sqlite restart ai-rollback-error
+  ---
+  duration_ms: 949.231512
+  ...
+# Subtest: sqlite restart product-one-link
+ok 10 - sqlite restart product-one-link
+  ---
+  duration_ms: 1113.205481
+  ...
+# Subtest: sqlite restart product-uncommitted
+ok 11 - sqlite restart product-uncommitted
+  ---
+  duration_ms: 1053.658514
+  ...
+# Subtest: sqlite restart product-committed
+ok 12 - sqlite restart product-committed
+  ---
+  duration_ms: 1008.606483
+  ...
+# Subtest: sqlite restart product-lost-ack
+ok 13 - sqlite restart product-lost-ack
+  ---
+  duration_ms: 1014.152118
+  ...
+# Subtest: sqlite restart finalize-uncommitted
+ok 14 - sqlite restart finalize-uncommitted
+  ---
+  duration_ms: 2314.417759
+  ...
+# Subtest: sqlite restart finalize-committed
+ok 15 - sqlite restart finalize-committed
+  ---
+  duration_ms: 2261.273782
+  ...
+# Subtest: sqlite restart finalize-first-output
+ok 16 - sqlite restart finalize-first-output
+  ---
+  duration_ms: 2291.451932
+  ...
+# Subtest: sqlite restart finalize-zero-output
+ok 17 - sqlite restart finalize-zero-output
+  ---
+  duration_ms: 2263.528771
+  ...
+# Subtest: sqlite restart instagram-temp
+ok 18 - sqlite restart instagram-temp
+  ---
+  duration_ms: 1128.301231
+  ...
+# Subtest: postgres restart ai-reserved-output
+not ok 19 - postgres restart ai-reserved-output
+  ---
+  duration_ms: 1080.180614
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart ai-encoded-output
+not ok 20 - postgres restart ai-encoded-output
+  ---
+  duration_ms: 798.968336
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart ai-uncommitted
+not ok 21 - postgres restart ai-uncommitted
+  ---
+  duration_ms: 858.653291
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart ai-committed
+not ok 22 - postgres restart ai-committed
+  ---
+  duration_ms: 875.6159
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart ai-lost-ack
+not ok 23 - postgres restart ai-lost-ack
+  ---
+  duration_ms: 870.73004
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart ai-rollback-error
+not ok 24 - postgres restart ai-rollback-error
+  ---
+  duration_ms: 822.894621
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart product-one-link
+not ok 25 - postgres restart product-one-link
+  ---
+  duration_ms: 811.657214
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart product-uncommitted
+not ok 26 - postgres restart product-uncommitted
+  ---
+  duration_ms: 817.318008
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart product-committed
+not ok 27 - postgres restart product-committed
+  ---
+  duration_ms: 833.088622
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart product-lost-ack
+not ok 28 - postgres restart product-lost-ack
+  ---
+  duration_ms: 851.920134
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart finalize-uncommitted
+not ok 29 - postgres restart finalize-uncommitted
+  ---
+  duration_ms: 838.322299
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart finalize-committed
+not ok 30 - postgres restart finalize-committed
+  ---
+  duration_ms: 787.452637
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart finalize-first-output
+not ok 31 - postgres restart finalize-first-output
+  ---
+  duration_ms: 811.474211
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart finalize-zero-output
+not ok 32 - postgres restart finalize-zero-output
+  ---
+  duration_ms: 799.492624
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+# Subtest: postgres restart instagram-temp
+not ok 33 - postgres restart instagram-temp
+  ---
+  duration_ms: 837.078423
+  location: '/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:27:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    Worker exited before checkpoint 2 {"name":"TypeError","message":"Synthetic PostgreSQL probe failed"}
+    
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    ChildProcess.<anonymous> (/home/runner/work/noctella-web/noctella-web/scripts/photo-crash-recovery/recovery.test.cjs:18:381)
+    Object.onceWrapper (node:events:639:26)
+    ChildProcess.emit (node:events:524:28)
+    ChildProcess._handle.onexit (node:internal/child_process:293:12)
+  ...
+1..33
+# tests 33
+# suites 0
+# pass 18
+# fail 15
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 33406.032537

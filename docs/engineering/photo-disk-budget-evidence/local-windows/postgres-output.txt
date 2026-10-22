@@ -1,0 +1,13 @@
+
+> @noctella/api@2.1.0-rc.2 test:postgres
+> vitest run tests/postgresRuntimeSprint151.test.ts tests/postgresMarketplaceDuplicatePreflight.test.ts tests/postgresBackgroundJobsSprint152.test.ts tests/postgresStockSyncSprint153.test.ts tests/postgresPublicCatalogSprint154.test.ts tests/postgresCartFreshnessSprint157.test.ts tests/photoTimestampCompatibility.test.ts
+
+
+ RUN  v4.1.10 <WORKTREE>/apps/api
+
+
+ Test Files  3 passed | 4 skipped (7)
+      Tests  17 passed | 34 skipped (51)
+   Start at  19:07:22
+   Duration  16.38s (transform 2.02s, setup 0ms, import 12.74s, tests 357ms, environment 2ms)
+

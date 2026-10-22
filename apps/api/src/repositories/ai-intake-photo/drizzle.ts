@@ -1,3 +1,4 @@
+import { photoTimestampValues, photoTimestampRecord } from "../photoTimestamps";
 import { and, asc, eq } from "drizzle-orm";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import * as sqliteSchemaModule from "../../db/schema.sqlite";
@@ -60,10 +61,12 @@ function checkIntakeDeletable(intake: Record<string, any> | null): { allowed: tr
  */
 export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, capability?: AiIntakeLockTransactionCapability): AiIntakePhotoRepository {
   const table = (schema as Record<string, any>).aiIntakePhotos;
+  const timestamps = (values: Record<string, unknown>, target = table) => photoTimestampValues(values, ["createdAt", "updatedAt"], target.createdAt.dataType === "date");
+  const record = (row: any) => photoTimestampRecord(row, ["createdAt", "updatedAt"]);
   const lock = capability ?? createAiIntakeLockTransactionCapabilityForDb(db, schema === sqliteSchemaModule ? "sqlite" : "postgres");
   return {
     async create(input: AiIntakePhotoCreateInput): Promise<AiIntakePhotoRecord> {
-      await db.insert(table).values({
+      await db.insert(table).values(timestamps({
         id: input.id,
         intakeId: input.intakeId,
         storageKey: input.storageKey,
@@ -71,9 +74,9 @@ export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, ca
         createdByAdminUserId: input.createdByAdminUserId,
         createdAt: input.createdAt,
         updatedAt: input.updatedAt,
-      });
+      }));
       const [row] = await db.select().from(table).where(eq(table.id, input.id));
-      return row as AiIntakePhotoRecord;
+      return record(row) as AiIntakePhotoRecord;
     },
 
     async listByIntake(intakeId: string): Promise<AiIntakePhotoRecord[]> {
@@ -82,12 +85,12 @@ export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, ca
         .from(table)
         .where(eq(table.intakeId, intakeId))
         .orderBy(asc(table.createdAt), asc(table.id));
-      return rows as AiIntakePhotoRecord[];
+      return rows.map(record) as AiIntakePhotoRecord[];
     },
 
     async findByIdAndIntake(intakeId: string, id: string): Promise<AiIntakePhotoRecord | null> {
       const [row] = await db.select().from(table).where(and(eq(table.id, id), eq(table.intakeId, intakeId)));
-      return (row as AiIntakePhotoRecord) ?? null;
+      return (record(row) as AiIntakePhotoRecord) ?? null;
     },
 
     async deleteById(id: string): Promise<void> {
@@ -105,7 +108,7 @@ export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, ca
           rows(
             tx
               .insert(txTable)
-              .values({
+              .values(timestamps({
                 id: input.id,
                 intakeId: input.intakeId,
                 storageKey: input.storageKey,
@@ -113,11 +116,11 @@ export function createDrizzleAiIntakePhotoRepository(db: any, schema: Schema, ca
                 createdByAdminUserId: input.createdByAdminUserId,
                 createdAt: input.createdAt,
                 updatedAt: input.updatedAt,
-              })
+              }, txTable))
               .returning(),
             execution,
           ),
-          (inserted: any[]) => ({ updated: true, row: inserted[0] as AiIntakePhotoRecord }),
+          (inserted: any[]) => ({ updated: true, row: record(inserted[0]) as AiIntakePhotoRecord }),
         );
       }) as Promise<AiIntakePhotoWriteResult>;
     },

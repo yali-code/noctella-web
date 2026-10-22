@@ -1,3 +1,12 @@
+import { stagedProductPhotoStorage, type StagedProductPhotoInput, type StagedProductPhotoStorage } from "./stagedProductPhotoStorage";
+import { abortedError, PhotoUploadError } from "./photoUploadAdmission";
+import { photoOwnershipFencingEnabled } from "./photoOwnershipFencing";
+import { commitDrizzlePhotoOperationFenced, type PhotoCommitFenceProof } from "./photoOperationCommitFence";
+
+/** W1/W2 (and with them W10 rollback deletion) are not adopted: with fencing ON they refuse before any write. */
+function refuseUnfencedProductUpload() {
+  if (photoOwnershipFencingEnabled()) throw new PhotoUploadError(503, "PHOTO_FENCING_WRITER_NOT_ADOPTED", "Photo uploads are paused while photo ownership fencing is enabled");
+}
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
@@ -33,6 +42,11 @@ const then = <T, U>(value: T | Promise<T>, next: (value: T) => U | Promise<U>): 
 function productWriteUseCaseContext(db: DbClient) {
   const write = createProductWriteServiceContextForDb(db);
   return { unitOfWork: { run: async <T>(work: (context: never) => T | Promise<T>) => work(undefined as never) }, repositories: write.repositories };
+}
+
+/** SQLite boolean mode yields true/false, Postgres boolean yields true/false; NULL stays undefined. */
+function optionalBoolean(value: unknown): boolean | undefined {
+  return value === null || value === undefined ? undefined : Boolean(value);
 }
 
 function toProduct(row: typeof products.$inferSelect): Product {
@@ -98,6 +112,30 @@ function toProduct(row: typeof products.$inferSelect): Product {
     etsyOccasion: row.etsyOccasion ?? undefined,
     etsyListingPriceEur: row.etsyListingPriceEur ?? undefined,
     etsyListingStatus: (row.etsyListingStatus as Product["etsyListingStatus"]) ?? undefined,
+    // Etsy listing form parity (Phase 1): NULL (legacy / not provided) reads as undefined, never false.
+    etsyTaxonomyId: row.etsyTaxonomyId ?? undefined,
+    etsyShopSectionId: row.etsyShopSectionId ?? undefined,
+    etsyQuantity: row.etsyQuantity ?? undefined,
+    etsySku: row.etsySku ?? undefined,
+    etsyWhoMade: (row.etsyWhoMade as Product["etsyWhoMade"]) ?? undefined,
+    etsyIsSupply: optionalBoolean(row.etsyIsSupply),
+    etsyWhenMade: row.etsyWhenMade ?? undefined,
+    etsyVintageYear: row.etsyVintageYear ?? undefined,
+    etsyShippingProfileId: row.etsyShippingProfileId ?? undefined,
+    etsyProcessingProfileId: row.etsyProcessingProfileId ?? undefined,
+    etsyReturnPolicyId: row.etsyReturnPolicyId ?? undefined,
+    etsyRenewalOption: (row.etsyRenewalOption as Product["etsyRenewalOption"]) ?? undefined,
+    etsyFeatured: optionalBoolean(row.etsyFeatured),
+    etsyAdsOptIn: optionalBoolean(row.etsyAdsOptIn),
+    etsyRestockRequests: optionalBoolean(row.etsyRestockRequests),
+    etsyGpsrManufacturerName: row.etsyGpsrManufacturerName ?? undefined,
+    etsyGpsrManufacturerAddress: row.etsyGpsrManufacturerAddress ?? undefined,
+    etsyGpsrManufacturerContact: row.etsyGpsrManufacturerContact ?? undefined,
+    etsyGpsrResponsiblePersonName: row.etsyGpsrResponsiblePersonName ?? undefined,
+    etsyGpsrResponsiblePersonAddress: row.etsyGpsrResponsiblePersonAddress ?? undefined,
+    etsyGpsrResponsiblePersonContact: row.etsyGpsrResponsiblePersonContact ?? undefined,
+    etsyGpsrSafetyInformation: row.etsyGpsrSafetyInformation ?? undefined,
+    etsyConsumerGuaranteeInfo: row.etsyConsumerGuaranteeInfo ?? undefined,
     wooProductName: row.wooProductName ?? undefined,
     wooShortDescription: row.wooShortDescription ?? undefined,
     wooLongDescription: row.wooLongDescription ?? undefined,
@@ -245,6 +283,11 @@ async function getImagesForProduct(db: DbClient, productId: string): Promise<Pro
 }
 
 
+/** FAZ A W2: the photo a committed fenced operation recorded, for idempotent retries (null if it no longer exists). */
+export async function getCommittedProductPhoto(db: DbClient, productId: string, photoId: string): Promise<ProductPhoto | null> {
+  return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === photoId) ?? null;
+}
+
 async function getPhotosForProduct(db: DbClient, productId: string): Promise<ProductPhoto[]> {
   const rows = await db
     .select()
@@ -302,10 +345,17 @@ export function computeMarketplaceReadiness(product: Product): ProductMarketplac
     ["listingPriceEur", product.ebayListingPriceEur],
   ]);
 
+  // Etsy listing form parity: only the fields the publish gate treats as errors (Etsy API-required)
+  // count here; form-only / unverified ones (what is it, processing profile, return policy) are
+  // publish warnings and never make an otherwise complete Etsy draft "not ready".
   const etsyMissing = missing([
     ["title", product.etsyTitle],
     ["description", product.etsyDescription],
     ["listingPriceEur", product.etsyListingPriceEur],
+    ["taxonomyId", product.etsyTaxonomyId],
+    ["whoMade", product.etsyWhoMade],
+    ["whenMade", product.etsyWhenMade],
+    ["shippingProfileId", product.etsyShippingProfileId],
   ]);
 
   const wooMissing = missing([
@@ -455,10 +505,39 @@ export async function uploadProductPhoto(
   altText?: string,
   storage: PhotoStorage = photoStorage,
 ): Promise<ProductPhoto> {
+  refuseUnfencedProductUpload();
   await getProductById(db, productId);
   const stored = await storage.saveProductPhoto(file);
+  return persistUploadedProductPhoto(db, productId, stored, altText, storage);
+}
+
+export async function uploadStagedProductPhoto(db: DbClient, productId: string, file: StagedProductPhotoInput, altText?: string, storage: StagedProductPhotoStorage = stagedProductPhotoStorage): Promise<ProductPhoto> {
+  refuseUnfencedProductUpload();
+  await getProductById(db, productId);
+  const stored = await storage.saveStagedProductPhoto(file);
+  if (file.signal.aborted) { await storage.deleteProductPhoto(stored); throw abortedError(); }
+  return persistUploadedProductPhoto(db, productId, stored, altText, storage, false);
+}
+
+/**
+ * The fenced writer must already own a sealed generation and have safely
+ * published its verified artifacts. This only performs the final DB effects,
+ * in the EXACT SAME product-row-locked transaction as the existing photo/outbox.
+ * It must never compensate/delete canonical bytes after ambiguous commit.
+ * NOT called by the current W2 route until ownership/publish adoption is proven.
+ */
+export function persistFencedUploadedProductPhoto(
+  db: DbClient, productId: string, stored: StoredProductPhoto,
+  altText: string | undefined, proof: PhotoCommitFenceProof,
+): Promise<ProductPhoto> {
+  return persistUploadedProductPhoto(db, productId, stored, altText, {
+    deleteProductPhoto: async () => { throw new Error("PHOTO_FENCED_DELETE_FORBIDDEN"); },
+  }, false, proof);
+}
+
+async function persistUploadedProductPhoto(db: DbClient, productId: string, stored: StoredProductPhoto, altText: string | undefined, storage: Pick<PhotoStorage, "deleteProductPhoto">, compensateOnTransactionFailure = true, fencedProof?: PhotoCommitFenceProof): Promise<ProductPhoto> {
   const now = new Date().toISOString();
-  const id = randomUUID();
+  const id = fencedProof?.photoId ?? randomUUID();
   const driver = ((process.env.DATABASE_DRIVER as string) || "sqlite") as ProductPhotoMutationLockDriver;
   try {
     const lock = createProductPhotoMutationLockCapabilityForDb(db, driver);
@@ -488,7 +567,7 @@ export async function uploadProductPhoto(
           updatedAt: now,
         };
         const outboxEvent = {
-          id: randomUUID(),
+          id: fencedProof?.eventId ?? randomUUID(),
           eventType: OutboxEventType.ProductPhotoPromoteRequested,
           aggregateType: "ProductPhoto",
           aggregateId: id,
@@ -501,15 +580,34 @@ export async function uploadProductPhoto(
           createdAt: now,
           updatedAt: now,
         };
-        return createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, { values, outboxEvent });
+        return then(
+          createProductPhotoWithPromotionOutboxInTransaction(tx, schema, execution, { values, outboxEvent }),
+          created => then(
+            fencedProof ? commitDrizzlePhotoOperationFenced(tx, execution, fencedProof) : undefined,
+            () => created,
+          ),
+        );
       }),
     );
-    await ensureSinglePrimary(db, productId);
-    return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
   } catch (err) {
-    await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
-    throw err;
+    // A lost commit acknowledgement cannot prove rollback. Retain candidate files and fail closed for recovery.
+    if (!compensateOnTransactionFailure) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo persistence requires recovery");
+    // Legacy path (W1/W10): never delete bytes a committed row may reference. Re-read authoritatively:
+    // committed -> keep files and return the photo; provably absent on SQLite (local, synchronous
+    // commit) -> the existing compensation; anything else (PostgreSQL ack loss, unreadable DB) ->
+    // retain the files and fail closed for operator recovery.
+    let committed: boolean | null = null;
+    try { committed = (await getPhotosForProduct(db, productId)).some((photo) => photo.id === id); } catch { committed = null; }
+    if (committed !== true) {
+      if (committed === false && driver === "sqlite") {
+        await storage.deleteProductPhoto({ url: stored.url, thumbnailUrl: stored.thumbnailUrl });
+        throw err;
+      }
+      throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Photo persistence requires recovery");
+    }
   }
+  await ensureSinglePrimary(db, productId);
+  return (await getPhotosForProduct(db, productId)).find((photo) => photo.id === id)!;
 }
 
 export async function updateProductPhoto(db: DbClient, productId: string, photoId: string, altText?: string): Promise<ProductPhoto> {

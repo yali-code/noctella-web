@@ -4,11 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { ProductForm, productToFormValues, type ProductFormValues } from "@/components/ProductForm";
+import { EtsyMediaPreview } from "@/components/EtsyMediaPreview";
 import type { ProductDetail } from "@/lib/types";
 import { advanceProductEditSession, beginProductEditSession, type ProductEditSession } from "@/lib/productEditSession";
 
 export default function EditProductPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const [previewPhotos, setPreviewPhotos] = useState<ProductDetail["photos"]>([]);
   const [initialValues, setInitialValues] = useState<ProductFormValues | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Sprint 88: EditProductPage owns the version token separately from
@@ -24,6 +26,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     api
       .get<ProductDetail>(`/api/products/${params.id}`)
       .then((product) => {
+        setPreviewPhotos(product.photos);
         setInitialValues(productToFormValues(product));
         setExpectedUpdatedAt(product.updatedAt);
         setEditSession(beginProductEditSession(product));
@@ -32,14 +35,15 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       .catch((err) => setError(err.message ?? "Failed to load product"));
   }, [params.id]);
 
-  if (error) return <p style={{ color: "#c86a6a" }}>{error}</p>;
-  if (!initialValues) return <p style={{ color: "var(--noctella-aged-bronze)" }}>Loading...</p>;
+  if (error) return <><p style={{ color: "#c86a6a" }}>{error}</p><EtsyMediaPreview photos={[]} error /></>;
+  if (!initialValues) return <EtsyMediaPreview photos={[]} loading />;
 
   return (
     <div>
       <h1>Edit Product</h1>
       {editSession && <p>Product Card {editSession.immutableSku}</p>}
       <hr className="noctella-divider" style={{ margin: "16px 0 24px" }} />
+      <EtsyMediaPreview photos={previewPhotos} />
       <ProductForm
         initialValues={initialValues}
         submitLabel="Save Changes"

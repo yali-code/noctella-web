@@ -1,0 +1,135 @@
+{
+  "driver": "postgres",
+  "boundary": "pg-ai-persistence-error",
+  "scope": "actual-postgres-AI-persistence-error-handler",
+  "death": {
+    "checkpoint": {
+      "phase": "actual-ai-rejected-source-retained",
+      "boundary": "pg-ai-persistence-error",
+      "driver": "postgres",
+      "syntheticOnly": true,
+      "scope": "actual-postgres-AI-persistence-error-handler",
+      "code": "PHOTO_STORAGE_UNAVAILABLE",
+      "admission": {
+        "held": 0,
+        "active": 0,
+        "waiting": 0,
+        "closed": true
+      }
+    },
+    "termination": {
+      "code": null,
+      "signal": "SIGKILL"
+    },
+    "platform": "linux"
+  },
+  "first": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [],
+    "aiPhotos": [],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "protocol-intake",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "intake",
+        "key": "c6da7824-d204-4f55-91c9-97f205ec095c.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801187,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801185,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "second": {
+    "dbAvailable": true,
+    "quiesced": true,
+    "rootAliases": {
+      "legacy-temp": "canonical"
+    },
+    "photos": [],
+    "aiPhotos": [],
+    "outbox": [],
+    "intakes": [
+      {
+        "id": "protocol-intake",
+        "status": "open",
+        "resultProductId": null
+      }
+    ],
+    "files": [
+      {
+        "root": "intake",
+        "key": "c6da7824-d204-4f55-91c9-97f205ec095c.webp",
+        "kind": "file",
+        "size": 72,
+        "dev": 2049,
+        "ino": 4801187,
+        "nlink": 1,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c"
+      },
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/input",
+        "kind": "file",
+        "size": 126,
+        "dev": 2049,
+        "ino": 4801185,
+        "nlink": 1,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb"
+      }
+    ]
+  },
+  "report": {
+    "version": 1,
+    "mode": "offline-diagnosis-only",
+    "safeToMutate": false,
+    "automaticRetry": false,
+    "blockers": [
+      "durable-operation-ownership-missing",
+      "reference-coverage-incomplete"
+    ],
+    "entries": [
+      {
+        "root": "ai-ingress",
+        "key": "request-protocol/input",
+        "size": 126,
+        "sha256": "d4bce0322fd98d7ef86f785f103a4f52dfbeb01c6db8088ada8d2dff327024fb",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      },
+      {
+        "root": "intake",
+        "key": "c6da7824-d204-4f55-91c9-97f205ec095c.webp",
+        "size": 72,
+        "sha256": "5afa062d124eb8f23bb216fad498374e2bae5f4b491c47304c24ff3b01eb1b5c",
+        "owners": [],
+        "state": "unproven-ownership",
+        "action": "retain"
+      }
+    ]
+  },
+  "sourceSha": "e6bc0a9d45e23ea172b9ade16ff3df3fa9958a8c"
+}

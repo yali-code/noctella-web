@@ -1,0 +1,34 @@
+[
+  {
+    "label": "ci562",
+    "artifactId": 11882769801,
+    "runId": 38543210243,
+    "sha256": "9408b084be27da9ddf5d76558daa84c1f80d0afba36970fe8d655afd3b7b1b49",
+    "bytes": 1823223,
+    "contents": "Complete synthetic evidence including SQLite files/WAL, generated media, checkpoints, snapshots and test logs; PostgreSQL state is serialized, not a server backup"
+  },
+  {
+    "label": "ci563",
+    "artifactId": 11883596494,
+    "runId": 38543448141,
+    "sha256": "bae65a88eebbfa208a872618508ee3b4b38233fa1ebb55a76ca3e4e06ffd956a",
+    "bytes": 3871750,
+    "contents": "Complete synthetic evidence including SQLite files/WAL, generated media, checkpoints, snapshots and test logs; PostgreSQL state is serialized, not a server backup"
+  },
+  {
+    "label": "ci564",
+    "artifactId": 11884340736,
+    "runId": 38544390009,
+    "sha256": "99e61cf3470e31f51b7d4f2d4b24bd9927dbbb3936ccb374192ca9879ec1db2e",
+    "bytes": 3899962,
+    "contents": "Complete synthetic evidence including SQLite files/WAL, generated media, checkpoints, snapshots and test logs; PostgreSQL state is serialized, not a server backup"
+  },
+  {
+    "label": "ci566",
+    "artifactId": 11883538427,
+    "runId": 38544583309,
+    "sha256": "53a5b374bca7a9df783ecb6023080add25d8e587700bcf926e4f340c807177d2",
+    "bytes": 3903764,
+    "contents": "Complete synthetic evidence including SQLite files/WAL, generated media, checkpoints, snapshots and test logs; PostgreSQL state is serialized, not a server backup"
+  }
+]

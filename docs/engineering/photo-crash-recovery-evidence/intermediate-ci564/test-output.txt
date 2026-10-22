@@ -1,0 +1,190 @@
+TAP version 13
+# Subtest: planner protects all referenced zero-byte, canonical and private files; never grants mutation
+ok 1 - planner protects all referenced zero-byte, canonical and private files; never grants mutation
+  ---
+  duration_ms: 16.734822
+  ...
+# Subtest: outbox delete/cleanup payloads protect bytes after photo-row disappearance regardless of status
+ok 2 - outbox delete/cleanup payloads protect bytes after photo-row disappearance regardless of status
+  ---
+  duration_ms: 0.538503
+  ...
+# Subtest: unknown ownership, malformed outbox, DB outages, live writers and unsafe paths never authorize cleanup
+ok 3 - unknown ownership, malformed outbox, DB outages, live writers and unsafe paths never authorize cleanup
+  ---
+  duration_ms: 0.39703
+  ...
+# Subtest: sqlite restart ai-reserved-output
+ok 4 - sqlite restart ai-reserved-output
+  ---
+  duration_ms: 1173.353044
+  ...
+# Subtest: sqlite restart ai-encoded-output
+ok 5 - sqlite restart ai-encoded-output
+  ---
+  duration_ms: 1052.561445
+  ...
+# Subtest: sqlite restart ai-uncommitted
+ok 6 - sqlite restart ai-uncommitted
+  ---
+  duration_ms: 1002.240728
+  ...
+# Subtest: sqlite restart ai-committed
+ok 7 - sqlite restart ai-committed
+  ---
+  duration_ms: 996.559581
+  ...
+# Subtest: sqlite restart ai-lost-ack
+ok 8 - sqlite restart ai-lost-ack
+  ---
+  duration_ms: 970.023925
+  ...
+# Subtest: sqlite restart ai-rollback-error
+ok 9 - sqlite restart ai-rollback-error
+  ---
+  duration_ms: 1001.773001
+  ...
+# Subtest: sqlite restart product-one-link
+ok 10 - sqlite restart product-one-link
+  ---
+  duration_ms: 1135.748513
+  ...
+# Subtest: sqlite restart product-uncommitted
+ok 11 - sqlite restart product-uncommitted
+  ---
+  duration_ms: 1089.088878
+  ...
+# Subtest: sqlite restart product-committed
+ok 12 - sqlite restart product-committed
+  ---
+  duration_ms: 1094.974026
+  ...
+# Subtest: sqlite restart product-lost-ack
+ok 13 - sqlite restart product-lost-ack
+  ---
+  duration_ms: 1041.986659
+  ...
+# Subtest: sqlite restart finalize-uncommitted
+ok 14 - sqlite restart finalize-uncommitted
+  ---
+  duration_ms: 2453.542972
+  ...
+# Subtest: sqlite restart finalize-committed
+ok 15 - sqlite restart finalize-committed
+  ---
+  duration_ms: 2379.925761
+  ...
+# Subtest: sqlite restart finalize-first-output
+ok 16 - sqlite restart finalize-first-output
+  ---
+  duration_ms: 2330.276817
+  ...
+# Subtest: sqlite restart finalize-zero-output
+ok 17 - sqlite restart finalize-zero-output
+  ---
+  duration_ms: 2357.69015
+  ...
+# Subtest: sqlite restart instagram-temp
+ok 18 - sqlite restart instagram-temp
+  ---
+  duration_ms: 1125.695594
+  ...
+# Subtest: postgres restart ai-reserved-output
+ok 19 - postgres restart ai-reserved-output # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 1115.282353
+  ...
+# Subtest: postgres restart ai-encoded-output
+ok 20 - postgres restart ai-encoded-output # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 817.099915
+  ...
+# Subtest: postgres restart ai-uncommitted
+ok 21 - postgres restart ai-uncommitted # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 845.885586
+  ...
+# Subtest: postgres restart ai-committed
+ok 22 - postgres restart ai-committed # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 887.672336
+  ...
+# Subtest: postgres restart ai-lost-ack
+ok 23 - postgres restart ai-lost-ack # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 818.882665
+  ...
+# Subtest: postgres restart ai-rollback-error
+ok 24 - postgres restart ai-rollback-error # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 830.642136
+  ...
+# Subtest: postgres restart product-one-link
+ok 25 - postgres restart product-one-link # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 852.145586
+  ...
+# Subtest: postgres restart product-uncommitted
+ok 26 - postgres restart product-uncommitted # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 837.31899
+  ...
+# Subtest: postgres restart product-committed
+ok 27 - postgres restart product-committed # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 858.184837
+  ...
+# Subtest: postgres restart product-lost-ack
+ok 28 - postgres restart product-lost-ack # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 853.60328
+  ...
+# Subtest: postgres restart finalize-uncommitted
+ok 29 - postgres restart finalize-uncommitted # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 847.264907
+  ...
+# Subtest: postgres restart finalize-committed
+ok 30 - postgres restart finalize-committed # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 807.466317
+  ...
+# Subtest: postgres restart finalize-first-output
+ok 31 - postgres restart finalize-first-output # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 882.749861
+  ...
+# Subtest: postgres restart finalize-zero-output
+ok 32 - postgres restart finalize-zero-output # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 862.02127
+  ...
+# Subtest: postgres restart instagram-temp
+ok 33 - postgres restart instagram-temp # SKIP BLOCKED baseline PostgreSQL timestamp mapping; not recovery acceptance
+  ---
+  duration_ms: 872.096382
+  ...
+# Subtest: postgres protocol fixture pg-protocol-uncommitted
+ok 34 - postgres protocol fixture pg-protocol-uncommitted
+  ---
+  duration_ms: 1582.093157
+  ...
+# Subtest: postgres protocol fixture pg-protocol-committed
+ok 35 - postgres protocol fixture pg-protocol-committed
+  ---
+  duration_ms: 1566.418101
+  ...
+# Subtest: postgres protocol fixture pg-protocol-outbox-only
+ok 36 - postgres protocol fixture pg-protocol-outbox-only
+  ---
+  duration_ms: 1561.851964
+  ...
+1..36
+# tests 36
+# suites 0
+# pass 21
+# fail 0
+# cancelled 0
+# skipped 15
+# todo 0
+# duration_ms 39155.22078

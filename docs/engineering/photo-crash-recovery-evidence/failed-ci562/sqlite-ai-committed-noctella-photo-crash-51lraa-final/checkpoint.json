@@ -1,0 +1,6 @@
+{
+  "phase": "commit-complete-before-response",
+  "boundary": "ai-committed",
+  "driver": "sqlite",
+  "syntheticOnly": true
+}

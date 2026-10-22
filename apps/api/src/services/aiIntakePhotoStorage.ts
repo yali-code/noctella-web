@@ -1,9 +1,16 @@
+import { imageAdmissionEnabled, PhotoUploadError, runImageOperation } from "./photoUploadAdmission";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { chmod, copyFile, link, mkdir, open, rm, lstat, realpath, unlink } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { BadRequestError, NotFoundError } from "./errors";
+import { abortedError } from "./photoUploadAdmission";
+import type { StagedProductPhotoInput } from "./stagedProductPhotoStorage";
 import { deleteManagedFile, statManagedFile } from "./managedFileDeletion";
+import { readStagedPhotoForExposure } from "./aiIntakeStagedExposure";
+import { originalSourceKeyParts } from "./aiIntakeStagedKey";
+import { aiIntakeOriginalSourceStagingEnabled } from "./aiIntakeOriginalSourceStaging";
 
 /**
  * Sprint 91: a dedicated, minimal storage implementation for AiIntakePhoto -
@@ -81,18 +88,119 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
   constructor(private readonly root: string = stagingRoot) {}
 
   async saveIntakePhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<StoredAiIntakePhoto> {
+    return runImageOperation(() => this.#saveIntakePhotoUnadmitted(file));
+  }
+  /** Internal disk-ingress capability. The established Buffer interface remains unchanged. */
+  async saveStagedIntakePhoto(file: StagedProductPhotoInput): Promise<StoredAiIntakePhoto> {
+    return runImageOperation(async () => {
+      if (!imageAdmissionEnabled()) throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Disk intake processing is disabled");
+      if (file.signal.aborted) throw abortedError();
+      // File-cache handles can outlive native work and prevent private ingress cleanup.
+      sharp.cache({ files: 0 });
+      validateUpload(file);
+      const info = await lstat(file.path);
+      if (path.dirname(file.path) !== file.workDir || path.basename(file.path) !== "input" || info.isSymbolicLink() || !info.isFile() || await realpath(file.path) !== path.resolve(file.path) || info.size !== file.size) {
+        throw new BadRequestError("Invalid staged intake photo");
+      }
+      return this.#saveIntakePhotoUnadmitted(file);
+    });
+  }
+  async #saveIntakePhotoUnadmitted(file: { buffer: Buffer; mimetype: string; size: number } | StagedProductPhotoInput): Promise<StoredAiIntakePhoto> {
     validateUpload(file);
     await mkdir(this.root, { recursive: true });
+
+    // #390: original-source staging (default OFF, not activatable in production); null keeps the WebP-first path.
+    if (aiIntakeOriginalSourceStagingEnabled()) {
+      const original = await this.#saveOriginalSourceUnadmitted(file);
+      if (original) return original;
+    }
 
     const storageKey = `${randomUUID()}.webp`;
     const filePath = path.join(this.root, storageKey);
 
-    const image = sharp(file.buffer, { failOn: "error" }).rotate();
-    const metadata = await image.metadata();
+    let owned = false;
+    try {
+      const image = sharp("buffer" in file ? file.buffer : file.path, { failOn: "error" }).rotate();
+      const metadata = await image.metadata();
+      if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
+      if (imageAdmissionEnabled()) {
+        const reserved = await open(filePath, "wx", 0o600);
+        owned = true;
+        await reserved.close();
+      }
+      await image.webp({ quality: 86 }).toFile(filePath);
+      if ("signal" in file && file.signal.aborted) throw abortedError();
+      return { storageKey };
+    } catch (error) {
+      if (owned) {
+        try { await rm(filePath, { force: true }); }
+        catch { throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Private photo cleanup failed"); }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * #390 Stage 2: stores the validated upload unchanged as `${uuid}.orig.(jpg|png|webp)` instead of a full-resolution
+   * WebP re-encode (whose libwebp token buffer exceeds the 384 MiB budget at 24 MP). The content must decode as the
+   * declared allow-listed format (stricter than the WebP-first path, which accepts any decodable format) and must
+   * fully decode under failOn "error" and the default pixel limit, without an output encode. Animated WebP returns
+   * null so the caller keeps the WebP-first path (first frame, metadata-free) unchanged.
+   *
+   * Write protocol: 0600 exclusive `.${uuid}.partial` -> fsync -> link() (never replaces an existing key) -> unlink
+   * the partial -> directory fsync. A failure before publication removes the partial; a crash can leave only a
+   * partial, which the orphan sweep recognises. Stored originals keep EXIF/GPS metadata: they are exposed only through
+   * readStagedPhotoForExposure's metadata-free preview, and W4 reads them privately.
+   */
+  async #saveOriginalSourceUnadmitted(file: { buffer: Buffer; mimetype: string; size: number } | StagedProductPhotoInput): Promise<StoredAiIntakePhoto | null> {
+    const parts = originalSourceKeyParts(file.mimetype);
+    if (!parts) throw new BadRequestError("Staged intake photos must be JPEG, PNG, or WebP images");
+    const input = "buffer" in file ? file.buffer : file.path;
+    let metadata: sharp.Metadata;
+    try {
+      metadata = await sharp(input, { failOn: "error" }).metadata();
+    } catch {
+      throw new BadRequestError("Uploaded file is not a valid image");
+    }
+    if (metadata.format !== parts.format) throw new BadRequestError("Staged intake photos must be JPEG, PNG, or WebP images");
     if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
+    if ((metadata.pages ?? 1) > 1) return null;
+    try {
+      await sharp(input, { failOn: "error" }).stats();
+    } catch {
+      throw new BadRequestError("Uploaded file is not a valid image");
+    }
 
-    await image.webp({ quality: 86 }).toFile(filePath);
-
+    const id = randomUUID();
+    const storageKey = `${id}.orig.${parts.ext}`;
+    const partial = path.join(this.root, `.${id}.partial`);
+    try {
+      if ("buffer" in file) {
+        if (file.buffer.length !== file.size) throw new BadRequestError("Invalid staged intake photo");
+        const handle = await open(partial, "wx", 0o600);
+        try { await handle.writeFile(file.buffer); await handle.sync(); } finally { await handle.close(); }
+      } else {
+        await copyFile(file.path, partial, constants.COPYFILE_EXCL);
+        await chmod(partial, 0o600);
+        const handle = await open(partial, "r+");
+        try {
+          if ((await handle.stat()).size !== file.size) throw new BadRequestError("Invalid staged intake photo");
+          await handle.sync();
+        } finally { await handle.close(); }
+      }
+      if ("signal" in file && file.signal.aborted) throw abortedError();
+      await link(partial, path.join(this.root, storageKey));
+    } catch (error) {
+      try { await rm(partial, { force: true }); }
+      catch { throw new PhotoUploadError(503, "PHOTO_STORAGE_UNAVAILABLE", "Private photo cleanup failed"); }
+      throw error;
+    }
+    // Published. A partial name left by a failed unlink is the same inode and is swept as an unowned partial.
+    await unlink(partial).catch(() => undefined);
+    if (process.platform === "linux") {
+      const directory = await open(this.root, "r");
+      try { await directory.sync(); } finally { await directory.close(); }
+    }
     return { storageKey };
   }
 
@@ -124,7 +232,8 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
       // Fixed, non-sensitive message - never includes the disposition-derived path or key.
       throw new Error("Staged AI intake photo could not be read");
     }
-    return readFile(info.path!);
+    // #390: exposure-safe bytes - legacy staged WebP unchanged; an original-source upload only as a metadata-free preview.
+    return readStagedPhotoForExposure(info.path!, storageKey);
   }
 }
 

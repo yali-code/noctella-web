@@ -1,0 +1,80 @@
+name: Photo 4C authorized deletion acceptance
+
+# 4C (#424): scoped acceptance of the authorized W8 canonical deletion, following photo-offline-acceptance.yml (#494):
+# only PRs into the #494 integration branch (Draft #495) that touch 4C files. No push or schedule trigger; no full
+# suite, benchmark, Linux memory profile or deployment. Tests the exact PR head SHA.
+on:
+  pull_request:
+    branches: [integrate/photo-program-offline-20261021]
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/photo-4c-acceptance.yml
+      - apps/api/src/app.ts
+      - apps/api/src/services/photoCanonicalDeletion.ts
+      - apps/api/src/services/photoCopyPublisher.ts
+      - apps/api/src/services/productPhotoOutboxDispatcher.ts
+      - apps/api/src/services/productPhotoStorageWorkflow.ts
+      - apps/api/src/services/outbox.ts
+      - apps/api/src/services/outboxRepository.ts
+      - apps/api/src/validation/backgroundJobs.ts
+      - apps/api/src/auth/machineAuth.ts
+      - apps/api/tests/photoOwnershipFencingSwitch.test.ts
+      - apps/api/tests/productPhotoOutboxWorkflow.test.ts
+      - apps/api/tests/photoCanonicalDeletion4C.test.ts
+      - apps/api/tests/productPhotoOutboxOnlyRoute4C.test.ts
+      - apps/api/tests/photoCanonicalWriterInventory.test.ts
+      - scripts/photo-writer-adoption/**
+      - scripts/photo-staging-acceptance/4c-evidence.cjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photo-4c-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scoped-4c-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: noctella_ci
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: noctella_photo_4c_test
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U noctella_ci -d noctella_photo_4c_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      POSTGRES_TEST_DATABASE_URL: postgres://noctella_ci:disposable_ci_only@127.0.0.1:5432/noctella_photo_4c_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Checked-out commit equals the PR head
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/shared
+      - run: npm run typecheck -w apps/api
+      - name: 4C deletion suite on SQLite and required PostgreSQL (no skipped case allowed)
+        run: |
+          npm exec -w apps/api -- vitest run tests/photoCanonicalDeletion4C.test.ts --reporter=default --reporter=json --outputFile=4c-results.json
+          node -e 'const r=require("./apps/api/4c-results.json"); if (r.numPendingTests || r.numTodoTests || !r.numPassedTests) { console.error("4C cases skipped or absent"); process.exit(1); }'
+      - name: Affected existing W8 / fencing / inventory suites
+        run: npm exec -w apps/api -- vitest run tests/productPhotoOutboxOnlyRoute4C.test.ts tests/photoCanonicalWriterInventory.test.ts tests/photoOwnershipFencingSwitch.test.ts tests/productPhotoOutboxWorkflow.test.ts
+      - name: Writer census and fencing dispositions
+        run: node --test scripts/photo-writer-adoption/census.test.cjs scripts/photo-writer-adoption/fencing-disposition.test.cjs

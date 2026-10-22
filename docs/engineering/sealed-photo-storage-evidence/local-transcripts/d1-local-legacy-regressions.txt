@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 C:/Users/Admin/noctella-web-p2-2b3d1/apps/api
+
+
+ Test Files  6 passed (6)
+      Tests  190 passed | 1 skipped (191)
+   Start at  17:01:16
+   Duration  76.79s (transform 5.10s, setup 0ms, import 23.69s, tests 48.51s, environment 3ms)
+
