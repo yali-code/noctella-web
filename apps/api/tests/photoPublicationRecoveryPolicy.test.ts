@@ -151,7 +151,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       expect([canonical.dev, canonical.ino, canonical.sha256]).toEqual([String(copy.copy_dev), String(copy.copy_ino), seal.main_sha256]);
       expect(canonical.ino).not.toBe(String(seal.main_ino)); // never the sealed worker inode
       expect(Number(copy.executor_epoch)).toBe(1); // recorded by the crashed executor, adopted by its successor
-      await expect(lstat(path.join(photoOperationPrivateRoot(path.join(root, "photos")), op.id, "1", "main.webp"))).rejects.toMatchObject({ code: "ENOENT" });
+      // Gate 5 retention: the sealed worker-private main survives commit as its own inode with the sealed bytes.
+      const privateMain = path.join(photoOperationPrivateRoot(path.join(root, "photos")), op.id, "1", "main.webp");
+      const retained = await lstat(privateMain, { bigint: true });
+      expect([String(retained.ino), retained.nlink]).toEqual([String(seal.main_ino), 1n]);
+      expect((await fileProof(privateMain)).sha256).toBe(seal.main_sha256);
 
       // Same bytes, different inode at the key after a crash: foreign; never adopted, replaced or cleaned.
       const other = `f3-foreign-${driver}-${randomUUID().slice(0, 8)}`, uploadOther = uploadAs(other);

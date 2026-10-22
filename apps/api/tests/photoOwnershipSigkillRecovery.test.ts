@@ -13,7 +13,8 @@ import { lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { sql } from "drizzle-orm";
-import { crossProcessExitAuthenticationAvailable } from "../src/services/photoPublicationExecutor";
+import { crossProcessExitAuthenticationAvailable, photoPublicationStagingRoot, sealedArtifactPath } from "../src/services/photoPublicationExecutor";
+import { fileProof } from "../src/services/photoOperationAuthority";
 import { ProductStatus, ProductType } from "@noctella/shared";
 
 const { root } = vi.hoisted(() => {
@@ -144,8 +145,21 @@ it("SIGKILL after T1 before any canonical name: BLOCKED until the executor's dea
   const killed = op(token);
   expect(killed.state).toBe("sealed");
   expect([await exists(path.join(photos(), killed.main_key)), await exists(path.join(photos(), killed.thumb_key))]).toEqual([false, false]);
-  if (await expectRecoveryAfterKilledExecutor(token))
-    expect((await lstat(path.join(photos(), killed.main_key), { bigint: true })).nlink).toBe(1n); // publisher-owned copy
+  if (await expectRecoveryAfterKilledExecutor(token)) {
+    // Gate 5 retention: the publisher-owned canonical copy keeps its recorded anchor (same inode, nlink 2), and the
+    // sealed worker-private main is retained after commit as a separate inode holding the sealed bytes.
+    const published = await lstat(path.join(photos(), killed.main_key), { bigint: true });
+    expect(published.nlink).toBe(2n);
+    const [copy] = all(sql`SELECT copy_ino, staging_name FROM photo_publication_copies WHERE operation_id = ${killed.id} AND artifact = 'main'`);
+    const anchor = await lstat(path.join(photoPublicationStagingRoot(photos()), killed.id, "main", copy.staging_name), { bigint: true });
+    expect([String(anchor.ino), anchor.dev]).toEqual([String(published.ino), published.dev]);
+    expect(String(published.ino)).toBe(String(copy.copy_ino));
+    const [seal] = all(sql`SELECT main_ino, main_sha256 FROM photo_operation_artifacts WHERE operation_id = ${killed.id} AND generation = 1`);
+    const privateMain = sealedArtifactPath(photos(), { operationId: killed.id, generation: 1 }, "main");
+    const retained = await lstat(privateMain, { bigint: true });
+    expect([String(retained.ino), retained.nlink]).toEqual([String(seal.main_ino), 1n]);
+    expect((await fileProof(privateMain)).sha256).toBe(seal.main_sha256);
+  }
 });
 
 it("SIGKILL after canonical publication: the recorded copies are adopted on recovery, never replaced", async () => {
