@@ -163,7 +163,7 @@ async function publishAndCommit(db: DbClient, driver: OwnershipDriver, authority
     operationId: authority.operationId, generation: authority.generation, owner: authority.owner, nonce: authority.nonce, sealId: authority.sealId,
     photoId, eventId: randomUUID(), intent: { epoch: authority.epoch, token: authority.token, executorIdentity: authority.executorIdentity },
   });
-  // Committed: the canonical names hold publisher-owned copies; the staging namespace and private files are ours.
+  // Committed: the historical cleanup hook now retains private derivatives and publication anchors (Gate 5).
   await cleanupCommittedPublication(canonicalRoot, authority);
   await hooks?.afterCommit?.();
   return photo;

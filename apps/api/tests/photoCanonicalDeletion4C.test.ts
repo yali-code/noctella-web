@@ -109,6 +109,35 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as const)
     expect(present(s)).toEqual([false, false]);
   });
 
+  run("canonical deletion preserves private derivatives and exact publication anchors; replay removes zero", async () => {
+    const s = await seed();
+    const privateDir = path.join(tmpRoot, ".product-photo-operations", s.opId, "1");
+    fs.mkdirSync(privateDir, { recursive: true });
+    const retained: Array<{ anchor: string; privateFile: string; bytes: Buffer; ino: bigint }> = [];
+    for (const [artifact, p] of [["main", s.main], ["thumb", s.thumb]] as const) {
+      const anchorDir = path.join(tmpRoot, ".product-photo-publication", s.opId, artifact);
+      fs.mkdirSync(anchorDir, { recursive: true });
+      const anchor = path.join(anchorDir, "data-0000000000000000"), privateFile = path.join(privateDir, artifact + ".webp");
+      fs.linkSync(p.file, anchor); fs.copyFileSync(p.file, privateFile);
+      const canonical = fs.lstatSync(p.file, { bigint: true });
+      expect(fs.lstatSync(anchor, { bigint: true }).ino).toBe(canonical.ino);
+      expect(fs.lstatSync(privateFile, { bigint: true }).ino).not.toBe(canonical.ino);
+      expect(canonical.nlink).toBe(2n);
+      retained.push({ anchor, privateFile, bytes: fs.readFileSync(p.file), ino: canonical.ino });
+    }
+    const before = await evidence(s.opId);
+    expect(await del(s.photoId)).toEqual({ kind: "deleted", removed: 2 });
+    expect(present(s)).toEqual([false, false]);
+    for (const r of retained) {
+      const anchor = fs.lstatSync(r.anchor, { bigint: true });
+      expect([anchor.ino, anchor.nlink]).toEqual([r.ino, 1n]);
+      expect(fs.readFileSync(r.anchor)).toEqual(r.bytes);
+      expect(fs.readFileSync(r.privateFile)).toEqual(r.bytes);
+    }
+    expect(await evidence(s.opId)).toEqual(before);
+    expect(await del(s.photoId)).toEqual({ kind: "deleted", removed: 0 });
+  });
+
   run("unknown or unresolved ownership retains both files", async () => {
     expect(await del(randomUUID())).toEqual({ kind: "retained", code: "PHOTO_DELETE_OWNERSHIP_UNKNOWN" });
     for (const [o, code] of [

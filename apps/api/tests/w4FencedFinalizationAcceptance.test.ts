@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
+import { expectRetainedPublication } from "./fixtures/retainedPublication";
 import { simulatedPersistentRemount, publicationSnapshot, recordRemountEvidence } from "./fixtures/persistentRemount";
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
@@ -32,7 +33,11 @@ import { digestW2StagedInput } from "../src/services/w2StagedInputDigest";
 import type { W4FencedOptions } from "../src/services/w4FencedFinalizationOwner";
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
-afterAll(async () => { await rm(root, { recursive: true, force: true, maxRetries: 3 }); });
+afterAll(async () => {
+  // Sharp metadata probes can retain cached file handles on Windows; release them before disposable fixture teardown.
+  sharp.cache(false);
+  await rm(root, { recursive: true, force: true, maxRetries: 3 });
+});
 
 it.runIf(process.env.W2_LIVE_REQUIRE_POSTGRES === "1")("PostgreSQL acceptance is configured", () => { expect(postgresTestConfigured).toBe(true); });
 
@@ -106,6 +111,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
       expect(r.committed_photo_id).toBe(r.subject_id);
       expect(r.main_key).toBe(`${productId}-${r.subject_id}.webp`);
       expect((await sharp(path.join(root, "photos", r.main_key)).metadata()).format).toBe("webp");
+      await expectRetainedPublication(root, r, q);
     }
     expect(await counts(productId)).toEqual([2, 2]);
     expect(await intakeStatus(intakeId)).toBe(AiProductIntakeStatus.Finalized);
@@ -122,6 +128,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     expect(await counts(productId)).toEqual([1, 1]);
     expect((await ops(stagedIds)).map((r) => r.state)).toEqual(["committed"]);
     expect((await readdir(path.join(root, "photos"))).length).toBe(files);
+    for (const row of await ops(stagedIds)) await expectRetainedPublication(root, row, q);
   });
 
   // #472: the crashed execution provably ended in this process, so the retry transfers both durable intents (epoch 2)
@@ -139,6 +146,7 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     const intents = await Promise.all(rows.map(async (r) => (await q(sql`SELECT state, executor_epoch FROM photo_publication_intents WHERE operation_id = ${r.id}`))[0]));
     expect(intents.map((i) => [i.state, Number(i.executor_epoch)])).toEqual([["committed", 2], ["committed", 2]]);
     expect(await Promise.all(rows.flatMap((r) => [inode(r.main_key), inode(r.thumb_key)]))).toEqual(before);
+    for (const row of rows) await expectRetainedPublication(root, row, q);
     expect(await counts(productId)).toEqual([2, 2]);
   });
 
@@ -195,10 +203,11 @@ describe.each([["sqlite", true], ["postgres", postgresTestConfigured]] as Array<
     for (const artifact of ["main", "thumb"] as const) {
       const canonical = await lstat(path.join(root, "photos", row[artifact + "_key"]), { bigint: true });
       const [copy] = await q(sql`SELECT copy_ino FROM photo_publication_copies WHERE operation_id = ${row.id} AND artifact = ${artifact}`);
-      expect([String(copy.copy_ino), canonical.nlink]).toEqual([String(canonical.ino), 1n]);
+      expect([String(copy.copy_ino), canonical.nlink]).toEqual([String(canonical.ino), 2n]);
     }
     expect(await counts(productId)).toEqual([1, 1]);
     expect(await intakeStatus(intakeId)).toBe(AiProductIntakeStatus.Finalized);
+    await expectRetainedPublication(root, row, q);
   });
 
   it.skipIf(!enabled).each(["main", "thumb"] as const)("F3: W4 rejects foreign identical-byte %s canonical inode without finalizing", async (artifact) => {
