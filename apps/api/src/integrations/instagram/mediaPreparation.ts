@@ -11,6 +11,10 @@ import { InstagramClientError } from "./types";
 import { imageRecipes, renderInstagramDerivative, type InstagramImageRecipe } from "./instagramDerivativeRecipe";
 import { photoOwnershipFencingEnabled } from "../../services/photoOwnershipFencing";
 import { assertPreparationConfinementReady, photoPreparationConfinementConfig, renderDerivativeInConfinedWorker } from "../../services/photoPreparationConfinement";
+import {
+  INSTAGRAM_DERIVATIVE_STATIC_PATH, assertInstagramStoreSafe, instagramDerivativeRoot, InstagramStoreError,
+  isBlockingStorageError, publishToInstagramStore, readStoreFile, sha256, storeBlocked,
+} from "./instagramDerivativeStore";
 
 /**
  * #472 daily-use parity 4B. In protected mode (fencing ON) Instagram derivatives are NOT written into the canonical
@@ -20,9 +24,10 @@ import { assertPreparationConfinementReady, photoPreparationConfinementConfig, r
  * verified source bytes. Lifecycle: derivatives are immutable, regenerable and referenced by
  * social_prepared_images.output_path; they are never overwritten (no-clobber link) and nothing here deletes them.
  * W11/0042 stays dormant. With fencing OFF the original canonical-root behaviour is unchanged.
+ * P5: the store, its private job root, publication and serving live in instagramDerivativeStore.ts and
+ * routes/instagramDerivativeAssets.ts; protected-mode records carry output_sha256 and are trusted only on an exact match.
  */
-export const INSTAGRAM_DERIVATIVE_STATIC_PATH = "/images/instagram-derivatives";
-export const instagramDerivativeRoot = (canonicalRoot: string = productPhotoStaticRoot) => path.join(path.dirname(path.resolve(canonicalRoot)), "instagram-derivatives");
+export { INSTAGRAM_DERIVATIVE_STATIC_PATH, instagramDerivativeRoot };
 /** The store an already prepared outputPath lives in (canonical root for records prepared before protected mode). */
 function storeOf(outputPath: string, canonicalRoot: string) {
   return outputPath.startsWith(`${INSTAGRAM_DERIVATIVE_STATIC_PATH}/`)
@@ -30,7 +35,7 @@ function storeOf(outputPath: string, canonicalRoot: string) {
     : { root: canonicalRoot, prefix: productPhotoStaticPath };
 }
 
-const inFlight = new Map<string, Promise<void>>();
+const inFlight = new Map<string, Promise<string | void>>();
 export const INSTAGRAM_IMAGE_RECIPE = "instagram-v1";
 export { renderInstagramDerivative, type InstagramImageRecipe };
 export interface PreparedInstagramImage {
@@ -38,6 +43,8 @@ export interface PreparedInstagramImage {
   outputPath: string;
   sourceFingerprint: string;
   recipeVersion: string;
+  /** Protected mode only: sha256 of the published store file (social_prepared_images.output_sha256). */
+  outputSha256?: string | null;
 }
 const invalid = () => new InstagramClientError("invalid_media", false);
 function canonicalFilename(url: string): string {
@@ -90,7 +97,7 @@ async function validDerivative(root: string, filename: string, recipe: typeof im
 /** Local-only derivative; no ProductPhoto writes, HTTP reads, or credential handling. */
 async function inspectPreparedInstagramImageUnadmitted(
   photo: { url: string },
-  prepared: Pick<PreparedInstagramImage, "sourceFingerprint" | "recipeVersion" | "outputPath">,
+  prepared: Pick<PreparedInstagramImage, "sourceFingerprint" | "recipeVersion" | "outputPath" | "outputSha256">,
   root: string = productPhotoStaticRoot,
 ): Promise<boolean> {
   try {
@@ -103,6 +110,12 @@ async function inspectPreparedInstagramImageUnadmitted(
     const derivative = `${prepared.recipeVersion}-${fingerprint}.jpg`;
     const store = storeOf(prepared.outputPath, root);
     if (prepared.outputPath !== `${store.prefix}/${derivative}`) return false;
+    // P5: protected mode trusts only a store record whose recorded output_sha256 exactly matches the stored bytes. A NULL
+    // hash or a legacy canonical record is never current here (re-preparation goes to the store; nothing is modified).
+    if (photoOwnershipFencingEnabled()) {
+      if (typeof prepared.outputSha256 !== "string" || !/^[0-9a-f]{64}$/.test(prepared.outputSha256) || store.root !== instagramDerivativeRoot(root)) return false;
+      return sha256(await readStoreFile(store.root, derivative)) === prepared.outputSha256;
+    }
     return await validDerivative(store.root, derivative, recipe);
   } catch (error: any) {
     // Missing/unsafe/undecodable assets are invalid. Other OS failures are infrastructure errors.
@@ -146,14 +159,16 @@ async function prepareInstagramImageAssetUnadmitted(
     const hash = sourceFingerprint(filename, source);
     const derivative = `${recipeId}-${hash}.jpg`;
     const store = protectedMode ? { root: instagramDerivativeRoot(root), prefix: `${INSTAGRAM_DERIVATIVE_STATIC_PATH}/` } : { root, prefix };
-    if (protectedMode) {
-      await mkdir(store.root, { recursive: true, mode: 0o755 });
-      const info = await lstat(store.root);
-      if (!info.isDirectory() || info.isSymbolicLink()) throw invalid();
-    }
+    // P5: both store roots are asserted (real dirs, one filesystem, no overlap with any protected root) before any write.
+    const roots = protectedMode ? await assertInstagramStoreSafe(root) : null;
     const destination = productPhotoStorageSafety.safeJoin(store.root, derivative);
     const url = validateInstagramMediaUrl(`${origin.origin}${store.prefix}${derivative}`, env);
     let work = inFlight.get(destination);
+    if (!work && roots) {
+      // Always render (deterministic recipe), then publish no-clobber: an existing name is adopted only on equal hash.
+      work = (async () => publishToInstagramStore(await renderProtected(source, recipeId, roots.jobs), derivative, roots))();
+      inFlight.set(destination, work);
+    }
     if (!work) {
       work = (async () => {
         if (await validDerivative(store.root, derivative, recipe)) return;
@@ -172,10 +187,12 @@ async function prepareInstagramImageAssetUnadmitted(
       })();
       inFlight.set(destination, work);
     }
-    try { await work; }
+    let published: string | void;
+    try { published = await work; }
     finally { if (inFlight.get(destination) === work) inFlight.delete(destination); }
-    return { url, outputPath: `${store.prefix}${derivative}`, sourceFingerprint: hash, recipeVersion: recipeId };
+    return { url, outputPath: `${store.prefix}${derivative}`, sourceFingerprint: hash, recipeVersion: recipeId, ...(protectedMode ? { outputSha256: published as string } : {}) };
   } catch (error) {
+    if (protectedMode) throw classifyProtectedFailure(error);
     // Confined-worker unavailability (start failure, no Landlock enforcement, timeout) is infrastructure, not bad media:
     // retryable, like the pre-check refusal. Never surface Sharp/filesystem errors, paths, or supplied URL credentials.
     if (error instanceof PhotoUploadError && error.status === 503) throw new InstagramClientError("processing", true);
@@ -183,11 +200,14 @@ async function prepareInstagramImageAssetUnadmitted(
   }
 }
 
-/** Protected-mode rendering: the confined worker gets a private copy of the verified source bytes (no path re-read). */
-async function renderProtected(source: Buffer, recipeId: InstagramImageRecipe, storeRoot: string): Promise<Buffer> {
+/**
+ * Protected-mode rendering: the confined worker gets a private copy of the verified source bytes (no path re-read), in a
+ * job directory under the private, never-served job root (P5), and may write only that directory.
+ */
+async function renderProtected(source: Buffer, recipeId: InstagramImageRecipe, jobRoot: string): Promise<Buffer> {
   const config = photoPreparationConfinementConfig();
   if (config.mode !== "confined") return renderInstagramDerivative(source, recipeId); // test/development only (unprotected)
-  const jobDir = path.join(storeRoot, `.job-${randomUUID()}`);
+  const jobDir = path.join(jobRoot, `.job-${randomUUID()}`);
   await mkdir(jobDir, { mode: 0o700 });
   try {
     const input = path.join(jobDir, "source.webp");
@@ -195,6 +215,20 @@ async function renderProtected(source: Buffer, recipeId: InstagramImageRecipe, s
     const { bytes } = await renderDerivativeInConfinedWorker(config.launcher, { kind: "instagram", inputPath: input, recipe: recipeId, outDir: jobDir }, jobDir);
     return bytes;
   } finally { await rm(jobDir, { recursive: true, force: true }); }
+}
+
+/**
+ * P5 protected-mode classification (the caller contract keeps the existing kinds):
+ * - store unsafe / key conflict: InstagramStoreError as raised (processing, not retryable);
+ * - ENOSPC/EDQUOT/EACCES/EPERM/EROFS/EIO, in the parent or reported by the worker: INSTAGRAM_STORE_BLOCKED (not retryable);
+ * - confined-worker start failure, timeout or missing enforcement (503): processing, retryable;
+ * - media/format and anything else: invalid_media, not retryable. Never surfaces paths, Sharp text or URL credentials.
+ */
+export function classifyProtectedFailure(error: unknown): InstagramClientError {
+  if (error instanceof InstagramStoreError) return error;
+  if (isBlockingStorageError(error)) return storeBlocked(error);
+  if (error instanceof PhotoUploadError && error.status === 503) return new InstagramClientError("processing", true);
+  return invalid();
 }
 
 async function instagramImageOperation<T>(work: () => Promise<T>): Promise<T> {

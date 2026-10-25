@@ -82,31 +82,36 @@ describe("protected-mode Instagram derivatives", () => {
     expect(fs.readdirSync(instagramDerivativeRoot(canonical)).sort()).toEqual(before);
   });
 
-  it("records prepared before protected mode (canonical-root outputPath) still validate", async () => {
+  it("records prepared before protected mode (canonical outputPath, no output_sha256) are never current in protected mode; fencing OFF they still validate", async () => {
     vi.stubEnv("PHOTO_OWNERSHIP_FENCING_ENABLED", "false");
     try {
       const legacy = await prepareInstagramImageAsset({ url: photoUrl }, "https://media.example.test", process.env, canonical);
       expect(legacy.outputPath.startsWith("/images/product-photos/instagram-v1-")).toBe(true);
-      vi.stubEnv("PHOTO_OWNERSHIP_FENCING_ENABLED", "true");
+      expect(legacy.outputSha256).toBeUndefined();
+      const file = path.join(canonical, path.basename(legacy.outputPath)), before = fs.statSync(file);
       expect(await inspectPreparedInstagramImage({ url: photoUrl }, legacy, canonical)).toBe(true);
+      vi.stubEnv("PHOTO_OWNERSHIP_FENCING_ENABLED", "true");
+      // P5: a NULL hash or a canonical (legacy) record is never trusted in protected mode; the legacy file is untouched.
+      expect(await inspectPreparedInstagramImage({ url: photoUrl }, { ...legacy, outputSha256: null }, canonical)).toBe(false);
+      expect(await inspectPreparedInstagramImage({ url: photoUrl }, legacy, canonical)).toBe(false);
+      const after = fs.statSync(file);
+      expect([after.ino, after.size, after.mtimeMs]).toEqual([before.ino, before.size, before.mtimeMs]);
     } finally { vi.unstubAllEnvs(); }
   });
-
-  it("the store is served at its public path (what Instagram publishing fetches); dotfiles are not served", async () => {
+  it("the store is never statically served: an unregistered store file, dotfiles and job dirs are 404", async () => {
     const prepared = await prepareInstagramImageAsset({ url: photoUrl }, "https://media.example.test", process.env, canonical);
+    expect(fs.existsSync(path.join(instagramDerivativeRoot(canonical), path.basename(prepared.outputPath)))).toBe(true);
     const app = (await import("../src/app")).default;
-    const res = await request(app).get(prepared.outputPath);
-    expect(res.status).toBe(200);
-    expect(res.headers["content-type"]).toMatch(/image\/jpeg/);
+    // P5: only a registered, hash-verified record is served (routes/instagramDerivativeAssets.ts); this file has no row.
+    expect((await request(app).get(prepared.outputPath)).status).toBe(404);
     fs.writeFileSync(path.join(instagramDerivativeRoot(canonical), ".hidden"), "x");
     const hidden = await request(app).get(`${INSTAGRAM_DERIVATIVE_STATIC_PATH}/.hidden`);
-    expect(hidden.status).not.toBe(200); // dotfiles (temp/job names) are never served
+    expect(hidden.status).toBe(404);
     expect(hidden.text).not.toBe("x");
-    // In-flight confined job directories (private source copy) are not served either (nested dot segment).
     fs.mkdirSync(path.join(instagramDerivativeRoot(canonical), ".job-review"), { recursive: true });
     fs.writeFileSync(path.join(instagramDerivativeRoot(canonical), ".job-review", "source.webp"), "y");
     const nested = await request(app).get(`${INSTAGRAM_DERIVATIVE_STATIC_PATH}/.job-review/source.webp`);
-    expect(nested.status).not.toBe(200);
+    expect(nested.status).toBe(404);
     expect(nested.text).not.toBe("y");
   });
 });

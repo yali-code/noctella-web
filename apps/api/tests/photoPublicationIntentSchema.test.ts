@@ -39,8 +39,8 @@ describe("WP1 migration files (forward-only convention)", () => {
     // 0039 belongs to the released Etsy Phase 1 (23406f7); on the composed release candidate it is that exact file.
     expect(files.filter((f) => f.startsWith("0039_")).every((f) => f === "0039_etsy_listing_form_parity.sql")).toBe(true);
     expect(files.filter((f) => f.startsWith("0042_"))).toEqual([]);
-    // Only the protected-publication copy registry (0044, #472) follows it.
-    expect(files.filter((f) => f.localeCompare(MIGRATION) > 0)).toEqual(["0044_photo_publication_copies.sql"]);
+    // Only the protected-publication copy registry (0044, #472) and the P5 nullable output_sha256 column (0045) follow it.
+    expect(files.filter((f) => f.localeCompare(MIGRATION) > 0)).toEqual(["0044_photo_publication_copies.sql", "0045_social_prepared_image_output_sha256.sql"]);
   });
   it("is purely additive: creates only its two tables, never alters, drops or rewrites existing data", () => {
     const body = migrationSql().replace(/--.*$/gm, "");

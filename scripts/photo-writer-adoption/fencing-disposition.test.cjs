@@ -30,6 +30,7 @@ const DISPOSITION = {
   'services/photoCanonicalDeletion.ts': { writers: 'W8 authorized deletion (4C)', disposition: 'ADOPTED (committed operation + committed intent + recorded copy identity, all references checked and names unlinked under the operation row lock; no sweep)', proof: () => has('services/photoCanonicalDeletion.ts', 'inOwnershipTransaction(db, driver,') && has('services/photoCanonicalDeletion.ts', 'WHERE target_photo_id = ${photoId}${rowLock(driver)}') && has('services/productPhotoOutboxDispatcher.ts', 'deleteAuthorizedCanonicalPhoto(') },
   'integrations/instagram/mediaPreparation.ts': { writers: 'W11', disposition: 'SEPARATE ROOT under fencing (non-canonical instagram-derivatives store, confined rendering; canonical root read-only; W11/0042 not adopted, #472)', proof: () => has('integrations/instagram/mediaPreparation.ts', 'const store = protectedMode ? { root: instagramDerivativeRoot(root)') && has('integrations/instagram/mediaPreparation.ts', 'assertPreparationConfinementReady()') && !has('integrations/instagram/mediaPreparation.ts', 'w11FencedInstagramDerivativeOwner') },
   'workers/photoPreparationWorker.ts': { writers: 'confined preparation worker', disposition: 'PRIVATE (Landlock-confined; writes only its generation/job directory, #472)', proof: () => has('workers/photoPreparationWorker.ts', 'path.join(job.outDir, "derivative.jpg")') },
+  'integrations/instagram/instagramDerivativeStore.ts': { writers: 'W11 protected-mode store (P5)', disposition: 'SEPARATE ROOT (non-canonical instagram-derivatives store + private job root, asserted non-overlapping with every protected root; no-clobber link, hash adoption or conflict; served only by the registered hash-verified route)', proof: () => { const s = read('integrations/instagram/instagramDerivativeStore.ts'); const writes = s.split('\n').filter((l) => /\b(link|unlink|mkdir|open)\(/.test(l) && !/^\s*(\*|\/\/|import)/.test(l)); return writes.length > 0 && writes.every((l) => !/productPhotoStaticRoot|photoOperationPrivateRoot|photoPublicationStagingRoot|canonicalRoot/.test(l)) && has('integrations/instagram/instagramDerivativeStore.ts', 'productPhotoStorageSafety.safeJoin(roots.store, name)') && has('integrations/instagram/instagramDerivativeStore.ts', 'productPhotoStorageSafety.safeJoin(roots.jobs, `.instagram-') && has('app.ts', 'createInstagramDerivativeAssetRouter(db)') && !has('app.ts', 'express.static(instagramDerivativeRoot'); } },
   'services/w11FencedInstagramDerivativeOwner.ts': { writers: 'W11 proposal', disposition: 'INACTIVE PROPOSAL (not imported by production code)', proof: () => !has('integrations/instagram/mediaPreparation.ts', 'w11FencedInstagramDerivativeOwner') },
   'integrations/media/reelRenderer.ts': { writers: 'W12', disposition: 'SEPARATE ROOT (generated reel MP4s in MEDIA_ASSET_DIR; no product-photo bytes)', proof: () => has('config/mediaAssets.ts', 'MEDIA_ASSET_DIR') && !has('integrations/media/reelRenderer.ts', 'productPhotoStaticRoot') },
   'use-cases/product-photo-backup/useCases.ts': { writers: 'W13', disposition: 'SEPARATE ROOT (private mkdtemp work dirs; reads canonical photos, never writes them)', proof: () => has('use-cases/product-photo-backup/useCases.ts', 'mkdtemp(path.join(os.tmpdir()') },
@@ -59,4 +60,66 @@ test('every disposition is backed by its source-level proof', () => {
 test('no canonical-root writer is left unfenced while fencing is ON', () => {
   const unsafe = Object.entries(DISPOSITION).filter(([, d]) => !/^(ADOPTED|REFUSED|W1 REFUSED|W5 PRIVATE|PRIVATE|INACTIVE|SEPARATE ROOT|DEVELOPMENT ONLY|NON_MEDIA)/.test(d.disposition));
   assert.deepEqual(unsafe, []);
+});
+
+// P5 admission decision: the Instagram recipe (instagramDerivativeRecipe.ts) keeps main's original admission-free body.
+// Its production importers are listed explicitly and must call it only under image admission; any new importer fails.
+// The dormant W11 owner reaches it through mediaPreparation's re-export and stays non-production-imported (inventory).
+test('the Instagram recipe is imported only by explicitly listed, admitted production callers', () => {
+  const recipe = /["']\.{1,2}\/(?:[\w-]+\/)*instagramDerivativeRecipe["']/;
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.ts') ? [path.join(dir, e.name)] : []);
+  const importers = walk(SRC).map((f) => path.relative(SRC, f).split(path.sep).join('/'))
+    .filter((f) => f !== 'integrations/instagram/instagramDerivativeRecipe.ts' && recipe.test(read(f))).sort();
+  assert.deepEqual(importers, ['integrations/instagram/mediaPreparation.ts', 'workers/photoPreparationWorker.ts']);
+
+  // Worker: the only render call is inside runImageOperation.
+  const worker = read('workers/photoPreparationWorker.ts').split(/\r?\n/).filter((l) => /renderInstagramDerivative\(/.test(l) && !/import\(/.test(l));
+  assert.deepEqual(worker.map((l) => l.trim()), ['const bytes = await runImageOperation(() => renderInstagramDerivative(readFileSync(job.inputPath), job.recipe));']);
+
+  // mediaPreparation: render happens only in non-exported *Unadmitted / renderProtected functions, and every exported
+  // entry point reaches them only through instagramImageOperation (runImageOperation).
+  const media = read('integrations/instagram/mediaPreparation.ts');
+  const calls = media.split(/\r?\n/).filter((l) => /\brender(InstagramDerivative|Protected)\(/.test(l) && !/^\s*(\*|\/\/|import|export \{)/.test(l) && !/^\s*(async )?function renderProtected\(/.test(l));
+  assert.ok(calls.length > 0);
+  for (const name of ['prepareInstagramImageAssetUnadmitted', 'inspectPreparedInstagramImageUnadmitted']) {
+    assert.ok(!new RegExp(`export\\s+(async\\s+)?function\\s+${name}\\b`).test(media), `${name} must not be exported`);
+  }
+  assert.ok(!/export\s+(async\s+)?function\s+renderProtected\b/.test(media), 'renderProtected must not be exported');
+  assert.match(media, /export const prepareInstagramImageAsset: typeof prepareInstagramImageAssetUnadmitted =\s*\(\.\.\.args\) => instagramImageOperation\(\(\) => prepareInstagramImageAssetUnadmitted\(\.\.\.args\)\);/);
+  assert.match(media, /export const inspectPreparedInstagramImage: typeof inspectPreparedInstagramImageUnadmitted =\s*\(\.\.\.args\) => instagramImageOperation\(\(\) => inspectPreparedInstagramImageUnadmitted\(\.\.\.args\)\);/);
+  assert.match(media, /async function instagramImageOperation<T>\(work: \(\) => Promise<T>\): Promise<T> \{\s*try \{ return await runImageOperation\(work\); \}/);
+  // The only other exported caller delegates to the wrapped entry point.
+  assert.match(media, /return \(await prepareInstagramImageAsset\(photo, publicOrigin, env, root\)\)\.url;/);
+});
+
+// P5: nothing writes or deletes in the Instagram store or its private job root outside the publication flow.
+test('only the publication flow mutates the Instagram store and private job root', () => {
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.ts') ? [path.join(dir, e.name)] : []);
+  const refs = /instagramDerivativeRoot|instagramDerivativeJobRoot|instagram-derivatives|\.instagram-derivative-jobs|publishToInstagramStore/;
+  const users = walk(SRC).map((f) => path.relative(SRC, f).split(path.sep).join('/')).filter((f) => refs.test(read(f))).sort();
+  assert.deepEqual(users, ['integrations/instagram/instagramDerivativeStore.ts', 'integrations/instagram/mediaPreparation.ts', 'routes/instagramDerivativeAssets.ts']);
+
+  // Route: read-only (no fs import at all; it reads through readStoreFile).
+  assert.ok(!/from ["'](?:node:)?fs(?:\/promises)?["']/.test(read('routes/instagramDerivativeAssets.ts')));
+
+  // Store module: root creation only in assertInstagramStoreSafe; temporary/link/unlink only in publishToInstagramStore.
+  const store = read('integrations/instagram/instagramDerivativeStore.ts');
+  const body = (name) => { const start = store.indexOf(`export async function ${name}(`); assert.ok(start >= 0, name); const next = store.indexOf('\nexport ', start + 1); return store.slice(start, next < 0 ? undefined : next); };
+  const mutating = (text) => text.split(/\r?\n/).filter((l) => /\b(mkdir|link|unlink|rm|writeFile|rename)\(|open\([^)]*"wx"/.test(l) && !/^\s*(\*|\/\/|import)/.test(l));
+  const assertSafe = mutating(body('assertInstagramStoreSafe')), publish = mutating(body('publishToInstagramStore'));
+  assert.ok(assertSafe.length > 0 && assertSafe.every((l) => /mkdir\(dir, \{ mode: 0o700 \}\)/.test(l)));
+  assert.ok(publish.length >= 3 && publish.every((l) => /open\(temporary, "wx", 0o600\)|handle\.writeFile\(bytes\)|link\(temporary, destination\)|unlink\(temporary\)/.test(l)));
+  assert.equal(mutating(store).length, assertSafe.length + publish.length);
+
+  // mediaPreparation: protected-mode job-root mutations only inside renderProtected (its own job directory).
+  const media = read('integrations/instagram/mediaPreparation.ts');
+  const start = media.indexOf('async function renderProtected('), close = /\r?\n\}\r?\n/.exec(media.slice(start)), end = close ? start + close.index : -1;
+  assert.ok(start >= 0 && end > start);
+  const render = media.slice(start, end);
+  assert.match(render, /const jobDir = path\.join\(jobRoot, `\.job-\$\{randomUUID\(\)\}`\);/);
+  assert.match(render, /await mkdir\(jobDir, \{ mode: 0o700 \}\);/);
+  assert.match(render, /finally \{ await rm\(jobDir, \{ recursive: true, force: true \}\); \}/);
+  // The only call sites that pass the job root are the protected publication flow.
+  assert.deepEqual(media.split(/\r?\n/).filter((l) => /roots\.jobs/.test(l)).map((l) => l.trim()),
+    ['work = (async () => publishToInstagramStore(await renderProtected(source, recipeId, roots.jobs), derivative, roots))();']);
 });

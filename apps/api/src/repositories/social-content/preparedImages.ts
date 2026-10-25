@@ -24,6 +24,8 @@ export interface SocialPreparedImage {
   sourceFingerprint: string;
   recipeVersion: string;
   outputPath: string;
+  /** P5: protected-mode store derivative hash; NULL for legacy rows. */
+  outputSha256: string | null;
 }
 
 export function createPreparedImageRepository(db: DbClient, driver: string) {
@@ -59,7 +61,7 @@ export function createPreparedImageRepository(db: DbClient, driver: string) {
     },
     *persist(tx: any, contentId: string, photoId: string, asset: PreparedInstagramImage): SocialWork<SocialPreparedImage> {
       const identity = { contentId, sourcePhotoId: photoId, sourceFingerprint: asset.sourceFingerprint, recipeVersion: asset.recipeVersion };
-      yield tx.insert(prepared).values({ id: randomUUID(), ...identity, outputPath: asset.outputPath }).onConflictDoNothing().returning();
+      yield tx.insert(prepared).values({ id: randomUUID(), ...identity, outputPath: asset.outputPath, outputSha256: asset.outputSha256 ?? null }).onConflictDoNothing().returning();
       return (yield tx.select().from(prepared).where(and(eq(prepared.contentId, contentId), eq(prepared.sourcePhotoId, photoId),
         eq(prepared.sourceFingerprint, identity.sourceFingerprint), eq(prepared.recipeVersion, identity.recipeVersion))))[0];
     },

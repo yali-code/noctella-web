@@ -27,6 +27,7 @@ const GOVERNED: Record<string, string> = {
   "services/productPhotoStorageWorkflow.ts": "W7 promotion / W9 temp cleanup (refused with fencing ON); W8 delete only through the authorized deleter with fencing ON",
   "services/photoCanonicalDeletion.ts": "4C authorized W8 deletion: a committed operation's recorded copy names, verified and unlinked under its row lock",
   "integrations/instagram/mediaPreparation.ts": "live Instagram prepare-image derivative writer: fencing OFF canonical root (unchanged); fencing ON only the non-canonical instagram-derivatives store with confined rendering",
+  "integrations/instagram/instagramDerivativeStore.ts": "P5 protected-mode Instagram store: writes only the non-canonical store and its private job root (asserted non-overlapping); never the canonical, private-operation or publication roots",
   "services/aiIntakePhotoStorage.ts": "AI intake root only (AI_INTAKE_PHOTO_DIR), never the canonical root",
   "services/mediaPlanner.ts": "MEDIA_ASSET_DIR only; reads canonical photos",
   "routes/productPhotoUpload.ts": "request upload staging (.product-photo-upload-staging) only",

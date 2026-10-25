@@ -54,6 +54,8 @@ export function ensureSocialContentAiColumns(sqlite: Database.Database): void {
     const additions: Record<string, string[]> = {
       social_contents: ["hashtags", "concept", "ai_provider", "ai_model", "ai_prompt_version", "ai_generated_at", "ai_request_id", "ai_source_product_id"],
       social_content_media: ["editorial_alt_text"],
+      // P5: protected-mode Instagram derivative hash; additive, nullable, no backfill (PostgreSQL 0045).
+      social_prepared_images: ["output_sha256"],
     };
     for (const [table, columns] of Object.entries(additions)) {
       const existing = new Set((sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name));
