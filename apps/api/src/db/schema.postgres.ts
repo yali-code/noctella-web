@@ -1094,6 +1094,8 @@ export const socialPreparedImages = pgTable("social_prepared_images", {
   sourceFingerprint: text("source_fingerprint").notNull(),
   recipeVersion: text("recipe_version").notNull(),
   outputPath: text("output_path").notNull(),
+  // P5: sha256 of the protected-mode store derivative; NULL for legacy rows (never trusted in protected mode).
+  outputSha256: text("output_sha256"),
 }, (table) => [
   uniqueIndex("idx_social_prepared_images_identity").on(table.contentId, table.sourcePhotoId, table.sourceFingerprint, table.recipeVersion),
 ]);

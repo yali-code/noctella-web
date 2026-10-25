@@ -4,7 +4,8 @@
  * its environment). Runs the unchanged W2/W4 derivative recipe and prints exactly one JSON line; the trusted parent
  * seals the outputs only after this process has exited.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 async function main() {
   const job = JSON.parse(Buffer.from(process.env.PHOTO_PREPARATION_JOB ?? "", "base64").toString("utf8"));
@@ -19,6 +20,14 @@ async function main() {
     const buffer = readFileSync(job.inputPath);
     const prepared = await prepareDeterministicProductPhotoFiles({ buffer, mimetype: job.mimetype, size: buffer.length }, job.outDir);
     return { main: prepared.main, thumb: prepared.thumb, width: prepared.width, height: prepared.height };
+  }
+  if (job.kind === "instagram") {
+    const { renderInstagramDerivative } = await import("../integrations/instagram/instagramDerivativeRecipe");
+    const { runImageOperation } = await import("../services/photoUploadAdmission");
+    const bytes = await runImageOperation(() => renderInstagramDerivative(readFileSync(job.inputPath), job.recipe));
+    const derivative = path.join(job.outDir, "derivative.jpg");
+    writeFileSync(derivative, bytes, { flag: "wx", mode: 0o600 });
+    return { derivative };
   }
   throw Object.assign(new Error("unknown preparation job"), { status: 500, code: "PHOTO_PREPARATION_JOB_INVALID" });
 }

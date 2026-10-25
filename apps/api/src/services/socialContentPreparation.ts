@@ -81,6 +81,10 @@ export function createSocialContentPreparationService(
         const current = yield* repository.source(tx, contentId, photoId);
         if (JSON.stringify(current) !== JSON.stringify(before)) throw new ConflictError("Selected media changed during preparation");
         const result = yield* repository.persist(tx, contentId, photoId, asset);
+        // P5 (owner decision): an existing legacy row for this identity is never modified; in protected mode a row that
+        // does not carry exactly this store path and hash is not current, and preparation refuses instead of reusing it.
+        if (asset.outputSha256 && (result.outputSha256 !== asset.outputSha256 || result.outputPath !== asset.outputPath))
+          throw new ConflictError("Existing prepared image is not current for protected mode");
         return { ...result, url: asset.url };
       });
     },

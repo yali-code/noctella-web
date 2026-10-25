@@ -792,6 +792,7 @@ CREATE TABLE IF NOT EXISTS social_prepared_images (
  source_fingerprint TEXT NOT NULL,
  recipe_version TEXT NOT NULL,
  output_path TEXT NOT NULL,
+ output_sha256 TEXT,
  UNIQUE(content_id, source_photo_id, source_fingerprint, recipe_version)
 );
 -- Evidence is created only by an explicit future Human Approval action.

@@ -147,7 +147,7 @@ describe.runIf(postgresTestConfigured)("PostgreSQL (supported driver): 0040/0041
       const before = (await h.pool.query("SELECT * FROM products WHERE id = $1", [product])).rows[0];
       const dir = path.join(__dirname, "../src/db/postgres-migrations");
       const candidate = fs.readdirSync(dir).filter((f) => f.endsWith(".sql") && f.slice(0, 4) > "0039").sort();
-      expect(candidate).toEqual(["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql", "0043_photo_publication_intents.sql", "0044_photo_publication_copies.sql"]);
+      expect(candidate).toEqual(["0040_photo_operation_ownership.sql", "0041_photo_w2_upload_intents.sql", "0043_photo_publication_intents.sql", "0044_photo_publication_copies.sql", "0045_social_prepared_image_output_sha256.sql"]);
       for (let pass = 0; pass < 2; pass++) for (const f of candidate) await h.pool.query(fs.readFileSync(path.join(dir, f), "utf8"));
       expect((await h.pool.query("SELECT * FROM products WHERE id = $1", [product])).rows[0]).toEqual(before);
       for (const t of F2_TABLES) expect((await h.pool.query("SELECT to_regclass($1) AS t", [t])).rows[0].t).not.toBeNull();
