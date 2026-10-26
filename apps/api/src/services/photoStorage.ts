@@ -8,6 +8,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { AiIntakePhotoFinalizationDestinationConflictError, BadRequestError } from "./errors";
+import { IMAGE_SIGNATURE_BYTES, assertAllowedDecodedFormat, assertAllowedImageSignature } from "./imageFormatGuard";
 
 export const PRODUCT_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 export const PRODUCT_PHOTO_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -74,10 +75,16 @@ interface ProcessedProductPhoto {
  * (2000x2000 inside) + thumbnail (400x400 inside) WebP transform, never
  * duplicated.
  */
-async function processProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }): Promise<ProcessedProductPhoto> {
+async function processProductPhoto(file: { buffer: Buffer; mimetype: string; size: number }, options: { matchDeclared?: boolean } = {}): Promise<ProcessedProductPhoto> {
   validateUpload(file);
+  // S1-b: actual content must be JPEG/PNG/WebP before any decoder sees it, and (client uploads) match the declared type.
+  // W4 passes matchDeclared:false: its declared type is derived from the staged key (owner decision: allowlist only).
+  // The rejection is the same plain BadRequestError as validateUpload's, so W4 (in-process and worker) routes it unchanged.
+  const declared = options.matchDeclared === false ? null : file.mimetype;
+  const detected = assertAllowedImageSignature(file.buffer.subarray(0, IMAGE_SIGNATURE_BYTES), declared);
   const image = productPhotoImage(file.buffer);
   const metadata = await image.metadata();
+  assertAllowedDecodedFormat(metadata.format, declared, undefined, detected); // W4 too: decoded must equal the signature
   if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
 
   const mainBytes = await productPhotoDerivative(image).toBuffer();
@@ -143,7 +150,8 @@ export interface DeterministicProductPhotoResult {
 async function writeDeterministicProductPhotoUnadmitted(input: DeterministicProductPhotoInput, destinationRoot = uploadRoot): Promise<DeterministicProductPhotoResult> {
   assertSafeDeterministicKey(input.mainStorageKey);
   assertSafeDeterministicKey(input.thumbnailStorageKey);
-  const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
+  const W4_FORMAT = { matchDeclared: false } as const; // W4 staged source: allowlist only (S1-b owner decision)
+  const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input, W4_FORMAT);
   await mkdir(destinationRoot, { recursive: true });
 
   const mainPath = path.join(destinationRoot, input.mainStorageKey);
@@ -178,7 +186,7 @@ export async function readPublishedPhotoDimensions(file: string): Promise<{ widt
  */
 export function prepareDeterministicProductPhotoFiles(input: { buffer: Buffer; mimetype: string; size: number }, outDir: string): Promise<{ main: string; thumb: string; width: number; height: number }> {
   return runImageOperation(async () => {
-    const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input);
+    const { mainBytes, thumbBytes, width, height } = await processProductPhoto(input, { matchDeclared: false }); // W4 fenced/worker: allowlist only (S1-b)
     const main = path.join(outDir, "main.webp"), thumb = path.join(outDir, "thumb.webp");
     await writeFile(main, mainBytes, { flag: "wx", mode: 0o600 });
     await writeFile(thumb, thumbBytes, { flag: "wx", mode: 0o600 });
