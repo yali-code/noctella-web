@@ -22,6 +22,20 @@ const { root } = vi.hoisted(() => {
   delete process.env.PHOTO_PREPARATION_CONFINEMENT;
   return { root };
 });
+// Pass-through unless set: forces metadata().format on the W4 recipe image, since libvips cannot be made to decode a
+// format other than the one its own magic-byte detection picks (a real signature/decode disagreement is not buildable).
+const forcedDecoded = vi.hoisted(() => ({ format: null as string | null }));
+vi.mock("../src/services/photoProcessingRecipe", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/services/photoProcessingRecipe")>();
+  return {
+    ...real,
+    productPhotoImage: (...args: Parameters<typeof real.productPhotoImage>) => {
+      const image = real.productPhotoImage(...args);
+      if (forcedDecoded.format) { const format = forcedDecoded.format, metadata = image.metadata.bind(image); (image as any).metadata = async () => ({ ...(await metadata()), format }); }
+      return image;
+    },
+  };
+});
 
 import { createTestDb } from "./testDb";
 import { finalizeAiIntakePhotos } from "../src/services/aiIntakePhotoFinalization";
@@ -102,5 +116,19 @@ describe("in-process fenced W4: format rejection routes exactly like the existin
       reRequest: { errorType: "BadRequestError", state: "preparing", generation: 2 },
     });
     expect(legacyWriter).not.toHaveBeenCalled();
+  });
+
+  it("a JPEG signature whose decoded format is PNG is rejected on W4 with the same routing as other invalid media", async () => {
+    const baseline = await route(Buffer.alloc(10 * 1024 * 1024 + 1, 0xff)); // validateUpload BadRequestError (pre-S1-b)
+    const jpeg = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#808080" } }).jpeg().toBuffer();
+    forcedDecoded.format = "png";
+    let disagreement: Awaited<ReturnType<typeof route>>;
+    try { disagreement = await route(jpeg); } finally { forcedDecoded.format = null; }
+    expect(disagreement.error).toBeInstanceOf(ImageFormatRejectedError);
+    expect(disagreement.routing).toEqual(baseline.routing);
+    expect(disagreement.routing).toMatchObject({ http: 400, state: "preparing", reviewReason: null, sideEffects: [0, 0, AiProductIntakeStatus.Applied] });
+    // Control: the same JPEG with its real decoded format is accepted by the recipe (the rejection came from the mismatch).
+    const accepted = appliedIntake(jpeg);
+    await expect(finalize(accepted.intakeId)).resolves.toMatchObject({ created: true });
   });
 });

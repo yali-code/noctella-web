@@ -46,10 +46,13 @@ export function assertAllowedImageSignature(head: Buffer, declaredMime: string |
   return detected;
 }
 
-/** Decoded-format allowlist after metadata(); must equal the declared MIME type. */
-export function assertAllowedDecodedFormat(metadataFormat: string | undefined, declaredMime: string | null, reject: ImageFormatReject = defaultReject): AllowedImageFormat {
+/**
+ * Decoded-format allowlist after metadata(); must equal the declared MIME type and, when given, the format the
+ * signature check detected for the same input (`expected`), so allowlist-only callers (W4) also reject a disagreement.
+ */
+export function assertAllowedDecodedFormat(metadataFormat: string | undefined, declaredMime: string | null, reject: ImageFormatReject = defaultReject, expected?: AllowedImageFormat): AllowedImageFormat {
   const allowed = Object.values(DECLARED).find((format) => format === metadataFormat);
-  if (!allowed || (declaredMime !== null && DECLARED[declaredMime] !== allowed)) throw reject();
+  if (!allowed || (declaredMime !== null && DECLARED[declaredMime] !== allowed) || (expected !== undefined && allowed !== expected)) throw reject();
   return allowed;
 }
 

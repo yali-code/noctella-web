@@ -84,6 +84,14 @@ describe("decoded format after metadata()", () => {
     expect(() => assertAllowedDecodedFormat("png", "image/jpeg")).toThrow(ImageFormatRejectedError);
     expect(assertAllowedDecodedFormat("jpeg", null)).toBe("jpeg");
   });
+  it("a decoded format different from the signature-detected format is rejected, also in allowlist-only mode", () => {
+    const detected = assertAllowedImageSignature(JPEG, null);
+    expect(detected).toBe("jpeg");
+    expect(() => assertAllowedDecodedFormat("png", null, undefined, detected)).toThrow(ImageFormatRejectedError);
+    expect(() => assertAllowedDecodedFormat("webp", null, undefined, detected)).toThrow(ALLOWED_IMAGE_FORMAT_MESSAGE);
+    expect(assertAllowedDecodedFormat("jpeg", null, undefined, detected)).toBe("jpeg");
+    expect(assertAllowedDecodedFormat("jpeg", "image/jpeg", undefined, detected)).toBe("jpeg");
+  });
 });
 
 describe("readImageSignatureHead", () => {

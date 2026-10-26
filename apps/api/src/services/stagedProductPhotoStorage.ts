@@ -55,10 +55,10 @@ export class LocalStagedProductPhotoStorage implements StagedProductPhotoStorage
     if (path.dirname(input.path) !== input.workDir || path.basename(input.path) !== "input" || info.isSymbolicLink() || !info.isFile() || await realpath(input.path) !== path.resolve(input.path)) throw new PhotoUploadError(400, "PHOTO_UPLOAD_INVALID", "Invalid staged photo");
     if (info.size !== input.size || info.size > PRODUCT_PHOTO_MAX_BYTES) throw new PhotoUploadError(413, "PHOTO_UPLOAD_LIMIT", "Product photos must be 10 MB or smaller");
     // S1-b: actual content must be JPEG/PNG/WebP and match the declared type before any decoder sees it.
-    assertAllowedImageSignature(await readImageSignatureHead(input.path), input.mimetype, rejectW2Format);
+    const detected = assertAllowedImageSignature(await readImageSignatureHead(input.path), input.mimetype, rejectW2Format);
     const image = productPhotoImage(input.path, { limitInputPixels: PHOTO_PIXEL_LIMIT, pages: 1, animated: false });
     const metadata = await image.metadata();
-    assertAllowedDecodedFormat(metadata.format, input.mimetype, rejectW2Format);
+    assertAllowedDecodedFormat(metadata.format, input.mimetype, rejectW2Format, detected);
     if (!metadata.width || !metadata.height || metadata.width > PHOTO_EDGE_LIMIT || metadata.height > PHOTO_EDGE_LIMIT || metadata.width * metadata.height > PHOTO_PIXEL_LIMIT) throw new PhotoUploadError(400, "PHOTO_PIXEL_LIMIT", "Photo dimensions exceed the safety limit");
     const main = path.join(outDir, "main.webp");
     const thumb = path.join(outDir, "thumb.webp");

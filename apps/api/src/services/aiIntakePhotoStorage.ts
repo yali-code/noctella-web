@@ -110,7 +110,7 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
     validateUpload(file);
     await mkdir(this.root, { recursive: true });
     // S1-b: actual content must be JPEG/PNG/WebP and match the declared type before any decoder (either path) sees it.
-    assertAllowedImageSignature("buffer" in file ? file.buffer.subarray(0, IMAGE_SIGNATURE_BYTES) : await readImageSignatureHead(file.path), file.mimetype);
+    const detected = assertAllowedImageSignature("buffer" in file ? file.buffer.subarray(0, IMAGE_SIGNATURE_BYTES) : await readImageSignatureHead(file.path), file.mimetype);
 
     // #390: original-source staging (default OFF, not activatable in production); null keeps the WebP-first path.
     if (aiIntakeOriginalSourceStagingEnabled()) {
@@ -125,7 +125,7 @@ export class LocalAiIntakePhotoStorage implements AiIntakePhotoStorage, AiIntake
     try {
       const image = sharp("buffer" in file ? file.buffer : file.path, { failOn: "error" }).rotate();
       const metadata = await image.metadata();
-      assertAllowedDecodedFormat(metadata.format, file.mimetype);
+      assertAllowedDecodedFormat(metadata.format, file.mimetype, undefined, detected);
       if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
       if (imageAdmissionEnabled()) {
         const reserved = await open(filePath, "wx", 0o600);

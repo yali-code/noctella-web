@@ -81,10 +81,10 @@ async function processProductPhoto(file: { buffer: Buffer; mimetype: string; siz
   // W4 passes matchDeclared:false: its declared type is derived from the staged key (owner decision: allowlist only).
   // The rejection is the same plain BadRequestError as validateUpload's, so W4 (in-process and worker) routes it unchanged.
   const declared = options.matchDeclared === false ? null : file.mimetype;
-  assertAllowedImageSignature(file.buffer.subarray(0, IMAGE_SIGNATURE_BYTES), declared);
+  const detected = assertAllowedImageSignature(file.buffer.subarray(0, IMAGE_SIGNATURE_BYTES), declared);
   const image = productPhotoImage(file.buffer);
   const metadata = await image.metadata();
-  assertAllowedDecodedFormat(metadata.format, declared);
+  assertAllowedDecodedFormat(metadata.format, declared, undefined, detected); // W4 too: decoded must equal the signature
   if (!metadata.width || !metadata.height) throw new BadRequestError("Uploaded file is not a valid image");
 
   const mainBytes = await productPhotoDerivative(image).toBuffer();
