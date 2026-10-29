@@ -11,6 +11,8 @@ export const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 const LAST_SEEN_UPDATE_THROTTLE_MS = 5 * 60 * 1000; // avoid a write on every single validated request
 export const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 export const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 10;
+/** SEC-A1: backstop so a third party cannot lock the owner out by failing from many IPs. */
+export const LOGIN_EMAIL_GLOBAL_MAX_ATTEMPTS = 50;
 
 export type AdminUserStatus = "active" | "disabled";
 export type AdminAuthEventType = "login_success" | "login_failed" | "logout" | "session_expired";
@@ -41,10 +43,17 @@ async function recordAuthEvent(db: DbClient, input: { adminUserId?: string | nul
   });
 }
 
-async function recentFailedLoginCount(db: DbClient, matcher: { email: string } | { ipAddress: string }, since: string): Promise<number> {
-  const clause = "email" in matcher
-    ? and(eq(adminAuthEvents.eventType, "login_failed"), eq(adminAuthEvents.email, matcher.email), gt(adminAuthEvents.createdAt, since))
-    : and(eq(adminAuthEvents.eventType, "login_failed"), eq(adminAuthEvents.ipAddress, matcher.ipAddress), gt(adminAuthEvents.createdAt, since));
+async function recentFailedLoginCount(
+  db: DbClient,
+  matcher: { email: string } | { ipAddress: string } | { email: string; ipAddress: string },
+  since: string,
+): Promise<number> {
+  const clause =
+    "email" in matcher && "ipAddress" in matcher
+      ? and(eq(adminAuthEvents.eventType, "login_failed"), eq(adminAuthEvents.email, matcher.email), eq(adminAuthEvents.ipAddress, matcher.ipAddress), gt(adminAuthEvents.createdAt, since))
+      : "email" in matcher
+        ? and(eq(adminAuthEvents.eventType, "login_failed"), eq(adminAuthEvents.email, matcher.email), gt(adminAuthEvents.createdAt, since))
+        : and(eq(adminAuthEvents.eventType, "login_failed"), eq(adminAuthEvents.ipAddress, matcher.ipAddress), gt(adminAuthEvents.createdAt, since));
   const rows = await db.select().from(adminAuthEvents).where(clause);
   return rows.length;
 }
@@ -61,10 +70,14 @@ export async function login(db: DbClient, input: LoginInput): Promise<LoginResul
   if (!email || !input.password) throw new BadRequestError("Email and password are required");
 
   const since = iso(new Date(Date.now() - LOGIN_RATE_LIMIT_WINDOW_MS));
-  const failuresByEmail = await recentFailedLoginCount(db, { email }, since);
-  const failuresByIp = input.ipAddress ? await recentFailedLoginCount(db, { ipAddress: input.ipAddress }, since) : 0;
-  if (failuresByEmail >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS || failuresByIp >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-    await recordAuthEvent(db, { email, eventType: "login_failed", ipAddress: input.ipAddress, userAgent: input.userAgent });
+  const ipAddress = input.ipAddress;
+  const rateLimited = ipAddress
+    ? (await recentFailedLoginCount(db, { email, ipAddress }, since)) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS ||
+      (await recentFailedLoginCount(db, { ipAddress }, since)) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS ||
+      (await recentFailedLoginCount(db, { email }, since)) >= LOGIN_EMAIL_GLOBAL_MAX_ATTEMPTS
+    : (await recentFailedLoginCount(db, { email }, since)) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS;
+  if (rateLimited) {
+    await recordAuthEvent(db, { email, eventType: "login_failed", ipAddress, userAgent: input.userAgent });
     throw new UnauthorizedError("Invalid email or password");
   }
 

@@ -58,5 +58,6 @@ export async function getCurrentAdmin(): Promise<AdminIdentity | null> {
 export function safeNextPath(next: string | null | undefined): string {
   if (!next) return "/";
   if (!next.startsWith("/") || next.startsWith("//") || next.includes("://")) return "/";
+  if (next.includes("\\") || /[\u0000-\u001f\u007f]/.test(next)) return "/";
   return next;
 }
