@@ -132,13 +132,90 @@ describe("bank debit + official rate (PHASE-2C)", () => {
 });
 
 describe("product selection and weights (PHASE-2C)", () => {
-  it("defaults the weight to the AI suggested price, an admin value overrides it, and a missing AI price stays empty", async () => {
+  it("defaults the weight to the AI suggested price, an admin value overrides it, and a missing AI price gets the set's AI average", async () => {
     const { setId, productIds } = await readySet();
     const noAi = await seedProduct(9, null);
     const out = await setInvoiceCostSetProducts(db as any, setId, [{ productId: productIds[0] }, { productId: productIds[1], valueWeightEur: 99.5 }, { productId: noAi }]);
-    expect(out.items.map((i) => [i.sku, i.valueWeightEur, i.weightSource])).toEqual([["CAM-1", 120, "ai"], ["CAM-2", 99.5, "admin"], ["CAM-9", null, null]]);
+    expect(out.items.map((i) => [i.sku, i.valueWeightEur, i.weightSource])).toEqual([["CAM-1", 120, "ai"], ["CAM-2", 99.5, "admin"], ["CAM-9", 100, "fallback"]]);
     const preview = await previewInvoiceCostSetAllocation(db as any, setId);
-    expect(preview.issues.map((i) => i.code)).toEqual(expect.arrayContaining(["MISSING_WEIGHT", "MISSING_RATE", "MISSING_BANK_DEBIT"]));
+    expect(preview.issues.map((i) => i.code)).toEqual(expect.arrayContaining(["MISSING_RATE", "MISSING_BANK_DEBIT"]));
+    expect(preview.issues.map((i) => i.code)).not.toContain("MISSING_WEIGHT");
+  });
+
+  /** Production example Växjö 227552 - lot 5332164: AI 50/30/50/50 and four products without an AI estimate. */
+  async function vaxjoSet() {
+    const ctx = await readySet();
+    await setInvoiceIntakeBankDebit(db as any, ctx.auctionId, 109.65, fxRate);
+    await setInvoiceIntakeBankDebit(db as any, ctx.transportId, 37.12, fxRate);
+    const ids: string[] = [];
+    for (const [k, ai] of [50, 30, 50, 50, null, null, null, null].entries()) ids.push(await seedProduct(k + 11, ai));
+    return { ...ctx, ids };
+  }
+  const storedWeights = async (setId: string) => (await db.select().from(invoiceCostSetItems).where(eq(invoiceCostSetItems.costSetId, setId)).orderBy(invoiceCostSetItems.createdAt))
+    .map((r) => [r.valueWeightEur, r.weightSource]);
+
+  it("PHASE-2C-1: items without an AI estimate get the set's AI average (45.00), stored with weight_source NULL; the allocation sums to the bank debits and approve is not blocked", async () => {
+    const { setId, ids } = await vaxjoSet();
+    const out = await setInvoiceCostSetProducts(db as any, setId, ids.map((productId) => ({ productId })));
+    expect(out.items.map((i) => [i.valueWeightEur, i.weightSource])).toEqual([[50, "ai"], [30, "ai"], [50, "ai"], [50, "ai"], [45, "fallback"], [45, "fallback"], [45, "fallback"], [45, "fallback"]]);
+    expect(await storedWeights(setId)).toEqual([[50, "ai"], [30, "ai"], [50, "ai"], [50, "ai"], [45, null], [45, null], [45, null], [45, null]]);
+    const preview = await previewInvoiceCostSetAllocation(db as any, setId);
+    expect(preview.issues).toEqual([]);
+    expect(preview.totalAllocatedEur).toBe(preview.totalBankDebitEur);
+    expect(preview.totalBankDebitEur).toBe(146.77);
+    const approved: any = await approveInvoiceCostSet(db as any, setId, { clientId: "test-client" }, execute);
+    expect(approved.status).toBe("approved");
+  });
+
+  it("PHASE-2C-1: with no AI estimate in the set every item gets weight 1 (equal split)", async () => {
+    const { setId, auctionId, transportId } = await readySet();
+    await setInvoiceIntakeBankDebit(db as any, auctionId, 109.65, fxRate);
+    await setInvoiceIntakeBankDebit(db as any, transportId, 37.12, fxRate);
+    const ids = [await seedProduct(21, null), await seedProduct(22, null), await seedProduct(23, 0)];
+    const out = await setInvoiceCostSetProducts(db as any, setId, ids.map((productId) => ({ productId })));
+    expect(out.items.map((i) => [i.valueWeightEur, i.weightSource])).toEqual([[1, "fallback"], [1, "fallback"], [1, "fallback"]]);
+    const preview = await previewInvoiceCostSetAllocation(db as any, setId);
+    expect(preview.issues).toEqual([]);
+    // Equal split: each cost component differs by at most its 1 remainder cent across items.
+    for (const key of ["lotEur", "hammerFeeEur", "premiumEur", "transportEur", "forwarderEur", "fxDiffEur"] as const) {
+      const cents = preview.items.map((i) => Math.round(i[key] * 100));
+      expect(Math.max(...cents) - Math.min(...cents)).toBeLessThanOrEqual(1);
+    }
+    const totals = preview.items.map((i) => i.totalEur);
+    expect(Math.round(totals.reduce((a, b) => a + b, 0) * 100)).toBe(14677);
+  });
+
+  it("PHASE-2C-1: an admin override of a fallback is kept on recompute; removing an AI product recomputes the average", async () => {
+    const { setId, ids } = await vaxjoSet();
+    await setInvoiceCostSetProducts(db as any, setId, ids.map((productId, k) => (k === 4 ? { productId, valueWeightEur: 12 } : { productId })));
+    expect((await storedWeights(setId))[4]).toEqual([12, "admin"]);
+    // Remove the 30 AI product: the average becomes 50; the admin weight stays.
+    const out = await setInvoiceCostSetProducts(db as any, setId, ids.filter((_, k) => k !== 1).map((productId, k) => (k === 3 ? { productId, valueWeightEur: 12 } : { productId })));
+    expect(out.items.map((i) => [i.valueWeightEur, i.weightSource])).toEqual([[50, "ai"], [50, "ai"], [50, "ai"], [12, "admin"], [50, "fallback"], [50, "fallback"], [50, "fallback"]]);
+    // A preview recomputes too and never touches the admin weight.
+    await previewInvoiceCostSetAllocation(db as any, setId);
+    expect(await storedWeights(setId)).toEqual([[50, "ai"], [50, "ai"], [50, "ai"], [12, "admin"], [50, null], [50, null], [50, null]]);
+  });
+
+  it("PHASE-2C-1: an existing open set with empty weights is filled by the next preview", async () => {
+    const { setId, ids } = await vaxjoSet();
+    await setInvoiceCostSetProducts(db as any, setId, ids.map((productId) => ({ productId })));
+    // Pre-2C-1 data: products without an AI estimate were stored with no weight.
+    for (const productId of ids.slice(4)) await db.update(invoiceCostSetItems).set({ valueWeightEur: null, weightSource: null } as any).where(eq(invoiceCostSetItems.productId, productId));
+    expect((await getInvoiceCostSet(db as any, setId) as any).items[4]).toMatchObject({ valueWeightEur: null, weightSource: null });
+    const preview = await previewInvoiceCostSetAllocation(db as any, setId);
+    expect(preview.issues).toEqual([]);
+    expect(await storedWeights(setId)).toEqual([[50, "ai"], [30, "ai"], [50, "ai"], [50, "ai"], [45, null], [45, null], [45, null], [45, null]]);
+  });
+
+  it("PHASE-2C-1: an admin weight of 0 is rejected on save and blocks the preview with MISSING_WEIGHT", async () => {
+    const { setId, ids } = await vaxjoSet();
+    await expect(setInvoiceCostSetProducts(db as any, setId, [{ productId: ids[0], valueWeightEur: 0 }])).rejects.toBeInstanceOf(BadRequestError);
+    await setInvoiceCostSetProducts(db as any, setId, ids.map((productId) => ({ productId })));
+    await db.update(invoiceCostSetItems).set({ valueWeightEur: 0, weightSource: "admin" } as any).where(eq(invoiceCostSetItems.productId, ids[4]));
+    const preview = await previewInvoiceCostSetAllocation(db as any, setId);
+    expect(preview.issues.map((i) => i.code)).toEqual(["MISSING_WEIGHT"]);
+    expect((await storedWeights(setId))[4]).toEqual([0, "admin"]);
   });
 
   it("rejects duplicates, unknown products, a product on a non-cancelled purchase line and a product in another open set", async () => {

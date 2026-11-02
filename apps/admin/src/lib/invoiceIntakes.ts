@@ -53,7 +53,8 @@ export interface InvoiceCostSetItem {
   aiSuggestedPriceEur: number | null;
   purchaseCost: number | null;
   valueWeightEur: number | null;
-  weightSource: "ai" | "admin" | null;
+  /** "fallback": the average of the set's AI estimates (or 1 when none), for an item without an AI estimate. */
+  weightSource: "ai" | "admin" | "fallback" | null;
   allocLotEur: number | null;
   allocHammerFeeEur: number | null;
   allocPremiumEur: number | null;
