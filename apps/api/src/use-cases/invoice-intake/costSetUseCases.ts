@@ -223,6 +223,10 @@ export async function approveCostSetUseCase(deps: { repository: InvoiceIntakeRep
   const existing = await deps.repository.findPurchaseByErpReference(reference);
   if (existing) {
     if (existing.status === "Cancelled") throw new ConflictError("The purchase created for this cost set was cancelled; it cannot be reused");
+    // Only a Draft purchase may be reused: an ordered or received purchase must never be re-allocated or approved here.
+    if (existing.status !== "Draft") {
+      throw new InvoiceCostSetBlockedError([{ code: "PURCHASE_NOT_DRAFT", message: `The purchase for this cost set (${existing.id}) is ${existing.status}, not Draft; it cannot be reused` }]);
+    }
     if (!sameLines(existing.lines, payload.lines)) throw new ConflictError(`A purchase for this cost set already exists (${existing.id}) with different lines; restore the previous selection or cancel that purchase`);
     purchaseId = existing.id;
   } else {

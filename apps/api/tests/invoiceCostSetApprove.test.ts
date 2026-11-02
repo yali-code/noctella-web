@@ -299,4 +299,41 @@ describe("approve -> Draft purchase (PHASE-2C)", () => {
     await expect(approveInvoiceCostSet(db as any, setId, { clientId: "test-client" }, execute)).rejects.toThrow(/already exists .* with different lines/);
     expect(await db.select().from(purchases)).toHaveLength(1);
   });
+
+  it("refuses (409) to reuse an existing matching purchase that is no longer Draft: no allocate, no new purchase, set stays open", async () => {
+    const { setId } = await fullyPrepared();
+    execute.mockImplementationOnce(executePurchaseCommand).mockImplementationOnce(async () => { throw new Error("allocate failed"); });
+    await expect(approveInvoiceCostSet(db as any, setId, { clientId: "test-client" }, execute)).rejects.toThrow(/allocate failed/);
+    const [created] = await db.select().from(purchases);
+    await db.update(purchases).set({ status: "Ordered" } as any).where(eq(purchases.id, created.id));
+
+    execute.mockClear();
+    const err = await approveInvoiceCostSet(db as any, setId, { clientId: "test-client" }, execute).catch((e) => e);
+    expect(err).toBeInstanceOf(InvoiceCostSetBlockedError);
+    expect(err.issues.map((i: any) => i.code)).toEqual(["PURCHASE_NOT_DRAFT"]);
+    expect(execute).not.toHaveBeenCalled();
+    expect(await db.select().from(purchases)).toHaveLength(1);
+    expect(await db.select().from(purchaseAllocations).where(eq(purchaseAllocations.purchaseId, created.id))).toHaveLength(0);
+    expect((await db.select().from(invoiceCostSets).where(eq(invoiceCostSets.id, setId)))[0]).toMatchObject({ status: "open", purchaseId: null });
+  });
+
+  it("two concurrent approves of the same set create exactly one purchase and approve the set once", async () => {
+    const { setId } = await fullyPrepared();
+    const results = await Promise.allSettled([
+      approveInvoiceCostSet(db as any, setId, { clientId: "test-client" }, execute),
+      approveInvoiceCostSet(db as any, setId, { clientId: "test-client" }, execute),
+    ]);
+
+    const all = await db.select().from(purchases).where(eq(purchases.erpReferenceId, `invoice-cost-set:${setId}`));
+    expect(all).toHaveLength(1);
+    const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled");
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0].value).toMatchObject({ status: "approved", purchaseId: all[0].id });
+    for (const r of results) if (r.status === "rejected") expect(r.reason).toBeInstanceOf(ConflictError);
+
+    const [set] = await db.select().from(invoiceCostSets).where(eq(invoiceCostSets.id, setId));
+    expect(set).toMatchObject({ status: "approved", purchaseId: all[0].id });
+    expect(await db.select().from(purchases)).toHaveLength(1);
+    expect(await db.select().from(stockMovements)).toHaveLength(0);
+  });
 });
