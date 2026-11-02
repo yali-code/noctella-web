@@ -16,6 +16,18 @@ import {
 } from "../use-cases/invoice-intake/useCases";
 import type { InvoiceEdits } from "../use-cases/invoice-intake/invoiceReview";
 import { createInvoiceExtractor, type InvoiceExtractor } from "../ai-intake/openAiInvoiceExtractor";
+import {
+  approveCostSetUseCase,
+  costSetItemsView,
+  intakeFxSummary,
+  listCostSetProductCandidatesUseCase,
+  previewCostSetAllocationUseCase,
+  setCostSetProductsUseCase,
+  setIntakeBankDebitAndRateUseCase,
+  type PurchaseCommandPort,
+} from "../use-cases/invoice-intake/costSetUseCases";
+import { ecbRateLookup, type FxRateLookup } from "./ecbReferenceRates";
+import { executePurchaseCommand } from "./erpPurchasingBridge";
 
 /**
  * PHASE-2A application service: orchestration and output mapping only - business rules live in
@@ -37,7 +49,7 @@ function toCostSet(row: InvoiceCostSetRecord) {
 /** PHASE-2B: the raw extraction/edits JSON is replaced by the review view (effective values, evidence, checks). */
 function toIntake(row: InvoiceIntakeRecord) {
   const { fileRelativePath: _omitted, extractionJson: _extraction, editsJson: _edits, ...rest } = row;
-  return { ...rest, review: invoiceIntakeReviewView(row) };
+  return { ...rest, review: invoiceIntakeReviewView(row), fx: intakeFxSummary(row) };
 }
 
 export async function createInvoiceCostSet(db: DbClient, input: { title: string; notes?: string | null }) {
@@ -50,8 +62,9 @@ export async function listInvoiceCostSets(db: DbClient, query: { page: number; p
 }
 
 export async function getInvoiceCostSet(db: DbClient, id: string) {
-  const { costSet, intakes } = await getInvoiceCostSetUseCase({ repository: repositoryFor(db) }, id);
-  return { ...toCostSet(costSet), intakes: intakes.map(toIntake) };
+  const repository = repositoryFor(db);
+  const { costSet, intakes } = await getInvoiceCostSetUseCase({ repository }, id);
+  return { ...toCostSet(costSet), intakes: intakes.map(toIntake), items: await costSetItemsView(repository, id) };
 }
 
 export async function cancelInvoiceCostSet(db: DbClient, id: string) {
@@ -84,6 +97,49 @@ export async function extractInvoiceIntake(
 
 export async function reviewInvoiceIntake(db: DbClient, id: string, input: { edits: InvoiceEdits; confirm: boolean }) {
   return toIntake(await reviewInvoiceIntakeUseCase({ repository: repositoryFor(db) }, id, input));
+}
+
+/** PHASE-2C: stores the bank debit and fetches the official ECB rate for the intake's paid date. */
+export async function setInvoiceIntakeBankDebit(db: DbClient, id: string, bankDebitEur: number, fxRate: FxRateLookup = ecbRateLookup) {
+  return toIntake(await setIntakeBankDebitAndRateUseCase({ repository: repositoryFor(db), fxRate }, id, bankDebitEur));
+}
+
+export async function listInvoiceCostSetProductCandidates(db: DbClient, id: string, query: string) {
+  return { items: await listCostSetProductCandidatesUseCase({ repository: repositoryFor(db) }, id, query) };
+}
+
+export async function setInvoiceCostSetProducts(db: DbClient, id: string, items: Array<{ productId: string; valueWeightEur?: number | null }>) {
+  return { items: await setCostSetProductsUseCase({ repository: repositoryFor(db) }, id, items) };
+}
+
+export async function previewInvoiceCostSetAllocation(db: DbClient, id: string) {
+  return previewCostSetAllocationUseCase({ repository: repositoryFor(db) }, id);
+}
+
+/**
+ * PHASE-2C: the canonical purchase command path the ERP routes use (routes/erp.ts /commands/purchases/*), called
+ * with the caller's ERP client id. Never writes purchase tables directly.
+ */
+export function purchaseCommandsFor(db: DbClient, clientId: string, execute: typeof executePurchaseCommand = executePurchaseCommand): PurchaseCommandPort {
+  return {
+    async createPurchase(payload, idempotencyKey) {
+      const out: any = await execute(db, clientId, { commandId: idempotencyKey, idempotencyKey, payload }, "CreatePurchase");
+      // A replayed command returns its stored result (entityId) instead of the purchase.
+      return { id: String(out?.id ?? out?.entityId) };
+    },
+    async allocateEqual(purchaseId, idempotencyKey) {
+      await execute(db, clientId, { commandId: idempotencyKey, idempotencyKey, payload: { allocationMethod: "Equal" } }, "AllocatePurchaseCosts", purchaseId);
+    },
+  };
+}
+
+export async function approveInvoiceCostSet(
+  db: DbClient,
+  id: string,
+  input: { clientId: string; approvedBy?: string | null },
+  execute: typeof executePurchaseCommand = executePurchaseCommand,
+) {
+  return toCostSet(await approveCostSetUseCase({ repository: repositoryFor(db), purchases: purchaseCommandsFor(db, input.clientId, execute) }, { costSetId: id, approvedBy: input.approvedBy }));
 }
 
 export async function getInvoiceIntakeFile(db: DbClient, id: string, storage: InvoiceFileStorage = invoiceFileStorage) {

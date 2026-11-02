@@ -661,6 +661,22 @@ export class InvoiceExtractionFailedError extends Error {
   }
 }
 
+/** PHASE-2C: the official (ECB) reference rate could not be fetched or read. Fixed message only; the admin can retry. */
+export class FxRateUnavailableError extends Error {
+  constructor() {
+    super("The official exchange rate is not available right now. Try again later.");
+    this.name = "FxRateUnavailableError";
+  }
+}
+
+/** PHASE-2C: a cost set preview/approve was refused because of blocking issues; carries the issue list. */
+export class InvoiceCostSetBlockedError extends ConflictError {
+  constructor(readonly issues: unknown[]) {
+    super("The cost set cannot be approved while it has blocking issues");
+    this.name = "InvoiceCostSetBlockedError";
+  }
+}
+
 /** PHASE-2B: a review confirmation was refused because a blocking check failed; carries the full check list. */
 export class InvoiceReviewChecksFailedError extends ConflictError {
   constructor(readonly checks: unknown[]) {

@@ -54,3 +54,13 @@ export const invoiceIntakeReviewSchema = z.object({
   }).partial().strict().default({}),
   confirm: z.boolean().default(false),
 }).strict();
+
+/** PHASE-2C: bank debit, product selection and the candidate search. Business rules are in the use cases. */
+const positiveEur = z.number().finite().positive().max(10_000_000);
+export const invoiceIntakeBankDebitSchema = z.object({ bankDebitEur: positiveEur }).strict();
+
+export const invoiceCostSetProductsSchema = z.object({
+  items: z.array(z.object({ productId: z.string().trim().min(1).max(64), valueWeightEur: positiveEur.nullable().optional() }).strict()).max(200),
+}).strict();
+
+export const invoiceCostSetCandidatesQuerySchema = z.object({ q: z.string().max(100).default("") });
