@@ -21,6 +21,7 @@ import {
   receivePurchase,
   redactSafeError,
   supplierHref,
+  updatePurchase,
   updateSupplier,
 } from "./erpPurchasingBridge";
 
@@ -94,6 +95,19 @@ describe("erp purchasing bridge network behavior (Sprint 57B)", () => {
     const [path, init] = fetchSpy.mock.calls[0];
     expect(path).toBe("/api/erp/commands/purchases/create");
     expect(JSON.parse((init as RequestInit).body as string).payload.lines).toHaveLength(1);
+  });
+
+  it("updatePurchase posts to the update proxy path with a fresh key per call and the current expectedUpdatedAt (PHASE-1B)", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () => new Response(JSON.stringify({ id: "p1" }), { status: 200, headers: { "content-type": "application/json" } }));
+    await updatePurchase("p1", { invoiceReferenceNumber: "INV-1" }, "2026-01-01T00:00:00.000Z");
+    await updatePurchase("p1", { invoiceReferenceNumber: "INV-1" }, "2026-01-01T00:00:00.000Z");
+    const [path, init] = fetchSpy.mock.calls[0];
+    expect(path).toBe("/api/erp/commands/purchases/p1/update");
+    const sent = JSON.parse((init as RequestInit).body as string);
+    expect(sent.payload).toEqual({ invoiceReferenceNumber: "INV-1", expectedUpdatedAt: "2026-01-01T00:00:00.000Z" });
+    expect(sent.payload.expectedVersion).toBeUndefined();
+    const second = JSON.parse((fetchSpy.mock.calls[1][1] as RequestInit).body as string);
+    expect(second.idempotencyKey).not.toBe(sent.idempotencyKey);
   });
 
   it("receivePurchase forwards the exact caller-supplied idempotency key, never generating its own", async () => {

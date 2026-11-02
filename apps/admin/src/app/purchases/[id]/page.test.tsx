@@ -121,6 +121,58 @@ describe("Purchase detail lifecycle actions (Sprint 57B)", () => {
     expect(alert).toHaveTextContent("Purchase cannot be cancelled in current status");
   });
 
+  it("shows the invoice header fields and the line lot reference (PHASE-1B)", async () => {
+    await renderPage(basePurchase({
+      invoiceReferenceNumber: "INV-77",
+      auctionHouse: "Hôtel Drouot",
+      auctionDate: "2026-10-30",
+      buyerPremium: 25.5,
+      notes: "USD 120 @ 0.92",
+      lines: [{ id: "l1", titleSnapshot: "Lot 1", sourceLineReference: "LOT-12", quantity: 3, receivedQuantity: 0, unitPurchaseCost: 10, productId: "prod-1" }],
+    }));
+    expect(screen.getByText("Invoice number").nextSibling).toHaveTextContent("INV-77");
+    expect(screen.getByText("Hôtel Drouot")).toBeInTheDocument();
+    expect(screen.getByText("2026-10-30")).toBeInTheDocument();
+    expect(screen.getByText("€25.50")).toBeInTheDocument();
+    expect(screen.getByText("USD 120 @ 0.92")).toBeInTheDocument();
+    expect(screen.getByText("LOT-12")).toBeInTheDocument();
+    expect(screen.queryByText(/Manual/)).not.toBeInTheDocument();
+  });
+
+  it("offers Edit invoice details only for a Draft purchase (PHASE-1B)", async () => {
+    await renderPage(basePurchase({ status: "Ordered" }));
+    expect(screen.queryByText("Edit invoice details")).not.toBeInTheDocument();
+  });
+
+  it("submits the Draft edit form to updatePurchase with expectedUpdatedAt and reloads (PHASE-1B)", async () => {
+    const user = userEvent.setup();
+    await renderPage(basePurchase({ status: "Draft", updatedAt: "2026-01-02T00:00:00.000Z", invoiceReferenceNumber: "INV-1" }));
+    const updateSpy = vi.spyOn(bridge, "updatePurchase").mockResolvedValue({});
+    const purchaseSpy = vi.spyOn(bridge.purchasingApi, "purchase").mockResolvedValueOnce(basePurchase({ invoiceReferenceNumber: "INV-2", shippingCost: 12 }));
+    await user.click(screen.getByText("Edit invoice details"));
+    const invoiceInput = screen.getByLabelText("Invoice number");
+    expect(invoiceInput).toHaveValue("INV-1");
+    await user.clear(invoiceInput);
+    await user.type(invoiceInput, "INV-2");
+    await user.type(screen.getByLabelText("Shipping (EUR)"), "12");
+    await user.click(screen.getByText("Save invoice details"));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith("p1", { invoiceReferenceNumber: "INV-2", shippingCost: 12 }, "2026-01-02T00:00:00.000Z"));
+    await screen.findByText("€12.00");
+    expect(purchaseSpy).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Save invoice details")).not.toBeInTheDocument();
+  });
+
+  it("shows an update API error as an alert and keeps the edit form open (PHASE-1B)", async () => {
+    const user = userEvent.setup();
+    await renderPage(basePurchase({ status: "Draft" }));
+    vi.spyOn(bridge, "updatePurchase").mockRejectedValue(new Error("Purchase has changed since expectedUpdatedAt"));
+    await user.click(screen.getByText("Edit invoice details"));
+    await user.click(screen.getByText("Save invoice details"));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Purchase has changed since expectedUpdatedAt");
+    expect(screen.getByText("Save invoice details")).toBeInTheDocument();
+  });
+
   it("activates Allocate Costs and labels its effect accurately (no finance-ledger claim; documents the quantity-1 purchase-cost sync)", async () => {
     const user = userEvent.setup();
     await renderPage(basePurchase({ status: "Draft" }));

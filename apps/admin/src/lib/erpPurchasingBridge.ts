@@ -26,6 +26,33 @@ export function commandStatusLabel(status:string){ return status === "Conflict" 
 export function supplierHref(id:string){ return `/suppliers/${id}`; } export function purchaseHref(id:string){ return `/purchases/${id}`; } export function productHref(id:string){ return `/products/${id}`; }
 export function buildPurchaseQuery(filters:any){ const q=new URLSearchParams(); for(const [k,v] of Object.entries(filters)) if(v) q.set(k,String(v)); return q.toString(); }
 
+/** PHASE-1B: optional invoice/fee header fields shared by the create form and the Draft edit form. */
+export const purchaseHeaderFields = [
+  { key: "invoiceReferenceNumber", label: "Invoice number", kind: "text" },
+  { key: "auctionHouse", label: "Auction house", kind: "text" },
+  { key: "auctionDate", label: "Auction date", kind: "date" },
+  { key: "externalReference", label: "External reference", kind: "text" },
+  { key: "buyerPremium", label: "Buyer premium (EUR)", kind: "money" },
+  { key: "shippingCost", label: "Shipping (EUR)", kind: "money" },
+  { key: "miscellaneousCost", label: "Miscellaneous (EUR)", kind: "money" },
+  { key: "taxVat", label: "VAT (EUR)", kind: "money" },
+  { key: "notes", label: "Notes (original currency amount, FX rate)", kind: "notes" },
+] as const;
+export type PurchaseHeaderDraft = Record<(typeof purchaseHeaderFields)[number]["key"], string>;
+export const emptyPurchaseHeaderDraft = (): PurchaseHeaderDraft => Object.fromEntries(purchaseHeaderFields.map((f) => [f.key, ""])) as PurchaseHeaderDraft;
+export function purchaseHeaderDraftFrom(purchase:any): PurchaseHeaderDraft { return Object.fromEntries(purchaseHeaderFields.map((f) => { const v=purchase?.[f.key]; return [f.key, v == null ? "" : f.kind === "date" ? String(v).slice(0,10) : String(v)]; })) as PurchaseHeaderDraft; }
+/** Empty fields are omitted; money fields must be numbers >= 0. Throws a user-facing Error otherwise. */
+export function buildPurchaseHeaderPayload(draft: PurchaseHeaderDraft) {
+  const out: Record<string, string|number> = {};
+  for (const f of purchaseHeaderFields) {
+    const raw = draft[f.key].trim();
+    if (!raw) continue;
+    if (f.kind === "money") { const n=Number(raw); if (Number.isNaN(n) || n < 0) throw new Error(`${f.label} must be a number of 0 or more`); out[f.key]=n; }
+    else out[f.key]=raw;
+  }
+  return out;
+}
+
 /**
  * Sprint 57B: /api/erp/* is requireErp-protected on the backend (needs the
  * server-only X-Noctella-ERP-Key), so the browser cannot call it directly -
@@ -73,6 +100,11 @@ export async function updateSupplier(id: string, payload: any, expectedUpdatedAt
 }
 export async function createPurchase(payload: any) {
   return erpPost<any>(`/api/erp/commands/purchases/create`, crypto.randomUUID(), payload);
+}
+/** expectedUpdatedAt must be the purchase's current updatedAt value: the live bridge-local
+ * updatePurchase() checks it by plain equality and ignores expectedVersion (same as updateSupplier). */
+export async function updatePurchase(id: string, payload: any, expectedUpdatedAt?: string) {
+  return erpPost<any>(`/api/erp/commands/purchases/${id}/update`, crypto.randomUUID(), { ...payload, expectedUpdatedAt });
 }
 /** idempotencyKey must be caller-supplied and stable across retries of the same submission
  * attempt (receivePurchaseUseCase replays on a repeated key+payload, conflicts on a repeated

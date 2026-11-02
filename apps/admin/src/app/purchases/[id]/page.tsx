@@ -5,14 +5,19 @@ import { LandedCostAllocationMethod, PurchaseStatus } from "@noctella/shared";
 import {
   allocatePurchaseCosts,
   allocationMethodLabels,
+  buildPurchaseHeaderPayload,
   cancelPurchase,
   costCompleteness,
   mapLandedCostSummary,
   markPurchaseOrdered,
   productLinkWarning,
+  purchaseHeaderDraftFrom,
+  purchaseHeaderFields,
   purchasingApi,
   receiptStatus,
   receivePurchase,
+  updatePurchase,
+  type PurchaseHeaderDraft,
 } from "@/lib/erpPurchasingBridge";
 import { ConfirmButton } from "@/components/lifecycle/ConfirmButton";
 
@@ -102,12 +107,39 @@ export default function PurchaseDetailPage({ params }: { params: { id: string } 
     }
   }
 
+  const [editDraft, setEditDraft] = useState<PurchaseHeaderDraft | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function openEdit() {
+    setEditDraft(purchaseHeaderDraftFrom(purchase));
+    setEditError(null);
+  }
+  async function submitEdit() {
+    if (editBusy || !editDraft) return;
+    setEditBusy(true);
+    setBusyCount((c) => c + 1);
+    setEditError(null);
+    try {
+      // updatePurchase generates a fresh idempotency key per submission attempt, like createPurchase.
+      await updatePurchase(purchase.id, buildPurchaseHeaderPayload(editDraft), purchase.updatedAt);
+      setEditDraft(null);
+      load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update invoice details");
+    } finally {
+      setEditBusy(false);
+      setBusyCount((c) => c - 1);
+    }
+  }
+
   if (loading) return <p style={{ color: "var(--noctella-aged-bronze)" }}>Loading purchase...</p>;
   if (loadError && !purchase) return <p role="alert" style={{ color: "#c86a6a" }}>{loadError}</p>;
   if (!purchase) return null;
 
   const blockedByOther = busyCount > 0;
   const canMarkOrdered = purchase.status === PurchaseStatus.Draft;
+  const canEditInvoice = purchase.status === PurchaseStatus.Draft;
   const canReceive = ![PurchaseStatus.Cancelled, PurchaseStatus.Received].includes(purchase.status) && purchase.lines.some((l: any) => l.quantity > l.receivedQuantity);
   const canAllocate = purchase.status !== PurchaseStatus.Received;
   const canCancel = ![PurchaseStatus.Received, PurchaseStatus.PartiallyReceived, PurchaseStatus.Cancelled].includes(purchase.status);
@@ -122,17 +154,60 @@ export default function PurchaseDetailPage({ params }: { params: { id: string } 
       <p>Ordered {purchase.orderedAt ?? "—"} · Received {purchase.receivedAt ?? "—"} · Created {purchase.createdAt}</p>
 
       <section>
+        <h2>Invoice details</h2>
+        <dl style={{ fontSize: 13, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "2px 12px" }}>
+          {purchaseHeaderFields.map((f) => {
+            const v = purchase[f.key];
+            return [
+              <dt key={`${f.key}-dt`}>{f.label}</dt>,
+              <dd key={`${f.key}-dd`} style={{ margin: 0, whiteSpace: "pre-wrap" }}>{v == null || v === "" ? "—" : f.kind === "money" ? `€${Number(v).toFixed(2)}` : String(v)}</dd>,
+            ];
+          })}
+        </dl>
+        {canEditInvoice && !editDraft && (
+          <button style={buttonStyle} disabled={blockedByOther} onClick={openEdit}>Edit invoice details</button>
+        )}
+        {canEditInvoice && editDraft && (
+          <div style={{ marginTop: 6 }}>
+            {purchaseHeaderFields.map((f) => (
+              <label key={f.key} style={{ fontSize: 13, marginRight: 8, display: "inline-block", marginBottom: 6 }}>
+                {f.label}
+                {f.kind === "notes" ? (
+                  <textarea style={{ ...inputStyle, marginLeft: 6, verticalAlign: "top" }} value={editDraft[f.key]} onChange={(e) => setEditDraft((d) => d && { ...d, [f.key]: e.target.value })} />
+                ) : (
+                  <input
+                    style={{ ...inputStyle, marginLeft: 6 }}
+                    type={f.kind === "money" ? "number" : f.kind === "date" ? "date" : "text"}
+                    min={f.kind === "money" ? 0 : undefined}
+                    step={f.kind === "money" ? "0.01" : undefined}
+                    value={editDraft[f.key]}
+                    onChange={(e) => setEditDraft((d) => d && { ...d, [f.key]: e.target.value })}
+                  />
+                )}
+              </label>
+            ))}
+            <div>
+              <button disabled={editBusy} style={buttonStyle} onClick={submitEdit}>{editBusy ? "Saving…" : "Save invoice details"}</button>
+              <button disabled={editBusy} style={buttonStyle} onClick={() => setEditDraft(null)}>Cancel edit</button>
+            </div>
+            {editError && <p role="alert" style={{ color: "#c86a6a" }}>{editError}</p>}
+          </div>
+        )}
+      </section>
+
+      <section>
         <h2>Lines — {receiptStatus(purchase)}</h2>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: "left" }}>
-              <th>Title</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Unit cost</th><th>Product</th>
+              <th>Title</th><th>Lot ref</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Unit cost</th><th>Product</th>
             </tr>
           </thead>
           <tbody>
             {purchase.lines.map((l: any) => (
               <tr key={l.id}>
                 <td>{l.titleSnapshot}</td>
+                <td>{l.sourceLineReference ?? "—"}</td>
                 <td>{l.quantity}</td>
                 <td>{l.receivedQuantity}</td>
                 <td>{l.quantity - l.receivedQuantity}</td>
