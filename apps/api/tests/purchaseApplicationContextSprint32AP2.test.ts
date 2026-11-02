@@ -293,6 +293,7 @@ const cases: Array<[string, () => void | Promise<void>]> = [
         Object.keys(buildPurchaseApplicationContext(deps())).sort(),
       ).toEqual(
         [
+          "aiIntakeResultProductLookup",
           "clock",
           "configuration",
           "eventPublisher",

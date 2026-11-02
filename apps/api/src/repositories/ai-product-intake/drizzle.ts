@@ -1,5 +1,5 @@
 import { intakeTimestampFields, photoTimestampValues, photoTimestampRecord } from "../photoTimestamps";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import type * as sqliteSchema from "../../db/schema.sqlite";
 import type * as postgresSchema from "../../db/schema.postgres";
@@ -215,6 +215,15 @@ export function createDrizzleAiProductIntakeRepository(db: any, schema: Schema):
       // directly (transaction-scoped) by
       // services/aiIntakeApplyTransactionCapabilityForDb.ts.
       return applyIntakeWithExpectedStateInTransaction(db, schema, "asynchronous", input) as Promise<AiProductIntakeApplyResult>;
+    },
+
+    async existsByResultProductIds(productIds: readonly string[]): Promise<readonly string[]> {
+      if (!productIds.length) return [];
+      const rows = await db
+        .select({ resultProductId: table.resultProductId })
+        .from(table)
+        .where(inArray(table.resultProductId, productIds as string[]));
+      return rows.map((r: any) => r.resultProductId as string);
     },
   };
 }

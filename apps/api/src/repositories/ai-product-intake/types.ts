@@ -105,4 +105,10 @@ export interface AiProductIntakeRepository {
    * apply audit fields.
    */
   applyWithExpectedState(input: AiProductIntakeApplyInput): Promise<AiProductIntakeApplyResult>;
+  /**
+   * PHASE-1A: read-only lookup backing the purchase Receive guard. Given candidate product ids,
+   * returns the subset that are the result product of some ai_product_intakes row (any status),
+   * i.e. were created through AI intake rather than a purchase receipt.
+   */
+  existsByResultProductIds(productIds: readonly string[]): Promise<readonly string[]>;
 }
