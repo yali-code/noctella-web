@@ -86,6 +86,24 @@ describe("Invoice cost set page — allocation and approve (PHASE-2C)", () => {
     expect(screen.getAllByText("admin").length).toBeGreaterThan(0);
   });
 
+  it("PHASE-2C-1: shows the fallback (average) badge with the pre-filled weight and the note; editing it makes it admin", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(lib.invoiceIntakeApi, "getCostSet").mockResolvedValue({ ...setRow, intakes: [reviewedIntake()], items: [item(5), item(9, { aiSuggestedPriceEur: null, valueWeightEur: 45, weightSource: "fallback" })] } as any);
+    const save = vi.spyOn(lib.invoiceIntakeApi, "setProducts").mockResolvedValue({ items: [item(5), item(9, { aiSuggestedPriceEur: null, valueWeightEur: 40, weightSource: "admin" })] } as any);
+    render(<InvoiceCostSetDetailPage params={{ id: "cs1" }} />);
+    const row = (await screen.findByText("CAM-9")).closest("tr")!;
+    expect(within(row).getByText("fallback (average)")).toBeInTheDocument();
+    expect(within(row).getByLabelText("Weight CAM-9")).toHaveValue(45);
+    expect(screen.getByText("Items without an AI estimate use the average of the AI estimates in this set; edit any value to override.")).toBeInTheDocument();
+
+    const weight = within(row).getByLabelText("Weight CAM-9");
+    await user.clear(weight);
+    await user.type(weight, "40");
+    expect(within(row).getByText("admin")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save products" }));
+    expect(save).toHaveBeenCalledWith("cs1", [{ productId: "p5" }, { productId: "p9", valueWeightEur: 40 }]);
+  });
+
   it("shows the preview table with a totals row equal to the bank debits; issues block approve (red), warnings show (amber)", async () => {
     const user = userEvent.setup();
     vi.spyOn(lib.invoiceIntakeApi, "getCostSet").mockResolvedValue({ ...setRow, intakes: [reviewedIntake()], items: [item(1), item(2)] } as any);

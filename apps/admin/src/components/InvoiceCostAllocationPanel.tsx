@@ -74,7 +74,8 @@ export function BankDebitForm({ intake, editable, onSaved }: { intake: InvoiceIn
   );
 }
 
-interface Row { productId: string; sku: string | null; title: string | null; aiSuggestedPriceEur: number | null; weight: string; source: "ai" | "admin" | null }
+interface Row { productId: string; sku: string | null; title: string | null; aiSuggestedPriceEur: number | null; weight: string; source: InvoiceCostSetItem["weightSource"] }
+const SOURCE_LABELS = { ai: "AI", admin: "admin", fallback: "fallback (average)" } as const;
 const toRow = (i: InvoiceCostSetItem): Row => ({ productId: i.productId, sku: i.sku, title: i.title, aiSuggestedPriceEur: i.aiSuggestedPriceEur, weight: i.valueWeightEur == null ? "" : String(i.valueWeightEur), source: i.weightSource });
 
 export function CostSetAllocationPanel({ costSet, onChanged }: { costSet: InvoiceCostSetDetail; onChanged: () => void }) {
@@ -147,13 +148,14 @@ export function CostSetAllocationPanel({ costSet, onChanged }: { costSet: Invoic
                     ? <input aria-label={`Weight ${r.sku}`} style={inputStyle} type="number" step="0.01" min="0" value={r.weight} onChange={(e) => editWeight(r.productId, e.target.value)} />
                     : r.weight || "—"}
                 </td>
-                <td>{r.source === "admin" ? "admin" : r.source === "ai" ? "AI" : "missing"}</td>
+                <td>{r.source ? SOURCE_LABELS[r.source] : "fallback (on save)"}</td>
                 <td>{open && <button style={buttonStyle} disabled={busy} onClick={() => remove(r.productId)}>Remove</button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+      {rows.length > 0 && <p style={{ margin: "4px 0", fontSize: 12 }}>Items without an AI estimate use the average of the AI estimates in this set; edit any value to override.</p>}
 
       {open && (
         <div style={{ marginTop: 8 }}>

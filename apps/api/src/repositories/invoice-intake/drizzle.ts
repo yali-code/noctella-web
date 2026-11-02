@@ -189,6 +189,12 @@ export function createDrizzleInvoiceIntakeRepository(db: any, schema: Schema): I
         .where(and(eq(items.costSetId, costSetId), eq(items.productId, productId)))));
     },
 
+    async saveCostSetItemWeights(costSetId: string, rows: Array<Omit<InvoiceCostSetItemInput, "id">>, updatedAt: string) {
+      await inTransaction(rows.map(({ productId, ...weight }) => (tx: any) => tx.update(items)
+        .set(itemValues({ ...weight, updatedAt }))
+        .where(and(eq(items.costSetId, costSetId), eq(items.productId, productId)))));
+    },
+
     async findProductFacts(productIds: string[]) {
       if (!productIds.length) return [];
       const rows = await db.select(productFactColumns()).from(products)

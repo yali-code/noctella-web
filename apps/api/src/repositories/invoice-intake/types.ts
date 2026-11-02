@@ -156,6 +156,8 @@ export interface InvoiceIntakeRepository {
   replaceCostSetItems(costSetId: string, items: InvoiceCostSetItemInput[], updatedAt: string): Promise<void>;
   /** Writes the alloc_* columns of the set's items in one transaction. */
   saveCostSetItemAllocations(costSetId: string, rows: InvoiceCostSetItemAllocationInput[], updatedAt: string): Promise<void>;
+  /** Writes value_weight_eur / weight_source of the set's items in one transaction. */
+  saveCostSetItemWeights(costSetId: string, rows: Array<Omit<InvoiceCostSetItemInput, "id">>, updatedAt: string): Promise<void>;
   findProductFacts(productIds: string[]): Promise<CostSetProductFacts[]>;
   findProductConflicts(input: { costSetId: string; productIds: string[]; ownPurchaseReference: string }): Promise<CostSetProductConflicts>;
   /** AI-intake products that are on no non-cancelled purchase line and in no other open/approved set; newest first. */

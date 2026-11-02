@@ -76,7 +76,25 @@ export async function listCostSetProductCandidatesUseCase(deps: { repository: In
   return deps.repository.listProductCandidates({ costSetId, query: query ?? "", limit: CANDIDATE_LIMIT, ownPurchaseReference: costSetPurchaseReference(costSetId) });
 }
 
-/** 2) Replaces the set's products. Default weight = the AI suggested price ('ai'); an admin value overrides it ('admin'). */
+/**
+ * PHASE-2C-1: effective weight per item: admin value ('admin', kept as entered; <= 0 blocks as MISSING_WEIGHT)
+ * > AI estimate > 0 ('ai') > fallback = average of the set's AI estimates, rounded to cents, or 1 when the set has
+ * none. A fallback is stored with weight_source NULL (the column only allows 'ai' | 'admin').
+ */
+export function resolveCostSetWeights(items: Array<{ adminWeightEur: number | null; aiSuggestedPriceEur: number | null }>) {
+  const aiCents = items.map((i) => (i.aiSuggestedPriceEur != null ? toCents(i.aiSuggestedPriceEur) : 0)).filter((c) => c > 0);
+  const fallback = aiCents.length ? eur(Math.round(aiCents.reduce((a, b) => a + b, 0) / aiCents.length)) : 1;
+  return items.map((i) => {
+    if (i.adminWeightEur != null) return { valueWeightEur: i.adminWeightEur, weightSource: "admin" as const };
+    if (i.aiSuggestedPriceEur != null && toCents(i.aiSuggestedPriceEur) > 0) return { valueWeightEur: i.aiSuggestedPriceEur, weightSource: "ai" as const };
+    return { valueWeightEur: fallback, weightSource: null };
+  });
+}
+
+/** API label of a stored weight: a value with a NULL source is the fallback (average). */
+const weightSourceLabel = (valueWeightEur: number | null, weightSource: string | null) => weightSource ?? (valueWeightEur != null ? "fallback" : null);
+
+/** 2) Replaces the set's products. Weights per resolveCostSetWeights; an admin value overrides ('admin'). */
 export async function setCostSetProductsUseCase(deps: { repository: InvoiceIntakeRepository }, costSetId: string, items: Array<{ productId: string; valueWeightEur?: number | null }>) {
   await loadOpenCostSet(deps.repository, costSetId);
   const ids = items.map((i) => i.productId);
@@ -90,12 +108,8 @@ export async function setCostSetProductsUseCase(deps: { repository: InvoiceIntak
   if (conflicts.onPurchase.length) throw new ConflictError(`Already on a purchase: ${conflicts.onPurchase.map((id) => facts.get(id)!.sku).join(", ")}`);
   if (conflicts.inOtherSet.length) throw new ConflictError(`Already in another open or approved cost set: ${conflicts.inOtherSet.map((id) => facts.get(id)!.sku).join(", ")}`);
 
-  const rows = items.map((i) => {
-    const ai = facts.get(i.productId)!.aiSuggestedPriceEur;
-    if (i.valueWeightEur != null) return { id: randomUUID(), productId: i.productId, valueWeightEur: i.valueWeightEur, weightSource: "admin" as const };
-    if (ai != null && toCents(ai) > 0) return { id: randomUUID(), productId: i.productId, valueWeightEur: ai, weightSource: "ai" as const };
-    return { id: randomUUID(), productId: i.productId, valueWeightEur: null, weightSource: null };
-  });
+  const weights = resolveCostSetWeights(items.map((i) => ({ adminWeightEur: i.valueWeightEur ?? null, aiSuggestedPriceEur: facts.get(i.productId)!.aiSuggestedPriceEur })));
+  const rows = items.map((i, k) => ({ id: randomUUID(), productId: i.productId, ...weights[k] }));
   await deps.repository.replaceCostSetItems(costSetId, rows, now());
   return costSetItemsView(deps.repository, costSetId);
 }
@@ -108,7 +122,7 @@ export async function costSetItemsView(repository: InvoiceIntakeRepository, cost
     const f: CostSetProductFacts | undefined = facts.get(String(i.productId));
     return {
       productId: i.productId as string, sku: f?.sku ?? null, title: f?.title ?? null, aiSuggestedPriceEur: f?.aiSuggestedPriceEur ?? null, purchaseCost: f?.purchaseCost ?? null,
-      valueWeightEur: i.valueWeightEur as number | null, weightSource: i.weightSource as string | null,
+      valueWeightEur: i.valueWeightEur as number | null, weightSource: weightSourceLabel(i.valueWeightEur as number | null, i.weightSource as string | null),
       allocLotEur: i.allocLotEur as number | null, allocHammerFeeEur: i.allocHammerFeeEur as number | null, allocPremiumEur: i.allocPremiumEur as number | null,
       allocTransportEur: i.allocTransportEur as number | null, allocForwarderEur: i.allocForwarderEur as number | null, allocFxDiffEur: i.allocFxDiffEur as number | null,
       allocTotalEur: i.allocTotalEur as number | null,
@@ -124,8 +138,18 @@ function allocationIntake(intake: InvoiceIntakeRecord): AllocationIntakeInput {
   };
 }
 
+/** Re-resolves the non-admin weights from the current AI estimates (admin weights are kept) and persists any change. */
+async function refreshCostSetWeights(repository: InvoiceIntakeRepository, costSetId: string) {
+  const items = await costSetItemsView(repository, costSetId);
+  const weights = resolveCostSetWeights(items.map((i) => ({ adminWeightEur: i.weightSource === "admin" ? i.valueWeightEur : null, aiSuggestedPriceEur: i.aiSuggestedPriceEur })));
+  const changed = items.map((i, k) => ({ productId: i.productId, ...weights[k] }))
+    .filter((w, k) => w.valueWeightEur !== items[k].valueWeightEur || weightSourceLabel(w.valueWeightEur, w.weightSource) !== items[k].weightSource);
+  if (changed.length) await repository.saveCostSetItemWeights(costSetId, changed, now());
+}
+
 /** Computes the allocation from current data (re-checking product conflicts) and persists alloc_* (null when blocked). */
 async function computeAndStorePreview(repository: InvoiceIntakeRepository, costSetId: string) {
+  await refreshCostSetWeights(repository, costSetId);
   const [intakes, items] = await Promise.all([repository.listIntakesByCostSet(costSetId), costSetItemsView(repository, costSetId)]);
   const allocation = allocateCostSet(intakes.map(allocationIntake), items.map((i) => ({
     productId: i.productId, sku: i.sku, title: i.title, valueWeightEur: i.valueWeightEur, weightSource: i.weightSource, purchaseCost: i.purchaseCost,
