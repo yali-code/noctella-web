@@ -1067,3 +1067,26 @@ export const mediaPlanItems = sqliteTable("media_plan_items", {
   version: integer("version").notNull().default(1),
   createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
 }, (table) => [uniqueIndex("idx_media_plan_items_plan_index").on(table.planId, table.itemIndex)]);
+
+/**
+ * PHASE-2A: invoice intake foundation (PostgreSQL 0046). A cost set groups the invoices (auction, transport,
+ * forwarder) that together make up the cost of one lot/purchase; each uploaded file is one invoice_intakes row.
+ * Money follows the purchases convention (real). invoice_cost_set_items is created now and filled in 2C.
+ */
+export const invoiceCostSets = sqliteTable("invoice_cost_sets", {
+  id: text("id").primaryKey(), status: text("status").notNull().default("open"), title: text("title").notNull(), purchaseId: text("purchase_id"), approvedBy: text("approved_by"), approvedAt: text("approved_at"), notes: text("notes"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [index("idx_invoice_cost_sets_status").on(table.status, table.createdAt)]);
+export const invoiceIntakes = sqliteTable("invoice_intakes", {
+  id: text("id").primaryKey(), costSetId: text("cost_set_id").notNull(), invoiceType: text("invoice_type").notNull(), status: text("status").notNull().default("uploaded"),
+  fileRelativePath: text("file_relative_path").notNull(), fileSha256: text("file_sha256").notNull(), fileSizeBytes: integer("file_size_bytes").notNull(), fileMime: text("file_mime").notNull(), originalFilenameSanitized: text("original_filename_sanitized"),
+  supplierName: text("supplier_name"), supplierVatNumber: text("supplier_vat_number"), platform: text("platform"), invoiceNumber: text("invoice_number"), issueDate: text("issue_date"), paidDate: text("paid_date"),
+  currency: text("currency"), totalOriginal: real("total_original"), vatNote: text("vat_note"), reverseCharge: integer("reverse_charge", { mode: "boolean" }), lotNumbers: text("lot_numbers"), extractionJson: text("extraction_json"), editsJson: text("edits_json"),
+  fxRate: real("fx_rate"), fxRateDate: text("fx_rate_date"), fxSource: text("fx_source"), bankDebitEur: real("bank_debit_eur"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [uniqueIndex("idx_invoice_intakes_set_sha256").on(table.costSetId, table.fileSha256), index("idx_invoice_intakes_set").on(table.costSetId, table.createdAt)]);
+export const invoiceCostSetItems = sqliteTable("invoice_cost_set_items", {
+  id: text("id").primaryKey(), costSetId: text("cost_set_id").notNull(), productId: text("product_id").notNull(), valueWeightEur: real("value_weight_eur"), weightSource: text("weight_source"),
+  allocLotEur: real("alloc_lot_eur"), allocHammerFeeEur: real("alloc_hammer_fee_eur"), allocPremiumEur: real("alloc_premium_eur"), allocTransportEur: real("alloc_transport_eur"), allocForwarderEur: real("alloc_forwarder_eur"), allocFxDiffEur: real("alloc_fx_diff_eur"), allocTotalEur: real("alloc_total_eur"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [uniqueIndex("idx_invoice_cost_set_items_set_product").on(table.costSetId, table.productId)]);

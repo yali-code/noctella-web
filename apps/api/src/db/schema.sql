@@ -1173,3 +1173,67 @@ CREATE TABLE IF NOT EXISTS photo_publication_copies (
   recorded_ms BIGINT NOT NULL CHECK (recorded_ms >= 0),
   PRIMARY KEY (operation_id, artifact)
 );
+
+-- PHASE-2A invoice intake foundation (PostgreSQL 0046). Additive only: three new tables, no existing table touched.
+-- Money columns follow the purchases convention (REAL). Files live under INVOICE_FILE_DIR; only a relative path is stored.
+CREATE TABLE IF NOT EXISTS invoice_cost_sets (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'approved', 'cancelled')),
+  title TEXT NOT NULL,
+  purchase_id TEXT,
+  approved_by TEXT,
+  approved_at TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_invoice_cost_sets_status ON invoice_cost_sets(status, created_at);
+CREATE TABLE IF NOT EXISTS invoice_intakes (
+  id TEXT PRIMARY KEY,
+  cost_set_id TEXT NOT NULL REFERENCES invoice_cost_sets(id),
+  invoice_type TEXT NOT NULL CHECK (invoice_type IN ('auction', 'transport', 'forwarder', 'other')),
+  status TEXT NOT NULL DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'extracted', 'reviewed', 'cancelled')),
+  file_relative_path TEXT NOT NULL,
+  file_sha256 TEXT NOT NULL CHECK (length(file_sha256) = 64),
+  file_size_bytes INTEGER NOT NULL CHECK (file_size_bytes > 0),
+  file_mime TEXT NOT NULL CHECK (file_mime IN ('application/pdf', 'image/jpeg', 'image/png')),
+  original_filename_sanitized TEXT,
+  supplier_name TEXT,
+  supplier_vat_number TEXT,
+  platform TEXT,
+  invoice_number TEXT,
+  issue_date TEXT,
+  paid_date TEXT,
+  currency TEXT,
+  total_original REAL,
+  vat_note TEXT,
+  reverse_charge INTEGER,
+  lot_numbers TEXT,
+  extraction_json TEXT,
+  edits_json TEXT,
+  fx_rate REAL,
+  fx_rate_date TEXT,
+  fx_source TEXT,
+  bank_debit_eur REAL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_intakes_set_sha256 ON invoice_intakes(cost_set_id, file_sha256);
+CREATE INDEX IF NOT EXISTS idx_invoice_intakes_set ON invoice_intakes(cost_set_id, created_at);
+CREATE TABLE IF NOT EXISTS invoice_cost_set_items (
+  id TEXT PRIMARY KEY,
+  cost_set_id TEXT NOT NULL REFERENCES invoice_cost_sets(id),
+  product_id TEXT NOT NULL,
+  value_weight_eur REAL,
+  weight_source TEXT CHECK (weight_source IN ('ai', 'admin')),
+  alloc_lot_eur REAL,
+  alloc_hammer_fee_eur REAL,
+  alloc_premium_eur REAL,
+  alloc_transport_eur REAL,
+  alloc_forwarder_eur REAL,
+  alloc_fx_diff_eur REAL,
+  alloc_total_eur REAL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_cost_set_items_set_product ON invoice_cost_set_items(cost_set_id, product_id);

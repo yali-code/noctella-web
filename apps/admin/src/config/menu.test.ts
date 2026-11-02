@@ -10,6 +10,15 @@ describe("adminMenuItems (Sprint 97)", () => {
     expect(adminMenuItems).toContainEqual({ label: "AI Drafts", href: "/ai-drafts" });
   });
 
+  it("includes Purchases, Suppliers and Invoice Cost Sets next to Invoices (PHASE-2A)", () => {
+    const hrefs = adminMenuItems.map((item) => item.href);
+    expect(adminMenuItems).toContainEqual({ label: "Purchases", href: "/purchases" });
+    expect(adminMenuItems).toContainEqual({ label: "Suppliers", href: "/suppliers" });
+    expect(adminMenuItems).toContainEqual({ label: "Invoice Cost Sets", href: "/invoice-cost-sets" });
+    const invoices = hrefs.indexOf("/invoices");
+    expect(hrefs.slice(invoices + 1, invoices + 4)).toEqual(["/invoice-cost-sets", "/purchases", "/suppliers"]);
+  });
+
   it("includes the Pending Publish entry at the existing /ready-to-publish route (Sprint 139: relabeled from Ready to Publish - route unchanged)", () => {
     expect(adminMenuItems).toContainEqual({ label: "Pending Publish", href: "/ready-to-publish" });
   });

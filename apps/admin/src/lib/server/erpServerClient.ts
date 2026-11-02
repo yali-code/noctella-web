@@ -155,6 +155,31 @@ export function purchaseLandedCostPath(purchaseId: string): string {
   return `/api/erp/purchases/${encodeURIComponent(purchaseId)}/landed-cost`;
 }
 
+/** PHASE-2A: invoice cost set / intake path builders, same fixed-template convention. */
+export function invoiceCostSetsListPath(query: string): string {
+  return `/api/erp/invoice-cost-sets${query ? `?${query}` : ""}`;
+}
+
+export function invoiceCostSetPath(costSetId: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}`;
+}
+
+export function cancelInvoiceCostSetPath(costSetId: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/cancel`;
+}
+
+export function invoiceCostSetFilesPath(costSetId: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/files`;
+}
+
+export function cancelInvoiceIntakePath(intakeId: string): string {
+  return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/cancel`;
+}
+
+export function invoiceIntakeFilePath(intakeId: string): string {
+  return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/file`;
+}
+
 export function productWorkspacePath(productId: string): string {
   return `/api/erp/products/${encodeURIComponent(productId)}/workspace`;
 }
@@ -363,4 +388,15 @@ export async function postErpBackend(path: string, body: unknown): Promise<Respo
   const base = backendBaseUrl();
   const headers = { ...buildErpRequestHeaders(), "Content-Type": "application/json" };
   return fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body), cache: "no-store" });
+}
+
+/**
+ * PHASE-2A: forwards a multipart body (a FormData rebuilt by the Route Handler)
+ * to a fixed backend path. fetch sets the multipart Content-Type with its own
+ * boundary; no browser-supplied header is forwarded.
+ */
+export async function postErpBackendMultipart(path: string, body: FormData): Promise<Response> {
+  const base = backendBaseUrl();
+  const headers = buildErpRequestHeaders();
+  return fetch(`${base}${path}`, { method: "POST", headers, body, cache: "no-store" });
 }

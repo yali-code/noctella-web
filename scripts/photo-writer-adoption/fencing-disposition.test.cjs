@@ -44,6 +44,7 @@ const DISPOSITION = {
   'scripts/inventoryRepositoryAudit.ts': { writers: 'NON_MEDIA', disposition: 'NON_MEDIA', proof: () => true },
   'scripts/refundUseCaseAudit.ts': { writers: 'NON_MEDIA', disposition: 'NON_MEDIA', proof: () => true },
   'scripts/sharedImageResourceProbe.ts': { writers: 'NON_MEDIA', disposition: 'NON_MEDIA (disposable resource probe)', proof: () => has('scripts/sharedImageResourceProbe.ts', 'Disposable Linux environment required') },
+  'services/invoiceFileStorage.ts': { writers: 'NON_MEDIA', disposition: 'NON_MEDIA (invoice files under INVOICE_FILE_DIR, separate root)', proof: () => has('services/invoiceFileStorage.ts', 'INVOICE_FILE_DIR') },
 };
 
 test('every census mutation site has an explicit fencing disposition (no unclassified writer)', () => {

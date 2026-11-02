@@ -42,6 +42,7 @@ const EXPECTED = {
   'scripts/inventoryRepositoryAudit.ts': { mutation: 3, writers: ['NON_MEDIA (audit fixtures in os.tmpdir)'] },
   'scripts/refundUseCaseAudit.ts': { mutation: 3, writers: ['NON_MEDIA (audit fixtures in os.tmpdir)'] },
   'scripts/sharedImageResourceProbe.ts': { mutation: 3, writers: ['NON_MEDIA (container resource probe evidence)'] },
+  'services/invoiceFileStorage.ts': { mutation: 4, handle: 1, writers: ['NON_MEDIA (PHASE-2A invoice files: separate INVOICE_FILE_DIR root, server-id paths, wx temp + fsync + rename; never a product-photo root)'] },
 };
 const DEV_MODULES = ['developmentPhotoStorageCapability', 'developmentPhotoDiskBudget', 'developmentPhotoRecovery', 'developmentLegacyWriterGate'];
 

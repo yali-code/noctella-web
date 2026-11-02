@@ -18,10 +18,16 @@ import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchas
 import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
 import * as warehouse from "../services/erpWarehouseBridge";
 import * as reports from "../services/erpReportsAnalyticsBridge";
+import { addInvoiceIntakeFile, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSets } from "../services/invoiceIntakes";
+import { INVOICE_FILE_MAX_BYTES, INVOICE_FILE_SIZE_MESSAGE } from "../services/invoiceFileGuard";
+import { BadRequestError } from "../services/errors";
+import { createInvoiceCostSetSchema, invoiceCostSetListQuerySchema, invoiceIntakeUploadFieldsSchema } from "../validation/invoiceIntake";
+import { createReadStream } from "node:fs";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const invoiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: INVOICE_FILE_MAX_BYTES, files: 1 } });
 const key = (req: any) => req.header("X-Noctella-ERP-Key");
 const version = (req: any) => req.header("X-Noctella-ERP-Client-Version");
 const requestId = (req: any) => req.header("X-Noctella-ERP-Request-Id");
@@ -164,6 +170,39 @@ router.post("/commands/purchases/:purchaseId/allocate", requireErp, async (req:a
 router.post("/commands/purchases/:purchaseId/receive", requireErp, async (req:any, res) => { try { res.json(await executePurchaseCommand(db, req.erp.clientId, req.body, "ReceivePurchase", req.params.purchaseId)); } catch (err) { handleRouteError(err, res); } });
 router.post("/commands/purchases/:purchaseId/cancel", requireErp, async (req:any, res) => { try { res.json(await executePurchaseCommand(db, req.erp.clientId, req.body, "CancelPurchase", req.params.purchaseId)); } catch (err) { handleRouteError(err, res); } });
 router.post("/commands/purchases/:purchaseId/mark-ordered", requireErp, async (req:any, res) => { try { res.json(await executePurchaseCommand(db, req.erp.clientId, req.body, "MarkPurchaseOrdered", req.params.purchaseId)); } catch (err) { handleRouteError(err, res); } });
+
+// PHASE-2A invoice intake foundation: validate input and delegate to services/invoiceIntakes.ts. Multipart is parsed only
+// after requireErp; the 5 MB limit is enforced again by the content guard in the use case.
+router.post("/invoice-cost-sets", requireErp, async (req, res) => { try { res.status(201).json(await createInvoiceCostSet(db, createInvoiceCostSetSchema.parse(req.body ?? {}))); } catch (err) { handleRouteError(err, res); } });
+router.get("/invoice-cost-sets", requireErp, async (req, res) => { try { res.json(await listInvoiceCostSets(db, invoiceCostSetListQuerySchema.parse(req.query))); } catch (err) { handleRouteError(err, res); } });
+router.get("/invoice-cost-sets/:id", requireErp, async (req, res) => { try { res.json(await getInvoiceCostSet(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.post("/invoice-cost-sets/:id/cancel", requireErp, async (req, res) => { try { res.json(await cancelInvoiceCostSet(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.post("/invoice-cost-sets/:id/files", requireErp, (req, res, next) => invoiceUpload.single("file")(req, res, (err: unknown) => {
+  if (err instanceof multer.MulterError) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: err.code === "LIMIT_FILE_SIZE" ? INVOICE_FILE_SIZE_MESSAGE : "Invalid invoice upload" });
+  if (err) return handleRouteError(err, res);
+  next();
+}), async (req: any, res) => {
+  try {
+    const { invoiceType } = invoiceIntakeUploadFieldsSchema.parse(req.body ?? {});
+    if (!req.file) throw new BadRequestError("An invoice file is required");
+    res.status(201).json(await addInvoiceIntakeFile(db, { costSetId: req.params.id, invoiceType, file: req.file }));
+  } catch (err) { handleRouteError(err, res); }
+});
+router.post("/invoice-intakes/:id/cancel", requireErp, async (req, res) => { try { res.json(await cancelInvoiceIntake(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.get("/invoice-intakes/:id/file", requireErp, async (req, res) => {
+  try {
+    const file = await getInvoiceIntakeFile(db, req.params.id);
+    const stream = createReadStream(file.absolutePath);
+    stream.once("open", () => {
+      res.setHeader("Content-Type", file.mime);
+      res.setHeader("Content-Disposition", `inline; filename="invoice-${req.params.id.replace(/[^A-Za-z0-9-]/g, "")}.${file.ext}"`);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store");
+      stream.pipe(res);
+    });
+    stream.once("error", () => { if (res.headersSent) res.destroy(); else res.status(500).json({ error: "Internal server error" }); });
+  } catch (err) { handleRouteError(err, res); }
+});
 
 router.get("/products", requireErp, async (req, res) => res.json(await listProductProjections(db, req.query)));
 router.get("/products/by-erp-reference/:erpReferenceId", requireErp, async (req, res) => { const [p]=await db.select().from(products).where(eq(products.erpReferenceId, req.params.erpReferenceId)).limit(1); if(!p) return res.status(404).json({ error:"Product not found" }); res.json(await getProductProjection(db,p.id)); });
