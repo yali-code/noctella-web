@@ -1,12 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { BadRequestError, ConflictError, NotFoundError } from "../../services/errors";
+import { readFile } from "node:fs/promises";
+import { BadRequestError, ConflictError, InvoiceExtractionFailedError, InvoiceReviewChecksFailedError, NotFoundError } from "../../services/errors";
 import { assertAllowedInvoiceFile } from "../../services/invoiceFileGuard";
 import { sha256Hex, type InvoiceFileStorage } from "../../services/invoiceFileStorage";
-import { DuplicateInvoiceFileError, type InvoiceIntakeRepository } from "../../repositories/invoice-intake/types";
+import { DuplicateInvoiceFileError, type InvoiceIntakeRecord, type InvoiceIntakeRepository } from "../../repositories/invoice-intake/types";
+import { parseInvoiceExtraction, type InvoiceExtraction } from "../../ai-intake/invoiceExtractionSchema";
+import type { InvoiceExtractor } from "../../ai-intake/openAiInvoiceExtractor";
+import {
+  denormalizedInvoiceColumns,
+  editedInvoiceFields,
+  effectiveInvoiceValues,
+  hasBlockingCheck,
+  runInvoiceChecks,
+  type InvoiceEdits,
+} from "./invoiceReview";
 
 /**
- * PHASE-2A: invoice intake foundation use cases. No AI, FX, allocation, purchase creation or stock change here -
- * a cost set only collects uploaded invoice files. Status transitions are atomic conditional updates in the
+ * PHASE-2A: invoice intake foundation use cases. No FX, allocation, purchase creation or stock change here -
+ * a cost set only collects uploaded invoice files; PHASE-2B adds AI extraction and the admin review. Status transitions are atomic conditional updates in the
  * repository; the "set must be open" checks below are read-then-act (single admin user, no stock effect).
  */
 export const INVOICE_COST_SET_STATUSES = ["open", "approved", "cancelled"] as const;
@@ -118,6 +129,117 @@ export async function cancelInvoiceIntakeUseCase(deps: Pick<InvoiceIntakeUseCase
   if (result.conflict?.field === "id") throw new NotFoundError("Invoice intake not found");
   if (result.row?.status === "cancelled") return result.row;
   throw new ConflictError("Invoice intake cannot be cancelled from its current status");
+}
+
+export interface InvoiceExtractionUseCaseDeps extends InvoiceIntakeUseCaseDeps {
+  /** Built per request; throws InvoiceExtractionUnavailableError when the AI provider is not configured. */
+  createExtractor: () => InvoiceExtractor;
+}
+
+const EXTRACTABLE_STATUSES = ["uploaded", "extracted"] as const;
+const REVIEWABLE_STATUSES = ["extracted", "reviewed"] as const;
+
+async function loadIntakeInOpenSet(repository: InvoiceIntakeRepository, id: string) {
+  const intake = await repository.findIntakeById(id);
+  if (!intake) throw new NotFoundError("Invoice intake not found");
+  await loadOpenCostSet(repository, intake.costSetId as string);
+  return intake;
+}
+
+function storedExtraction(intake: InvoiceIntakeRecord): { output: InvoiceExtraction; model: string | null; extractedAt: string | null } | null {
+  if (!intake.extractionJson) return null;
+  const parsed = JSON.parse(String(intake.extractionJson));
+  const output = parseInvoiceExtraction(parsed?.output);
+  return output ? { output, model: parsed.model ?? null, extractedAt: parsed.extractedAt ?? null } : null;
+}
+
+function storedEdits(intake: InvoiceIntakeRecord): { edits: InvoiceEdits; editedAt: string | null; confirmed: boolean } | null {
+  if (!intake.editsJson) return null;
+  const parsed = JSON.parse(String(intake.editsJson));
+  return { edits: parsed?.edits ?? {}, editedAt: parsed?.editedAt ?? null, confirmed: parsed?.confirmed === true };
+}
+
+function finishIntakeUpdate(result: Awaited<ReturnType<InvoiceIntakeRepository["updateIntakeReview"]>>, message: string) {
+  if (result.updated) return result.row!;
+  if (result.conflict?.field === "id") throw new NotFoundError("Invoice intake not found");
+  throw new ConflictError(message);
+}
+
+/**
+ * PHASE-2B: reads the stored invoice file with the AI extractor. Allowed while the set is open and the intake is
+ * uploaded or extracted; a re-read replaces the extraction and its checks and clears the admin's edits. Nothing
+ * is written unless the extractor returns a valid result - any failure leaves the intake unchanged.
+ */
+export async function extractInvoiceIntakeUseCase(deps: InvoiceExtractionUseCaseDeps, id: string) {
+  const intake = await loadIntakeInOpenSet(deps.repository, id);
+  if (!(EXTRACTABLE_STATUSES as readonly string[]).includes(intake.status as string)) throw new ConflictError("Only an uploaded or extracted invoice can be read by AI");
+  const extractor = deps.createExtractor();
+  const bytes = await readFile(await deps.storage.resolveForRead(intake.fileRelativePath as string));
+
+  let raw: unknown;
+  try {
+    raw = await extractor.extract({ bytes, mime: intake.fileMime as string });
+  } catch {
+    throw new InvoiceExtractionFailedError();
+  }
+  const output = parseInvoiceExtraction(raw);
+  if (!output) throw new InvoiceExtractionFailedError();
+
+  const checks = runInvoiceChecks(output);
+  const t = now();
+  const result = await deps.repository.updateIntakeReview({
+    id, expectedStatuses: EXTRACTABLE_STATUSES, nextStatus: "extracted", updatedAt: t,
+    values: {
+      extractionJson: JSON.stringify({ output, checks, model: extractor.modelName, extractedAt: t }),
+      editsJson: null,
+      ...denormalizedInvoiceColumns(effectiveInvoiceValues(output), intake.invoiceType as string),
+    },
+  });
+  return finishIntakeUpdate(result, "Invoice intake changed while it was being read; reload and try again");
+}
+
+/**
+ * PHASE-2B: stores the admin's edits over the extraction and re-runs the checks on the effective values. With
+ * confirm the intake becomes reviewed, refused (409 with the check list, nothing stored) while TOTAL_MISMATCH
+ * fails; without confirm the edits are saved and the intake is (back to) extracted.
+ */
+export async function reviewInvoiceIntakeUseCase(deps: Pick<InvoiceIntakeUseCaseDeps, "repository">, id: string, input: { edits: InvoiceEdits; confirm: boolean }) {
+  const intake = await loadIntakeInOpenSet(deps.repository, id);
+  if (!(REVIEWABLE_STATUSES as readonly string[]).includes(intake.status as string)) throw new ConflictError("Only an extracted or reviewed invoice can be reviewed");
+  const extraction = storedExtraction(intake);
+  if (!extraction) throw new ConflictError("This invoice has no AI extraction to review");
+
+  const edits = input.edits ?? {};
+  if (edits.invoiceType != null && !(INVOICE_TYPES as readonly string[]).includes(edits.invoiceType)) throw new BadRequestError("Invalid invoice type");
+  const checks = runInvoiceChecks(extraction.output, edits);
+  if (input.confirm && hasBlockingCheck(checks)) throw new InvoiceReviewChecksFailedError(checks);
+
+  const t = now();
+  const result = await deps.repository.updateIntakeReview({
+    id, expectedStatuses: REVIEWABLE_STATUSES, nextStatus: input.confirm ? "reviewed" : "extracted", updatedAt: t,
+    values: {
+      editsJson: JSON.stringify({ edits, checks, editedAt: t, confirmed: input.confirm }),
+      ...denormalizedInvoiceColumns(effectiveInvoiceValues(extraction.output, edits), intake.invoiceType as string),
+    },
+  });
+  return finishIntakeUpdate(result, "Invoice intake changed while it was being reviewed; reload and try again");
+}
+
+/** PHASE-2B: the review view of an intake for API output - effective values, the model's evidence/confidence, and fresh checks. */
+export function invoiceIntakeReviewView(intake: InvoiceIntakeRecord) {
+  const extraction = storedExtraction(intake);
+  if (!extraction) return null;
+  const stored = storedEdits(intake);
+  const edits = stored?.edits ?? {};
+  return {
+    extracted: extraction.output,
+    effective: effectiveInvoiceValues(extraction.output, edits),
+    editedFields: editedInvoiceFields(edits),
+    checks: runInvoiceChecks(extraction.output, edits),
+    model: extraction.model,
+    extractedAt: extraction.extractedAt,
+    editedAt: stored?.editedAt ?? null,
+  };
 }
 
 /** Resolves the stored file of an intake for streaming. The absolute path never leaves the API process. */

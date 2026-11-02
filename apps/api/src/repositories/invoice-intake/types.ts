@@ -35,6 +35,28 @@ export interface ExpectedStatusTransitionInput {
   updatedAt: string;
 }
 
+/** PHASE-2B: the extraction/review columns written together with a status change. */
+export interface InvoiceIntakeReviewValues {
+  extractionJson?: string | null;
+  editsJson: string | null;
+  invoiceType: string;
+  supplierName: string | null;
+  supplierVatNumber: string | null;
+  platform: string | null;
+  invoiceNumber: string | null;
+  issueDate: string | null;
+  paidDate: string | null;
+  currency: string | null;
+  totalOriginal: number | null;
+  vatNote: string | null;
+  reverseCharge: boolean | null;
+  lotNumbers: string | null;
+}
+
+export interface InvoiceIntakeReviewUpdateInput extends ExpectedStatusTransitionInput {
+  values: InvoiceIntakeReviewValues;
+}
+
 /** Same result shape as AiProductIntakeCancelResult: conflict.field separates not-found from a status mismatch. */
 export interface ExpectedStatusTransitionResult<T> {
   updated: boolean;
@@ -59,6 +81,8 @@ export interface InvoiceIntakeRepository {
   findIntakeBySha256(costSetId: string, sha256: string): Promise<InvoiceIntakeRecord | null>;
   listIntakesByCostSet(costSetId: string): Promise<InvoiceIntakeRecord[]>;
   transitionIntake(input: ExpectedStatusTransitionInput): Promise<ExpectedStatusTransitionResult<InvoiceIntakeRecord>>;
+  /** PHASE-2B: the same atomic conditional UPDATE as transitionIntake, also writing the extraction/review columns. */
+  updateIntakeReview(input: InvoiceIntakeReviewUpdateInput): Promise<ExpectedStatusTransitionResult<InvoiceIntakeRecord>>;
 }
 
 export class DuplicateInvoiceFileError extends Error {

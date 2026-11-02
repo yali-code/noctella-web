@@ -641,3 +641,30 @@ export class CanonicalProductProposalProviderInvalidResponseError extends Error 
     this.name = "CanonicalProductProposalProviderInvalidResponseError";
   }
 }
+
+/**
+ * PHASE-2B: invoice AI extraction is not available - AI_INTAKE_PROVIDER is not "openai" or its OpenAI settings
+ * are incomplete. Fixed message only; never names a value. Thrown before any network request.
+ */
+export class InvoiceExtractionUnavailableError extends Error {
+  constructor() {
+    super("AI invoice reading is not available. Enter the invoice values manually.");
+    this.name = "InvoiceExtractionUnavailableError";
+  }
+}
+
+/** PHASE-2B: the AI provider failed or returned an unusable result. Fixed message only; the raw error/output is never surfaced. */
+export class InvoiceExtractionFailedError extends Error {
+  constructor() {
+    super("The invoice could not be read by AI. Try again later.");
+    this.name = "InvoiceExtractionFailedError";
+  }
+}
+
+/** PHASE-2B: a review confirmation was refused because a blocking check failed; carries the full check list. */
+export class InvoiceReviewChecksFailedError extends ConflictError {
+  constructor(readonly checks: unknown[]) {
+    super("The invoice cannot be confirmed while the total does not match its lines");
+    this.name = "InvoiceReviewChecksFailedError";
+  }
+}

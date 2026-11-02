@@ -176,6 +176,15 @@ export function cancelInvoiceIntakePath(intakeId: string): string {
   return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/cancel`;
 }
 
+/** PHASE-2B: AI extraction and review of one invoice intake. */
+export function extractInvoiceIntakePath(intakeId: string): string {
+  return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/extract`;
+}
+
+export function reviewInvoiceIntakePath(intakeId: string): string {
+  return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/review`;
+}
+
 export function invoiceIntakeFilePath(intakeId: string): string {
   return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/file`;
 }

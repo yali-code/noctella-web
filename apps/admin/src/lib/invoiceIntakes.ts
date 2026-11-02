@@ -31,7 +31,51 @@ export interface InvoiceIntake {
   originalFilenameSanitized: string | null;
   createdAt: string;
   updatedAt: string;
+  /** PHASE-2B: null until the invoice has been read by AI. */
+  review?: InvoiceIntakeReview | null;
 }
+
+/** PHASE-2B: AI extraction + admin review. Mirrors the API's review view (use-cases/invoice-intake). */
+export const INVOICE_FEE_TYPES = ["hammer_fee", "buyer_premium", "transport", "other"] as const;
+export type InvoiceFeeType = (typeof INVOICE_FEE_TYPES)[number];
+export const LOW_CONFIDENCE = 0.7;
+
+export interface ExtractedField<T> { value: T | null; evidence: string | null; confidence: number }
+export interface InvoiceLotValues { lotNumber: string | null; title: string | null; itemCountHint: number | null; amount: number | null }
+export interface InvoiceFeeValues { type: InvoiceFeeType | null; label: string | null; amount: number | null; percent: number | null; lotNumber: string | null }
+export interface InvoiceValues {
+  invoiceType: InvoiceType | null;
+  supplierName: string | null;
+  supplierVatNumber: string | null;
+  platform: string | null;
+  invoiceNumber: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  paidDate: string | null;
+  currency: string | null;
+  vatNote: string | null;
+  reverseCharge: boolean | null;
+  total: number | null;
+  lots: InvoiceLotValues[];
+  fees: InvoiceFeeValues[];
+}
+export type InvoiceHeaderField = Exclude<keyof InvoiceValues, "lots" | "fees">;
+export type InvoiceExtraction = { [K in InvoiceHeaderField]: ExtractedField<InvoiceValues[K]> } & {
+  lots: Array<{ [K in keyof InvoiceLotValues]: ExtractedField<InvoiceLotValues[K]> }>;
+  fees: Array<{ [K in keyof InvoiceFeeValues]: ExtractedField<InvoiceFeeValues[K]> }>;
+};
+export interface InvoiceCheck { code: "TOTAL_MISMATCH" | "PREMIUM_MISMATCH" | "CURRENCY_MISSING" | "NO_LOTS" | "UNSUPPORTED_FIELDS"; ok: boolean; message: string; fields?: string[] }
+export interface InvoiceIntakeReview {
+  extracted: InvoiceExtraction;
+  effective: InvoiceValues;
+  editedFields: string[];
+  checks: InvoiceCheck[];
+  model: string | null;
+  extractedAt: string | null;
+  editedAt: string | null;
+}
+
+export const hasTotalMismatch = (checks: InvoiceCheck[]) => checks.some((c) => c.code === "TOTAL_MISMATCH" && !c.ok);
 
 export interface InvoiceCostSetDetail extends InvoiceCostSet {
   intakes: InvoiceIntake[];
@@ -60,6 +104,9 @@ export const invoiceIntakeApi = {
     return fetch(`/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/files`, { method: "POST", body: form }).then(readJson<InvoiceIntake>);
   },
   cancelIntake: (id: string) => postJson<InvoiceIntake>(`/api/erp/invoice-intakes/${encodeURIComponent(id)}/cancel`, {}),
+  extractIntake: (id: string) => postJson<InvoiceIntake>(`/api/erp/invoice-intakes/${encodeURIComponent(id)}/extract`, {}),
+  reviewIntake: (id: string, edits: Partial<InvoiceValues>, confirm: boolean) =>
+    postJson<InvoiceIntake>(`/api/erp/invoice-intakes/${encodeURIComponent(id)}/review`, { edits, confirm }),
   fileUrl: (id: string) => `/api/erp/invoice-intakes/${encodeURIComponent(id)}/file`,
 };
 

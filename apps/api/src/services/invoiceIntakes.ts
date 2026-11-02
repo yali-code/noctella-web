@@ -7,10 +7,15 @@ import {
   cancelInvoiceCostSetUseCase,
   cancelInvoiceIntakeUseCase,
   createInvoiceCostSetUseCase,
+  extractInvoiceIntakeUseCase,
   getInvoiceCostSetUseCase,
   getInvoiceIntakeFileUseCase,
+  invoiceIntakeReviewView,
   listInvoiceCostSetsUseCase,
+  reviewInvoiceIntakeUseCase,
 } from "../use-cases/invoice-intake/useCases";
+import type { InvoiceEdits } from "../use-cases/invoice-intake/invoiceReview";
+import { createInvoiceExtractor, type InvoiceExtractor } from "../ai-intake/openAiInvoiceExtractor";
 
 /**
  * PHASE-2A application service: orchestration and output mapping only - business rules live in
@@ -29,9 +34,10 @@ function toCostSet(row: InvoiceCostSetRecord) {
   };
 }
 
+/** PHASE-2B: the raw extraction/edits JSON is replaced by the review view (effective values, evidence, checks). */
 function toIntake(row: InvoiceIntakeRecord) {
-  const { fileRelativePath: _omitted, ...rest } = row;
-  return rest;
+  const { fileRelativePath: _omitted, extractionJson: _extraction, editsJson: _edits, ...rest } = row;
+  return { ...rest, review: invoiceIntakeReviewView(row) };
 }
 
 export async function createInvoiceCostSet(db: DbClient, input: { title: string; notes?: string | null }) {
@@ -62,6 +68,22 @@ export async function addInvoiceIntakeFile(
 
 export async function cancelInvoiceIntake(db: DbClient, id: string) {
   return toIntake(await cancelInvoiceIntakeUseCase({ repository: repositoryFor(db) }, id));
+}
+
+export async function extractInvoiceIntake(
+  db: DbClient,
+  id: string,
+  deps: { storage?: InvoiceFileStorage; createExtractor?: () => InvoiceExtractor } = {},
+) {
+  return toIntake(await extractInvoiceIntakeUseCase({
+    repository: repositoryFor(db),
+    storage: deps.storage ?? invoiceFileStorage,
+    createExtractor: deps.createExtractor ?? (() => createInvoiceExtractor()),
+  }, id));
+}
+
+export async function reviewInvoiceIntake(db: DbClient, id: string, input: { edits: InvoiceEdits; confirm: boolean }) {
+  return toIntake(await reviewInvoiceIntakeUseCase({ repository: repositoryFor(db) }, id, input));
 }
 
 export async function getInvoiceIntakeFile(db: DbClient, id: string, storage: InvoiceFileStorage = invoiceFileStorage) {

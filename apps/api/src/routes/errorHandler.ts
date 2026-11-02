@@ -38,6 +38,9 @@ import {
   MarketplacePreparationVersionConflictError,
   NotFoundError,
   ProductVersionConflictError,
+  InvoiceExtractionFailedError,
+  InvoiceExtractionUnavailableError,
+  InvoiceReviewChecksFailedError,
   UnauthorizedError,
 } from "../services/errors";
 import { InventoryUseCaseError, type InventoryErrorCategory } from "../application/inventory/errors";
@@ -67,6 +70,15 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof ZodError) {
     res.status(400).json({ error: "Validation failed", details: formatZodError(err) });
+    return;
+  }
+  // PHASE-2B: fixed messages only - never the provider error, the document or the model output.
+  if (err instanceof InvoiceExtractionUnavailableError) {
+    res.status(503).json({ error: err.message, code: "INVOICE_EXTRACTION_UNAVAILABLE" });
+    return;
+  }
+  if (err instanceof InvoiceExtractionFailedError) {
+    res.status(502).json({ error: err.message, code: "INVOICE_EXTRACTION_FAILED" });
     return;
   }
   if (err instanceof UnauthorizedError) {
@@ -201,6 +213,11 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof CanonicalProductProposalNotPendingError) {
     res.status(409).json({ error: err.message, code: "CANONICAL_PRODUCT_PROPOSAL_NOT_PENDING" });
+    return;
+  }
+  // PHASE-2B: checked before the generic ConflictError branch below (subclass); the check list is app-computed data.
+  if (err instanceof InvoiceReviewChecksFailedError) {
+    res.status(409).json({ error: err.message, code: "INVOICE_REVIEW_CHECKS_FAILED", checks: err.checks });
     return;
   }
   if (err instanceof ConflictError) {
