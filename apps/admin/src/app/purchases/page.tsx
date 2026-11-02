@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PurchaseSourceType, PurchaseStatus } from "@noctella/shared";
-import { buildPurchaseQuery, createPurchase, mapPurchase, purchasingApi } from "@/lib/erpPurchasingBridge";
+import {
+  buildPurchaseHeaderPayload,
+  buildPurchaseQuery,
+  createPurchase,
+  emptyPurchaseHeaderDraft,
+  mapPurchase,
+  purchaseHeaderFields,
+  purchasingApi,
+  type PurchaseHeaderDraft,
+} from "@/lib/erpPurchasingBridge";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--noctella-deep-star-blue)",
@@ -16,8 +25,8 @@ const inputStyle: React.CSSProperties = {
 };
 const buttonStyle: React.CSSProperties = { ...inputStyle, cursor: "pointer" };
 
-type LineDraft = { titleSnapshot: string; quantity: string; unitPurchaseCost: string; productId: string };
-const emptyLine = (): LineDraft => ({ titleSnapshot: "", quantity: "1", unitPurchaseCost: "0", productId: "" });
+type LineDraft = { titleSnapshot: string; quantity: string; unitPurchaseCost: string; productId: string; sourceLineReference: string; weight: string };
+const emptyLine = (): LineDraft => ({ titleSnapshot: "", quantity: "1", unitPurchaseCost: "0", productId: "", sourceLineReference: "", weight: "" });
 
 export default function PurchasesPage() {
   const router = useRouter();
@@ -30,6 +39,7 @@ export default function PurchasesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [supplierId, setSupplierId] = useState("");
   const [sourceType, setSourceType] = useState<string>(PurchaseSourceType.Other);
+  const [header, setHeader] = useState<PurchaseHeaderDraft>(emptyPurchaseHeaderDraft());
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -59,18 +69,27 @@ export default function PurchasesPage() {
     setCreateBusy(true);
     setCreateError(null);
     try {
+      const headerPayload = buildPurchaseHeaderPayload(header);
       const payloadLines = lines.map((l) => {
         const quantity = Number(l.quantity);
         const unitPurchaseCost = Number(l.unitPurchaseCost);
         if (!l.titleSnapshot.trim()) throw new Error("Every line needs a title");
         if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Quantity must be a positive whole number");
         if (Number.isNaN(unitPurchaseCost) || unitPurchaseCost < 0) throw new Error("Unit cost cannot be negative");
-        return { titleSnapshot: l.titleSnapshot.trim(), quantity, unitPurchaseCost, productId: l.productId.trim() || undefined };
+        const line: Record<string, unknown> = { titleSnapshot: l.titleSnapshot.trim(), quantity, unitPurchaseCost, productId: l.productId.trim() || undefined };
+        if (l.sourceLineReference.trim()) line.sourceLineReference = l.sourceLineReference.trim();
+        if (l.weight.trim()) {
+          const weight = Number(l.weight);
+          if (Number.isNaN(weight) || weight < 0) throw new Error("Weight cannot be negative");
+          line.weight = weight;
+        }
+        return line;
       });
-      const created = await createPurchase({ supplierId: supplierId || undefined, sourceType, lines: payloadLines });
+      const created = await createPurchase({ supplierId: supplierId || undefined, sourceType, ...headerPayload, lines: payloadLines });
       setFormOpen(false);
       setSupplierId("");
       setSourceType(PurchaseSourceType.Other);
+      setHeader(emptyPurchaseHeaderDraft());
       setLines([emptyLine()]);
       router.push(`/purchases/${created.id}`);
     } catch (err) {
@@ -120,6 +139,25 @@ export default function PurchasesPage() {
           </label>
           <p style={{ fontSize: 12, color: "var(--noctella-aged-bronze)" }}>Currency is EUR only.</p>
 
+          <h3>Invoice details (optional)</h3>
+          {purchaseHeaderFields.map((f) => (
+            <label key={f.key} style={{ fontSize: 13, marginRight: 8, display: "inline-block", marginBottom: 6 }}>
+              {f.label}
+              {f.kind === "notes" ? (
+                <textarea style={{ ...inputStyle, marginLeft: 6, verticalAlign: "top" }} value={header[f.key]} onChange={(e) => setHeader((h) => ({ ...h, [f.key]: e.target.value }))} />
+              ) : (
+                <input
+                  style={{ ...inputStyle, marginLeft: 6 }}
+                  type={f.kind === "money" ? "number" : f.kind === "date" ? "date" : "text"}
+                  min={f.kind === "money" ? 0 : undefined}
+                  step={f.kind === "money" ? "0.01" : undefined}
+                  value={header[f.key]}
+                  onChange={(e) => setHeader((h) => ({ ...h, [f.key]: e.target.value }))}
+                />
+              )}
+            </label>
+          ))}
+
           <h3>Lines</h3>
           {lines.map((line, i) => (
             <div key={i} style={{ marginBottom: 6 }}>
@@ -127,6 +165,8 @@ export default function PurchasesPage() {
               <input style={inputStyle} type="number" min={1} placeholder="Quantity" value={line.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} />
               <input style={inputStyle} type="number" min={0} step="0.01" placeholder="Unit cost (EUR)" value={line.unitPurchaseCost} onChange={(e) => updateLine(i, { unitPurchaseCost: e.target.value })} />
               <input style={inputStyle} placeholder="Product ID (optional)" value={line.productId} onChange={(e) => updateLine(i, { productId: e.target.value })} />
+              <input style={inputStyle} placeholder="Lot reference (optional)" value={line.sourceLineReference} onChange={(e) => updateLine(i, { sourceLineReference: e.target.value })} />
+              <input style={inputStyle} type="number" min={0} step="0.001" placeholder="Weight (optional)" value={line.weight} onChange={(e) => updateLine(i, { weight: e.target.value })} />
               {lines.length > 1 && (
                 <button style={buttonStyle} onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}>Remove</button>
               )}

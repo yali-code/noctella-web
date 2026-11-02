@@ -167,6 +167,10 @@ export function createPurchasePath(): string {
   return `/api/erp/commands/purchases/create`;
 }
 
+export function updatePurchasePath(purchaseId: string): string {
+  return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/update`;
+}
+
 export function receivePurchasePath(purchaseId: string): string {
   return `/api/erp/commands/purchases/${encodeURIComponent(purchaseId)}/receive`;
 }
