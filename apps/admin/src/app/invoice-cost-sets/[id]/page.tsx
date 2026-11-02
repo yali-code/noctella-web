@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatFileSize, INVOICE_TYPES, invoiceIntakeApi, type InvoiceCostSetDetail, type InvoiceIntake, type InvoiceIntakeReview, type InvoiceType } from "@/lib/invoiceIntakes";
 import { InvoiceReviewPanel } from "@/components/InvoiceReviewPanel";
+import { BankDebitForm, CostSetAllocationPanel } from "@/components/InvoiceCostAllocationPanel";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--noctella-deep-star-blue)",
@@ -148,6 +149,17 @@ export default function InvoiceCostSetDetailPage({ params }: { params: { id: str
       {reviewable.map((i) => (
         <InvoiceReviewPanel key={`${i.id}-${i.updatedAt}`} intake={i} editable={open} onSaved={load} />
       ))}
+
+      {costSet.intakes.some((i) => i.status === "reviewed") && (
+        <section aria-label="Bank debits" style={{ marginTop: 16 }}>
+          <h2>Bank debits and official rates</h2>
+          {costSet.intakes.filter((i) => i.status === "reviewed").map((i) => (
+            <BankDebitForm key={`${i.id}-${i.updatedAt}`} intake={i} editable={open && i.invoiceType !== "other"} onSaved={load} />
+          ))}
+        </section>
+      )}
+
+      {costSet.status !== "cancelled" && <CostSetAllocationPanel costSet={costSet} onChanged={load} />}
 
       {open && (
         <div style={{ marginTop: 16 }}>

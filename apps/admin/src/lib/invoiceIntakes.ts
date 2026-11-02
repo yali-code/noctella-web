@@ -33,6 +33,45 @@ export interface InvoiceIntake {
   updatedAt: string;
   /** PHASE-2B: null until the invoice has been read by AI. */
   review?: InvoiceIntakeReview | null;
+  /** PHASE-2C: summary columns, official rate and bank debit. */
+  invoiceNumber?: string | null;
+  currency?: string | null;
+  paidDate?: string | null;
+  totalOriginal?: number | null;
+  fxRate?: number | null;
+  fxRateDate?: string | null;
+  fxSource?: string | null;
+  bankDebitEur?: number | null;
+  fx?: { officialEur: number; fxDiffEur: number | null } | null;
+}
+
+/** PHASE-2C: one selected product of a cost set with its weight and stored allocation. */
+export interface InvoiceCostSetItem {
+  productId: string;
+  sku: string | null;
+  title: string | null;
+  aiSuggestedPriceEur: number | null;
+  purchaseCost: number | null;
+  valueWeightEur: number | null;
+  weightSource: "ai" | "admin" | null;
+  allocLotEur: number | null;
+  allocHammerFeeEur: number | null;
+  allocPremiumEur: number | null;
+  allocTransportEur: number | null;
+  allocForwarderEur: number | null;
+  allocFxDiffEur: number | null;
+  allocTotalEur: number | null;
+}
+
+export interface CostSetProductCandidate { productId: string; sku: string; title: string; createdAt: string; purchaseCost: number | null; aiSuggestedPriceEur: number | null }
+export interface CostSetIssue { code: string; message: string; intakeId?: string; productId?: string }
+export interface CostSetPreview {
+  issues: CostSetIssue[];
+  warnings: CostSetIssue[];
+  intakes: Array<{ intakeId: string; invoiceType: string; invoiceNumber: string | null; currency: string | null; totalOriginal: number | null; fxRate: number | null; fxRateDate: string | null; fxSource: string | null; officialEur: number; bankDebitEur: number; fxDiffEur: number }>;
+  items: Array<{ productId: string; sku: string | null; title: string | null; lotEur: number; hammerFeeEur: number; premiumEur: number; transportEur: number; forwarderEur: number; fxDiffEur: number; totalEur: number }>;
+  totalBankDebitEur: number;
+  totalAllocatedEur: number;
 }
 
 /** PHASE-2B: AI extraction + admin review. Mirrors the API's review view (use-cases/invoice-intake). */
@@ -79,6 +118,8 @@ export const hasTotalMismatch = (checks: InvoiceCheck[]) => checks.some((c) => c
 
 export interface InvoiceCostSetDetail extends InvoiceCostSet {
   intakes: InvoiceIntake[];
+  /** PHASE-2C: absent on responses from before 2C. */
+  items?: InvoiceCostSetItem[];
 }
 
 async function readJson<T>(res: Response): Promise<T> {
@@ -108,7 +149,16 @@ export const invoiceIntakeApi = {
   reviewIntake: (id: string, edits: Partial<InvoiceValues>, confirm: boolean) =>
     postJson<InvoiceIntake>(`/api/erp/invoice-intakes/${encodeURIComponent(id)}/review`, { edits, confirm }),
   fileUrl: (id: string) => `/api/erp/invoice-intakes/${encodeURIComponent(id)}/file`,
+  setBankDebit: (id: string, bankDebitEur: number) => postJson<InvoiceIntake>(`/api/erp/invoice-intakes/${encodeURIComponent(id)}/bank-debit`, { bankDebitEur }),
+  productCandidates: (costSetId: string, q: string) =>
+    fetch(`/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/product-candidates${q ? `?${new URLSearchParams({ q })}` : ""}`).then(readJson<{ items: CostSetProductCandidate[] }>),
+  setProducts: (costSetId: string, items: Array<{ productId: string; valueWeightEur?: number | null }>) =>
+    fetch(`/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/products`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) }).then(readJson<{ items: InvoiceCostSetItem[] }>),
+  preview: (costSetId: string) => postJson<CostSetPreview>(`/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/preview`, {}),
+  approve: (costSetId: string) => postJson<InvoiceCostSet>(`/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/approve`, {}),
 };
+
+export const formatEur = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(2));
 
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

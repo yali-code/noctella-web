@@ -7,6 +7,11 @@ import { POST as CANCEL_INTAKE } from "../invoice-intakes/[id]/cancel/route";
 import { GET as GET_FILE } from "../invoice-intakes/[id]/file/route";
 import { POST as EXTRACT } from "../invoice-intakes/[id]/extract/route";
 import { POST as REVIEW } from "../invoice-intakes/[id]/review/route";
+import { POST as BANK_DEBIT } from "../invoice-intakes/[id]/bank-debit/route";
+import { GET as CANDIDATES } from "./[id]/product-candidates/route";
+import { PUT as PRODUCTS } from "./[id]/products/route";
+import { POST as PREVIEW } from "./[id]/preview/route";
+import { POST as APPROVE } from "./[id]/approve/route";
 
 const ORIGINAL_ENV = { ...process.env };
 beforeEach(() => {
@@ -115,11 +120,34 @@ describe("invoice cost set proxy routes (PHASE-2A)", () => {
     expect(await res.json()).toEqual(conflict);
   });
 
+  it("PHASE-2C: forwards bank debit, products (PUT), preview and approve with the ERP key", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockImplementation(async () => json({ ok: true }));
+    await BANK_DEBIT(new Request("http://admin.local/x", { method: "POST", body: JSON.stringify({ bankDebitEur: 109.65 }) }), { params: { id: "in1" } });
+    const items = { items: [{ productId: "p1", valueWeightEur: 20 }] };
+    await PRODUCTS(new Request("http://admin.local/x", { method: "PUT", body: JSON.stringify(items) }), { params: { id: "cs/1" } });
+    await PREVIEW(new Request("http://admin.local/x", { method: "POST", body: JSON.stringify({ injected: true }) }), { params: { id: "cs1" } });
+    await APPROVE(new Request("http://admin.local/x", { method: "POST", body: JSON.stringify({ approvedBy: "spoof" }) }), { params: { id: "cs1" } });
+    expect(mockFetch).toHaveBeenNthCalledWith(1, "http://backend.internal:4000/api/erp/invoice-intakes/in1/bank-debit", expect.objectContaining({ method: "POST", body: JSON.stringify({ bankDebitEur: 109.65 }) }));
+    expect(mockFetch).toHaveBeenNthCalledWith(2, "http://backend.internal:4000/api/erp/invoice-cost-sets/cs%2F1/products", expect.objectContaining({ method: "PUT", body: JSON.stringify(items) }));
+    expect(mockFetch).toHaveBeenNthCalledWith(3, "http://backend.internal:4000/api/erp/invoice-cost-sets/cs1/preview", expect.objectContaining({ method: "POST", body: "{}" }));
+    expect(mockFetch).toHaveBeenNthCalledWith(4, "http://backend.internal:4000/api/erp/invoice-cost-sets/cs1/approve", expect.objectContaining({ method: "POST", body: "{}" }));
+    for (const call of mockFetch.mock.calls) expect(call[1]).toEqual(expect.objectContaining({ headers: expect.objectContaining({ "X-Noctella-ERP-Key": "test-erp-key" }) }));
+  });
+
+  it("PHASE-2C: the candidate search forwards only q", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(json({ items: [] }));
+    await CANDIDATES(new Request("http://admin.local/x?q=cam 1&limit=9999"), { params: { id: "cs1" } });
+    await CANDIDATES(new Request("http://admin.local/x"), { params: { id: "cs1" } });
+    expect(mockFetch).toHaveBeenNthCalledWith(1, "http://backend.internal:4000/api/erp/invoice-cost-sets/cs1/product-candidates?q=cam+1", keyHeader);
+    expect(mockFetch).toHaveBeenNthCalledWith(2, "http://backend.internal:4000/api/erp/invoice-cost-sets/cs1/product-candidates", keyHeader);
+  });
+
   it("fails closed without the ERP key and never calls fetch", async () => {
     delete process.env.ERP_INTEGRATION_KEY;
     const mockFetch = vi.spyOn(global, "fetch");
     expect((await GET(new Request("http://admin.local/api/erp/invoice-cost-sets"))).status).toBe(500);
     expect((await GET_FILE(new Request("http://admin.local/x"), { params: { id: "in1" } })).status).toBe(500);
+    expect((await APPROVE(new Request("http://admin.local/x", { method: "POST" }), { params: { id: "cs1" } })).status).toBe(500);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });

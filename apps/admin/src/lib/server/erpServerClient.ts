@@ -189,6 +189,27 @@ export function invoiceIntakeFilePath(intakeId: string): string {
   return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/file`;
 }
 
+/** PHASE-2C: bank debit + official rate, product selection, allocation preview and approve. */
+export function invoiceIntakeBankDebitPath(intakeId: string): string {
+  return `/api/erp/invoice-intakes/${encodeURIComponent(intakeId)}/bank-debit`;
+}
+
+export function invoiceCostSetProductCandidatesPath(costSetId: string, query: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/product-candidates${query ? `?${query}` : ""}`;
+}
+
+export function invoiceCostSetProductsPath(costSetId: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/products`;
+}
+
+export function invoiceCostSetPreviewPath(costSetId: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/preview`;
+}
+
+export function invoiceCostSetApprovePath(costSetId: string): string {
+  return `/api/erp/invoice-cost-sets/${encodeURIComponent(costSetId)}/approve`;
+}
+
 export function productWorkspacePath(productId: string): string {
   return `/api/erp/products/${encodeURIComponent(productId)}/workspace`;
 }
@@ -397,6 +418,13 @@ export async function postErpBackend(path: string, body: unknown): Promise<Respo
   const base = backendBaseUrl();
   const headers = { ...buildErpRequestHeaders(), "Content-Type": "application/json" };
   return fetch(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body), cache: "no-store" });
+}
+
+/** PHASE-2C: same as postErpBackend, with the PUT method (replace-style command). */
+export async function putErpBackend(path: string, body: unknown): Promise<Response> {
+  const base = backendBaseUrl();
+  const headers = { ...buildErpRequestHeaders(), "Content-Type": "application/json" };
+  return fetch(`${base}${path}`, { method: "PUT", headers, body: JSON.stringify(body), cache: "no-store" });
 }
 
 /**

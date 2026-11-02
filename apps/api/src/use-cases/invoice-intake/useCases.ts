@@ -36,13 +36,13 @@ export interface InvoiceIntakeUseCaseDeps {
 
 const now = () => new Date().toISOString();
 
-async function loadCostSet(repository: InvoiceIntakeRepository, id: string) {
+export async function loadCostSet(repository: InvoiceIntakeRepository, id: string) {
   const row = await repository.findCostSetById(id);
   if (!row) throw new NotFoundError("Invoice cost set not found");
   return row;
 }
 
-async function loadOpenCostSet(repository: InvoiceIntakeRepository, id: string) {
+export async function loadOpenCostSet(repository: InvoiceIntakeRepository, id: string) {
   const row = await loadCostSet(repository, id);
   if (row.status !== "open") throw new ConflictError("Invoice cost set is not open");
   return row;
@@ -139,7 +139,7 @@ export interface InvoiceExtractionUseCaseDeps extends InvoiceIntakeUseCaseDeps {
 const EXTRACTABLE_STATUSES = ["uploaded", "extracted"] as const;
 const REVIEWABLE_STATUSES = ["extracted", "reviewed"] as const;
 
-async function loadIntakeInOpenSet(repository: InvoiceIntakeRepository, id: string) {
+export async function loadIntakeInOpenSet(repository: InvoiceIntakeRepository, id: string) {
   const intake = await repository.findIntakeById(id);
   if (!intake) throw new NotFoundError("Invoice intake not found");
   await loadOpenCostSet(repository, intake.costSetId as string);
@@ -158,6 +158,12 @@ function storedEdits(intake: InvoiceIntakeRecord): { edits: InvoiceEdits; edited
   const parsed = JSON.parse(String(intake.editsJson));
   return { edits: parsed?.edits ?? {}, editedAt: parsed?.editedAt ?? null, confirmed: parsed?.confirmed === true };
 }
+
+/**
+ * PHASE-2C: a re-read or a review may change the currency, total or paid date, so the official rate fetched for
+ * the previous values is cleared; the admin fetches it again. The bank debit is a bank fact and is kept.
+ */
+const CLEARED_OFFICIAL_RATE = { fxRate: null, fxRateDate: null, fxSource: null } as const;
 
 function finishIntakeUpdate(result: Awaited<ReturnType<InvoiceIntakeRepository["updateIntakeReview"]>>, message: string) {
   if (result.updated) return result.row!;
@@ -193,6 +199,7 @@ export async function extractInvoiceIntakeUseCase(deps: InvoiceExtractionUseCase
       extractionJson: JSON.stringify({ output, checks, model: extractor.modelName, extractedAt: t }),
       editsJson: null,
       ...denormalizedInvoiceColumns(effectiveInvoiceValues(output), intake.invoiceType as string),
+      ...CLEARED_OFFICIAL_RATE,
     },
   });
   return finishIntakeUpdate(result, "Invoice intake changed while it was being read; reload and try again");
@@ -220,6 +227,7 @@ export async function reviewInvoiceIntakeUseCase(deps: Pick<InvoiceIntakeUseCase
     values: {
       editsJson: JSON.stringify({ edits, checks, editedAt: t, confirmed: input.confirm }),
       ...denormalizedInvoiceColumns(effectiveInvoiceValues(extraction.output, edits), intake.invoiceType as string),
+      ...CLEARED_OFFICIAL_RATE,
     },
   });
   return finishIntakeUpdate(result, "Invoice intake changed while it was being reviewed; reload and try again");

@@ -18,10 +18,10 @@ import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchas
 import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
 import * as warehouse from "../services/erpWarehouseBridge";
 import * as reports from "../services/erpReportsAnalyticsBridge";
-import { addInvoiceIntakeFile, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, extractInvoiceIntake, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSets, reviewInvoiceIntake } from "../services/invoiceIntakes";
+import { addInvoiceIntakeFile, approveInvoiceCostSet, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, extractInvoiceIntake, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSetProductCandidates, listInvoiceCostSets, previewInvoiceCostSetAllocation, reviewInvoiceIntake, setInvoiceCostSetProducts, setInvoiceIntakeBankDebit } from "../services/invoiceIntakes";
 import { INVOICE_FILE_MAX_BYTES, INVOICE_FILE_SIZE_MESSAGE } from "../services/invoiceFileGuard";
 import { BadRequestError } from "../services/errors";
-import { createInvoiceCostSetSchema, invoiceCostSetListQuerySchema, invoiceIntakeReviewSchema, invoiceIntakeUploadFieldsSchema } from "../validation/invoiceIntake";
+import { createInvoiceCostSetSchema, invoiceCostSetCandidatesQuerySchema, invoiceCostSetListQuerySchema, invoiceCostSetProductsSchema, invoiceIntakeBankDebitSchema, invoiceIntakeReviewSchema, invoiceIntakeUploadFieldsSchema } from "../validation/invoiceIntake";
 import { createReadStream } from "node:fs";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
 
@@ -192,6 +192,12 @@ router.post("/invoice-intakes/:id/cancel", requireErp, async (req, res) => { try
 // PHASE-2B: AI extraction and the admin review of one invoice intake.
 router.post("/invoice-intakes/:id/extract", requireErp, async (req, res) => { try { res.json(await extractInvoiceIntake(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
 router.post("/invoice-intakes/:id/review", requireErp, async (req, res) => { try { res.json(await reviewInvoiceIntake(db, req.params.id, invoiceIntakeReviewSchema.parse(req.body ?? {}))); } catch (err) { handleRouteError(err, res); } });
+// PHASE-2C: official FX + bank debit, product selection, allocation preview and approve -> Draft purchase.
+router.post("/invoice-intakes/:id/bank-debit", requireErp, async (req, res) => { try { res.json(await setInvoiceIntakeBankDebit(db, req.params.id, invoiceIntakeBankDebitSchema.parse(req.body ?? {}).bankDebitEur)); } catch (err) { handleRouteError(err, res); } });
+router.get("/invoice-cost-sets/:id/product-candidates", requireErp, async (req, res) => { try { res.json(await listInvoiceCostSetProductCandidates(db, req.params.id, invoiceCostSetCandidatesQuerySchema.parse(req.query).q)); } catch (err) { handleRouteError(err, res); } });
+router.put("/invoice-cost-sets/:id/products", requireErp, async (req, res) => { try { res.json(await setInvoiceCostSetProducts(db, req.params.id, invoiceCostSetProductsSchema.parse(req.body ?? {}).items)); } catch (err) { handleRouteError(err, res); } });
+router.post("/invoice-cost-sets/:id/preview", requireErp, async (req, res) => { try { res.json(await previewInvoiceCostSetAllocation(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.post("/invoice-cost-sets/:id/approve", requireErp, async (req: any, res) => { try { res.json(await approveInvoiceCostSet(db, req.params.id, { clientId: req.erp.clientId })); } catch (err) { handleRouteError(err, res); } });
 router.get("/invoice-intakes/:id/file", requireErp, async (req, res) => {
   try {
     const file = await getInvoiceIntakeFile(db, req.params.id);

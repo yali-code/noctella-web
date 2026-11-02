@@ -41,6 +41,8 @@ import {
   InvoiceExtractionFailedError,
   InvoiceExtractionUnavailableError,
   InvoiceReviewChecksFailedError,
+  FxRateUnavailableError,
+  InvoiceCostSetBlockedError,
   UnauthorizedError,
 } from "../services/errors";
 import { InventoryUseCaseError, type InventoryErrorCategory } from "../application/inventory/errors";
@@ -79,6 +81,10 @@ export function handleRouteError(err: unknown, res: Response): void {
   }
   if (err instanceof InvoiceExtractionFailedError) {
     res.status(502).json({ error: err.message, code: "INVOICE_EXTRACTION_FAILED" });
+    return;
+  }
+  if (err instanceof FxRateUnavailableError) {
+    res.status(502).json({ error: err.message, code: "FX_RATE_UNAVAILABLE" });
     return;
   }
   if (err instanceof UnauthorizedError) {
@@ -218,6 +224,10 @@ export function handleRouteError(err: unknown, res: Response): void {
   // PHASE-2B: checked before the generic ConflictError branch below (subclass); the check list is app-computed data.
   if (err instanceof InvoiceReviewChecksFailedError) {
     res.status(409).json({ error: err.message, code: "INVOICE_REVIEW_CHECKS_FAILED", checks: err.checks });
+    return;
+  }
+  if (err instanceof InvoiceCostSetBlockedError) {
+    res.status(409).json({ error: err.message, code: "INVOICE_COST_SET_BLOCKED", issues: err.issues });
     return;
   }
   if (err instanceof ConflictError) {
