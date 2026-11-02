@@ -1149,3 +1149,22 @@ export const socialPublishScheduleExecutions = pgTable("social_publish_schedule_
   uniqueIndex("idx_social_schedule_executions_job_unique").on(table.backgroundJobId),
   uniqueIndex("idx_social_schedule_executions_attempt_unique").on(table.instagramAttemptId),
 ]);
+
+/** PHASE-2A: invoice intake foundation (migration 0046) - see schema.sqlite.ts. Money is numeric(18,6). */
+export const invoiceCostSets = pgTable("invoice_cost_sets", {
+  id: text("id").primaryKey().notNull(), status: text("status").notNull().default("open"), title: text("title").notNull(), purchaseId: text("purchase_id"), approvedBy: text("approved_by"), approvedAt: timestamp("approved_at", { withTimezone: true }), notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_invoice_cost_sets_status").on(table.status, table.createdAt)]);
+export const invoiceIntakes = pgTable("invoice_intakes", {
+  id: text("id").primaryKey().notNull(), costSetId: text("cost_set_id").notNull(), invoiceType: text("invoice_type").notNull(), status: text("status").notNull().default("uploaded"),
+  fileRelativePath: text("file_relative_path").notNull(), fileSha256: text("file_sha256").notNull(), fileSizeBytes: integer("file_size_bytes").notNull(), fileMime: text("file_mime").notNull(), originalFilenameSanitized: text("original_filename_sanitized"),
+  supplierName: text("supplier_name"), supplierVatNumber: text("supplier_vat_number"), platform: text("platform"), invoiceNumber: text("invoice_number"), issueDate: text("issue_date"), paidDate: text("paid_date"),
+  currency: text("currency"), totalOriginal: numeric("total_original", { precision: 18, scale: 6 }), vatNote: text("vat_note"), reverseCharge: boolean("reverse_charge"), lotNumbers: text("lot_numbers"), extractionJson: text("extraction_json"), editsJson: text("edits_json"),
+  fxRate: numeric("fx_rate", { precision: 18, scale: 6 }), fxRateDate: text("fx_rate_date"), fxSource: text("fx_source"), bankDebitEur: numeric("bank_debit_eur", { precision: 18, scale: 6 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [uniqueIndex("idx_invoice_intakes_set_sha256").on(table.costSetId, table.fileSha256), index("idx_invoice_intakes_set").on(table.costSetId, table.createdAt)]);
+export const invoiceCostSetItems = pgTable("invoice_cost_set_items", {
+  id: text("id").primaryKey().notNull(), costSetId: text("cost_set_id").notNull(), productId: text("product_id").notNull(), valueWeightEur: numeric("value_weight_eur", { precision: 18, scale: 6 }), weightSource: text("weight_source"),
+  allocLotEur: numeric("alloc_lot_eur", { precision: 18, scale: 6 }), allocHammerFeeEur: numeric("alloc_hammer_fee_eur", { precision: 18, scale: 6 }), allocPremiumEur: numeric("alloc_premium_eur", { precision: 18, scale: 6 }), allocTransportEur: numeric("alloc_transport_eur", { precision: 18, scale: 6 }), allocForwarderEur: numeric("alloc_forwarder_eur", { precision: 18, scale: 6 }), allocFxDiffEur: numeric("alloc_fx_diff_eur", { precision: 18, scale: 6 }), allocTotalEur: numeric("alloc_total_eur", { precision: 18, scale: 6 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [uniqueIndex("idx_invoice_cost_set_items_set_product").on(table.costSetId, table.productId)]);

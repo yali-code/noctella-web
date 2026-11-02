@@ -1,0 +1,104 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GET, POST } from "./route";
+import { GET as GET_DETAIL } from "./[id]/route";
+import { POST as CANCEL_SET } from "./[id]/cancel/route";
+import { POST as UPLOAD } from "./[id]/files/route";
+import { POST as CANCEL_INTAKE } from "../invoice-intakes/[id]/cancel/route";
+import { GET as GET_FILE } from "../invoice-intakes/[id]/file/route";
+
+const ORIGINAL_ENV = { ...process.env };
+beforeEach(() => {
+  process.env.ERP_INTEGRATION_KEY = "test-erp-key";
+  process.env.NEXT_PUBLIC_API_BASE_URL = "http://backend.internal:4000";
+});
+afterEach(() => {
+  process.env = { ...ORIGINAL_ENV };
+  vi.restoreAllMocks();
+});
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const keyHeader = expect.objectContaining({ headers: expect.objectContaining({ "X-Noctella-ERP-Key": "test-erp-key" }) });
+
+describe("invoice cost set proxy routes (PHASE-2A)", () => {
+  it("lists cost sets with the query string and the server-side ERP key", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(json({ items: [], total: 0, page: 1, pageSize: 20 }));
+    const res = await GET(new Request("http://admin.local/api/erp/invoice-cost-sets?status=open"));
+    expect(mockFetch).toHaveBeenCalledWith("http://backend.internal:4000/api/erp/invoice-cost-sets?status=open", keyHeader);
+    expect(res.status).toBe(200);
+  });
+
+  it("creates a cost set by forwarding the JSON body", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(json({ id: "cs1", status: "open" }, 201));
+    const res = await POST(new Request("http://admin.local/api/erp/invoice-cost-sets", { method: "POST", body: JSON.stringify({ title: "Lot 1" }) }));
+    expect(mockFetch).toHaveBeenCalledWith("http://backend.internal:4000/api/erp/invoice-cost-sets", expect.objectContaining({ method: "POST", body: JSON.stringify({ title: "Lot 1" }) }));
+    expect(res.status).toBe(201);
+  });
+
+  it("gets a cost set detail and encodes the id segment", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(json({ id: "a/b", intakes: [] }));
+    await GET_DETAIL(new Request("http://admin.local/x"), { params: { id: "a/b" } });
+    expect(mockFetch).toHaveBeenCalledWith("http://backend.internal:4000/api/erp/invoice-cost-sets/a%2Fb", keyHeader);
+  });
+
+  it("cancels a cost set and an intake", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockImplementation(async () => json({ status: "cancelled" }));
+    await CANCEL_SET(new Request("http://admin.local/x", { method: "POST" }), { params: { id: "cs1" } });
+    await CANCEL_INTAKE(new Request("http://admin.local/x", { method: "POST" }), { params: { id: "in1" } });
+    expect(mockFetch).toHaveBeenNthCalledWith(1, "http://backend.internal:4000/api/erp/invoice-cost-sets/cs1/cancel", expect.objectContaining({ method: "POST" }));
+    expect(mockFetch).toHaveBeenNthCalledWith(2, "http://backend.internal:4000/api/erp/invoice-intakes/in1/cancel", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("passes a multipart upload through with only file and invoiceType", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(json({ id: "in1", status: "uploaded" }, 201));
+    const form = new FormData();
+    form.append("invoiceType", "auction");
+    form.append("file", new File([Buffer.from("%PDF-1.4")], "inv.pdf", { type: "application/pdf" }));
+    form.append("extra", "ignored");
+    const res = await UPLOAD(new Request("http://admin.local/x", { method: "POST", body: form }), { params: { id: "cs1" } });
+    expect(res.status).toBe(201);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://backend.internal:4000/api/erp/invoice-cost-sets/cs1/files");
+    expect((init.headers as Record<string, string>)["X-Noctella-ERP-Key"]).toBe("test-erp-key");
+    const sent = init.body as FormData;
+    expect(sent.get("invoiceType")).toBe("auction");
+    expect((sent.get("file") as File).name).toBe("inv.pdf");
+    expect(sent.has("extra")).toBe(false);
+  });
+
+  it("rejects an upload without a file and never calls fetch", async () => {
+    const mockFetch = vi.spyOn(global, "fetch");
+    const form = new FormData();
+    form.append("invoiceType", "auction");
+    const res = await UPLOAD(new Request("http://admin.local/x", { method: "POST", body: form }), { params: { id: "cs1" } });
+    expect(res.status).toBe(400);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("streams the invoice file inline with nosniff", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockResolvedValue(new Response(Buffer.from("%PDF-1.4 body"), { status: 200, headers: { "content-type": "application/pdf", "content-disposition": 'inline; filename="invoice-in1.pdf"' } }));
+    const res = await GET_FILE(new Request("http://admin.local/x"), { params: { id: "in1" } });
+    expect(mockFetch).toHaveBeenCalledWith("http://backend.internal:4000/api/erp/invoice-intakes/in1/file", keyHeader);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/pdf");
+    expect(res.headers.get("content-disposition")).toMatch(/^inline/);
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(await res.text()).toBe("%PDF-1.4 body");
+  });
+
+  it("passes a file-route error through and refuses an unexpected content type", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(json({ error: "Invoice intake not found" }, 404));
+    expect((await GET_FILE(new Request("http://admin.local/x"), { params: { id: "missing" } })).status).toBe(404);
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(new Response("<html>", { status: 200, headers: { "content-type": "text/html" } }));
+    const res = await GET_FILE(new Request("http://admin.local/x"), { params: { id: "in1" } });
+    expect(res.status).toBe(502);
+    expect(await res.text()).not.toContain("<html>");
+  });
+
+  it("fails closed without the ERP key and never calls fetch", async () => {
+    delete process.env.ERP_INTEGRATION_KEY;
+    const mockFetch = vi.spyOn(global, "fetch");
+    expect((await GET(new Request("http://admin.local/api/erp/invoice-cost-sets"))).status).toBe(500);
+    expect((await GET_FILE(new Request("http://admin.local/x"), { params: { id: "in1" } })).status).toBe(500);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
