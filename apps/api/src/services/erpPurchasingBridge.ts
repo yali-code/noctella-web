@@ -26,7 +26,7 @@ import { createPurchaseApplicationContextForDb } from "./purchaseApplicationCont
 function mapPurchaseUseCaseError(e: unknown): never {
   if (e instanceof PurchaseUseCaseError) {
     if (e.code === "purchase_not_found" || e.code === "supplier_not_found") throw new NotFoundError(e.message);
-    if (e.code === "purchase_concurrency_conflict" || e.code === "purchase_duplicate_reference" || e.code === "supplier_duplicate_reference" || e.code === "purchase_receipt_conflict" || e.code === "purchase_quantity") throw new ConflictError(e.message);
+    if (e.code === "purchase_concurrency_conflict" || e.code === "purchase_duplicate_reference" || e.code === "supplier_duplicate_reference" || e.code === "purchase_receipt_conflict" || e.code === "purchase_quantity" || e.code === "purchase_receive_not_allowed") throw new ConflictError(e.message);
     throw new BadRequestError(e.message);
   }
   throw e;

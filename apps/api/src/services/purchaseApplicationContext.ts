@@ -12,6 +12,9 @@ import type { increaseInventoryInTransactionUseCase } from "../application/inven
 import { noopPurchaseEventPublisher } from "../events/purchase";
 import { noopPurchaseObservability } from "../observability/purchase";
 
+const EMPTY_RESULT_PRODUCT_IDS: readonly string[] = Object.freeze([]);
+const noopAiIntakeResultProductLookup = (): readonly string[] => EMPTY_RESULT_PRODUCT_IDS;
+
 export interface PurchaseClock {
   now(): Date;
 }
@@ -43,6 +46,14 @@ export interface PurchaseApplicationContext {
     inventoryContext: Pick<PurchaseApplicationContext, "clock" | "idGenerator">,
     input: Parameters<typeof increaseInventoryInTransactionUseCase>[2],
   ) => ReturnType<typeof increaseInventoryInTransactionUseCase>;
+  /**
+   * PHASE-1A: given candidate product ids, returns the subset that were created through AI
+   * intake (an ai_product_intakes row's result product). Read-only, pre-mutation only - never
+   * wired to anything that writes. Defaults to "none" when not supplied by the caller.
+   */
+  readonly aiIntakeResultProductLookup: (
+    productIds: readonly string[],
+  ) => Promise<readonly string[]> | readonly string[];
   readonly logger: PurchaseLogger;
   readonly clock: PurchaseClock;
   readonly idGenerator: PurchaseIdGenerator;
@@ -55,6 +66,7 @@ export interface BuildPurchaseApplicationContextInput {
   readonly purchaseRepositories: PurchaseRepositories;
   readonly unitOfWork: UnitOfWork;
   readonly inventoryReceiptMutation: PurchaseApplicationContext["inventoryReceiptMutation"];
+  readonly aiIntakeResultProductLookup?: PurchaseApplicationContext["aiIntakeResultProductLookup"];
   readonly logger: PurchaseLogger;
   readonly clock: PurchaseClock;
   readonly idGenerator: PurchaseIdGenerator;
@@ -103,6 +115,7 @@ export function buildPurchaseApplicationContext(
     purchaseReceiptRepository: purchaseRepositories.receipts,
     unitOfWork: dependencies.unitOfWork,
     inventoryReceiptMutation: dependencies.inventoryReceiptMutation,
+    aiIntakeResultProductLookup: dependencies.aiIntakeResultProductLookup ?? noopAiIntakeResultProductLookup,
     logger: dependencies.logger,
     clock: dependencies.clock,
     idGenerator: dependencies.idGenerator,

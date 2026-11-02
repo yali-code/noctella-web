@@ -8,3 +8,4 @@ export class SupplierDuplicateReferenceError extends PurchaseUseCaseError{constr
 export class InvalidPurchaseStatusTransitionError extends PurchaseUseCaseError{constructor(message="Invalid purchase status transition"){super(message,"purchase_status_transition")}}
 export class InvalidPurchaseQuantityError extends PurchaseUseCaseError{constructor(message="Invalid purchase quantity"){super(message,"purchase_quantity")}}
 export class PurchaseReceiptConflictError extends PurchaseUseCaseError{constructor(){super("Purchase receipt idempotency conflict","purchase_receipt_conflict")}}
+export class PurchaseReceiveNotAllowedError extends PurchaseUseCaseError{constructor(){super("Receive is not allowed for products stocked through AI intake","purchase_receive_not_allowed")}}

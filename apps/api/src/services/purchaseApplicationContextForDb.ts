@@ -12,6 +12,7 @@ import {
 import { PostgresUnitOfWork, SqliteUnitOfWork, type UnitOfWork } from "./unitOfWork";
 import { createInventoryRepositoryBundleForDb } from "../repositories/inventory/factory";
 import { increaseInventoryInTransactionUseCase } from "../application/inventory";
+import { createAiProductIntakeRepository } from "../repositories/ai-product-intake/factory";
 
 export interface CreatePurchaseApplicationContextForDbInput {
   readonly db: DbClient;
@@ -39,6 +40,7 @@ export function createPurchaseApplicationContextForDb(
   if (options.unitOfWork && options.unitOfWork.driver !== undefined && options.unitOfWork.driver !== driver) {
     throw new Error(`PURCHASE_TRANSACTION_DRIVER_MISMATCH:${driver}:${options.unitOfWork.driver}`);
   }
+  const aiProductIntakeRepository = createAiProductIntakeRepository(driver, options.db);
   return buildPurchaseApplicationContext({
     purchaseRepositories: createPurchaseRepositoriesForDb(options.db, driver),
     unitOfWork: options.unitOfWork ?? unitOfWorkForDb(options.db, driver),
@@ -52,6 +54,8 @@ export function createPurchaseApplicationContextForDb(
         ),
         mutation,
       ),
+    aiIntakeResultProductLookup: (productIds) =>
+      productIds.length ? aiProductIntakeRepository.existsByResultProductIds(productIds) : [],
     logger: options.logger ?? {},
     clock: { now: () => new Date() },
     idGenerator: { newId: () => crypto.randomUUID() },

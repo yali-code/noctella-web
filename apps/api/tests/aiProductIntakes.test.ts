@@ -272,6 +272,9 @@ describe("ai product intake foundation (Sprint 90)", () => {
       expect(repo.create).toBeTypeOf("function");
       expect(repo.findById).toBeTypeOf("function");
       expect(repo.cancelWithExpectedState).toBeTypeOf("function");
+      // PHASE-1A: the purchase Receive guard's lookup, added for both dialects via this same
+      // schema-parameterized factory - see apps/api/src/repositories/ai-product-intake/drizzle.ts.
+      expect(repo.existsByResultProductIds).toBeTypeOf("function");
     });
 
     it("the repository factory resolves sqlite, postgres, and rejects unsupported drivers", () => {

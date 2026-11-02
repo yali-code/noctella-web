@@ -11,7 +11,7 @@ import { LandedCostAllocationMethod, ProductStatus, ProductType, StockMovementTy
 import { createCategory } from "../src/services/categories";
 import { createProduct } from "../src/services/products";
 import * as schema from "../src/db/schema";
-import { stockMovements, erpCommandExecutions, purchaseReceipts, purchases, purchaseLines, purchaseAllocations, purchaseEvents, suppliers } from "../src/db/schema";
+import { stockMovements, erpCommandExecutions, purchaseReceipts, purchases, purchaseLines, purchaseAllocations, purchaseEvents, suppliers, aiProductIntakes } from "../src/db/schema";
 
 function memoryDb() { const sqlite = new Database(":memory:"); sqlite.pragma("foreign_keys = ON"); ensureSchema(sqlite); return { sqlite, db: drizzle(sqlite, { schema }) as any }; }
 function commandChecksum(payload: any) { return createHash("sha256").update(JSON.stringify(payload ?? {})).digest("hex"); }
@@ -268,6 +268,22 @@ describe("receivePurchase error mapping (Sprint 65)", () => {
     await expect(call).rejects.not.toBeInstanceOf(BadRequestError);
     await expect(call).rejects.not.toBeInstanceOf(NotFoundError);
     await expect(call).rejects.not.toBeInstanceOf(ConflictError);
+  });
+
+  it("PHASE-1A: product is an AI-intake result -> ConflictError (maps to 409), no generic message leaks ids", async () => {
+    const { purchase, product } = await seedPurchase(2);
+    await db.insert(aiProductIntakes).values({
+      id: `intake-${product.id}`,
+      status: "applied",
+      createdByAdminUserId: "admin-1",
+      resultProductId: product.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    const call = receivePurchase(db, purchase.id, { idempotencyKey: "ai-intake-1", lines: [{ purchaseLineId: purchase.lines[0].id, quantityReceived: 1 }] });
+    await expect(call).rejects.toBeInstanceOf(ConflictError);
+    await expect(call).rejects.toMatchObject({ message: "Receive is not allowed for products stocked through AI intake" });
+    expect(await db.select().from(purchaseReceipts).where(eq(purchaseReceipts.purchaseId, purchase.id))).toHaveLength(0);
   });
 
   it("the successful receive flow is unchanged", async () => {

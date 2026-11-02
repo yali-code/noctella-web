@@ -15,6 +15,7 @@ import {
   PurchaseDuplicateReferenceError,
   PurchaseNotFoundError,
   PurchaseReceiptConflictError,
+  PurchaseReceiveNotAllowedError,
   PurchaseValidationError,
   SupplierDuplicateReferenceError,
   SupplierNotFoundError,
@@ -579,6 +580,15 @@ export const receivePurchaseUseCase = (ctx: PurchaseApplicationContext) => ({
       );
     if (!input.lines.length)
       throw new PurchaseValidationError("Receipt requires lines");
+    const candidateProductIds = [...new Set(
+      input.lines
+        .map((x) => p.lines.find((l: PurchaseLineRecord) => l.id === x.purchaseLineId)?.productId)
+        .filter((productId): productId is string => !!productId),
+    )];
+    if (candidateProductIds.length && typeof ctx.aiIntakeResultProductLookup === "function") {
+      const aiIntakeProductIds = await ctx.aiIntakeResultProductLookup(candidateProductIds);
+      if (aiIntakeProductIds.length) throw new PurchaseReceiveNotAllowedError();
+    }
     let receipt: any;
     const updated = await ctx.unitOfWork.run(({ repositories }) => chain(
       repositories.purchaseRepositories.purchases.findById(input.purchaseId),
