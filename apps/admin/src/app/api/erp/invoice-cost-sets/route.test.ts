@@ -5,6 +5,8 @@ import { POST as CANCEL_SET } from "./[id]/cancel/route";
 import { POST as UPLOAD } from "./[id]/files/route";
 import { POST as CANCEL_INTAKE } from "../invoice-intakes/[id]/cancel/route";
 import { GET as GET_FILE } from "../invoice-intakes/[id]/file/route";
+import { POST as EXTRACT } from "../invoice-intakes/[id]/extract/route";
+import { POST as REVIEW } from "../invoice-intakes/[id]/review/route";
 
 const ORIGINAL_ENV = { ...process.env };
 beforeEach(() => {
@@ -92,6 +94,25 @@ describe("invoice cost set proxy routes (PHASE-2A)", () => {
     const res = await GET_FILE(new Request("http://admin.local/x"), { params: { id: "in1" } });
     expect(res.status).toBe(502);
     expect(await res.text()).not.toContain("<html>");
+  });
+
+  it("PHASE-2B: forwards extract and review to the fixed backend paths with the server-side key", async () => {
+    const mockFetch = vi.spyOn(global, "fetch").mockImplementation(async () => json({ id: "in1", status: "extracted" }));
+    const extract = await EXTRACT(new Request("http://admin.local/x", { method: "POST", body: JSON.stringify({ injected: true }) }), { params: { id: "in/1" } });
+    expect(extract.status).toBe(200);
+    const body = { edits: { invoiceType: "transport" }, confirm: true };
+    await REVIEW(new Request("http://admin.local/x", { method: "POST", body: JSON.stringify(body) }), { params: { id: "in1" } });
+    expect(mockFetch).toHaveBeenNthCalledWith(1, "http://backend.internal:4000/api/erp/invoice-intakes/in%2F1/extract", expect.objectContaining({ method: "POST", body: "{}" }));
+    expect(mockFetch).toHaveBeenNthCalledWith(2, "http://backend.internal:4000/api/erp/invoice-intakes/in1/review", expect.objectContaining({ method: "POST", body: JSON.stringify(body) }));
+    expect(mockFetch).toHaveBeenCalledWith(expect.any(String), keyHeader);
+  });
+
+  it("PHASE-2B: passes a review 409 with its checks through unchanged", async () => {
+    const conflict = { error: "The invoice cannot be confirmed while the total does not match its lines", code: "INVOICE_REVIEW_CHECKS_FAILED", checks: [{ code: "TOTAL_MISMATCH", ok: false, message: "x" }] };
+    vi.spyOn(global, "fetch").mockResolvedValue(json(conflict, 409));
+    const res = await REVIEW(new Request("http://admin.local/x", { method: "POST", body: JSON.stringify({ edits: {}, confirm: true }) }), { params: { id: "in1" } });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual(conflict);
   });
 
   it("fails closed without the ERP key and never calls fetch", async () => {

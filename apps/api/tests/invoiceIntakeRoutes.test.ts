@@ -126,4 +126,59 @@ describe("invoice intake ERP routes (PHASE-2A)", () => {
     const noFile = await fetch(`${baseUrl}/api/erp/invoice-cost-sets/${set.id}/files`, { method: "POST", headers, body: (() => { const f = new FormData(); f.append("invoiceType", "auction"); return f; })() });
     expect(noFile.status).toBe(400);
   });
+
+  it("PHASE-2B: extract fails closed with a generic 503 when AI_INTAKE_PROVIDER is not openai, leaving the intake uploaded", async () => {
+    const previous = process.env.AI_INTAKE_PROVIDER;
+    process.env.AI_INTAKE_PROVIDER = "mock";
+    try {
+      const set = await createSet();
+      const intake = await (await upload(set.id, new Blob([PDF, "2b-extract"], { type: "application/pdf" }), "a.pdf")).json();
+      const res = await fetch(`${baseUrl}/api/erp/invoice-intakes/${intake.id}/extract`, { method: "POST", headers });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: "AI invoice reading is not available. Enter the invoice values manually.", code: "INVOICE_EXTRACTION_UNAVAILABLE" });
+      const detail = await (await fetch(`${baseUrl}/api/erp/invoice-cost-sets/${set.id}`, { headers })).json();
+      expect(detail.intakes[0]).toMatchObject({ status: "uploaded", review: null });
+      expect((await fetch(`${baseUrl}/api/erp/invoice-intakes/missing/extract`, { method: "POST", headers })).status).toBe(404);
+      for (const url of ["/invoice-intakes/x/extract", "/invoice-intakes/x/review"]) {
+        expect((await fetch(`${baseUrl}/api/erp${url}`, { method: "POST", headers: { "X-Noctella-ERP-Client-Version": "0.1.0" } })).status).toBe(401);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.AI_INTAKE_PROVIDER; else process.env.AI_INTAKE_PROVIDER = previous;
+    }
+  });
+
+  it("PHASE-2B: review validates the body, returns 409 with checks on a blocked confirm, and never exposes a path", async () => {
+    const { invoiceIntakes } = await import("../src/db/schema.sqlite");
+    const { eq } = await import("drizzle-orm");
+    const set = await createSet();
+    const intake = await (await upload(set.id, new Blob([PDF, "2b-review"], { type: "application/pdf" }), "a.pdf")).json();
+    const review = (body: unknown) => fetch(`${baseUrl}/api/erp/invoice-intakes/${intake.id}/review`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+    expect((await review({ edits: {}, confirm: true })).status).toBe(409); // not extracted yet
+    const v = (value: unknown) => ({ value, evidence: value === null ? null : String(value), confidence: 0.9 });
+    const output = {
+      invoiceType: v("auction"), supplierName: v("House"), supplierVatNumber: v(null), platform: v(null), invoiceNumber: v("227552"),
+      issueDate: v(null), dueDate: v(null), paidDate: v(null), currency: v("SEK"), vatNote: v(null), reverseCharge: v(null), total: v(1198),
+      lots: [{ lotNumber: v("5332164"), title: v("KAMEROR"), itemCountHint: v(8), amount: v(945) }],
+      fees: [{ type: v("hammer_fee"), label: v("Hammer fee"), amount: v(64), percent: v(null), lotNumber: v(null) }, { type: v("buyer_premium"), label: v("Buyer's premium"), amount: v(189), percent: v(20), lotNumber: v(null) }],
+    };
+    await harnessDb.update(invoiceIntakes).set({ status: "extracted", extractionJson: JSON.stringify({ output, checks: [], model: "m", extractedAt: "2026-11-02T00:00:00.000Z" }) }).where(eq(invoiceIntakes.id, intake.id));
+
+    expect((await review({ edits: { invoiceType: "shipping" } })).status).toBe(400);
+    expect((await review({ edits: { issueDate: "02.11.2026" } })).status).toBe(400);
+    expect((await review({ edits: {}, extra: 1 })).status).toBe(400);
+
+    const blocked = await review({ edits: { total: 1199 }, confirm: true });
+    expect(blocked.status).toBe(409);
+    const blockedBody = await blocked.json();
+    expect(blockedBody.code).toBe("INVOICE_REVIEW_CHECKS_FAILED");
+    expect(blockedBody.checks.find((c: any) => c.code === "TOTAL_MISMATCH")).toMatchObject({ ok: false });
+
+    const ok = await review({ edits: { invoiceType: "transport", lots: [], fees: [{ type: "transport", label: "Home delivery: 5332164", amount: 300, percent: null, lotNumber: "5332164" }], total: 300 }, confirm: true });
+    expect(ok.status).toBe(200);
+    const text = await ok.text();
+    expect(text).not.toContain(dir);
+    expect(text).not.toContain("fileRelativePath");
+    expect(JSON.parse(text)).toMatchObject({ status: "reviewed", invoiceType: "transport", totalOriginal: 300 });
+  });
 });

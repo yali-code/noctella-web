@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatFileSize, INVOICE_TYPES, invoiceIntakeApi, type InvoiceCostSetDetail, type InvoiceType } from "@/lib/invoiceIntakes";
+import { formatFileSize, INVOICE_TYPES, invoiceIntakeApi, type InvoiceCostSetDetail, type InvoiceIntake, type InvoiceIntakeReview, type InvoiceType } from "@/lib/invoiceIntakes";
+import { InvoiceReviewPanel } from "@/components/InvoiceReviewPanel";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--noctella-deep-star-blue)",
@@ -24,6 +25,7 @@ export default function InvoiceCostSetDetailPage({ params }: { params: { id: str
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -61,11 +63,22 @@ export default function InvoiceCostSetDetailPage({ params }: { params: { id: str
     }, "Failed to upload invoice");
   }
 
+  async function handleExtract(id: string) {
+    if (busy) return;
+    setExtractingId(id);
+    try {
+      await run(() => invoiceIntakeApi.extractIntake(id), "The invoice could not be read by AI");
+    } finally {
+      setExtractingId(null);
+    }
+  }
+
   if (loading && !costSet) return <main><p style={{ color: "var(--noctella-aged-bronze)" }}>Loading cost set...</p></main>;
   if (loadError && !costSet) return <main><p role="alert" style={{ color: "#c86a6a" }}>{loadError}</p></main>;
   if (!costSet) return null;
 
   const open = costSet.status === "open";
+  const reviewable = costSet.intakes.filter((i): i is InvoiceIntake & { review: InvoiceIntakeReview } => !!i.review && (i.status === "extracted" || i.status === "reviewed"));
 
   return (
     <main>
@@ -102,7 +115,7 @@ export default function InvoiceCostSetDetailPage({ params }: { params: { id: str
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ textAlign: "left" }}>
-              <th>Type</th><th>File name</th><th>Size</th><th>Uploaded at</th><th>Status</th><th></th><th></th>
+              <th>Type</th><th>File name</th><th>Size</th><th>Uploaded at</th><th>Status</th><th></th><th></th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -115,6 +128,13 @@ export default function InvoiceCostSetDetailPage({ params }: { params: { id: str
                 <td>{i.status}</td>
                 <td><a href={invoiceIntakeApi.fileUrl(i.id)} target="_blank" rel="noopener noreferrer">View file</a></td>
                 <td>
+                  {open && (i.status === "uploaded" || i.status === "extracted") && (
+                    <button disabled={busy} style={buttonStyle} onClick={() => handleExtract(i.id)}>
+                      {extractingId === i.id ? "Reading…" : i.status === "uploaded" ? "Read with AI" : "Read again"}
+                    </button>
+                  )}
+                </td>
+                <td>
                   {open && i.status !== "cancelled" && (
                     <button disabled={busy} style={buttonStyle} onClick={() => run(() => invoiceIntakeApi.cancelIntake(i.id), "Failed to cancel invoice")}>Cancel</button>
                   )}
@@ -124,6 +144,10 @@ export default function InvoiceCostSetDetailPage({ params }: { params: { id: str
           </tbody>
         </table>
       )}
+
+      {reviewable.map((i) => (
+        <InvoiceReviewPanel key={`${i.id}-${i.updatedAt}`} intake={i} editable={open} onSaved={load} />
+      ))}
 
       {open && (
         <div style={{ marginTop: 16 }}>

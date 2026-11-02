@@ -12,6 +12,7 @@ import {
   type InvoiceIntakeCreateInput,
   type InvoiceIntakeRecord,
   type InvoiceIntakeRepository,
+  type InvoiceIntakeReviewUpdateInput,
 } from "./types";
 
 type Schema = typeof sqliteSchema | typeof postgresSchema;
@@ -42,10 +43,10 @@ export function createDrizzleInvoiceIntakeRepository(db: any, schema: Schema): I
   };
   const statusFilter = (query: InvoiceCostSetListQuery) => (query.status ? eq(sets.status, query.status) : undefined);
 
-  async function transition<T>(table: any, record: (row: any) => T, values: (v: Record<string, unknown>) => Record<string, unknown>, label: string, input: ExpectedStatusTransitionInput): Promise<ExpectedStatusTransitionResult<T>> {
+  async function transition<T>(table: any, record: (row: any) => T, values: (v: Record<string, unknown>) => Record<string, unknown>, label: string, input: ExpectedStatusTransitionInput, extra: Record<string, unknown> = {}): Promise<ExpectedStatusTransitionResult<T>> {
     const changed = await db
       .update(table)
-      .set(values({ status: input.nextStatus, updatedAt: input.updatedAt }))
+      .set(values({ ...extra, status: input.nextStatus, updatedAt: input.updatedAt }))
       .where(and(eq(table.id, input.id), inArray(table.status, input.expectedStatuses as string[])))
       .returning();
     if (changed.length) return { updated: true, row: record(changed[0]) };
@@ -106,5 +107,7 @@ export function createDrizzleInvoiceIntakeRepository(db: any, schema: Schema): I
     },
 
     transitionIntake: (input: ExpectedStatusTransitionInput) => transition(intakes, intakeRecord, intakeValues, "Invoice intake", input),
+
+    updateIntakeReview: (input: InvoiceIntakeReviewUpdateInput) => transition(intakes, intakeRecord, intakeValues, "Invoice intake", input, { ...input.values }),
   };
 }
