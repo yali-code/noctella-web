@@ -33,7 +33,7 @@ const invoiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSi
 const key = (req: any) => req.header("X-Noctella-ERP-Key");
 const version = (req: any) => req.header("X-Noctella-ERP-Client-Version");
 const requestId = (req: any) => req.header("X-Noctella-ERP-Request-Id");
-async function requireErp(req: any, res: any, next: any) { const auth = await authenticateErp(db, key(req), version(req), requestId(req)); if (!auth.ok) return res.status(401).json({ error: auth.error }); if (!isVersionSupported(version(req))) return res.status(409).json({ error: "ERP client version is not supported", version: versionInfo(version(req)) }); req.erp=auth; next(); }
+async function requireErp(req: any, res: any, next: any) { let auth: Awaited<ReturnType<typeof authenticateErp>>; try { auth = await authenticateErp(db, key(req), version(req), requestId(req)); } catch (err) { handleRouteError(err, res); return; } if (!auth.ok) return res.status(401).json({ error: auth.error }); if (!isVersionSupported(version(req))) return res.status(409).json({ error: "ERP client version is not supported", version: versionInfo(version(req)) }); req.erp=auth; next(); }
 
 router.options("*", (req, res) => { const allow=(process.env.ERP_CORS_ORIGINS??"").split(",").map(s=>s.trim()).filter(Boolean); const origin=req.header("origin"); if(origin && allow.includes(origin)) res.header("Access-Control-Allow-Origin", origin); res.header("Access-Control-Allow-Headers", "Content-Type,X-Noctella-ERP-Key,X-Noctella-ERP-Client-Version,X-Noctella-ERP-Request-Id"); res.sendStatus(204); });
 router.get("/version", (req, res) => res.json(versionInfo(version(req))));
