@@ -3,6 +3,7 @@ import { AdminRole, Permission, ROLE_PERMISSIONS } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { parseCookieHeader, SESSION_COOKIE_NAME } from "./cookies";
 import { validateSession, type SessionUser } from "../services/adminAuth";
+import { handleRouteError } from "../routes/errorHandler";
 
 /**
  * Sprint 64B: adminUser is now real, database-backed identity (see
@@ -54,7 +55,14 @@ export function createRequireAuth(db: DbClient) {
   return async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction): Promise<void> {
     const cookies = parseCookieHeader(req.headers.cookie);
     const token = cookies[SESSION_COOKIE_NAME];
-    const user = await validateSession(db, token);
+    // Express 4 does not catch async middleware errors: an unhandled rejection here would terminate the process.
+    let user: SessionUser | null;
+    try {
+      user = await validateSession(db, token);
+    } catch (error) {
+      handleRouteError(error, res);
+      return;
+    }
     if (!user) {
       res.status(401).json({ error: "Authentication required" });
       return;
