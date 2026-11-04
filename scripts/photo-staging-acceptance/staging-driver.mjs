@@ -224,7 +224,7 @@ export async function runDriver(argv, env = process.env, emit = log) {
     const accepted = await call(api, cookie, "PATCH", `/api/ai-product-intakes/${id}/proposal/fields/title`, { decision: "edited", value: `F2 synthetic ${randomUUID()}`, expectedUpdatedAt: proposal.json.updatedAt });
     if (accepted.status >= 300) throw new Error(`accept title ${accepted.status}`);
     proposal = await call(api, cookie, "GET", `/api/ai-product-intakes/${id}/proposal`);
-    const stock = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/stock-acceptance`, { categoryId, type: "unique_item", expectedProposalUpdatedAt: proposal.json.updatedAt });
+    const stock = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/stock-acceptance`, { categoryId, type: "unique_item", condition: "Used", expectedProposalUpdatedAt: proposal.json.updatedAt });
     if (stock.status !== 201) throw new Error(`stock acceptance ${stock.status}`);
     const staged = await call(api,cookie,"GET",`/api/ai-product-intakes/${id}/photos`);
     if (staged.status!==200 || !Array.isArray(staged.json) || staged.json.length !== [img1,img2].filter(Boolean).length) throw Error("staged photo list mismatch");
