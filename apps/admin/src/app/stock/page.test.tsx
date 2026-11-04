@@ -63,6 +63,38 @@ describe("Stock page (Sprint 137)", () => {
     expect(screen.getByRole("link", { name: "Card" })).toHaveAttribute("href", "/stock/product-9/card");
   });
 
+  it("searches all stock by title, SKU or category, regardless of the selected date period", async () => {
+    mockLoads([product(), product({ id: "product-old", sku: "NOC-000006", title: "Gold Desktop Calendar", categoryId: "cat-2" })]);
+    const { items } = await stockLib.listStockMovements();
+    vi.spyOn(stockLib, "listStockMovements").mockResolvedValue({
+      items: items.map((m) => (m.productId === "product-old" ? { ...m, createdAt: "2020-01-15T10:00:00.000Z" } : m)),
+      total: items.length, page: 1, pageSize: 100,
+    });
+    const user = userEvent.setup();
+    render(<StockPage />);
+    await screen.findByText("Canon Camera");
+    expect(screen.queryByText("Gold Desktop Calendar")).not.toBeInTheDocument();
+
+    const box = screen.getByRole("searchbox", { name: /Search stock/ });
+    await user.type(box, "noc-000006");
+    expect(screen.getByText("Gold Desktop Calendar")).toBeInTheDocument();
+    expect(screen.queryByText("Canon Camera")).not.toBeInTheDocument();
+    expect(screen.getByText(/searching all stock/)).toBeInTheDocument();
+
+    await user.clear(box);
+    await user.type(box, "camera");
+    expect(screen.getByText("Canon Camera")).toBeInTheDocument();
+    expect(screen.queryByText("Gold Desktop Calendar")).not.toBeInTheDocument();
+
+    await user.clear(box);
+    await user.type(box, "no such product");
+    expect(screen.getByText("No products match this search.")).toBeInTheDocument();
+
+    await user.clear(box);
+    expect(screen.getByText("Canon Camera")).toBeInTheDocument();
+    expect(screen.queryByText("Gold Desktop Calendar")).not.toBeInTheDocument();
+  });
+
   it("shows overview totals and lets All include products with no opening movement", async () => {
     const user = userEvent.setup();
     mockLoads([product({ stockQuantity: 3, purchaseCost: 10 })]);
