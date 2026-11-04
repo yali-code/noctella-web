@@ -124,7 +124,7 @@ describe("AI Intake Stock Acceptance (Sprint 106)", () => {
     });
 
     it("keeps the strict trimmed contract and rejects negative cost, blank strings, SKU and unknown fields", () => {
-      const base = { categoryId, type: ProductType.UniqueItem, expectedProposalUpdatedAt: "version" };
+      const base = { categoryId, type: ProductType.UniqueItem, condition: "Used", expectedProposalUpdatedAt: "version" };
       expect(stockAcceptanceSchema.parse({ ...base, purchaseCost: 0, purchaseSource: "  Gift  " })).toEqual({ ...base, purchaseCost: 0, purchaseSource: "Gift" });
       for (const invalid of [{ purchaseCost: -1 }, { sku: "CLIENT" }, { unknown: true }, ...Object.keys(metadata).map((key) => ({ [key]: "  " }))]) {
         expect(stockAcceptanceSchema.safeParse({ ...base, ...invalid }).success).toBe(false);

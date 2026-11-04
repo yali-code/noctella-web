@@ -139,6 +139,19 @@ describe("Sprint 137 Required Fix Correction: explicit sales-price clear via Pro
     expect(JSON.stringify(payload)).toContain('"priceEur":null');
   });
 
+  it("offers the approved conditions and keeps a previously saved value selected", () => {
+    render(
+      <ProductForm
+        initialValues={productToFormValues(baseProduct({ condition: "Good vintage" }))}
+        onSubmit={vi.fn()}
+        submitLabel="Save"
+      />,
+    );
+    const select = screen.getByLabelText("Condition") as HTMLSelectElement;
+    expect(select.value).toBe("Good vintage");
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Select condition", "Good vintage", "Used", "For parts", "Unused", "New old stock"]);
+  });
+
   it("Approved: blanking a previously-set EUR Price also sends literal priceEur: null (status does not change this behavior)", async () => {
     const payload = await submitAfterClearing({ status: "approved", priceEur: 100 }, "EUR Price");
     expect(Object.prototype.hasOwnProperty.call(payload, "priceEur")).toBe(true);

@@ -5,6 +5,7 @@ import {
   LISTING_STATUS_VALUES,
   PRICE_CURRENCY_VALUES,
   PRODUCT_SHIPPING_PROFILE_VALUES,
+  PRODUCT_CONDITION_VALUES,
   PRODUCT_STATUS_VALUES,
   PRODUCT_TYPE_VALUES,
   PublishChannel,
@@ -750,11 +751,12 @@ export function ProductForm({
           />
         </Field>
         <Field label="Condition">
-          <input
-            style={inputStyle}
-            value={values.condition ?? ""}
-            onChange={(e) => set("condition", e.target.value)}
-          />
+          <select style={inputStyle} value={values.condition ?? ""} onChange={(e) => set("condition", e.target.value)}>
+            <option value="">Select condition</option>
+            {/* A value saved before this list existed stays visible and unchanged until an admin replaces it. */}
+            {values.condition && !(PRODUCT_CONDITION_VALUES as string[]).includes(values.condition) && <option value={values.condition}>{values.condition}</option>}
+            {PRODUCT_CONDITION_VALUES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
         </Field>
         <Field label="Condition Description">
           <textarea
