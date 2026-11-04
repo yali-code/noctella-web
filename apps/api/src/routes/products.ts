@@ -1,3 +1,5 @@
+import { fillProductWithAi } from "../services/productAiFill";
+import { fillProductWithAiSchema } from "../validation/productAiFill";
 import { Router, type RequestHandler } from "express";
 import { createProductPhotoUploadHandler } from "./productPhotoUpload";
 import { photoOwnershipFencingEnabled } from "../services/photoOwnershipFencing";
@@ -199,6 +201,15 @@ router.delete("/:id/marketing-tags/:tagId", requirePermission("products.edit"), 
 // are edited via products.edit everywhere else in this file (the generic PUT below, and the
 // Marketing Tags routes above), so this is not publish-journey-scoped like Marketplace
 // Preparation is.
+router.post("/:id/ai-fill", requirePermission("products.edit"), async (req, res) => {
+  try {
+    const input = fillProductWithAiSchema.parse(req.body ?? {});
+    res.json(await fillProductWithAi(db, req.params.id, input.replaceExisting));
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
 router.post("/:id/canonical-ai-proposal", requirePermission("products.edit"), async (req, res) => {
   try {
     generateCanonicalProductProposalSchema.parse(req.body ?? {});

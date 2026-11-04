@@ -19,8 +19,7 @@ import {
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
-import { AiChannelSuggestionsSection } from "./AiChannelSuggestionsSection";
-import { CanonicalProductAiSuggestionsSection } from "./CanonicalProductAiSuggestionsSection";
+import { ProductAiFillSection } from "./ProductAiFillSection";
 import { EtsyListingFormFields, etsyFormValuesFromProduct, etsyLimitMessage, etsyPayloadFromValues, type EtsyListingFormValues } from "./EtsyListingFormFields";
 import { MarketingTagsSection } from "./MarketingTagsSection";
 import { PublishActions } from "./PublishActions";
@@ -362,34 +361,14 @@ interface ProductFormProps {
   onPublishComplete?: () => void;
 }
 
-/** Sprint 145: exactly the ProductFormValues keys each channel's Marketplace Preparation Approve is allowed to have written - mirrors mapApprovedFieldsToProductValues (use-cases/marketplace-preparation/useCases.ts) exactly, never Core/SKU/stock/price/status/other-channel fields. */
-const AI_CHANNEL_FIELD_KEYS: Record<PublishChannel, Array<keyof ProductFormValues>> = {
-  [PublishChannel.Ebay]: ["ebayTitle", "ebayDescription", "ebayConditionDescription", "ebayItemSpecifics"],
-  [PublishChannel.Etsy]: ["etsyTitle", "etsyDescription", "etsyTags", "etsyMaterials", "etsyStyle", "etsyOccasion"],
-  [PublishChannel.NoctellaWeb]: ["wooProductName", "wooLongDescription", "wooShortDescription", "wooSeoTitle", "wooMetaDescription", "wooFocusKeyword"],
-  [PublishChannel.WooCommerce]: ["wooProductName", "wooLongDescription", "wooShortDescription", "wooSeoTitle", "wooMetaDescription", "wooFocusKeyword"],
-};
-
-/** Maps a channel's owned ProductFormValues keys onto the corresponding field of the returned canonical Product (etsyTags is an array on Product, a comma-joined string in ProductFormValues - matches productToFormValues's own convention exactly). */
-function readAiChannelFieldFromProduct(product: Product, key: keyof ProductFormValues): string | undefined {
-  if (key === "etsyTags") return product.etsyTags?.join(", ") ?? "";
-  const value = (product as unknown as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : (value ?? "") as string;
-}
-
-/**
- * Sprint 148: reads one canonical Product Details/Physical Information field off the returned
- * Product for ProductForm's own scoped merge - mirrors readAiChannelFieldFromProduct's exact
- * convention (numeric fields become their string form, matching productToFormValues's own
- * `?.toString()` convention; null/undefined becomes ""). Only ever called for the specific field
- * keys the admin explicitly selected in CanonicalProductAiSuggestionsSection's Accept request -
- * never a blind full-proposal merge.
- */
-function readCanonicalFieldFromProduct(product: Product, key: keyof ProductFormValues): string {
-  const value = (product as unknown as Record<string, unknown>)[key];
-  if (value === null || value === undefined) return "";
-  return typeof value === "number" ? value.toString() : String(value);
-}
+/** The ProductFormValues keys the single AI fill may have written. */
+const AI_FILL_FORM_KEYS: Array<keyof ProductFormValues> = [
+  "brand", "model", "manufacturer", "countryOfOrigin", "period", "materials", "description", "productStory", "conditionDescription",
+  "priceEur", "priceUsd", "minOfferPrice", "seoTitle", "metaDescription", "keywords",
+  "ebayTitle", "ebayDescription", "ebayConditionDescription", "ebayItemSpecifics",
+  "etsyTitle", "etsyDescription", "etsyTags", "etsyMaterials", "etsyStyle", "etsyOccasion",
+  "wooProductName", "wooLongDescription", "wooShortDescription", "wooSeoTitle", "wooMetaDescription", "wooFocusKeyword",
+];
 
 /** Sprint 146: a plain key-by-key comparison over every ProductFormValues field - a flat object of primitives, no nested/deep comparison needed. The sole basis for `isDirty` below. */
 function valuesEqual(a: ProductFormValues, b: ProductFormValues): boolean {
@@ -421,7 +400,7 @@ export function ProductForm({
   const [versionConflict, setVersionConflict] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Sprint 145: mirrors `values`'s own "initialize once from props" convention - advanced only by
-  // handleAiSuggestionsApplied below, never by re-reading the productUpdatedAt prop after mount
+  // handleAiFillCompleted below, never by re-reading the productUpdatedAt prop after mount
   // (EditProductPage never re-renders ProductForm with a new prop value while it stays mounted).
   const [currentProductUpdatedAt, setCurrentProductUpdatedAt] = useState(productUpdatedAt);
   const[salePaused,setSalePaused]=useState(Boolean(productSalePausedAt));
@@ -438,28 +417,15 @@ export function ProductForm({
   const [persistedBaseline, setPersistedBaseline] = useState<ProductFormValues>(initialValues);
   const isDirty = !valuesEqual(values, persistedBaseline);
 
-  /**
-   * Sprint 145/146: the ONLY place a Marketplace Preparation Approve result is allowed to touch
-   * `values` - merges exclusively the approved channel's own known field keys from the endpoint's
-   * returned Product, leaving every other field (including any unsaved manual edit anywhere else
-   * in this form) completely untouched. Sprint 146: the SAME channel-scoped keys are also merged
-   * into `persistedBaseline` - AI Approve already persisted these exact fields server-side, so they
-   * must never register as locally dirty (which would otherwise trigger an unnecessary generic
-   * Save before Publish); any unrelated field the admin had already edited remains dirty in
-   * `values` because `persistedBaseline` for THAT field is left untouched by this merge. Also
-   * advances the local staleness baseline and notifies EditProductPage so the next Save Changes
-   * uses the fresh version token.
-   */
-  function handleAiSuggestionsApplied(channel: PublishChannel, product: Product) {
-    const channelFields: Partial<ProductFormValues> = {};
-    for (const key of AI_CHANNEL_FIELD_KEYS[channel]) {
-      (channelFields as Record<string, unknown>)[key] = readAiChannelFieldFromProduct(product, key);
-    }
-    setValues((prev) => ({ ...prev, ...channelFields }));
-    setPersistedBaseline((prev) => ({ ...prev, ...channelFields }));
+  /** The AI fill already persisted these values, so they enter both the form and the saved baseline. */
+  function handleAiFillCompleted(product: Product) {
+    const filled = productToFormValues(product as ProductDetail);
+    const fields = Object.fromEntries(AI_FILL_FORM_KEYS.map((key) => [key, filled[key]])) as Partial<ProductFormValues>;
+    setValues((prev) => ({ ...prev, ...fields }));
+    setPersistedBaseline((prev) => ({ ...prev, ...fields }));
     setCurrentProductUpdatedAt(product.updatedAt);
     onProductVersionAdvanced?.(product.updatedAt);
-    setSalePaused(Boolean(product.salePausedAt));
+    setMarketingTagsRefreshSignal((n) => n + 1);
   }
   function handleLifecycleVersion(before:string,after:string){setCurrentProductUpdatedAt(current=>current===before?after:current);onLifecycleVersionResult?.(before,after)}
 
@@ -467,32 +433,6 @@ export function ProductForm({
   // Tag - forces MarketingTagsSection's own independent load() to re-run, without coupling
   // Marketing Tags into ProductFormValues at all.
   const [marketingTagsRefreshSignal, setMarketingTagsRefreshSignal] = useState(0);
-
-  /**
-   * Sprint 148: the ONLY place a canonical AI proposal Accept result is allowed to touch `values`
-   * - merges exclusively the admin-SELECTED field keys (never the full suggested set, never every
-   * canonical field) from the endpoint's returned Product, leaving every other field (including
-   * any unsaved manual edit anywhere else in this form, and any canonical field the admin did not
-   * select) completely untouched. Mirrors handleAiSuggestionsApplied's exact scoped-merge
-   * principle: the same selected keys are also merged into `persistedBaseline`, since Accept
-   * already persisted exactly those fields server-side, so they must never register as locally
-   * dirty. Marketing Tags are never part of `values`/`persistedBaseline` - a successful tag
-   * addition instead bumps marketingTagsRefreshSignal so MarketingTagsSection reloads its own,
-   * entirely separate state.
-   */
-  function handleCanonicalAiSuggestionsApplied(selectedProductFields: string[], marketingTagsChanged: boolean, product: Product) {
-    const fields: Partial<ProductFormValues> = {};
-    for (const key of selectedProductFields) {
-      (fields as Record<string, unknown>)[key] = readCanonicalFieldFromProduct(product, key as keyof ProductFormValues);
-    }
-    if (Object.keys(fields).length > 0) {
-      setValues((prev) => ({ ...prev, ...fields }));
-      setPersistedBaseline((prev) => ({ ...prev, ...fields }));
-    }
-    setCurrentProductUpdatedAt(product.updatedAt);
-    onProductVersionAdvanced?.(product.updatedAt);
-    if (marketingTagsChanged) setMarketingTagsRefreshSignal((n) => n + 1);
-  }
 
   /**
    * Sprint 146: performs the existing Product PUT without EditProductPage's generic Save Changes
@@ -816,13 +756,8 @@ export function ProductForm({
           only (productId known); create mode never mounts this, so it never calls the canonical
           AI proposal API for a Product that does not exist yet. */}
       {productId && (
-        <Section title="AI Product Suggestions">
-          <CanonicalProductAiSuggestionsSection
-            productId={productId}
-            values={values}
-            productUpdatedAt={currentProductUpdatedAt}
-            onApplied={handleCanonicalAiSuggestionsApplied}
-          />
+        <Section title="AI Fill">
+          <ProductAiFillSection productId={productId} dirty={isDirty} onFilled={handleAiFillCompleted} />
         </Section>
       )}
 
@@ -1036,17 +971,6 @@ export function ProductForm({
             ))}
           </select>
         </Field>
-        {/* Sprint 145: inline Marketplace Preparation AI assistance - only in edit mode (productId
-            known); create mode never mounts this, so it never calls the Marketplace Preparation
-            API for a Product that does not exist yet. */}
-        {productId && (
-          <AiChannelSuggestionsSection
-            productId={productId}
-            channel={PublishChannel.Ebay}
-            productUpdatedAt={currentProductUpdatedAt}
-            onApplied={handleAiSuggestionsApplied}
-          />
-        )}
       </Section>
 
       <Section title="Etsy (optional — not published or synced yet)">
@@ -1103,14 +1027,6 @@ export function ProductForm({
         </Field>
         {/* Etsy listing form parity (Phase 1): * = required before publishing; drafts always save. */}
         <EtsyListingFormFields values={values} set={set} Field={Field} inputStyle={inputStyle} />
-        {productId && (
-          <AiChannelSuggestionsSection
-            productId={productId}
-            channel={PublishChannel.Etsy}
-            productUpdatedAt={currentProductUpdatedAt}
-            onApplied={handleAiSuggestionsApplied}
-          />
-        )}
       </Section>
 
       <Section title="Noctella Web (optional — not published or synced yet)">
@@ -1180,14 +1096,6 @@ export function ProductForm({
             ))}
           </select>
         </Field>
-        {productId && (
-          <AiChannelSuggestionsSection
-            productId={productId}
-            channel={PublishChannel.NoctellaWeb}
-            productUpdatedAt={currentProductUpdatedAt}
-            onApplied={handleAiSuggestionsApplied}
-          />
-        )}
       </Section>
 
       {/* Sprint 144: Marketing Tags reuse the existing Sprint 140 API unchanged, only in edit mode
