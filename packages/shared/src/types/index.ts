@@ -1,6 +1,7 @@
 import { AdminRole } from "../enums/adminRole";
 import { ProductStatus } from "../enums/productStatus";
 import { ProductType } from "../enums/productType";
+import type { ProductCondition } from "../enums/productCondition";
 import { DimensionUnit } from "../enums/dimensionUnit";
 import { WeightUnit } from "../enums/weightUnit";
 import { PriceCurrency } from "../enums/priceCurrency";
@@ -379,6 +380,11 @@ export interface AiProductIntake extends Timestamps {
   /** Sprint 95: set exactly once, when status transitions to Finalized. */
   finalizedAt?: string;
   finalizedByAdminUserId?: ID;
+
+  /** Warehouse-declared condition; required before AI generation, authoritative for the AI. */
+  declaredCondition?: ProductCondition;
+  /** Warehouse test note; the only source for any working/tested claim. */
+  testNote?: string;
 }
 
 /**

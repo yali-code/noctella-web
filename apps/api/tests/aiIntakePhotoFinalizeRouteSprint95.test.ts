@@ -54,6 +54,7 @@ async function readyAppliedIntakeViaRoute(photoCount = 1, cookie = managerCookie
     const uploaded = await request(app).post(`/api/ai-product-intakes/${intakeId}/photos`).set("Cookie", cookie).attach("photo", testImage, `photo-${i}.png`);
     stagedPhotoIds.push(uploaded.body.id);
   }
+  await request(app).patch(`/api/ai-product-intakes/${intakeId}/warehouse-facts`).set("Cookie", cookie).send({ declaredCondition: "Used" }).expect(200);
   const generated = await request(app).post(`/api/ai-product-intakes/${intakeId}/generate`).set("Cookie", cookie).send({});
   titleCounter += 1;
   const reviewed = await request(app)

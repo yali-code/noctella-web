@@ -95,6 +95,8 @@ export const aiProductIntakesApi = {
   get: (id: string) => api.get<AiProductIntake>(`/api/ai-product-intakes/${id}`),
   cancel: (id: string, cancellationReason?: string) =>
     api.post<AiProductIntake>(`/api/ai-product-intakes/${id}/cancel`, cancellationReason ? { cancellationReason } : {}),
+  updateWarehouseFacts: (id: string, facts: { declaredCondition: string; testNote: string | null }) =>
+    api.patch<AiProductIntake>(`/api/ai-product-intakes/${id}/warehouse-facts`, facts),
   listPhotos: (id: string) => api.get<AiIntakePhoto[]>(`/api/ai-product-intakes/${id}/photos`),
   uploadPhoto: (id: string, file: File) => {
     const form = new FormData();

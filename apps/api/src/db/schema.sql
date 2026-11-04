@@ -701,6 +701,8 @@ CREATE TABLE IF NOT EXISTS ai_product_intakes (
   applied_by_admin_user_id TEXT,
   finalized_at TEXT,
   finalized_by_admin_user_id TEXT,
+  declared_condition TEXT,
+  test_note TEXT,
   created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );

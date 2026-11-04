@@ -1,3 +1,4 @@
+import { assertIntakeReadyForGenerationUseCase } from "../use-cases/ai-product-intake/useCases";
 import { AiProductIntakeStatus, type AiIntakeProposalReview } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { BadRequestError } from "./errors";
@@ -71,4 +72,10 @@ export async function generateIntakeProposal(
   // The fingerprint just persisted was computed from the same photo read used to build the
   // generation context, so the freshly generated/regenerated proposal is never stale.
   return toProposalReview(row, false);
+}
+
+/** Admin entry point: requires the warehouse condition before any paid provider call. */
+export async function generateIntakeProposalForAdmin(db: DbClient, intakeId: string): Promise<AiIntakeProposalReview> {
+  assertIntakeReadyForGenerationUseCase(await getIntakeById(db, intakeId));
+  return generateIntakeProposal(db, intakeId);
 }

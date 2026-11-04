@@ -8,6 +8,7 @@ import type {
   AiProductIntakeApplyResult,
   AiProductIntakeCancelInput,
   AiProductIntakeCancelResult,
+  AiProductIntakeWarehouseFactsInput,
   AiProductIntakeCreateInput,
   AiProductIntakeFinalizeInput,
   AiProductIntakeFinalizeResult,
@@ -193,6 +194,28 @@ export function createDrizzleAiProductIntakeRepository(db: any, schema: Schema):
           cancelledAt: input.cancelledAt,
           cancelledByAdminUserId: input.cancelledByAdminUserId,
           cancellationReason: input.cancellationReason ?? null,
+          updatedAt: input.updatedAt,
+        }))
+        .where(and(eq(table.id, input.id), eq(table.status, input.expectedStatus)))
+        .returning();
+
+      if (changed.length) return { updated: true, row: record(changed[0]) as AiProductIntakeRecord };
+
+      const [existing] = await db.select().from(table).where(eq(table.id, input.id));
+      if (!existing) return { updated: false, conflict: { field: "id", message: "AI product intake not found" } };
+      return {
+        updated: false,
+        conflict: { field: "status", message: `Expected status "${input.expectedStatus}" but found "${existing.status}"` },
+        row: record(existing) as AiProductIntakeRecord,
+      };
+    },
+
+    async updateWarehouseFactsWithExpectedState(input: AiProductIntakeWarehouseFactsInput): Promise<AiProductIntakeCancelResult> {
+      const changed = await db
+        .update(table)
+        .set(timestamps({
+          declaredCondition: input.declaredCondition,
+          testNote: input.testNote,
           updatedAt: input.updatedAt,
         }))
         .where(and(eq(table.id, input.id), eq(table.status, input.expectedStatus)))

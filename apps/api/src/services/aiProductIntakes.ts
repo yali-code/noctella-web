@@ -1,4 +1,4 @@
-import type { AiProductIntake, AiProductIntakeStatus } from "@noctella/shared";
+import type { AiProductIntake, AiProductIntakeStatus, ProductCondition } from "@noctella/shared";
 import type { DbClient } from "../db/client";
 import { createAiProductIntakeRepository } from "../repositories/ai-product-intake/factory";
 import type { AiProductIntakeRecord, AiProductIntakeRepository } from "../repositories/ai-product-intake/types";
@@ -7,6 +7,7 @@ import {
   createAiProductIntakeUseCase,
   getAiProductIntakeUseCase,
   listAiProductIntakesUseCase,
+  updateIntakeWarehouseFactsUseCase,
 } from "../use-cases/ai-product-intake/useCases";
 import type { AiProductIntakeListQuery } from "../validation/aiProductIntake";
 
@@ -23,6 +24,8 @@ function toIntake(row: AiProductIntakeRecord): AiProductIntake {
     appliedByAdminUserId: (row.appliedByAdminUserId as string | null) ?? undefined,
     finalizedAt: toOptionalIsoString(row.finalizedAt as string | Date | null),
     finalizedByAdminUserId: (row.finalizedByAdminUserId as string | null) ?? undefined,
+    declaredCondition: (row.declaredCondition as ProductCondition | null) ?? undefined,
+    testNote: (row.testNote as string | null) ?? undefined,
     createdAt: row.createdAt as string,
     updatedAt: row.updatedAt as string,
   };
@@ -68,4 +71,12 @@ export async function cancelIntake(
 ): Promise<AiProductIntake> {
   const row = await cancelAiProductIntakeUseCase(repositoryFor(db), { id, cancelledByAdminUserId, cancellationReason });
   return toIntake(row);
+}
+
+export async function updateIntakeWarehouseFacts(
+  db: DbClient,
+  id: string,
+  facts: { declaredCondition: string; testNote: string | null },
+): Promise<AiProductIntake> {
+  return toIntake(await updateIntakeWarehouseFactsUseCase(repositoryFor(db), { id, ...facts }));
 }

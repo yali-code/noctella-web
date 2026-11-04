@@ -31,6 +31,21 @@ function proposal(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ProposalReviewSection (Sprint 97)", () => {
+  it("disables Generate until the warehouse condition is saved", () => {
+    render(
+      <ProposalReviewSection
+        intakeId="intake-1"
+        intakeStatus={AiProductIntakeStatus.Open}
+        photos={[]}
+        proposal={null}
+        onProposalChanged={vi.fn()}
+        onProposalReload={vi.fn()}
+        generateBlockedReason="Save the warehouse condition first."
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+  });
+
   it("shows a zero-photo warning without disabling Generate", () => {
     render(
       <ProposalReviewSection

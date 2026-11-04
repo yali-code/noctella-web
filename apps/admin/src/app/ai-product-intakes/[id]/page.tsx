@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { aiProductIntakesApi } from "@/lib/aiProductIntakes";
+import { IntakeWarehouseFactsSection } from "./IntakeWarehouseFactsSection";
 import { IntakePhotoSection } from "./IntakePhotoSection";
 import { ProposalReviewSection } from "./ProposalReviewSection";
 import { ApplyAndFinalizeSection } from "./ApplyAndFinalizeSection";
@@ -121,6 +122,8 @@ export default function AiProductIntakeDetailPage({ params }: { params: { id: st
         )}
       </div>
 
+      <IntakeWarehouseFactsSection intake={intake} hasProposal={proposal !== null} onIntakeChanged={reloadIntake} />
+
       <IntakePhotoSection intakeId={intake.id} intakeStatus={intake.status} photos={photos} onPhotosChanged={refreshPhotosAndProposal} />
 
       {proposalLoadError ? (
@@ -139,6 +142,7 @@ export default function AiProductIntakeDetailPage({ params }: { params: { id: st
           proposal={proposal}
           onProposalChanged={setProposal}
           onProposalReload={reloadProposal}
+          generateBlockedReason={intake.declaredCondition ? undefined : "Save the warehouse condition first."}
         />
       )}
 
@@ -166,6 +170,7 @@ function describeNextAction(intake: AiProductIntake, photos: AiIntakePhoto[], pr
   if (intake.status === AiProductIntakeStatus.Applied) {
     return "Product created as Draft. Select a Primary photo and finalize to create canonical photos.";
   }
+  if (!proposal && !intake.declaredCondition) return "Save the warehouse condition, then upload photos and generate a proposal.";
   if (!proposal) return photos.length === 0 ? "Upload staged photos, then generate a proposal." : "Generate a proposal for this intake.";
   return "Review the generated proposal, then Save as Draft.";
 }

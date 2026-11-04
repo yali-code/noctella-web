@@ -66,6 +66,8 @@ export interface AiIntakeGenerationContext {
   intakeId: string;
   photos: AiIntakePhotoReference[];
   allowedCategories?: AiIntakeAllowedCategory[];
+  declaredCondition?: string;
+  testNote?: string;
 }
 
 export interface AiIntakePrompt {

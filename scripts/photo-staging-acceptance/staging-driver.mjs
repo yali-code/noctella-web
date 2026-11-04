@@ -218,6 +218,8 @@ export async function runDriver(argv, env = process.env, emit = log) {
     if (intake.status !== 201 && intake.status !== 200) throw new Error(`intake create ${intake.status}`);
     const id = intake.json.id;
     for (const img of [img1, img2].filter(Boolean)) { const r = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/photos`, photoForm(img)); if (r.status >= 300) throw new Error(`intake photo HTTP ${r.status}`); }
+    const facts = await call(api, cookie, "PATCH", `/api/ai-product-intakes/${id}/warehouse-facts`, { declaredCondition: "Used" });
+    if (facts.status !== 200) throw new Error(`warehouse facts ${facts.status}`);
     const gen = await call(api, cookie, "POST", `/api/ai-product-intakes/${id}/generate`, {});
     if (gen.status >= 300) throw new Error(`generate ${gen.status} (AI_INTAKE_PROVIDER must be unset or mock on staging)`);
     let proposal = await call(api, cookie, "GET", `/api/ai-product-intakes/${id}/proposal`);
