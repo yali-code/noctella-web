@@ -14,6 +14,7 @@ export default function StockPage() {
   const [period, setPeriod] = useState<StockPeriod>("this-month");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -27,8 +28,12 @@ export default function StockPage() {
   const categoryName = (id?: string) => categories.find((c) => c.id === id)?.name ?? "—";
   const now = new Date();
   const summary = stockSummary(rows, now);
-  const visible = filterStockRows(rows, period, now, start, end);
-  const invalidRange = period === "custom" && !stockPeriodBounds(period, now, start, end);
+  const query = search.trim().toLocaleLowerCase();
+  // A search covers all stock, so a product is findable whichever date period is selected.
+  const visible = query
+    ? rows.filter(({ product: item }) => [item.title, item.sku, categoryName(item.categoryId)].some((value) => value?.toLocaleLowerCase().includes(query)))
+    : filterStockRows(rows, period, now, start, end);
+  const invalidRange = !query && period === "custom" && !stockPeriodBounds(period, now, start, end);
 
   if (loading) return <div><h1>Stock</h1><p role="status">Loading stock…</p></div>;
   if (error) return <div><h1>Stock</h1><p role="alert">{error}</p></div>;
@@ -48,6 +53,7 @@ export default function StockPage() {
         ].map(([label, value]) => <section className="noctella-panel" key={label} style={{ padding: 16 }} aria-label={label}><h2 style={{ fontSize: 16 }}>{label}</h2><p style={{ fontSize: 24, margin: "8px 0" }}>{value}</p></section>)}
       </div>
       <p style={{ color: "var(--noctella-aged-bronze)" }}>Recorded Stock Cost = recorded Product unit purchase cost × current quantity (EUR). {summary.excludedCosts} in-stock products with unknown or unusable costs excluded.</p>
+      <label style={{ display: "block", marginTop: 20 }}>Search stock <input style={{ ...filterButton, marginLeft: 8, minWidth: 280, maxWidth: "100%" }} type="search" placeholder="Product, SKU or category" value={search} onChange={(e) => setSearch(e.target.value)} /></label>
       <div role="group" aria-label="Stock entry period" style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "20px 0" }}>
         {([["this-month", "This Month"], ["last-month", "Last Month"], ["all", "All"], ["custom", "Custom Range"]] as const).map(([value, label]) =>
           <button key={value} style={{ ...filterButton, fontWeight: period === value ? 700 : 400, background: period === value ? "var(--noctella-antique-gold)" : filterButton.background, color: period === value ? "var(--noctella-night-navy)" : filterButton.color }} aria-pressed={period === value} onClick={() => setPeriod(value)}>{label}</button>)}
@@ -57,7 +63,7 @@ export default function StockPage() {
         <label>Through <input style={filterButton} type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
       </div>}
       <p>Stocked On uses the opening stock movement in your local timezone. All includes products without a recorded opening movement.</p>
-      {invalidRange ? <p role="status">Choose a valid start and end date (both included).</p> : <p>{visible.length} products shown</p>}
+      {invalidRange ? <p role="status">Choose a valid start and end date (both included).</p> : <p>{visible.length} products shown{query ? " (searching all stock; date filter ignored)" : ""}</p>}
       <div className="noctella-panel" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
@@ -81,7 +87,7 @@ export default function StockPage() {
                 </td>
               </tr>
             ))}
-            {!visible.length && !invalidRange && <tr><td style={cell} colSpan={7}>No stock entries in this period.</td></tr>}
+            {!visible.length && !invalidRange && <tr><td style={cell} colSpan={7}>{query ? "No products match this search." : "No stock entries in this period."}</td></tr>}
           </tbody>
         </table>
       </div>
