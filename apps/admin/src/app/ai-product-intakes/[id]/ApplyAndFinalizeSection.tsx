@@ -92,6 +92,12 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
       .catch(() => {});
   }, []);
 
+  // Warehouse facts are explicit declarations: a saved change replaces the form values.
+  useEffect(() => {
+    if (intake.declaredCondition) setCondition(intake.declaredCondition);
+    if (intake.testNote) setConditionDescription(intake.testNote);
+  }, [intake.declaredCondition, intake.testNote]);
+
   // Pre-fills from the AI's suggestions only while the admin has not yet
   // entered a value of their own (prev is empty) - never overwrites an
   // in-progress edit if the proposal reference changes again later.

@@ -38,6 +38,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureAiListingDraftColumns(sqlite);
   ensureAiProductIntakeAppliedColumns(sqlite);
   ensureAiProductIntakeFinalizationColumns(sqlite);
+  ensureAiProductIntakeWarehouseFactColumns(sqlite);
   ensureAiIntakeProposalStockAcceptanceColumns(sqlite);
   ensureProductSkuSequenceTable(sqlite);
   ensureMarketplacePreparationsTable(sqlite);
@@ -430,6 +431,22 @@ function ensureAiProductIntakeFinalizationColumns(sqlite: Database.Database): vo
   }
   if (!existing.has("finalized_by_admin_user_id")) {
     sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN finalized_by_admin_user_id TEXT");
+  }
+}
+
+/**
+ * Additive migration for the warehouse-declared facts captured before AI
+ * generation. No backfill: existing rows keep NULL, meaning never declared.
+ */
+function ensureAiProductIntakeWarehouseFactColumns(sqlite: Database.Database): void {
+  const existing = new Set(
+    (sqlite.prepare("PRAGMA table_info(ai_product_intakes)").all() as Array<{ name: string }>).map((row) => row.name),
+  );
+  if (!existing.has("declared_condition")) {
+    sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN declared_condition TEXT");
+  }
+  if (!existing.has("test_note")) {
+    sqlite.exec("ALTER TABLE ai_product_intakes ADD COLUMN test_note TEXT");
   }
 }
 

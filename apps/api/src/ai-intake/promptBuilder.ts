@@ -5,7 +5,7 @@ import type { AiIntakeGenerationContext, AiIntakePrompt, AiIntakePromptBuilder }
  * Exported standalone (not embedded in the prompt text) so callers can
  * report it without parsing the prompt itself.
  */
-export const AI_INTAKE_PROMPT_VERSION = "intake-v2-title-keywords";
+export const AI_INTAKE_PROMPT_VERSION = "intake-v3-warehouse-facts";
 
 /**
  * Deterministic, pure, provider-independent: the same context always
@@ -28,6 +28,15 @@ export class DeterministicAiIntakePromptBuilder implements AiIntakePromptBuilder
             "Photo filenames are storage labels only - never treat them as evidence and never use them as keywords.",
           ]
         : ["No staged photos are attached to this intake."]),
+      ...(context.declaredCondition
+        ? [
+            `Warehouse-declared condition (authoritative, never contradict it): ${context.declaredCondition}`,
+            context.testNote
+              ? `Warehouse test note (authoritative): ${context.testNote}`
+              : "No warehouse test note was given.",
+            "Make working or tested claims only if the warehouse test note states them.",
+          ]
+        : []),
     ];
 
     return {

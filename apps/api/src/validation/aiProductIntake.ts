@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AI_PRODUCT_INTAKE_STATUS_VALUES } from "@noctella/shared";
+import { AI_PRODUCT_INTAKE_STATUS_VALUES, PRODUCT_CONDITION_VALUES } from "@noctella/shared";
 
 /**
  * Sprint 90: creator identity comes only from the authenticated session
@@ -36,3 +36,16 @@ export const generateAiIntakeProposalSchema = z.object({}).strict();
 
 export type AiProductIntakeListQuery = z.infer<typeof aiProductIntakeListQuerySchema>;
 export type CancelAiProductIntakeInput = z.infer<typeof cancelAiProductIntakeSchema>;
+
+export const updateIntakeWarehouseFactsSchema = z
+  .object({
+    declaredCondition: z.enum(PRODUCT_CONDITION_VALUES as [string, ...string[]]),
+    testNote: z
+      .string()
+      .trim()
+      .max(2000)
+      .nullable()
+      .optional()
+      .transform((value) => value || null),
+  })
+  .strict();

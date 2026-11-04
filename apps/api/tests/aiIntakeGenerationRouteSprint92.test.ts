@@ -38,6 +38,7 @@ async function login(email: string): Promise<string> {
 
 async function createIntakeViaRoute(cookie = managerCookie): Promise<string> {
   const res = await request(app).post("/api/ai-product-intakes").set("Cookie", cookie).send({});
+  await request(app).patch(`/api/ai-product-intakes/${res.body.id}/warehouse-facts`).set("Cookie", managerCookie).send({ declaredCondition: "Used" }).expect(200);
   return res.body.id;
 }
 
@@ -77,7 +78,7 @@ describe("POST /api/ai-product-intakes/:id/generate", () => {
       expect(res.body[field].value).toBeNull();
     }
     expect(res.body.providerName).toBe("mock-intake-v1");
-    expect(res.body.promptVersion).toBe("intake-v2-title-keywords");
+    expect(res.body.promptVersion).toBe("intake-v3-warehouse-facts");
     expect(res.body.stale).toBe(false);
   });
 

@@ -38,6 +38,7 @@ async function login(email: string): Promise<string> {
 
 async function createIntakeViaRoute(cookie = managerCookie): Promise<string> {
   const res = await request(app).post("/api/ai-product-intakes").set("Cookie", cookie).send({});
+  await request(app).patch(`/api/ai-product-intakes/${res.body.id}/warehouse-facts`).set("Cookie", managerCookie).send({ declaredCondition: "Used" }).expect(200);
   return res.body.id;
 }
 

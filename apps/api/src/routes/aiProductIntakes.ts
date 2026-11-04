@@ -6,9 +6,9 @@ import { Router } from "express";
 import multer from "multer";
 import { requirePermission, type AuthedRequest } from "../auth/permissions";
 import { db } from "../db/client";
-import { cancelIntake, createIntake, getIntakeById, listIntakes } from "../services/aiProductIntakes";
+import { cancelIntake, createIntake, getIntakeById, listIntakes, updateIntakeWarehouseFacts } from "../services/aiProductIntakes";
 import { deleteIntakePhoto, getIntakePhotoContent, listIntakePhotos, uploadIntakePhoto, uploadStagedIntakePhoto } from "../services/aiIntakePhotos";
-import { generateIntakeProposal } from "../services/aiIntakeGeneration";
+import { generateIntakeProposalForAdmin } from "../services/aiIntakeGeneration";
 import { getCurrentProposal, updateProposalFieldReview } from "../services/aiIntakeProposals";
 import { saveAiIntakeAsDraft } from "../services/aiIntakeApply";
 import { acceptAiIntakeIntoStock } from "../services/aiIntakeStockAcceptance";
@@ -19,6 +19,7 @@ import {
   cancelAiProductIntakeSchema,
   createAiProductIntakeSchema,
   generateAiIntakeProposalSchema,
+  updateIntakeWarehouseFactsSchema,
 } from "../validation/aiProductIntake";
 import { descriptionFieldReviewSchema, keywordsFieldReviewSchema, titleFieldReviewSchema } from "../validation/aiIntakeProposal";
 import { saveAiIntakeAsDraftSchema } from "../validation/aiIntakeApply";
@@ -92,6 +93,15 @@ router.post("/:id/cancel", requirePermission("ai_product_intakes.manage"), async
     // client-supplied body field.
     const intake = await cancelIntake(db, req.params.id, req.adminUser!.id, input.cancellationReason);
     res.json(intake);
+  } catch (err) {
+    handleRouteError(err, res);
+  }
+});
+
+router.patch("/:id/warehouse-facts", requirePermission("ai_product_intakes.manage"), async (req, res) => {
+  try {
+    const input = updateIntakeWarehouseFactsSchema.parse(req.body ?? {});
+    res.json(await updateIntakeWarehouseFacts(db, req.params.id, input));
   } catch (err) {
     handleRouteError(err, res);
   }
@@ -175,7 +185,7 @@ router.get("/:id/photos/:photoId/content", requirePermission("ai_product_intakes
 router.post("/:id/generate", requirePermission("ai_product_intakes.manage"), async (req, res) => {
   try {
     generateAiIntakeProposalSchema.parse(req.body ?? {});
-    const result = await generateIntakeProposal(db, req.params.id);
+    const result = await generateIntakeProposalForAdmin(db, req.params.id);
     res.json(result);
   } catch (err) {
     handleRouteError(err, res);

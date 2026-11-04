@@ -256,7 +256,7 @@ describe("OpenAiIntakeGenerationProvider (Sprint 101)", () => {
       expect(result.proposal.suggestedTitle).toBe("Vintage Technical Drawing Pen Nib Set with Case");
       expect(result.proposal.suggestedDescription).toBe("A set of drawing pen nibs in a fitted case.");
       expect(result.proposal.suggestedKeywords).toEqual(["drawing pen", "nib set", "technical drawing", "fitted case"]);
-      expect(result.metadata.promptVersion).toBe("intake-v2-title-keywords");
+      expect(result.metadata.promptVersion).toBe("intake-v3-warehouse-facts");
     });
 
     it("genuinely unidentifiable evidence: null title/keywords remain valid and map to undefined (no fallback text injected)", async () => {

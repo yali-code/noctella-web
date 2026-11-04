@@ -33,6 +33,14 @@ export interface AiProductIntakeCancelInput {
   updatedAt: string;
 }
 
+export interface AiProductIntakeWarehouseFactsInput {
+  id: string;
+  expectedStatus: string;
+  declaredCondition: string;
+  testNote: string | null;
+  updatedAt: string;
+}
+
 export interface AiProductIntakeApplyConflict {
   field: "id" | "status" | "resultProductId";
   message: string;
@@ -96,6 +104,7 @@ export interface AiProductIntakeRepository {
    * "already Cancelled" as idempotent success rather than an error.
    */
   cancelWithExpectedState(input: AiProductIntakeCancelInput): Promise<AiProductIntakeCancelResult>;
+  updateWarehouseFactsWithExpectedState(input: AiProductIntakeWarehouseFactsInput): Promise<AiProductIntakeCancelResult>;
   /**
    * Atomic conditional transition: UPDATE ... WHERE id = ? AND status = 'open'
    * AND result_product_id IS NULL. Zero affected rows means not-found,

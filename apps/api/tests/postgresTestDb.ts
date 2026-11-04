@@ -59,7 +59,7 @@ export interface PostgresTestDb {
   close(): Promise<void>;
 }
 
-export async function createPostgresTestDb(through = "0039_etsy_listing_form_parity.sql"): Promise<PostgresTestDb> {
+export async function createPostgresTestDb(through = "0047_ai_intake_warehouse_facts.sql"): Promise<PostgresTestDb> {
   const connectionString = assertDisposablePostgresUrl(process.env.POSTGRES_TEST_DATABASE_URL);
   const schemaName = `sprint151_test_${crypto.randomBytes(8).toString("hex")}`;
   const admin = new pg.Pool({ connectionString, max: 1 });

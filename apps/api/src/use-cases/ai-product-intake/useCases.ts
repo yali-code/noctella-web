@@ -71,3 +71,28 @@ export async function cancelAiProductIntakeUseCase(repository: AiProductIntakeRe
 
   throw new BadRequestError(result.conflict?.message ?? "AI product intake cannot be cancelled from its current status");
 }
+
+export interface UpdateIntakeWarehouseFactsInput {
+  id: string;
+  declaredCondition: string;
+  testNote: string | null;
+}
+
+/** Warehouse facts are editable only while the intake is Open. */
+export async function updateIntakeWarehouseFactsUseCase(repository: AiProductIntakeRepository, input: UpdateIntakeWarehouseFactsInput) {
+  const result = await repository.updateWarehouseFactsWithExpectedState({
+    ...input,
+    expectedStatus: AiProductIntakeStatus.Open,
+    updatedAt: new Date().toISOString(),
+  });
+  if (result.updated) return result.row!;
+  if (result.conflict?.field === "id") throw new NotFoundError(result.conflict.message);
+  throw new BadRequestError(result.conflict?.message ?? "Warehouse facts can only be changed on an Open intake");
+}
+
+/** The warehouse declares condition before the AI sees the product. */
+export function assertIntakeReadyForGenerationUseCase(intake: { declaredCondition?: string }): void {
+  if (!intake.declaredCondition) {
+    throw new BadRequestError("Set the warehouse condition before generating an AI proposal");
+  }
+}

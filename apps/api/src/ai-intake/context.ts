@@ -33,5 +33,7 @@ export function buildAiIntakeGenerationContext(
       referenceId: photo.id,
     })),
     allowedCategories,
+    ...(intake.declaredCondition ? { declaredCondition: intake.declaredCondition } : {}),
+    ...(intake.testNote ? { testNote: intake.testNote } : {}),
   };
 }

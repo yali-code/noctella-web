@@ -20,6 +20,7 @@ interface Props {
   proposal: AiIntakeProposalReview | null;
   onProposalChanged: (proposal: AiIntakeProposalReview) => void;
   onProposalReload: () => Promise<AiIntakeProposalReview | null>;
+  generateBlockedReason?: string;
 }
 
 function formatValue(value: string | string[] | null): string {
@@ -35,7 +36,7 @@ function formatValue(value: string | string[] | null): string {
  * 409 (stale or version conflict), shows an explicit reload prompt and never
  * auto-resubmits.
  */
-export function ProposalReviewSection({ intakeId, intakeStatus, photos, proposal, onProposalChanged, onProposalReload }: Props) {
+export function ProposalReviewSection({ intakeId, intakeStatus, photos, proposal, onProposalChanged, onProposalReload, generateBlockedReason }: Props) {
   const [generating, setGenerating] = useState(false);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +144,7 @@ export function ProposalReviewSection({ intakeId, intakeStatus, photos, proposal
       )}
 
       {!proposal && isOpen && (
-        <button onClick={handleGenerate} disabled={generating} style={primaryButtonStyle}>
+        <button onClick={handleGenerate} disabled={generating || Boolean(generateBlockedReason)} title={generateBlockedReason} style={primaryButtonStyle}>
           {generating ? "Generating..." : "Generate"}
         </button>
       )}
@@ -222,7 +223,7 @@ export function ProposalReviewSection({ intakeId, intakeStatus, photos, proposal
             (confirmRegenerate ? (
               <div style={{ marginTop: 12 }}>
                 <p style={{ fontSize: 12 }}>Regenerate the proposal? This replaces the current suggestions.</p>
-                <button onClick={handleGenerate} disabled={generating || !allPending} style={primaryButtonStyle}>
+                <button onClick={handleGenerate} disabled={generating || !allPending || Boolean(generateBlockedReason)} title={generateBlockedReason} style={primaryButtonStyle}>
                   {generating ? "Regenerating..." : "Confirm Regenerate"}
                 </button>{" "}
                 <button onClick={() => setConfirmRegenerate(false)} style={secondaryButtonStyle}>

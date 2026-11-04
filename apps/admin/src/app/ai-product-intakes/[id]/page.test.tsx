@@ -33,6 +33,7 @@ function intake(overrides: Record<string, unknown> = {}) {
   return {
     id: "intake-1",
     status: AiProductIntakeStatus.Open,
+    declaredCondition: "Used" as any,
     createdByAdminUserId: "admin-1",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -80,6 +81,12 @@ describe("AiProductIntakeDetailPage (Sprint 97)", () => {
     mockLoads();
     render(<AiProductIntakeDetailPage params={{ id: "intake-1" }} />);
     await screen.findByText("Upload staged photos, then generate a proposal.");
+  });
+
+  it("asks for the warehouse condition first", async () => {
+    mockLoads({ declaredCondition: undefined });
+    render(<AiProductIntakeDetailPage params={{ id: "intake-1" }} />);
+    await screen.findByText("Save the warehouse condition, then upload photos and generate a proposal.");
   });
 
   it("shows terminal guidance for a Cancelled intake", async () => {
