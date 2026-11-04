@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AiProductIntakeStatus } from "@noctella/shared";
 import { api, ApiError } from "@/lib/api";
@@ -46,6 +46,7 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
     const fields = { "Purchase source": "Kleinanzeigen", "Auction house": "Example Auction", "Invoice / reference": "REF-123", Provenance: "Private collection", "Previous owner": "Estate seller" };
     for (const [label, value] of Object.entries(fields)) fireEvent.change(screen.getByLabelText(label), { target: { value: `  ${value}  ` } });
     await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.selectOptions(screen.getByLabelText("Condition (required)"), "Used");
     await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
     expect(screen.getByRole("button", { name: "Accepting..." })).toBeDisabled();
@@ -64,6 +65,7 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
     await user.click(screen.getByText("Acquisition (optional)"));
     await user.type(screen.getByLabelText("Purchase cost (€)"), "-1");
     await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.selectOptions(screen.getByLabelText("Condition (required)"), "Used");
     await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
     expect(screen.getByText("Purchase cost must be a non-negative number.")).toBeInTheDocument();
@@ -140,7 +142,29 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
     expect(screen.getByPlaceholderText(/Quantity/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Brand (optional)")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Model (optional)")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Condition (optional)")).toBeInTheDocument();
+    const conditionSelect = screen.getByLabelText("Condition (required)");
+    expect(within(conditionSelect).getAllByRole("option").map((o) => o.textContent)).toEqual(["Select condition", "Used", "For parts", "Unused", "New old stock"]);
+  });
+
+  it("cannot confirm Stock Acceptance until a condition is selected", async () => {
+    const user = userEvent.setup();
+    mockCategories();
+    render(
+      <ApplyAndFinalizeSection
+        intakeId="intake-1"
+        intake={intake()}
+        photos={[]}
+        proposal={proposal}
+        onIntakeChanged={vi.fn().mockResolvedValue(intake())}
+        onPhotosReload={vi.fn().mockResolvedValue([])}
+      />,
+    );
+    await screen.findByText("Category One");
+    await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
+    expect(screen.getByRole("button", { name: "Confirm Stock Acceptance" })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText("Condition (required)"), "For parts");
+    expect(screen.getByRole("button", { name: "Confirm Stock Acceptance" })).toBeEnabled();
   });
 
   it("Stock Acceptance still requires explicit confirmation before submitting", async () => {
@@ -159,6 +183,7 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
     );
     await screen.findByText("Category One");
     await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.selectOptions(screen.getByLabelText("Condition (required)"), "Used");
     await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     expect(acceptSpy).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
@@ -185,6 +210,7 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
       fireEvent.change(screen.getByLabelText(label), { target: { value: "   " } });
     }
     await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+    await user.selectOptions(screen.getByLabelText("Condition (required)"), "Used");
     await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
     await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
     await waitFor(() => expect(acceptSpy).toHaveBeenCalled());
@@ -216,6 +242,7 @@ describe("ApplyAndFinalizeSection (Sprint 137: warehouse-simplified Stock Accept
     async function acceptFlow(user: ReturnType<typeof userEvent.setup>) {
       await screen.findByText("Category One");
       await user.selectOptions(screen.getByDisplayValue("Select category"), "cat-1");
+      await user.selectOptions(screen.getByLabelText("Condition (required)"), "Used");
       await user.click(screen.getByRole("button", { name: "Accept into Stock" }));
       await user.click(screen.getByRole("button", { name: "Confirm Stock Acceptance" }));
     }

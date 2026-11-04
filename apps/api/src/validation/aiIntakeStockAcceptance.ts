@@ -1,3 +1,4 @@
+import { PRODUCT_CONDITION_VALUES, ProductCondition } from "@noctella/shared";
 import { z } from "zod";
 import { ProductType } from "@noctella/shared";
 
@@ -39,7 +40,7 @@ export const stockAcceptanceSchema = z
     countryOfOrigin: z.string().trim().min(1).optional(),
     period: z.string().trim().min(1).optional(),
     materials: z.string().trim().min(1).optional(),
-    condition: z.string().trim().min(1).optional(),
+    condition: z.enum(PRODUCT_CONDITION_VALUES as [ProductCondition, ...ProductCondition[]], { message: "Condition is required" }),
     conditionDescription: z.string().trim().min(1).optional(),
     seoTitle: z.string().trim().min(1).optional(),
     metaDescription: z.string().trim().min(1).optional(),

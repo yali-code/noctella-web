@@ -57,6 +57,7 @@ function baseStockAcceptanceBody(overrides: Record<string, unknown> = {}) {
   return {
     categoryId,
     type: "unique_item",
+    condition: "Used",
     priceEur: 42,
     expectedProposalUpdatedAt: "placeholder",
     ...overrides,
@@ -87,6 +88,13 @@ afterAll(() => {
 });
 
 describe("POST /api/ai-product-intakes/:id/stock-acceptance", () => {
+  it("requires a condition from the approved list", async () => {
+    for (const condition of [undefined, "", "Excellent"]) {
+      const res = await request(app).post("/api/ai-product-intakes/any-intake/stock-acceptance").set("Cookie", managerCookie).send(baseStockAcceptanceBody({ condition }));
+      expect(res.status).toBe(400);
+    }
+  });
+
   it("creates the canonical Product on first acceptance - 201, a system-generated NOC-###### SKU, canonical Product response shape", async () => {
     const { intakeId, proposalUpdatedAt } = await readyIntakeViaRoute();
     const res = await request(app)
@@ -118,10 +126,10 @@ describe("POST /api/ai-product-intakes/:id/stock-acceptance", () => {
     const res = await request(app)
       .post(`/api/ai-product-intakes/${intakeId}/stock-acceptance`)
       .set("Cookie", managerCookie)
-      .send(baseStockAcceptanceBody({ expectedProposalUpdatedAt: proposalUpdatedAt, brand: "Acme", condition: "Good", seoTitle: "SEO Title" }));
+      .send(baseStockAcceptanceBody({ expectedProposalUpdatedAt: proposalUpdatedAt, brand: "Acme", condition: "Used", seoTitle: "SEO Title" }));
     expect(res.status).toBe(201);
     expect(res.body.brand).toBe("Acme");
-    expect(res.body.condition).toBe("Good");
+    expect(res.body.condition).toBe("Used");
     expect(res.body.seoTitle).toBe("SEO Title");
   });
 

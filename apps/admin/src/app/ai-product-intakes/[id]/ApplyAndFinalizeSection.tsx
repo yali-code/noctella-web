@@ -2,9 +2,11 @@
 
 import {
   AiProductIntakeStatus,
+  PRODUCT_CONDITION_VALUES,
   ProductType,
   type AiIntakePhoto,
   type AiIntakeProposalReview,
+  type ProductCondition,
   type AiProductIntake,
   type Category,
 } from "@noctella/shared";
@@ -98,7 +100,6 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
     setCategoryId((prev) => prev || proposal.suggestedCategoryId || "");
     setBrand((prev) => prev || proposal.suggestedBrand || "");
     setModel((prev) => prev || proposal.suggestedModel || "");
-    setCondition((prev) => prev || proposal.suggestedCondition || "");
     setManufacturer((prev) => prev || proposal.suggestedManufacturer || "");
     setCountryOfOrigin((prev) => prev || proposal.suggestedCountryOfOrigin || "");
     setPeriod((prev) => prev || proposal.suggestedPeriod || "");
@@ -147,7 +148,7 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
         previousOwner: toOptionalField(previousOwner),
         brand: toOptionalField(brand),
         model: toOptionalField(model),
-        condition: toOptionalField(condition),
+        condition: condition as ProductCondition,
         manufacturer: toOptionalField(manufacturer),
         countryOfOrigin: toOptionalField(countryOfOrigin),
         period: toOptionalField(period),
@@ -220,7 +221,12 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
             />
             <input placeholder="Brand (optional)" value={brand} onChange={(e) => setBrand(e.target.value)} style={inputStyle} />
             <input placeholder="Model (optional)" value={model} onChange={(e) => setModel(e.target.value)} style={inputStyle} />
-            <input placeholder="Condition (optional)" value={condition} onChange={(e) => setCondition(e.target.value)} style={inputStyle} />
+            <label>Condition (required)
+              <select value={condition} onChange={(e) => setCondition(e.target.value)} style={inputStyle}>
+                <option value="">Select condition</option>
+                {PRODUCT_CONDITION_VALUES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
 
             <details>
               <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--noctella-aged-bronze)" }}>Acquisition (optional)</summary>
@@ -272,7 +278,7 @@ export function ApplyAndFinalizeSection({ intakeId, intake, photos, proposal, on
               <p style={{ fontSize: 12 }}>Accept this item into stock?</p>
               <button
                 onClick={handleAcceptIntoStock}
-                disabled={accepting || finalizing || !proposal || !categoryId}
+                disabled={accepting || finalizing || !proposal || !categoryId || !condition}
                 style={primaryButtonStyle}
               >
                 {accepting ? "Accepting..." : finalizing ? "Finalizing photos..." : "Confirm Stock Acceptance"}

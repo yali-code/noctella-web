@@ -1,5 +1,6 @@
 export * from "./enums/productStatus";
 export * from "./enums/productType";
+export * from "./enums/productCondition";
 export * from "./enums/adminRole";
 export * from "./enums/dimensionUnit";
 export * from "./enums/weightUnit";
