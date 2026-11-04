@@ -3,14 +3,14 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const REQUEST_TIMEOUT_MS = 30_000;
 export async function requestStructuredResponse(apiKey: string, body: unknown, errors: {
   authentication: new () => Error; unavailable: new () => Error; invalid: new () => Error;
-}): Promise<unknown> {
+}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<unknown> {
     let res: Response;
     try {
       res = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       // Network-level failure (DNS, connection refused, timeout) - never the raw error (may embed

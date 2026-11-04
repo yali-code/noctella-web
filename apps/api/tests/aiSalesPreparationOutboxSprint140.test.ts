@@ -94,7 +94,7 @@ describe("Transactional AI Sales Preparation Outbox (Sprint 140)", () => {
     dispatchSpy.mockRestore();
   });
 
-  it("the immediate post-commit dispatch actually processes the just-committed event end-to-end (all three channels prepared, event Succeeded)", async () => {
+  it("the immediate post-commit dispatch actually processes the just-committed event end-to-end (event Succeeded, no paid channel generation)", async () => {
     const proposal = await readyIntake();
     const result = await acceptAiIntakeIntoStock(
       db as any,
@@ -108,7 +108,7 @@ describe("Transactional AI Sales Preparation Outbox (Sprint 140)", () => {
 
     const repo = createDrizzleMarketplacePreparationRepository(db as any);
     for (const channel of [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy]) {
-      expect(await repo.findByProductIdAndChannel(result.product.id, channel)).not.toBeNull();
+      expect(await repo.findByProductIdAndChannel(result.product.id, channel)).toBeNull();
     }
   });
 
@@ -273,111 +273,8 @@ describe("AiSalesPreparationHandler - channel auto-generation (Sprint 140)", () 
     } as any;
   }
 
-  it("generates all three channels when none exist yet", async () => {
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
-    await handler.handle(event());
-
-    const repo = createDrizzleMarketplacePreparationRepository(db as any);
-    for (const channel of [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy]) {
-      const row = await repo.findByProductIdAndChannel(productId, channel);
-      expect(row).not.toBeNull();
-      expect(row!.status).toBe("pending");
-    }
-  });
-
-  it("skips a channel that already has a pending preparation - never regenerates it", async () => {
-    const repo = createDrizzleMarketplacePreparationRepository(db as any);
-    await repo.upsert({
-      id: "existing-web-prep",
-      productId,
-      channel: PublishChannel.NoctellaWeb,
-      baseProductUpdatedAt: new Date().toISOString(),
-      suggestedTitle: "Admin-visible existing suggestion",
-      suggestedDescription: null,
-      suggestedConditionDescription: null,
-      suggestedItemSpecifics: null,
-      suggestedTags: null,
-      suggestedMaterials: null,
-      suggestedStyle: null,
-      suggestedOccasion: null,
-      suggestedShortDescription: null,
-      suggestedSeoTitle: null,
-      suggestedMetaDescription: null,
-      suggestedFocusKeyword: null,
-      providerName: "manual-admin-trigger",
-      promptVersion: "v1",
-      generatedAt: new Date().toISOString(),
-    });
-
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
-    await handler.handle(event());
-
-    const row = await repo.findByProductIdAndChannel(productId, PublishChannel.NoctellaWeb);
-    expect(row!.suggestedTitle).toBe("Admin-visible existing suggestion"); // untouched, never regenerated
-    expect(row!.providerName).toBe("manual-admin-trigger");
-  });
-
-  it("skips a channel that is already Applied - automatic processing never performs applied -> pending", async () => {
-    const repo = createDrizzleMarketplacePreparationRepository(db as any);
-    const upserted = await repo.upsert({
-      id: "existing-etsy-prep",
-      productId,
-      channel: PublishChannel.Etsy,
-      baseProductUpdatedAt: new Date().toISOString(),
-      suggestedTitle: "Human-approved title",
-      suggestedDescription: null,
-      suggestedConditionDescription: null,
-      suggestedItemSpecifics: null,
-      suggestedTags: null,
-      suggestedMaterials: null,
-      suggestedStyle: null,
-      suggestedOccasion: null,
-      suggestedShortDescription: null,
-      suggestedSeoTitle: null,
-      suggestedMetaDescription: null,
-      suggestedFocusKeyword: null,
-      providerName: "mock-marketplace-prep-v1",
-      promptVersion: "v1",
-      generatedAt: new Date().toISOString(),
-    });
-    // Simulate the existing, unchanged human approval path having already applied it.
-    const approvalRepo = createDrizzleMarketplacePreparationApprovalRepository(db as any, sqliteSchema, "asynchronous");
-    await (approvalRepo as any).claimAndApprove({ id: upserted.id, appliedAt: new Date().toISOString(), appliedByAdminUserId: "admin-1", updatedAt: new Date().toISOString() });
-
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
-    await handler.handle(event());
-
-    const row = await repo.findByProductIdAndChannel(productId, PublishChannel.Etsy);
-    expect(row!.status).toBe("applied"); // never reset to pending by automatic processing
-    expect(row!.suggestedTitle).toBe("Human-approved title");
-  });
-
-  it("critical retry scenario: Web and eBay succeed, Etsy fails - the event fails; a retry regenerates only Etsy", async () => {
-    const repo = createDrizzleMarketplacePreparationRepository(db as any);
-    const failingProvider = providerThatFailsOneChannel(PublishChannel.Etsy);
-    const handler = new AiSalesPreparationHandler(db as any, failingProvider);
-
-    await expect(handler.handle(event())).rejects.toThrow();
-
-    const web1 = await repo.findByProductIdAndChannel(productId, PublishChannel.NoctellaWeb);
-    const ebay1 = await repo.findByProductIdAndChannel(productId, PublishChannel.Ebay);
-    const etsy1 = await repo.findByProductIdAndChannel(productId, PublishChannel.Etsy);
-    expect(web1).not.toBeNull();
-    expect(ebay1).not.toBeNull();
-    expect(etsy1).toBeNull(); // still absent after the failed first attempt
-
-    // Second attempt: now Etsy succeeds too (provider no longer fails it).
-    const secondHandler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
-    await secondHandler.handle(event());
-
-    const web2 = await repo.findByProductIdAndChannel(productId, PublishChannel.NoctellaWeb);
-    const etsy2 = await repo.findByProductIdAndChannel(productId, PublishChannel.Etsy);
-    expect(web2!.providerName).toBe(web1!.providerName); // Web's already-succeeded row was never regenerated
-    expect(etsy2).not.toBeNull(); // the previously-absent channel is now generated
-  });
-
   it("best-effort price initialization does not fail the event even when the AI Intake proposal has no usable suggestedPriceEur", async () => {
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
+    const handler = new AiSalesPreparationHandler(db as any);
     // event() payload omits intakeId entirely - tryInitializePriceFromAiIntake must no-op, not throw.
     await expect(handler.handle(event())).resolves.toBeUndefined();
     const product = await getProductById(db as any, productId);
@@ -390,7 +287,7 @@ describe("AiSalesPreparationHandler - channel auto-generation (Sprint 140)", () 
     const generated = await generateIntakeProposal(db as any, intake.id, stubProvider({ suggestedPriceEur: 42 }));
     await updateProposalFieldReview(db as any, intake.id, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
 
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
+    const handler = new AiSalesPreparationHandler(db as any);
     await handler.handle(event({ payload: { productId, intakeId: intake.id } }));
 
     const product = await getProductById(db as any, productId);
@@ -455,7 +352,7 @@ describe("AiSalesPreparationHandler - channel auto-generation (Sprint 140)", () 
       return snapshot;
     });
 
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
+    const handler = new AiSalesPreparationHandler(db as any);
     // 13. The AiSalesPreparationRequested processing is not failed merely because AI lost the pricing race.
     await expect(handler.handle(event({ payload: { productId, intakeId: intake.id } }))).resolves.toBeUndefined();
 
@@ -495,7 +392,7 @@ describe("AiSalesPreparationHandler - channel auto-generation (Sprint 140)", () 
     // .catch(()=>undefined) around tryInitializePriceFromAiIntake must then absorb.
     const updateProductSpy = vi.spyOn(productsModule, "updateProduct").mockRejectedValueOnce(new Error("Simulated price update failure"));
 
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
+    const handler = new AiSalesPreparationHandler(db as any);
     await expect(handler.handle(event({ payload: { productId, intakeId: intake.id } }))).resolves.toBeUndefined(); // the Outbox event still succeeds
 
     expect(updateProductSpy).toHaveBeenCalled(); // the exception genuinely occurred inside the price-write attempt
@@ -503,42 +400,7 @@ describe("AiSalesPreparationHandler - channel auto-generation (Sprint 140)", () 
     const product = await getProductById(db as any, productId);
     expect(product.priceEur).toBeNull(); // no fallback price invented; the mocked rejection prevented any real write
 
-    const repo = createDrizzleMarketplacePreparationRepository(db as any);
-    for (const channel of [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy]) {
-      expect(await repo.findByProductIdAndChannel(productId, channel)).not.toBeNull(); // channel preparation still completed
-    }
-
     updateProductSpy.mockRestore();
   });
 
-  /**
-   * Sprint 145 ordering fix: price initialization (a genuine Product write, since it applies to a
-   * still-null price) now runs BEFORE automatic per-channel generation. Proves the fix directly -
-   * each freshly generated proposal's baseProductUpdatedAt equals the POST-price-write
-   * Product.updatedAt, never the pre-price one, so a proposal is never born already-stale against
-   * the very Product it was just generated for.
-   */
-  it("Sprint 145: automatically generated Marketplace Preparation proposals use the Product version AFTER AI price initialization, never a pre-price stale version", async () => {
-    const intake = await createIntake(db as any, "admin-1");
-    const generated = await generateIntakeProposal(db as any, intake.id, stubProvider({ suggestedPriceEur: 123 }));
-    await updateProposalFieldReview(db as any, intake.id, "title", AiIntakeFieldDecision.Accepted, undefined, "admin-2", generated.updatedAt);
-
-    const beforeProduct = await getProductById(db as any, productId);
-    expect(beforeProduct.priceEur).toBeNull();
-
-    const handler = new AiSalesPreparationHandler(db as any, new MockMarketplacePreparationProvider());
-    await handler.handle(event({ payload: { productId, intakeId: intake.id } }));
-
-    const afterProduct = await getProductById(db as any, productId);
-    expect(afterProduct.priceEur).toBe(123); // price initialization genuinely applied
-    expect(afterProduct.updatedAt).not.toBe(beforeProduct.updatedAt); // Product genuinely advanced
-
-    const repo = createDrizzleMarketplacePreparationRepository(db as any);
-    for (const channel of [PublishChannel.NoctellaWeb, PublishChannel.Ebay, PublishChannel.Etsy]) {
-      const row = await repo.findByProductIdAndChannel(productId, channel);
-      expect(row).not.toBeNull();
-      // The core ordering proof: baseProductUpdatedAt reflects the POST-price version.
-      expect(row!.baseProductUpdatedAt).toBe(afterProduct.updatedAt);
-    }
-  });
 });
