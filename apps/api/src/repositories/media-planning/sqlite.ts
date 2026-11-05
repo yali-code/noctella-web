@@ -20,6 +20,12 @@ export function createMediaPlanRepository(db: any) {
         photos: photos.filter((ph) => ph.productId === p.id).map((ph) => ({ id: ph.id, url: ph.url, isPrimary: Boolean(ph.isPrimary), sortOrder: ph.sortOrder ?? 0, processingStatus: ph.processingStatus ?? null })),
       }));
     },
+    /** Products already taken by social content (except rejected) or by an approved or scheduled plan. */
+    readUsedSocialProductIds(): Set<string> {
+      const contents = db.select({ id: schema.socialContents.productId, status: schema.socialContents.status }).from(schema.socialContents).all() as Array<{ id: string | null; status: string }>;
+      const planned = db.select({ id: items.productId }).from(items).innerJoin(plans, eq(plans.id, items.planId)).where(inArray(plans.status, ["APPROVED", "SCHEDULED"])).all() as Array<{ id: string }>;
+      return new Set([...contents.filter((c) => c.id && c.status !== "rejected").map((c) => c.id as string), ...planned.map((p) => p.id)]);
+    },
     insertPlan(plan: typeof plans.$inferInsert, planItems: (typeof items.$inferInsert)[]) {
       db.transaction((tx: any) => {
         tx.insert(plans).values(plan).run();

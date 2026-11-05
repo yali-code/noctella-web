@@ -150,7 +150,7 @@ export async function renderPlanReel(db: DbClient, planId: string, itemId: strin
 export async function generateMediaPlan(db: DbClient, input: { generatedBy: string; startDate?: string }, deps: MediaPlannerDeps = {}) {
   const env = envOf(deps), now = nowOf(deps), timeZone = timezoneOf(env);
   const repo = createMediaPlanRepository(db);
-  const eligible = eligibleProducts(repo.readPlannerProducts(), productPhotoStaticPath);
+  const eligible = eligibleProducts(repo.readPlannerProducts(), productPhotoStaticPath, repo.readUsedSocialProductIds());
   const selection = selectPlanProducts(eligible);
   if ("blocker" in selection) throw new MediaPlanningBlockedError([selection.blocker]);
   if (input.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.startDate)) throw new BadRequestError("startDate must be YYYY-MM-DD");
@@ -204,10 +204,12 @@ export function editMediaPlanItem(db: DbClient, planId: string, itemId: string, 
   const plan = repo.getPlan(planId), item = repo.getItem(planId, itemId);
   if (!plan || !item) throw new NotFoundError("Media plan item not found");
   if (plan.status !== "READY_FOR_REVIEW") throw new ConflictError("Only a plan awaiting review can be edited");
-  const eligible = eligibleProducts(repo.readPlannerProducts(), productPhotoStaticPath);
   const productId = input.productId ?? item.productId;
+  const used = repo.readUsedSocialProductIds();
+  used.delete(item.productId);
+  const eligible = eligibleProducts(repo.readPlannerProducts(), productPhotoStaticPath, used);
   const product = eligible.find((p) => p.id === productId);
-  if (!product) throw new BadRequestError("Selected product is not eligible (active, in stock, with ready photos)");
+  if (!product) throw new BadRequestError("Selected product is not eligible (active, in stock, with ready photos, not shared before)");
   const productChanged = productId !== item.productId;
   const photoIds = input.photoIds ?? (productChanged ? (item.contentType === "REEL" ? product.photos.slice(0, REEL_MAX_PHOTOS).map((p) => p.id) : [product.photos[0]!.id]) : parse<string[]>(item.photoIdsJson, []));
   if (photoIds.some((id) => !product.photos.some((p) => p.id === id))) throw new BadRequestError("Selected photos must be ready photos of the selected product");
@@ -315,8 +317,9 @@ export async function scheduleMediaPlan(db: DbClient, planId: string, actorId: s
 
 export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerDeps = {}) {
   const env = envOf(deps);
-  const rows = createMediaPlanRepository(db).readPlannerProducts();
-  const eligible = eligibleProducts(rows, productPhotoStaticPath);
+  const planRepo = createMediaPlanRepository(db);
+  const rows = planRepo.readPlannerProducts();
+  const eligible = eligibleProducts(rows, productPhotoStaticPath, planRepo.readUsedSocialProductIds());
   const instagram = await getInstagramPublishingReadiness(db, env).catch(() => null);
   const ffmpeg = resolveFfmpeg(env);
   const rendererReady = await (deps.ffmpegAvailable ?? (() => isFfmpegAvailable(env)))();
@@ -333,7 +336,8 @@ export async function getMediaPlannerReadiness(db: DbClient, deps: MediaPlannerD
   // Workflow state, not infrastructure: a PENDING Reel never affects technicallyReady.
   const reelAssetStatus: string | null = plan?.items.find((i: { contentType: string }) => i.contentType === "REEL")?.reel?.status ?? null;
   const technicalBlockers = [
-    ...(eligible.length < MIN_ELIGIBLE_PRODUCTS ? [`INSUFFICIENT_ELIGIBLE_PRODUCTS:${eligible.length}/${MIN_ELIGIBLE_PRODUCTS}`] : []),
+    // Shared products leave the pool, so stock only matters while no approved plan covers the next posts.
+    ...(eligible.length < MIN_ELIGIBLE_PRODUCTS && !["APPROVED", "SCHEDULED"].includes(plan?.status ?? "") ? [`INSUFFICIENT_ELIGIBLE_PRODUCTS:${eligible.length}/${MIN_ELIGIBLE_PRODUCTS}`] : []),
     ...(instagram?.ready ? [] : ["INSTAGRAM_PUBLISHING_NOT_READY"]),
     ...(rendererReady ? [] : ["REEL_RENDERER_UNAVAILABLE"]),
     ...(assetDirWritable ? [] : ["MEDIA_ASSET_DIR_NOT_WRITABLE"]),
