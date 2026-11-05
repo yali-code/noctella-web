@@ -47,6 +47,7 @@ export function ensureSchema(sqlite: Database.Database): void {
   ensureMarketingTagsTables(sqlite);
   ensureCanonicalProductAiProposalsTable(sqlite);
   ensureProductLifecycleFoundation(sqlite);
+  backfillInvoiceCostCurrency(sqlite);
 }
 
 /** Upgrade existing ETAP 2 tables before creating any index on new columns. */
@@ -122,6 +123,13 @@ CREATE INDEX IF NOT EXISTS idx_customer_oauth_attempts_expiry ON customer_oauth_
 }
 
 /** Sprint 149 Checkpoint 1: additive, rerunnable local Pause foundation. */
+/** Costs written by an approved invoice cost set are EUR. Idempotent; fills only the blank currency (PostgreSQL 0048). */
+function backfillInvoiceCostCurrency(sqlite: Database.Database): void {
+  sqlite.exec(`UPDATE products SET purchase_currency = 'EUR'
+    WHERE purchase_currency IS NULL AND purchase_cost IS NOT NULL
+      AND id IN (SELECT i.product_id FROM invoice_cost_set_items i JOIN invoice_cost_sets s ON s.id = i.cost_set_id WHERE s.status = 'approved')`);
+}
+
 function ensureProductLifecycleFoundation(sqlite: Database.Database): void {
   const columns = sqlite.prepare("PRAGMA table_info(products)").all() as Array<{ name: string }>;
   if (!columns.some((column) => column.name === "sale_paused_at")) sqlite.exec("ALTER TABLE products ADD COLUMN sale_paused_at TEXT");

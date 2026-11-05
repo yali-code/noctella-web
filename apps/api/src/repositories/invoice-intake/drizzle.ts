@@ -169,6 +169,15 @@ export function createDrizzleInvoiceIntakeRepository(db: any, schema: Schema): I
 
     updateIntakeFx: (input: InvoiceIntakeFxUpdateInput) => transition(intakes, intakeRecord, intakeValues, "Invoice intake", input, { ...input.values }),
 
+    async findApprovedCostSetItemByProduct(productId: string) {
+      const rows = await db.select().from(items).where(eq(items.productId, productId)).orderBy(items.createdAt, items.id);
+      for (const row of rows) {
+        const [set] = await db.select().from(sets).where(and(eq(sets.id, row.costSetId), eq(sets.status, "approved")));
+        if (set) return { costSet: setRecord(set), item: itemRecord(row) };
+      }
+      return null;
+    },
+
     async listCostSetItems(costSetId: string) {
       const rows = await db.select().from(items).where(eq(items.costSetId, costSetId)).orderBy(items.createdAt, items.id);
       return rows.map(itemRecord);

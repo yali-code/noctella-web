@@ -133,14 +133,14 @@ function cents(v:number){ return Math.round(v*100); } function money(c:number){ 
  * left untouched — averaging/lot-costing across multiple units of the same product is a
  * weighted-average/FIFO business decision explicitly deferred, not implemented here.
  */
-function syncProductPurchaseCostFromLandedCostSync(tx:any, lines:any[], allocations:any[]) {
+function syncProductPurchaseCostFromLandedCostSync(tx:any, lines:any[], allocations:any[], currency:string) {
   for (const line of lines) {
     if (!line.productId || line.quantity !== 1) continue;
     const allocation = allocations.find((a: any) => a.purchaseLineId === line.id);
     if (!allocation || allocation.allocatedTotalCost == null) continue;
     const product: any = tx.select().from(products).where(eq(products.id, line.productId)).get();
     if (!product || product.purchaseCost != null) continue;
-    tx.update(products).set({ purchaseCost: money(cents(allocation.allocatedTotalCost)), updatedAt: now() }).where(eq(products.id, line.productId)).run();
+    tx.update(products).set({ purchaseCost: money(cents(allocation.allocatedTotalCost)), purchaseCurrency: currency, updatedAt: now() }).where(eq(products.id, line.productId)).run();
   }
 }
 function split(total:number|null|undefined, weights:number[]){ if(total==null) return weights.map(()=>null); if(total<0) throw new BadRequestError("Negative costs are not allowed"); const c=cents(total), sum=weights.reduce((a,b)=>a+b,0); let used=0; return weights.map((w,i)=>{ const x=i===weights.length-1?c-used:Math.floor(c*(sum?w/sum:1/weights.length)); used+=x; return money(x); }); }
@@ -162,7 +162,7 @@ export async function allocatePurchaseCosts(db:Db,id:string,cmd:any){ const p=aw
     tx.delete(purchaseAllocations).where(eq(purchaseAllocations.purchaseId,id)).run();
     for(const row of newRows) tx.insert(purchaseAllocations).values(row).run();
     tx.insert(purchaseEvents).values({ id:randomUUID(), purchaseId:id, eventType:"Allocated", safeMetadata:JSON.stringify({allocationMethod:method}), createdAt:t }).run();
-    syncProductPurchaseCostFromLandedCostSync(tx, lines, newRows);
+    syncProductPurchaseCostFromLandedCostSync(tx, lines, newRows, p.currency);
   });
   return getPurchaseLandedCostSummary(db,id); }
 export async function recalculatePurchaseTotals(db:Db,id:string){ const p=await getPurchase(db,id); const total=totalOf(p); await db.update(purchases).set({totalCost:total,updatedAt:now()}).where(eq(purchases.id,id)); return getPurchase(db,id); }
@@ -186,7 +186,7 @@ export async function receivePurchase(db:Db,id:string,cmd:any){
   // receive still gets picked up the next time this purchase is touched; idempotent per the guard
   // inside syncProductPurchaseCostFromLandedCostSync (purchaseCost only ever set once, from null).
   const purchaseForSync = await getPurchase(db, id);
-  (db as any).transaction((tx: any) => syncProductPurchaseCostFromLandedCostSync(tx, purchaseForSync.lines, purchaseForSync.allocations));
+  (db as any).transaction((tx: any) => syncProductPurchaseCostFromLandedCostSync(tx, purchaseForSync.lines, purchaseForSync.allocations, purchaseForSync.currency));
   return result.purchase;
 }
 export async function getPurchaseEvents(db:Db,id:string){ return db.select().from(purchaseEvents).where(eq(purchaseEvents.purchaseId,id)).orderBy(purchaseEvents.createdAt); }

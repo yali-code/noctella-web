@@ -265,3 +265,21 @@ export async function approveCostSetUseCase(deps: { repository: InvoiceIntakeRep
   if (result.conflict?.field === "id") throw new NotFoundError("Invoice cost set not found");
   throw new ConflictError("Only an open invoice cost set can be approved");
 }
+
+/** Read-only cost breakdown of a product from its approved cost set; null when none exists. Reads stored allocation values only. */
+export async function getProductCostBreakdownUseCase(deps: { repository: InvoiceIntakeRepository }, productId: string) {
+  const found = await deps.repository.findApprovedCostSetItemByProduct(productId);
+  if (!found) return null;
+  const { costSet, item } = found;
+  const amount = (value: unknown) => Number(value ?? 0);
+  return {
+    currency: "EUR" as const,
+    costSetId: costSet.id as string,
+    costSetTitle: costSet.title as string,
+    purchaseId: (costSet.purchaseId as string | null) ?? null,
+    goodsEur: eur(toCents(amount(item.allocLotEur)) + toCents(amount(item.allocHammerFeeEur)) + toCents(amount(item.allocPremiumEur))),
+    transportEur: eur(toCents(amount(item.allocTransportEur)) + toCents(amount(item.allocForwarderEur))),
+    fxDifferenceEur: amount(item.allocFxDiffEur),
+    totalEur: amount(item.allocTotalEur),
+  };
+}

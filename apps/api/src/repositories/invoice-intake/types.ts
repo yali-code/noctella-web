@@ -152,6 +152,8 @@ export interface InvoiceIntakeRepository {
   /** PHASE-2C: the same atomic conditional UPDATE, writing the official rate and the bank debit. */
   updateIntakeFx(input: InvoiceIntakeFxUpdateInput): Promise<ExpectedStatusTransitionResult<InvoiceIntakeRecord>>;
   listCostSetItems(costSetId: string): Promise<InvoiceCostSetItemRecord[]>;
+  /** The approved set's cost item for a product, if any; a product can be on one open or approved set only. */
+  findApprovedCostSetItemByProduct(productId: string): Promise<{ costSet: InvoiceCostSetRecord; item: InvoiceCostSetItemRecord } | null>;
   /** Deletes the set's items and inserts the given ones in one transaction. */
   replaceCostSetItems(costSetId: string, items: InvoiceCostSetItemInput[], updatedAt: string): Promise<void>;
   /** Writes the alloc_* columns of the set's items in one transaction. */
