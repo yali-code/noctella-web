@@ -6,7 +6,8 @@ import { z } from "zod";
  * only used later for copy. Never invents products or images; never publishes.
  */
 
-export const MIN_ELIGIBLE_PRODUCTS = 7;
+/** One plan uses 4 feed products and 1 Reel product; a product is never shared twice, so no spare pool is required. */
+export const MIN_ELIGIBLE_PRODUCTS = 5;
 export const PLAN_DAYS = 4;
 export const FEED_POSTS = 4;
 export const REEL_DAY_INDEX = 2; // third day carries both a feed post and the Reel
@@ -27,9 +28,9 @@ export interface PlannerProductRow {
 }
 
 /** Eligible = active inventory (published/approved), in stock, not paused, with at least one Ready stored photo. */
-export function eligibleProducts(rows: readonly PlannerProductRow[], photoPathPrefix: string): EligibleProduct[] {
+export function eligibleProducts(rows: readonly PlannerProductRow[], photoPathPrefix: string, alreadyUsedProductIds: ReadonlySet<string> = new Set()): EligibleProduct[] {
   return rows
-    .filter((p) => (ELIGIBLE_PRODUCT_STATUSES as readonly string[]).includes(p.status) && p.stockQuantity > 0 && !p.salePausedAt)
+    .filter((p) => (ELIGIBLE_PRODUCT_STATUSES as readonly string[]).includes(p.status) && p.stockQuantity > 0 && !p.salePausedAt && !alreadyUsedProductIds.has(p.id))
     .map((p) => ({ ...p, photos: p.photos.filter((ph) => ph.processingStatus === "Ready" && ph.url.startsWith(`${photoPathPrefix}/`)).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder || a.id.localeCompare(b.id)) }))
     .filter((p) => p.photos.length > 0);
 }

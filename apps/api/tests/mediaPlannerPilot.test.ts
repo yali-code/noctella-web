@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createMediaPlanRepository } from "../src/repositories/media-planning/sqlite";
+import { eligibleProducts } from "../src/use-cases/media-planning/planner";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,10 +84,22 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("Media Planning Agent - planning", () => {
-  it("blocks planning with fewer than 7 eligible products (ineligible products are not counted)", async () => {
-    seedProducts(6);
-    await expect(generateMediaPlan(db, { generatedBy: actorId }, deps())).rejects.toMatchObject({ blockers: ["INSUFFICIENT_ELIGIBLE_PRODUCTS:6/7"] });
+  it("blocks planning with fewer than 5 eligible products (ineligible products are not counted)", async () => {
+    seedProducts(4);
+    await expect(generateMediaPlan(db, { generatedBy: actorId }, deps())).rejects.toMatchObject({ blockers: ["INSUFFICIENT_ELIGIBLE_PRODUCTS:4/5"] });
     await expect(generateMediaPlan(db, { generatedBy: actorId }, deps())).rejects.toBeInstanceOf(MediaPlanningBlockedError);
+  });
+
+  it("never reuses a product from an approved plan or from non-rejected social content", async () => {
+    seedProducts(10);
+    const first = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    createMediaPlanRepository(db).setPlanStatus(first.id, ["READY_FOR_REVIEW"], { status: "APPROVED" });
+    const second = await generateMediaPlan(db, { generatedBy: actorId }, deps());
+    const ids = (plan: typeof first) => plan.items.map((item) => item.product.id);
+    expect(ids(second).filter((id) => ids(first).includes(id))).toEqual([]);
+    const repo = createMediaPlanRepository(db);
+    expect(ids(first).every((id) => repo.readUsedSocialProductIds().has(id))).toBe(true);
+    expect(eligibleProducts([{ id: "used", sku: "U", title: "U", status: "approved", stockQuantity: 1, salePausedAt: null, category: null, brand: null, condition: null, createdAt: "t", photos: [{ id: "p", url: "/x/p.webp", isPrimary: true, sortOrder: 0, processingStatus: "Ready" }] }], "/x", new Set(["used"]))).toEqual([]);
   });
 
   it("generates exactly 4 feed posts + 1 Reel over 4 days from real ERP photos, diverse and unrepeated, with policy-labelled times", async () => {
@@ -316,11 +330,11 @@ describe("Media Planning Agent - review, approval and Social Agent hand-off", ()
   });
 
   it("readiness reports counts and blockers without secrets", async () => {
-    seedProducts(6);
+    seedProducts(4);
     const empty = await getMediaPlannerReadiness(db, deps({ ffmpegAvailable: async () => false }));
-    expect(empty).toMatchObject({ eligibleProductCount: 6, requiredProductCount: 7, ffmpegAvailable: false, planExists: false, feedPostsScheduled: 0, reelScheduled: false, reelPublishingSupported: true, technicallyReady: false, ready: false });
+    expect(empty).toMatchObject({ eligibleProductCount: 4, requiredProductCount: 5, ffmpegAvailable: false, planExists: false, feedPostsScheduled: 0, reelScheduled: false, reelPublishingSupported: true, technicallyReady: false, ready: false });
     expect(empty.blockers).not.toContain("MANUAL_PUBLISH_REQUIRED");
-    expect(empty.blockers).toEqual(expect.arrayContaining(["INSUFFICIENT_ELIGIBLE_PRODUCTS:6/7", "INSTAGRAM_PUBLISHING_NOT_READY", "REEL_RENDERER_UNAVAILABLE", "NO_PLAN"]));
+    expect(empty.blockers).toEqual(expect.arrayContaining(["INSUFFICIENT_ELIGIBLE_PRODUCTS:4/5", "INSTAGRAM_PUBLISHING_NOT_READY", "REEL_RENDERER_UNAVAILABLE", "NO_PLAN"]));
     expect(JSON.stringify(empty)).not.toMatch(/token|secret|password/i);
   });
 
