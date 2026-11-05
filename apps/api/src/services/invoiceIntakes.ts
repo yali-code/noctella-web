@@ -1,3 +1,4 @@
+import { getProductCostBreakdownUseCase } from "../use-cases/invoice-intake/costSetUseCases";
 import type { DbClient } from "../db/client";
 import { createInvoiceIntakeRepository } from "../repositories/invoice-intake/factory";
 import type { InvoiceCostSetRecord, InvoiceIntakeRecord, InvoiceIntakeRepository } from "../repositories/invoice-intake/types";
@@ -144,4 +145,8 @@ export async function approveInvoiceCostSet(
 
 export async function getInvoiceIntakeFile(db: DbClient, id: string, storage: InvoiceFileStorage = invoiceFileStorage) {
   return getInvoiceIntakeFileUseCase({ repository: repositoryFor(db), storage }, id);
+}
+
+export async function getProductCostBreakdown(db: DbClient, productId: string) {
+  return getProductCostBreakdownUseCase({ repository: repositoryFor(db) }, productId);
 }

@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { PaginatedResult, ProductDetail } from "@/lib/types";
 import { ProductAiFillSection } from "./ProductAiFillSection";
+import { ProductCostBreakdown } from "./ProductCostBreakdown";
 import { EtsyListingFormFields, etsyFormValuesFromProduct, etsyLimitMessage, etsyPayloadFromValues, type EtsyListingFormValues } from "./EtsyListingFormFields";
 import { MarketingTagsSection } from "./MarketingTagsSection";
 import { PublishActions } from "./PublishActions";
@@ -813,6 +814,7 @@ export function ProductForm({
             onChange={(e) => set("internalNotes", e.target.value)}
           />
         </Field>
+        {productId && <ProductCostBreakdown productId={productId} refreshKey={currentProductUpdatedAt} />}
       </Section>
 
       <Section title="Pricing">

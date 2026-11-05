@@ -19,7 +19,7 @@ import { executePurchaseCommand, executeSupplierCommand, getPurchase, getPurchas
 import { addConsent, addNote, createCustomer, executeMerge, getConsents, getCustomer, getPreferences, getStatistics, listCustomers, listNotes, mergeCandidates, related, setPreferences, tagCustomer, timeline, updateCustomer } from "../services/erpCustomerBridge";
 import * as warehouse from "../services/erpWarehouseBridge";
 import * as reports from "../services/erpReportsAnalyticsBridge";
-import { addInvoiceIntakeFile, approveInvoiceCostSet, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, extractInvoiceIntake, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSetProductCandidates, listInvoiceCostSets, previewInvoiceCostSetAllocation, reviewInvoiceIntake, setInvoiceCostSetProducts, setInvoiceIntakeBankDebit } from "../services/invoiceIntakes";
+import { getProductCostBreakdown, addInvoiceIntakeFile, approveInvoiceCostSet, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, extractInvoiceIntake, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSetProductCandidates, listInvoiceCostSets, previewInvoiceCostSetAllocation, reviewInvoiceIntake, setInvoiceCostSetProducts, setInvoiceIntakeBankDebit } from "../services/invoiceIntakes";
 import { INVOICE_FILE_MAX_BYTES, INVOICE_FILE_SIZE_MESSAGE } from "../services/invoiceFileGuard";
 import { BadRequestError } from "../services/errors";
 import { createInvoiceCostSetSchema, invoiceCostSetCandidatesQuerySchema, invoiceCostSetListQuerySchema, invoiceCostSetProductsSchema, invoiceIntakeBankDebitSchema, invoiceIntakeReviewSchema, invoiceIntakeUploadFieldsSchema } from "../validation/invoiceIntake";
@@ -175,6 +175,7 @@ router.post("/commands/purchases/:purchaseId/mark-ordered", requireErp, async (r
 
 // PHASE-2A invoice intake foundation: validate input and delegate to services/invoiceIntakes.ts. Multipart is parsed only
 // after requireErp; the 5 MB limit is enforced again by the content guard in the use case.
+router.get("/products/:id/cost-breakdown", requireErp, async (req, res) => { try { res.json({ breakdown: await getProductCostBreakdown(db, req.params.id) }); } catch (err) { handleRouteError(err, res); } });
 router.post("/invoice-cost-sets", requireErp, async (req, res) => { try { res.status(201).json(await createInvoiceCostSet(db, createInvoiceCostSetSchema.parse(req.body ?? {}))); } catch (err) { handleRouteError(err, res); } });
 router.get("/invoice-cost-sets", requireErp, async (req, res) => { try { res.json(await listInvoiceCostSets(db, invoiceCostSetListQuerySchema.parse(req.query))); } catch (err) { handleRouteError(err, res); } });
 router.get("/invoice-cost-sets/:id", requireErp, async (req, res) => { try { res.json(await getInvoiceCostSet(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
