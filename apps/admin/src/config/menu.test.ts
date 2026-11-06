@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminMenuItems } from "./menu";
+import { activeMenuGroupLabel, adminMenuGroups, adminMenuItems } from "./menu";
 
 describe("adminMenuItems (Sprint 97)", () => {
   it("includes the AI Product Intake entry", () => {
@@ -22,5 +22,21 @@ describe("adminMenuItems (Sprint 97)", () => {
 
   it("includes the Pending Publish entry at the existing /ready-to-publish route (Sprint 139: relabeled from Ready to Publish - route unchanged)", () => {
     expect(adminMenuItems).toContainEqual({ label: "Pending Publish", href: "/ready-to-publish" });
+  });
+
+  it("keeps every page in exactly one of nine groups", () => {
+    expect(adminMenuGroups).toHaveLength(9);
+    expect(adminMenuItems).toHaveLength(54);
+    expect(new Set(adminMenuItems.map((item) => item.href)).size).toBe(54);
+  });
+
+  it("opens the group of the most specific matching page", () => {
+    expect(activeMenuGroupLabel("/")).toBe("Dashboard");
+    expect(activeMenuGroupLabel("/products/abc")).toBe("Products");
+    expect(activeMenuGroupLabel("/settings/shipping")).toBe("Shipping");
+    expect(activeMenuGroupLabel("/settings")).toBe("System");
+    expect(activeMenuGroupLabel("/stock/abc")).toBe("Stock & Warehouse");
+    expect(activeMenuGroupLabel("/finance/ebay-statements")).toBe("Finance & Purchasing");
+    expect(activeMenuGroupLabel("/login-unknown")).toBeNull();
   });
 });

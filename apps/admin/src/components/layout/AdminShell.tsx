@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { adminMenuItems } from "@/config/menu";
+import { activeMenuGroupLabel, adminMenuGroups } from "@/config/menu";
 import { LogoutControl } from "@/components/auth/LogoutControl";
 
 /**
@@ -13,6 +14,20 @@ import { LogoutControl } from "@/components/auth/LogoutControl";
  */
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const activeGroup = activeMenuGroupLabel(pathname);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(activeGroup ? [activeGroup] : []));
+
+  useEffect(() => {
+    if (activeGroup) setOpenGroups((current) => (current.has(activeGroup) ? current : new Set(current).add(activeGroup)));
+  }, [activeGroup]);
+
+  const toggle = (label: string) =>
+    setOpenGroups((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
 
   if (pathname === "/login") {
     return <>{children}</>;
@@ -31,23 +46,55 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       >
         <h2 style={{ fontSize: 22, marginBottom: 24 }}>Noctella</h2>
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {adminMenuItems.map((item) => (
-            <li key={item.href} style={{ marginBottom: 4 }}>
-              <Link
-                href={item.href}
-                style={{
-                  display: "block",
-                  padding: "8px 10px",
-                  borderRadius: 4,
-                  fontSize: 14,
-                  textDecoration: "none",
-                  color: "var(--noctella-ivory)",
-                }}
-              >
-                {item.label}
-              </Link>
-            </li>
-          ))}
+          {adminMenuGroups.map((group) => {
+            const open = openGroups.has(group.label);
+            return (
+              <li key={group.label} style={{ marginBottom: 4 }}>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => toggle(group.label)}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "none",
+                    borderRadius: 4,
+                    background: "transparent",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: group.label === activeGroup ? "var(--noctella-antique-gold)" : "var(--noctella-ivory)",
+                  }}
+                >
+                  <span>{group.label}</span>
+                  <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+                </button>
+                {open && (
+                  <ul style={{ listStyle: "none", margin: "0 0 6px", padding: "0 0 0 12px" }}>
+                    {group.items.map((item) => (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          style={{
+                            display: "block",
+                            padding: "6px 10px",
+                            borderRadius: 4,
+                            fontSize: 13,
+                            textDecoration: "none",
+                            color: "var(--noctella-ivory)",
+                          }}
+                        >
+                          {item.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
         <LogoutControl />
       </nav>
