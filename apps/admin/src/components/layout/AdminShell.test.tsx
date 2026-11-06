@@ -40,4 +40,20 @@ describe("AdminShell (Sprint 67)", () => {
     expect(screen.getByText("Products page")).toBeInTheDocument();
     expect(await screen.findByText("Sign out")).toBeInTheDocument();
   });
+
+  it("groups the menu, opens the current page's group, and toggles a group", async () => {
+    pathname = "/finance/ebay-statements";
+    vi.spyOn(authLib, "getCurrentAdmin").mockResolvedValue({ id: "1", email: "owner@example.com", role: "owner", status: "active" });
+    render(
+      <AdminShell>
+        <div>Statements page</div>
+      </AdminShell>,
+    );
+    expect(screen.getByRole("button", { name: /Finance & Purchasing/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("link", { name: "eBay Statements" })).toHaveAttribute("href", "/finance/ebay-statements");
+    expect(screen.queryByRole("link", { name: "Warehouses" })).not.toBeInTheDocument();
+    screen.getByRole("button", { name: /Stock & Warehouse/ }).click();
+    expect(await screen.findByRole("link", { name: "Warehouses" })).toBeInTheDocument();
+    expect(await screen.findByText("Sign out")).toBeInTheDocument();
+  });
 });
