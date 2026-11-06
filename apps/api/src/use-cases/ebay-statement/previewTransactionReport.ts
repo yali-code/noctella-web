@@ -13,7 +13,7 @@ const REQUIRED_COLUMNS = [
 const KNOWN_TYPES = new Set(["Order", "Other fee", "Refund", "Payout"]);
 const NET_CHECK_TOLERANCE_CENTS = 1;
 
-type Row = Record<(typeof REQUIRED_COLUMNS)[number], string>;
+export type EbayReportRow = Record<(typeof REQUIRED_COLUMNS)[number], string>;
 
 export type EbayFundsStatus = "paid_out" | "on_hold" | "awaiting_payout";
 
@@ -36,6 +36,8 @@ export interface EbayStatementOrder {
   adFeesEur: number;
   orderNetEur: number;
   earningsEur: number;
+  refundNetEur: number;
+  earningsAfterRefundEur: number;
   exchangeRate: number;
   fundsStatus: EbayFundsStatus;
 }
@@ -76,23 +78,24 @@ export function parseCsv(text: string): string[][] {
 
 const cents = (value: number) => Math.round(value * 100);
 const money = (value: number) => cents(value) / 100;
-const blank = (value: string | undefined) => !value || value === "--" ? null : value;
-function amount(value: string): number {
+export const blank = (value: string | undefined) => !value || value === "--" ? null : value;
+export function amount(value: string): number {
   if (blank(value) === null) return 0;
   const parsed = Number(value.replace(/,/g, ""));
   if (!Number.isFinite(parsed)) throw new BadRequestError(`Unreadable amount in the report: "${value}"`);
   return parsed;
 }
-function headerValue(rows: string[][], label: string): string | null {
+export function headerValue(rows: string[][], label: string): string | null {
   return rows.find((row) => row[0] === label)?.[1]?.trim() || null;
 }
 
-function fundsStatus(row: Row): EbayFundsStatus {
+export function fundsStatus(row: EbayReportRow): EbayFundsStatus {
   if (blank(row["Payout date"])) return "paid_out";
   return /hold/i.test(row["Reason for hold"]) ? "on_hold" : "awaiting_payout";
 }
 
-export function previewEbayTransactionReportUseCase(text: string): EbayStatementPreview {
+/** Validated report rows, shared by the preview and the import. */
+export function readEbayTransactionReport(text: string): { all: string[][]; rows: EbayReportRow[] } {
   const all = parseCsv(text.replace(/^﻿/, ""));
   const headerIndex = all.findIndex((row) => row[0] === "Transaction creation date");
   if (headerIndex < 0) throw new BadRequestError("This is not an eBay Transaction report");
@@ -100,11 +103,16 @@ export function previewEbayTransactionReportUseCase(text: string): EbayStatement
   const missing = REQUIRED_COLUMNS.filter((column) => !header.includes(column));
   if (missing.length) throw new BadRequestError(`The report format changed. Missing columns: ${missing.join(", ")}`);
 
-  const warnings: string[] = [];
   const rows = all.slice(headerIndex + 1).filter((row) => row.some((cell) => cell.trim())).map((cells, index) => {
     if (cells.length !== header.length) throw new BadRequestError(`Report line ${headerIndex + index + 2} has an unexpected number of columns`);
-    return Object.fromEntries(header.map((name, i) => [name, cells[i]])) as Row;
+    return Object.fromEntries(header.map((name, i) => [name, cells[i]])) as EbayReportRow;
   });
+  return { all, rows };
+}
+
+export function previewEbayTransactionReportUseCase(text: string): EbayStatementPreview {
+  const { all, rows } = readEbayTransactionReport(text);
+  const warnings: string[] = [];
 
   const rowCounts: Record<string, number> = {};
   for (const row of rows) rowCounts[row.Type] = (rowCounts[row.Type] ?? 0) + 1;
@@ -127,6 +135,9 @@ export function previewEbayTransactionReportUseCase(text: string): EbayStatement
     adFeesByOrder.set(order, { usd: current.usd - amount(row["Gross transaction amount"]), eur: current.eur - amount(row["Net amount"]) });
   }
 
+  const refundsByOrder = new Map<string, number>();
+  for (const row of rows.filter((candidate) => candidate.Type === "Refund")) refundsByOrder.set(row["Order number"], (refundsByOrder.get(row["Order number"]) ?? 0) - amount(row["Net amount"]));
+
   const shownAdFees = new Set<string>();
   const orders = orderRows.map((row): EbayStatementOrder => {
     const orderNumber = row["Order number"];
@@ -138,6 +149,7 @@ export function previewEbayTransactionReportUseCase(text: string): EbayStatement
     if (seenTransactions.has(row["Transaction ID"])) warnings.push(`Duplicate transaction ID: ${row["Transaction ID"]}`);
     seenTransactions.add(row["Transaction ID"]);
     const ads = shownAdFees.has(orderNumber) ? { usd: 0, eur: 0 } : adFeesByOrder.get(orderNumber) ?? { usd: 0, eur: 0 };
+    const refundNetEur = shownAdFees.has(orderNumber) ? 0 : money(refundsByOrder.get(orderNumber) ?? 0);
     shownAdFees.add(orderNumber);
     return {
       orderNumber,
@@ -158,6 +170,8 @@ export function previewEbayTransactionReportUseCase(text: string): EbayStatement
       adFeesEur: money(ads.eur),
       orderNetEur,
       earningsEur: money(orderNetEur - ads.eur),
+      refundNetEur,
+      earningsAfterRefundEur: money(orderNetEur - ads.eur - refundNetEur),
       exchangeRate: rate,
       fundsStatus: fundsStatus(row),
     };

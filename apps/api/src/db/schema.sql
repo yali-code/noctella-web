@@ -1239,3 +1239,43 @@ CREATE TABLE IF NOT EXISTS invoice_cost_set_items (
   updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_cost_set_items_set_product ON invoice_cost_set_items(cost_set_id, product_id);
+
+CREATE TABLE IF NOT EXISTS ebay_statement_imports (
+  id TEXT PRIMARY KEY,
+  file_sha256 TEXT NOT NULL,
+  seller TEXT,
+  period_start TEXT,
+  period_end TEXT,
+  inserted_count INTEGER NOT NULL,
+  updated_count INTEGER NOT NULL,
+  unchanged_count INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE TABLE IF NOT EXISTS ebay_statement_rows (
+  id TEXT PRIMARY KEY,
+  row_type TEXT NOT NULL,
+  transaction_date TEXT NOT NULL,
+  order_number TEXT,
+  transaction_id TEXT,
+  reference_id TEXT,
+  item_id TEXT,
+  title TEXT,
+  custom_label TEXT,
+  ship_country TEXT,
+  ship_city TEXT,
+  item_subtotal_usd REAL NOT NULL DEFAULT 0,
+  shipping_usd REAL NOT NULL DEFAULT 0,
+  ebay_tax_usd REAL NOT NULL DEFAULT 0,
+  fees_usd REAL NOT NULL DEFAULT 0,
+  gross_usd REAL NOT NULL DEFAULT 0,
+  net_eur REAL NOT NULL DEFAULT 0,
+  exchange_rate REAL,
+  funds_status TEXT,
+  payout_id TEXT,
+  payout_date TEXT,
+  description TEXT,
+  created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+  updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+);
+CREATE INDEX IF NOT EXISTS idx_ebay_statement_rows_date ON ebay_statement_rows(transaction_date, row_type);
+CREATE INDEX IF NOT EXISTS idx_ebay_statement_rows_order ON ebay_statement_rows(order_number);

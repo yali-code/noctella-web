@@ -14,7 +14,7 @@ const payout = line({ Type: "Payout", "Net amount": "-75", "Gross transaction am
 describe("eBay Transaction report preview", () => {
   it("merges order and ad fee rows into the seller earnings eBay shows", () => {
     const preview = previewEbayTransactionReportUseCase(report(order, adFee, storeFee, payout));
-    expect(preview.orders[0]).toMatchObject({ orderNumber: "26-1", title: "Parker, 21 Pen", salesUsd: 43.99, itemSubtotalUsd: 39, shippingUsd: 4.99, salesEur: 37.67, orderFeesUsd: 6.38, adFeesUsd: 5.28, adFeesEur: 4.81, orderNetEur: 32.21, earningsEur: 27.4, fundsStatus: "paid_out", customLabel: null });
+    expect(preview.orders[0]).toMatchObject({ orderNumber: "26-1", title: "Parker, 21 Pen", salesUsd: 43.99, itemSubtotalUsd: 39, shippingUsd: 4.99, salesEur: 37.67, orderFeesUsd: 6.38, adFeesUsd: 5.28, adFeesEur: 4.81, orderNetEur: 32.21, earningsEur: 27.4, fundsStatus: "paid_out", customLabel: null, refundNetEur: 0, earningsAfterRefundEur: 27.4 });
     expect(preview.totals).toMatchObject({ salesUsd: 43.99, orderFeesUsd: 6.38, adFeesUsd: 5.28, monthlyFeesUsd: 2.53, totalFeesUsd: 14.19, payoutsEur: 75, netRemainingEur: 25.06 });
     expect(preview.monthlyFees).toHaveLength(1);
     expect(preview.rowCounts).toEqual({ Order: 1, "Other fee": 2, Payout: 1 });

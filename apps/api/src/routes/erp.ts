@@ -22,7 +22,7 @@ import * as reports from "../services/erpReportsAnalyticsBridge";
 import { getProductCostBreakdown, addInvoiceIntakeFile, approveInvoiceCostSet, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, extractInvoiceIntake, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSetProductCandidates, listInvoiceCostSets, previewInvoiceCostSetAllocation, reviewInvoiceIntake, setInvoiceCostSetProducts, setInvoiceIntakeBankDebit } from "../services/invoiceIntakes";
 import { INVOICE_FILE_MAX_BYTES, INVOICE_FILE_SIZE_MESSAGE } from "../services/invoiceFileGuard";
 import { BadRequestError } from "../services/errors";
-import { EBAY_STATEMENT_MAX_BYTES, previewEbayStatement } from "../services/ebayStatements";
+import { EBAY_STATEMENT_MAX_BYTES, importEbayStatement, listEbayStatementMonths, previewEbayStatement } from "../services/ebayStatements";
 import { createInvoiceCostSetSchema, invoiceCostSetCandidatesQuerySchema, invoiceCostSetListQuerySchema, invoiceCostSetProductsSchema, invoiceIntakeBankDebitSchema, invoiceIntakeReviewSchema, invoiceIntakeUploadFieldsSchema } from "../validation/invoiceIntake";
 import { createReadStream } from "node:fs";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
@@ -187,6 +187,12 @@ router.post("/ebay-statements/preview", requireErp, (req, res) => ebayStatementU
   if (err) return handleRouteError(err, res);
   try { res.json(previewEbayStatement(req.file?.buffer)); } catch (error) { handleRouteError(error, res); }
 }));
+router.post("/ebay-statements/import", requireErp, (req, res) => ebayStatementUpload.single("file")(req, res, async (err: unknown) => {
+  if (err instanceof multer.MulterError) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "The report must be 5 MB or smaller" : "Invalid report upload" });
+  if (err) return handleRouteError(err, res);
+  try { res.json(await importEbayStatement(db, req.file?.buffer)); } catch (error) { handleRouteError(error, res); }
+}));
+router.get("/ebay-statements/months", requireErp, async (_req, res) => { try { res.json({ months: await listEbayStatementMonths(db) }); } catch (err) { handleRouteError(err, res); } });
 router.post("/invoice-cost-sets/:id/files", requireErp, (req, res, next) => invoiceUpload.single("file")(req, res, (err: unknown) => {
   if (err instanceof multer.MulterError) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: err.code === "LIMIT_FILE_SIZE" ? INVOICE_FILE_SIZE_MESSAGE : "Invalid invoice upload" });
   if (err) return handleRouteError(err, res);
