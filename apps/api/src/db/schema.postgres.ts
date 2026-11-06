@@ -1170,3 +1170,16 @@ export const invoiceCostSetItems = pgTable("invoice_cost_set_items", {
   allocLotEur: numeric("alloc_lot_eur", { precision: 18, scale: 6 }), allocHammerFeeEur: numeric("alloc_hammer_fee_eur", { precision: 18, scale: 6 }), allocPremiumEur: numeric("alloc_premium_eur", { precision: 18, scale: 6 }), allocTransportEur: numeric("alloc_transport_eur", { precision: 18, scale: 6 }), allocForwarderEur: numeric("alloc_forwarder_eur", { precision: 18, scale: 6 }), allocFxDiffEur: numeric("alloc_fx_diff_eur", { precision: 18, scale: 6 }), allocTotalEur: numeric("alloc_total_eur", { precision: 18, scale: 6 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
 }, (table) => [uniqueIndex("idx_invoice_cost_set_items_set_product").on(table.costSetId, table.productId)]);
+
+export const ebayStatementImports = pgTable("ebay_statement_imports", {
+  id: text("id").primaryKey().notNull(), fileSha256: text("file_sha256").notNull(), seller: text("seller"), periodStart: text("period_start"), periodEnd: text("period_end"),
+  insertedCount: integer("inserted_count").notNull(), updatedCount: integer("updated_count").notNull(), unchangedCount: integer("unchanged_count").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+});
+export const ebayStatementRows = pgTable("ebay_statement_rows", {
+  id: text("id").primaryKey().notNull(), rowType: text("row_type").notNull(), transactionDate: text("transaction_date").notNull(),
+  orderNumber: text("order_number"), transactionId: text("transaction_id"), referenceId: text("reference_id"), itemId: text("item_id"), title: text("title"), customLabel: text("custom_label"), shipCountry: text("ship_country"), shipCity: text("ship_city"),
+  itemSubtotalUsd: numeric("item_subtotal_usd", { precision: 18, scale: 6 }).notNull().default("0"), shippingUsd: numeric("shipping_usd", { precision: 18, scale: 6 }).notNull().default("0"), ebayTaxUsd: numeric("ebay_tax_usd", { precision: 18, scale: 6 }).notNull().default("0"), feesUsd: numeric("fees_usd", { precision: 18, scale: 6 }).notNull().default("0"), grossUsd: numeric("gross_usd", { precision: 18, scale: 6 }).notNull().default("0"), netEur: numeric("net_eur", { precision: 18, scale: 6 }).notNull().default("0"),
+  exchangeRate: numeric("exchange_rate", { precision: 18, scale: 6 }), fundsStatus: text("funds_status"), payoutId: text("payout_id"), payoutDate: text("payout_date"), description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => [index("idx_ebay_statement_rows_date").on(table.transactionDate, table.rowType), index("idx_ebay_statement_rows_order").on(table.orderNumber)]);

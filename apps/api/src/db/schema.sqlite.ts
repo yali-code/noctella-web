@@ -1092,3 +1092,16 @@ export const invoiceCostSetItems = sqliteTable("invoice_cost_set_items", {
   allocLotEur: real("alloc_lot_eur"), allocHammerFeeEur: real("alloc_hammer_fee_eur"), allocPremiumEur: real("alloc_premium_eur"), allocTransportEur: real("alloc_transport_eur"), allocForwarderEur: real("alloc_forwarder_eur"), allocFxDiffEur: real("alloc_fx_diff_eur"), allocTotalEur: real("alloc_total_eur"),
   createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
 }, (table) => [uniqueIndex("idx_invoice_cost_set_items_set_product").on(table.costSetId, table.productId)]);
+
+export const ebayStatementImports = sqliteTable("ebay_statement_imports", {
+  id: text("id").primaryKey(), fileSha256: text("file_sha256").notNull(), seller: text("seller"), periodStart: text("period_start"), periodEnd: text("period_end"),
+  insertedCount: integer("inserted_count").notNull(), updatedCount: integer("updated_count").notNull(), unchangedCount: integer("unchanged_count").notNull(),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+});
+export const ebayStatementRows = sqliteTable("ebay_statement_rows", {
+  id: text("id").primaryKey(), rowType: text("row_type").notNull(), transactionDate: text("transaction_date").notNull(),
+  orderNumber: text("order_number"), transactionId: text("transaction_id"), referenceId: text("reference_id"), itemId: text("item_id"), title: text("title"), customLabel: text("custom_label"), shipCountry: text("ship_country"), shipCity: text("ship_city"),
+  itemSubtotalUsd: real("item_subtotal_usd").notNull().default(0), shippingUsd: real("shipping_usd").notNull().default(0), ebayTaxUsd: real("ebay_tax_usd").notNull().default(0), feesUsd: real("fees_usd").notNull().default(0), grossUsd: real("gross_usd").notNull().default(0), netEur: real("net_eur").notNull().default(0),
+  exchangeRate: real("exchange_rate"), fundsStatus: text("funds_status"), payoutId: text("payout_id"), payoutDate: text("payout_date"), description: text("description"),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP)`), updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP)`),
+}, (table) => [index("idx_ebay_statement_rows_date").on(table.transactionDate, table.rowType), index("idx_ebay_statement_rows_order").on(table.orderNumber)]);
