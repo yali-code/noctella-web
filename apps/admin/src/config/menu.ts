@@ -42,6 +42,7 @@ export const adminMenuItems: AdminMenuItem[] = [
   { label: "Invoice Cost Sets", href: "/invoice-cost-sets" },
   { label: "Purchases", href: "/purchases" },
   { label: "Suppliers", href: "/suppliers" },
+  { label: "eBay Statements", href: "/finance/ebay-statements" },
   { label: "Finance", href: "/finance" },
   { label: "Payments", href: "/payments" },
   { label: "Currencies", href: "/currencies" },
