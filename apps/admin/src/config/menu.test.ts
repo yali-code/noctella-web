@@ -15,6 +15,7 @@ describe("adminMenuItems (Sprint 97)", () => {
     expect(adminMenuItems).toContainEqual({ label: "Purchases", href: "/purchases" });
     expect(adminMenuItems).toContainEqual({ label: "Suppliers", href: "/suppliers" });
     expect(adminMenuItems).toContainEqual({ label: "Invoice Cost Sets", href: "/invoice-cost-sets" });
+    expect(adminMenuItems).toContainEqual({ label: "eBay Statements", href: "/finance/ebay-statements" });
     const invoices = hrefs.indexOf("/invoices");
     expect(hrefs.slice(invoices + 1, invoices + 4)).toEqual(["/invoice-cost-sets", "/purchases", "/suppliers"]);
   });

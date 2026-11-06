@@ -22,6 +22,7 @@ import * as reports from "../services/erpReportsAnalyticsBridge";
 import { getProductCostBreakdown, addInvoiceIntakeFile, approveInvoiceCostSet, cancelInvoiceCostSet, cancelInvoiceIntake, createInvoiceCostSet, extractInvoiceIntake, getInvoiceCostSet, getInvoiceIntakeFile, listInvoiceCostSetProductCandidates, listInvoiceCostSets, previewInvoiceCostSetAllocation, reviewInvoiceIntake, setInvoiceCostSetProducts, setInvoiceIntakeBankDebit } from "../services/invoiceIntakes";
 import { INVOICE_FILE_MAX_BYTES, INVOICE_FILE_SIZE_MESSAGE } from "../services/invoiceFileGuard";
 import { BadRequestError } from "../services/errors";
+import { EBAY_STATEMENT_MAX_BYTES, previewEbayStatement } from "../services/ebayStatements";
 import { createInvoiceCostSetSchema, invoiceCostSetCandidatesQuerySchema, invoiceCostSetListQuerySchema, invoiceCostSetProductsSchema, invoiceIntakeBankDebitSchema, invoiceIntakeReviewSchema, invoiceIntakeUploadFieldsSchema } from "../validation/invoiceIntake";
 import { createReadStream } from "node:fs";
 import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilities as migrationCapabilities, detectErpMigrationConflicts, ERP_MIGRATION_MAX_BYTES, validateErpMigrationSource } from "../services/erpMigration";
@@ -29,6 +30,7 @@ import { buildErpMigrationManifestPreview, buildErpMigrationPreview, capabilitie
 const router = Router();
 const requireAdminSession = createRequireAuth(db);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const ebayStatementUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: EBAY_STATEMENT_MAX_BYTES, files: 1 } });
 const invoiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: INVOICE_FILE_MAX_BYTES, files: 1 } });
 const key = (req: any) => req.header("X-Noctella-ERP-Key");
 const version = (req: any) => req.header("X-Noctella-ERP-Client-Version");
@@ -180,6 +182,11 @@ router.post("/invoice-cost-sets", requireErp, async (req, res) => { try { res.st
 router.get("/invoice-cost-sets", requireErp, async (req, res) => { try { res.json(await listInvoiceCostSets(db, invoiceCostSetListQuerySchema.parse(req.query))); } catch (err) { handleRouteError(err, res); } });
 router.get("/invoice-cost-sets/:id", requireErp, async (req, res) => { try { res.json(await getInvoiceCostSet(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
 router.post("/invoice-cost-sets/:id/cancel", requireErp, async (req, res) => { try { res.json(await cancelInvoiceCostSet(db, req.params.id)); } catch (err) { handleRouteError(err, res); } });
+router.post("/ebay-statements/preview", requireErp, (req, res) => ebayStatementUpload.single("file")(req, res, (err: unknown) => {
+  if (err instanceof multer.MulterError) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "The report must be 5 MB or smaller" : "Invalid report upload" });
+  if (err) return handleRouteError(err, res);
+  try { res.json(previewEbayStatement(req.file?.buffer)); } catch (error) { handleRouteError(error, res); }
+}));
 router.post("/invoice-cost-sets/:id/files", requireErp, (req, res, next) => invoiceUpload.single("file")(req, res, (err: unknown) => {
   if (err instanceof multer.MulterError) return res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: err.code === "LIMIT_FILE_SIZE" ? INVOICE_FILE_SIZE_MESSAGE : "Invalid invoice upload" });
   if (err) return handleRouteError(err, res);
